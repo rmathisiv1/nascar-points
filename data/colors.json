@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "description": "Per-car color palette for NASCAR Momentum. Each entry has car (individual accent), org (team brand color for teammate views), and team (team code for grouping). Unknown cars fall back to deterministic hash-assigned colors.",
+    "description": "Per-car color palette for NASCAR Points Analysis. Each entry has car (individual accent), org (team brand color for teammate views), and team (team code for grouping). Unknown cars fall back to deterministic hash-assigned colors.",
     "source": "TRD-provided for NOS; derived from team brand colors for NCS and NTS",
     "special": {
       "leader_lap_down": "#FEFEFE"
@@ -8,12 +8,12 @@
   },
 
   "W": {
-    "1":  { "car": "#ff6b35", "org": "#D4AF37", "team": "TMS"  },
+    "1":  { "car": "#ff6b35", "org": "#1a1a1a", "team": "THR"  },
     "2":  { "car": "#ffa500", "org": "#FFCC00", "team": "PEN"  },
     "3":  { "car": "#d7263d", "org": "#8B5A2B", "team": "RCR"  },
     "4":  { "car": "#f5f5dc", "org": "#1F4E79", "team": "FRM"  },
     "5":  { "car": "#4ec9ff", "org": "#1E90FF", "team": "HMS"  },
-    "6":  { "car": "#3ddc4d", "org": "#003DA5", "team": "RFR"  },
+    "6":  { "car": "#3ddc4d", "org": "#003DA5", "team": "RFK"  },
     "7":  { "car": "#f5b7d7", "org": "#2ECC40", "team": "SPI"  },
     "8":  { "car": "#8b5a2b", "org": "#8B5A2B", "team": "RCR"  },
     "9":  { "car": "#4a90e2", "org": "#1E90FF", "team": "HMS"  },
@@ -23,10 +23,10 @@
     "13": { "car": "#a8a8a8", "org": "#8B0000", "team": "JTG"  },
     "15": { "car": "#a3d977", "org": "#1F4E79", "team": "FRM"  },
     "16": { "car": "#c0c0c0", "org": "#1E90FF", "team": "KR"   },
-    "17": { "car": "#1a6d1a", "org": "#003DA5", "team": "RFR"  },
+    "17": { "car": "#1a6d1a", "org": "#003DA5", "team": "RFK"  },
     "19": { "car": "#ffffff", "org": "#9956CD", "team": "JGR"  },
     "20": { "car": "#e11d26", "org": "#9956CD", "team": "JGR"  },
-    "21": { "car": "#7a0e1e", "org": "#000000", "team": "WMS"  },
+    "21": { "car": "#7a0e1e", "org": "#FFD700", "team": "WBR"  },
     "22": { "car": "#b5b834", "org": "#FFCC00", "team": "PEN"  },
     "23": { "car": "#3ec6ff", "org": "#E91E63", "team": "23XI" },
     "24": { "car": "#3a7bd5", "org": "#1E90FF", "team": "HMS"  },
@@ -41,13 +41,13 @@
     "48": { "car": "#2e5c8a", "org": "#1E90FF", "team": "HMS"  },
     "51": { "car": "#90b98c", "org": "#727272", "team": "RWR"  },
     "54": { "car": "#2ecc40", "org": "#9956CD", "team": "JGR"  },
-    "60": { "car": "#0a4d18", "org": "#003DA5", "team": "RFR"  },
+    "60": { "car": "#0a4d18", "org": "#003DA5", "team": "RFK"  },
     "67": { "car": "#63f5b9", "org": "#E91E63", "team": "23XI" },
-    "71": { "car": "#f5b7d7", "org": "#D4AF37", "team": "TMS"  },
-    "77": { "car": "#f5a8d6", "org": "#C8102E", "team": "SPI"  },
-    "88": { "car": "#6b1e1e", "org": "#D4AF37", "team": "TMS"  },
-    "97": { "car": "#7a4a4a", "org": "#000000", "team": "TMS"  },
-    "99": { "car": "#b23a1a", "org": "#D4AF37", "team": "TMS"  }
+    "71": { "car": "#f5b7d7", "org": "#1a1a1a", "team": "THR"  },
+    "77": { "car": "#f5a8d6", "org": "#2ECC40", "team": "SPI"  },
+    "88": { "car": "#6b1e1e", "org": "#1a1a1a", "team": "THR"  },
+    "97": { "car": "#7a4a4a", "org": "#1a1a1a", "team": "THR"  },
+    "99": { "car": "#b23a1a", "org": "#1a1a1a", "team": "THR"  }
   },
 
   "B": {

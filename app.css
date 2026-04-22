@@ -1,5 +1,5 @@
 /* =========================================================================
-   NASCAR Momentum — app.css
+   NASCAR Points Analysis — app.css
    Direction C · dense dark dashboard with blue accent
    ========================================================================= */
 
@@ -41,27 +41,30 @@ html, body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-/* ========== TOP BAR ========== */
+/* ========== TOP BAR — fully opaque, no transparency ========== */
 .topbar {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 12px 24px;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.01);
+  background: var(--bg);            /* solid, not transparent */
   position: sticky; top: 0; z-index: 50;
 }
 .brand {
   display: flex; align-items: center; gap: 10px;
   font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 .brand-mark {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
   padding: 2px 6px; border-radius: 3px;
   background: var(--accent); color: #fff;
   letter-spacing: 0.05em;
+  flex-shrink: 0;
 }
 .season-pill {
   font-family: var(--mono); font-size: 11px;
@@ -69,6 +72,7 @@ html, body {
   padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: 4px;
+  white-space: nowrap;
 }
 .series-sw {
   display: flex;
@@ -92,7 +96,6 @@ html, body {
 }
 .series-sw button:not(.on):hover { color: var(--text); }
 
-/* Entity (Driver/Owner) switcher — lives next to series-sw */
 .entity-sw {
   display: flex;
   background: var(--card);
@@ -128,8 +131,9 @@ html, body {
 .nav-toggle {
   display: none;
   background: var(--card); border: 1px solid var(--border);
-  color: var(--text); padding: 6px 10px; border-radius: 4px;
-  font-size: 16px; cursor: pointer;
+  color: var(--text); padding: 8px 12px; border-radius: 4px;
+  font-size: 18px; cursor: pointer;
+  line-height: 1;
 }
 
 /* ========== METRIC BAR ========== */
@@ -137,6 +141,7 @@ html, body {
   display: flex; gap: 28px;
   padding: 12px 24px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg);
   font-family: var(--mono); font-size: 11px;
   overflow-x: auto;
   white-space: nowrap;
@@ -276,6 +281,57 @@ html, body {
 }
 .btn-ghost:hover { color: var(--text); border-color: var(--border-hi); }
 
+/* ========== DRIVER GRID (used on Season Cumulative + Breakdown) ========== */
+.picker-label {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--muted); letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 18px 0 8px;
+}
+.driver-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 6px;
+}
+.driver-pill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 9px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.driver-pill:hover {
+  background: var(--card-hi);
+  border-color: var(--border-hi);
+}
+.driver-pill.selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.driver-pill .dp-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px; padding: 2px 6px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  border-radius: 3px;
+  color: #000;
+  flex-shrink: 0;
+}
+.driver-pill .dp-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* chips (legacy arc chips — kept for any legacy use, but grid is primary now) */
 .chip-row {
   display: flex; gap: 4px; flex-wrap: wrap;
   flex: 1;
@@ -302,11 +358,65 @@ html, body {
   border-radius: 8px;
   overflow: hidden;
 }
-.card-chart { padding: 14px; }
+.card-chart {
+  padding: 14px;
+  position: relative;  /* tooltip positioning */
+}
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .loading {
   padding: 40px; text-align: center;
   color: var(--muted); font-family: var(--mono); font-size: 12px;
 }
+
+/* ========== CHART TOOLTIP ========== */
+.chart-tooltip {
+  position: absolute;
+  background: var(--card-hi);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  padding: 8px 11px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text);
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  min-width: 140px;
+  line-height: 1.55;
+}
+.chart-tooltip .tt-hdr {
+  font-weight: 700;
+  color: var(--accent-2);
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.chart-tooltip .tt-row {
+  display: flex; justify-content: space-between; gap: 14px;
+}
+.chart-tooltip .tt-row .lbl {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--muted);
+}
+.chart-tooltip .tt-row .sw {
+  width: 8px; height: 8px; border-radius: 1.5px;
+}
+.chart-tooltip .tt-row .val {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+}
+.chart-tooltip .tt-row.total {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.chart-tooltip .tt-row.total .val { color: var(--accent-2); }
 
 /* ========== DATA TABLE ========== */
 .data-table {
@@ -353,7 +463,6 @@ html, body {
   font-size: 13px;
 }
 
-/* Standings-specific larger numbers and rank cell */
 #standings-table td.num {
   font-size: 14px;
   font-weight: 500;
@@ -373,7 +482,7 @@ html, body {
   white-space: nowrap;
 }
 
-/* Weekly position-change arrow pill (used in Standings) */
+/* position change pills */
 .pos-change {
   display: inline-flex;
   align-items: center;
@@ -393,7 +502,7 @@ html, body {
 .pos-change.flat { color: var(--dim); }
 .pos-change.new  { background: var(--accent-bg-hi); color: var(--accent-2); }
 
-/* car tag (colored chip with number) — bumped up a bit */
+/* car tag */
 .car-tag {
   display: inline-flex;
   align-items: center; justify-content: center;
@@ -412,18 +521,24 @@ html, body {
   font-size: 11px; color: var(--muted);
   font-weight: 600;
 }
-/* Team-code "pill" used on Standings — bigger + colored background */
+/* Team-code pill — always readable. Uses palette org color if present,
+   falls back to a muted card-style pill with a visible border if not. */
 .team-pill {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 42px; padding: 3px 9px;
+  min-width: 44px; padding: 3px 10px;
   font-family: var(--mono);
   font-size: 12px; font-weight: 800;
   border-radius: 3px;
   letter-spacing: 0.05em;
   text-align: center;
 }
+.team-pill.fallback {
+  background: var(--card-hi);
+  color: var(--text-2);
+  border: 1px solid var(--border-hi);
+}
 
-/* heat cells (finish position colorized) — brighter palette */
+/* heat cells */
 .heat {
   display: inline-block;
   padding: 2px 6px; border-radius: 3px;
@@ -448,7 +563,6 @@ html, body {
 .trend.up { color: var(--pos); }
 .trend.down { color: var(--neg); }
 
-/* rating stack */
 .rating-stack {
   display: inline-flex; flex-direction: column; align-items: flex-end;
   line-height: 1.2;
@@ -476,11 +590,12 @@ html, body {
 .delta-pill.down { background: var(--neg-bg-hi); color: var(--neg); }
 .delta-pill.zero { color: var(--dim); }
 
-/* ========== HEATMAP — brighter green/red scale ========== */
+/* ========== HEATMAP ========== */
 .heatmap-wrap {
   overflow: auto;
   padding: 8px 0;
   max-height: 80vh;
+  -webkit-overflow-scrolling: touch;
 }
 .heatmap-grid {
   display: grid;
@@ -554,18 +669,11 @@ html, body {
   align-items: center;
 }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.legend-swatch {
-  width: 12px; height: 12px; border-radius: 2px;
-}
-.legend-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-}
-.legend-line {
-  width: 18px; height: 0;
-  border-top: 1px dashed var(--muted);
-}
+.legend-swatch { width: 12px; height: 12px; border-radius: 2px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.legend-line { width: 18px; height: 0; border-top: 1px dashed var(--muted); }
 
-/* ========== TRAJECTORY-VIEW SPECIFIC ========== */
+/* ========== TRAJECTORY ========== */
 .traj-dot { cursor: pointer; transition: r 0.12s, stroke-width 0.12s; }
 .traj-dot:hover { stroke: #fff; stroke-width: 1.8; }
 .traj-label { fill: var(--text-2); font-family: var(--mono); font-size: 10px; pointer-events: none; font-weight: 600; }
@@ -613,17 +721,57 @@ code {
   font-size: 11px;
 }
 
-/* ========== RESPONSIVE ========== */
+/* ========== RESPONSIVE — mobile polish ========== */
 @media (max-width: 900px) {
-  .topbar { padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
-  .series-sw { order: 10; margin-left: 0; }
-  .entity-sw { order: 11; }
-  .season-pill { display: none; }
-  .topbar-right { margin-left: auto; }
-  .season-select { display: none; }
-  .nav-toggle { display: inline-block; }
+  body { font-size: 13px; }
 
-  .metricbar { padding: 10px 14px; gap: 18px; }
+  .topbar {
+    padding: 10px 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .brand { flex: 0 0 auto; }
+  .brand-name { font-size: 13px; }
+  .season-pill {
+    order: 5;
+    margin-left: auto;
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+  .topbar-right {
+    order: 6;
+  }
+  .series-sw {
+    order: 10;
+    margin-left: 0;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .series-sw button {
+    padding: 6px 10px;
+    font-size: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+  .entity-sw {
+    order: 11;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .entity-sw button {
+    padding: 6px 10px;
+    flex: 1;
+    font-size: 9px;
+  }
+  .season-select { display: none; }
+  .nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+
+  .metricbar {
+    padding: 10px 14px;
+    gap: 16px;
+  }
+  .metric .k { font-size: 9px; letter-spacing: 0.1em; }
   .metric .v { font-size: 12px; }
 
   .app { grid-template-columns: 1fr; }
@@ -635,19 +783,76 @@ code {
     z-index: 100;
     transition: left 0.2s ease;
     border-right: 1px solid var(--border);
+    box-shadow: 6px 0 22px rgba(0,0,0,0.6);
   }
   .sidebar.open { left: 0; }
-  .main { padding: 18px 14px; }
+  .main { padding: 16px 14px; }
 
   .view-head h1 { font-size: 17px; }
+  .view-sub { font-size: 11px; }
   .toolbar { gap: 6px; }
-  .toggle-group button { padding: 4px 8px; font-size: 9px; }
-  .search-input { min-width: 100%; }
+  .toggle-group button {
+    padding: 5px 8px;
+    font-size: 9px;
+  }
+  .search-input { min-width: 100%; width: 100%; }
+  .toolbar-label { display: none; }  /* labels are noise on mobile */
 
-  .data-table th, .data-table td { padding: 7px 8px; font-size: 12px; }
+  /* Data table on mobile — allow horizontal scroll, smaller cells */
+  .data-table { font-size: 12px; }
+  .data-table th,
+  .data-table td {
+    padding: 7px 8px;
+    font-size: 11px;
+  }
   .data-table td.num { font-size: 11px; }
   #standings-table td.num { font-size: 12px; }
   #standings-table td.num.total-col { font-size: 13px; }
+  #standings-table td.rank-cell { font-size: 12px; }
+  .pos-change { font-size: 9px; padding: 1px 4px; min-width: 24px; }
+  .car-tag { min-width: 28px; font-size: 11px; padding: 2px 5px; }
+  .team-pill { min-width: 38px; font-size: 11px; padding: 2px 7px; }
 
-  .callout-rail { grid-template-columns: 1fr; }
+  /* Heatmap cells — give each column a touch more room */
+  .heatmap-grid { padding: 4px 8px; }
+  .hm-label { font-size: 11px; padding: 3px 6px 3px 3px; }
+  .hm-cell { font-size: 10px; min-width: 24px; padding: 3px 2px; }
+  .hm-header { font-size: 9px; }
+
+  /* Charts — fix minimum widths so they don't collapse */
+  #arc-svg, #breakdown-svg, #trajectory-svg {
+    min-width: 580px;
+  }
+  .card-chart { padding: 10px; }
+
+  /* Callouts stack */
+  .callout-rail { grid-template-columns: 1fr; gap: 10px; }
+
+  /* Driver grid — tighter on mobile */
+  .driver-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 5px;
+  }
+  .driver-pill {
+    padding: 6px 7px;
+    font-size: 11px;
+  }
+  .driver-pill .dp-num {
+    min-width: 26px; font-size: 10px; padding: 2px 4px;
+  }
+
+  /* Chart tooltip — constrain so it doesn't escape */
+  .chart-tooltip { font-size: 10px; padding: 6px 9px; min-width: 120px; }
+}
+
+/* Extra-tight phone breakpoint */
+@media (max-width: 480px) {
+  .topbar { padding: 8px 10px; }
+  .brand-name { display: none; }     /* just logo on tiny screens */
+  .season-pill { font-size: 9px; padding: 2px 6px; }
+  .main { padding: 12px 10px; }
+  .view-head h1 { font-size: 16px; }
+  .toolbar { gap: 4px; }
+  .toggle-group button { padding: 4px 7px; font-size: 9px; }
+  .btn-ghost { padding: 4px 8px; font-size: 10px; }
 }

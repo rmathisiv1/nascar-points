@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>NASCAR Momentum</title>
+  <title>NASCAR Points Analysis</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark">MMT</span>
-    <span class="brand-name">Momentum</span>
+    <span class="brand-name">Points Analysis</span>
   </div>
   <div class="season-pill" id="season-pill">— / —</div>
   <div class="series-sw" id="series-sw">
@@ -35,7 +35,7 @@
 
   <nav class="sidebar" id="sidebar">
     <a href="#/form"       class="navlink" data-view="form">Form</a>
-    <a href="#/arc"        class="navlink" data-view="arc">Season Arc</a>
+    <a href="#/arc"        class="navlink" data-view="arc">Season Cumulative</a>
     <a href="#/breakdown"  class="navlink" data-view="breakdown">Breakdown</a>
     <a href="#/trajectory" class="navlink" data-view="trajectory">Trajectory</a>
     <a href="#/heatmap"    class="navlink" data-view="heatmap">Heatmap</a>
@@ -72,31 +72,42 @@
 
     <section class="view" id="view-arc" hidden>
       <div class="view-head">
-        <h1>Season Arc</h1>
-        <div class="view-sub">Cumulative points by race · click drivers to add/remove</div>
+        <h1>Season Cumulative</h1>
+        <div class="view-sub">Cumulative points by race · tap drivers below to add/remove</div>
       </div>
       <div class="toolbar">
         <button class="btn-ghost" id="arc-top10">Top 10</button>
         <button class="btn-ghost" id="arc-clear">Clear</button>
-        <div class="chip-row" id="arc-chips"></div>
+        <div class="toggle-group" data-group="arc-ft">
+          <button class="on" data-val="ft">Full-time only</button>
+          <button data-val="all">All entrants</button>
+        </div>
       </div>
       <div class="card card-chart">
         <svg id="arc-svg"></svg>
       </div>
+      <div class="picker-label">Select drivers</div>
+      <div class="driver-grid" id="arc-driver-grid"></div>
     </section>
 
     <section class="view" id="view-breakdown" hidden>
       <div class="view-head">
         <h1>Per-Race Breakdown</h1>
-        <div class="view-sub">Stage 1 · Stage 2 · Finish · Fastest Lap, stacked</div>
+        <div class="view-sub">Stage 1 · Stage 2 · Finish · Fastest Lap, stacked · hover bars for details</div>
       </div>
       <div class="toolbar">
-        <select id="breakdown-driver" class="select"></select>
+        <div class="toggle-group" data-group="breakdown-ft">
+          <button class="on" data-val="ft">Full-time only</button>
+          <button data-val="all">All entrants</button>
+        </div>
       </div>
       <div class="card card-chart">
         <svg id="breakdown-svg"></svg>
+        <div id="breakdown-tooltip" class="chart-tooltip" hidden></div>
       </div>
       <div class="legend" id="breakdown-legend"></div>
+      <div class="picker-label">Select driver</div>
+      <div class="driver-grid" id="breakdown-driver-grid"></div>
     </section>
 
     <section class="view" id="view-trajectory" hidden>
@@ -160,7 +171,7 @@
         <h1>Standings</h1>
         <div class="view-sub">Full points breakdown · click any column to sort</div>
       </div>
-      <div class="card">
+      <div class="card table-scroll">
         <table id="standings-table" class="data-table"></table>
       </div>
     </section>

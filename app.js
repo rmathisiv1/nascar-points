@@ -1,5 +1,5 @@
 // =========================================================================
-// NASCAR Momentum — app.js
+// NASCAR Points Analysis — app.js
 // Loads data/points_<year>.json + data/colors.json, renders 6 views,
 // handles routing, series/season/entity switching, filters, sorts.
 // =========================================================================
@@ -8,19 +8,14 @@ const STATE = {
   series: "NCS",
   season: 2026,
   view: "form",
-  entity: "driver",         // driver | owner  — global toggle
-  data: null,               // current season's series (races array)
-  colors: null,             // full colors.json
+  entity: "driver",
+  data: null,
+  colors: null,
   seasonsAvailable: [],
-  // form-view settings
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
-  // season-arc view settings
-  arc: { selected: new Set() },
-  // breakdown view settings
-  breakdown: { driver: null },
-  // trajectory view settings
+  arc: { selected: new Set(), ftOnly: true },
+  breakdown: { driver: null, ftOnly: true },
   trajectory: { mode: "season", show: "all", labels: "top12" },
-  // standings view sort
   standings: { sortKey: "total", sortDir: "desc" },
 };
 
@@ -136,7 +131,6 @@ function hideError() {
 // UI CONTROLS
 // ============================================================
 function wireUIControls() {
-  // Series switcher
   document.querySelectorAll("#series-sw button").forEach(b => {
     b.addEventListener("click", async () => {
       document.querySelectorAll("#series-sw button")
@@ -149,7 +143,6 @@ function wireUIControls() {
     });
   });
 
-  // Entity switcher (Driver vs Owner/Car) — global
   document.querySelectorAll("#entity-sw button").forEach(b => {
     b.addEventListener("click", () => {
       document.querySelectorAll("#entity-sw button")
@@ -161,7 +154,7 @@ function wireUIControls() {
     });
   });
 
-  // Form-view toggles (window + full-time filter)
+  // Form view toggles
   document.querySelectorAll("#view-form .toggle-group").forEach(g => {
     const group = g.dataset.group;
     g.querySelectorAll("button").forEach(b => {
@@ -178,7 +171,31 @@ function wireUIControls() {
     renderFormTable();
   });
 
-  // Trajectory-view toggles
+  // Arc toggles (full-time filter)
+  document.querySelectorAll("#view-arc .toggle-group").forEach(g => {
+    const group = g.dataset.group;
+    g.querySelectorAll("button").forEach(b => {
+      b.addEventListener("click", () => {
+        g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+        if (group === "arc-ft") STATE.arc.ftOnly = (b.dataset.val === "ft");
+        renderArc();
+      });
+    });
+  });
+
+  // Breakdown toggle (full-time filter)
+  document.querySelectorAll("#view-breakdown .toggle-group").forEach(g => {
+    const group = g.dataset.group;
+    g.querySelectorAll("button").forEach(b => {
+      b.addEventListener("click", () => {
+        g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+        if (group === "breakdown-ft") STATE.breakdown.ftOnly = (b.dataset.val === "ft");
+        renderBreakdown();
+      });
+    });
+  });
+
+  // Trajectory toggles
   document.querySelectorAll("#view-trajectory .toggle-group").forEach(g => {
     const group = g.dataset.group;
     g.querySelectorAll("button").forEach(b => {
@@ -192,7 +209,6 @@ function wireUIControls() {
     });
   });
 
-  // Nav links
   document.querySelectorAll(".navlink").forEach(a => {
     a.addEventListener("click", () => {
       document.getElementById("sidebar")?.classList.remove("open");
@@ -202,7 +218,6 @@ function wireUIControls() {
     document.getElementById("sidebar")?.classList.toggle("open");
   });
 
-  // Arc view buttons
   document.getElementById("arc-clear")?.addEventListener("click", () => {
     STATE.arc.selected.clear();
     renderArc();
@@ -212,12 +227,6 @@ function wireUIControls() {
     const totals = computeSeasonTotals();
     totals.slice(0, 10).forEach(t => STATE.arc.selected.add(entityKey(t)));
     renderArc();
-  });
-
-  // Breakdown driver picker
-  document.getElementById("breakdown-driver")?.addEventListener("change", (e) => {
-    STATE.breakdown.driver = e.target.value;
-    renderBreakdown();
   });
 }
 
@@ -267,22 +276,17 @@ function racesSorted() {
     .sort((a, b) => (a.round || 0) - (b.round || 0));
 }
 
-// Group by driver OR by car_number (owner mode).
-// In owner mode the display name is "#NN — <primary driver>" (or list of drivers
-// if the car was shared); driver swaps accumulate in one bucket.
 function allEntities() {
   const map = new Map();
   racesSorted().forEach(r => {
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      const key = (STATE.entity === "owner")
-        ? `#${d.car_number}`
-        : d.driver;
+      const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
       if (!map.has(key)) {
         map.set(key, {
           key,
-          driver: d.driver,              // primary / most-recent
-          driversSet: new Set(),         // all drivers that drove this car
+          driver: d.driver,
+          driversSet: new Set(),
           car_number: d.car_number,
           team: d.team,
           manufacturer: d.manufacturer,
@@ -291,7 +295,6 @@ function allEntities() {
       }
       const e = map.get(key);
       e.driversSet.add(d.driver);
-      // keep most-recent driver as primary display
       e.driver = d.driver;
       e.team = d.team;
       e.manufacturer = d.manufacturer || e.manufacturer;
@@ -309,7 +312,6 @@ function allEntities() {
       });
     });
   });
-  // Convert driversSet → array sorted by race count in this car
   return Array.from(map.values()).map(e => {
     const counts = {};
     e.races.forEach(r => { counts[r.driver] = (counts[r.driver] || 0) + 1; });
@@ -318,10 +320,8 @@ function allEntities() {
   });
 }
 
-// Backward-compat name kept for existing callers we didn't rewrite internally
 function allDrivers() { return allEntities(); }
 
-// The label we show in chips, callouts, etc.
 function displayName(entity) {
   if (STATE.entity === "owner") {
     if (entity.drivers && entity.drivers.length > 1) {
@@ -331,7 +331,7 @@ function displayName(entity) {
   }
   return entity.driver;
 }
-// Key used in Sets (arc selection, etc.)
+
 function entityKey(entity) {
   return (STATE.entity === "owner") ? `#${entity.car_number}` : entity.driver;
 }
@@ -351,8 +351,6 @@ function mean(xs) {
   return a.reduce((s, x) => s + x, 0) / a.length;
 }
 
-// Placeholder Form Rating: 100 - avgFinish*2 over the window.
-// Bigger = better. 1st → 98, 10th → 80, 20th → 60, 30th → 40, 40th → 20.
 function formRatingFor(driverRaces, windowType) {
   let slice;
   if (windowType === "5") slice = driverRaces.slice(-5);
@@ -361,15 +359,13 @@ function formRatingFor(driverRaces, windowType) {
   const finishes = slice.map(r => r.finish).filter(x => x != null);
   if (finishes.length === 0) return null;
   const avg = finishes.reduce((s, x) => s + x, 0) / finishes.length;
-  const rating = Math.max(0, Math.min(100, 100 - (avg - 1) * 2));
-  return rating;
+  return Math.max(0, Math.min(100, 100 - (avg - 1) * 2));
 }
 
 function seasonTotalRating(driverRaces) {
   return formRatingFor(driverRaces, "season");
 }
 
-// Full-time detector: started every race this season (our current definition).
 function isFullTime(entity) {
   const totalRaces = racesSorted().length;
   return entity.races.length >= totalRaces && totalRaces > 0;
@@ -388,7 +384,7 @@ function orgColorFor(series, carNumber) {
   const k = SERIES_TO_KEY[series];
   const pal = STATE.colors && STATE.colors[k];
   if (pal && pal[carNumber] && pal[carNumber].org) return pal[carNumber].org;
-  return FALLBACK_COLOR;
+  return null;
 }
 function teamCodeFromPalette(series, carNumber) {
   const k = SERIES_TO_KEY[series];
@@ -418,14 +414,12 @@ function contrastTextFor(hex) {
 // ============================================================
 function renderMetricBar() {
   const bar = document.getElementById("metricbar");
-  if (!bar || !STATE.data) { bar.innerHTML = ""; return; }
+  if (!bar || !STATE.data) { if (bar) bar.innerHTML = ""; return; }
   const races = racesSorted();
   const totals = computeSeasonTotals();
   const lastRace = races[races.length - 1];
   const leader = totals[0];
 
-  // Hottest/coldest from eligible (full-time) entities only, so part-timers
-  // with one good road-course run don't top the leaderboard.
   const deltas = allEntities().filter(isFullTime).map(d => {
     const f = formRatingFor(d.races, "5");
     const s = formRatingFor(d.races, "season");
@@ -452,14 +446,14 @@ function signed(n) {
 }
 
 // ============================================================
-// SORT HELPER (used by Form + Standings)
+// SORT HELPER
 // ============================================================
 function sortRows(rows, key, dir) {
   const mul = dir === "asc" ? 1 : -1;
   return rows.slice().sort((a, b) => {
     const va = a[key], vb = b[key];
     if (va == null && vb == null) return 0;
-    if (va == null) return 1;     // nulls always last
+    if (va == null) return 1;
     if (vb == null) return -1;
     if (typeof va === "number" && typeof vb === "number") return (va - vb) * mul;
     return String(va).localeCompare(String(vb)) * mul;
@@ -467,7 +461,7 @@ function sortRows(rows, key, dir) {
 }
 
 // ============================================================
-// VIEW: FORM TABLE
+// FORM TABLE
 // ============================================================
 function renderFormTable() {
   const card = document.getElementById("form-card");
@@ -477,28 +471,17 @@ function renderFormTable() {
   const races = racesSorted();
   const shownRaces = races.slice(-5);
 
-  // Build decorated rows
   let decorated = entities.map(d => {
     const formRating = formRatingFor(d.races, STATE.form.window);
     const seasonRating = seasonTotalRating(d.races);
     const deltaR = (formRating != null && seasonRating != null) ? formRating - seasonRating : null;
     const lastFinishes = d.races.slice(-5).map(r => r.finish);
     const totalPts = d.races.reduce((s, r) => s + r.total, 0);
-    const avgFinish = mean(d.races.map(r => r.finish).filter(x => x != null));
-    return {
-      ...d,
-      formRating, seasonRating, deltaR,
-      lastFinishes, totalPts, avgFinish,
-      fullTime: isFullTime(d),
-    };
+    return { ...d, formRating, seasonRating, deltaR, lastFinishes, totalPts, fullTime: isFullTime(d) };
   });
 
-  // Full-time filter (default on)
-  if (STATE.form.ftOnly) {
-    decorated = decorated.filter(d => d.fullTime);
-  }
+  if (STATE.form.ftOnly) decorated = decorated.filter(d => d.fullTime);
 
-  // Search
   const q = STATE.form.search.trim().toLowerCase();
   if (q) {
     decorated = decorated.filter(d =>
@@ -508,7 +491,6 @@ function renderFormTable() {
     );
   }
 
-  // Sort: user key, else default by formRating desc
   const sortKey = STATE.form.sortKey || "formRating";
   const sortDir = STATE.form.sortKey ? STATE.form.sortDir : "desc";
   decorated = sortRows(decorated, sortKey, sortDir);
@@ -529,7 +511,7 @@ function renderFormTable() {
     const trend = trendArrow(d.deltaR);
     const ratingCls = d.deltaR == null ? "" : d.deltaR > 6 ? "hot" : d.deltaR < -6 ? "cold" : "";
     const teamPill = renderTeamPill(STATE.series, d.car_number, d.team);
-    return `<tr data-driver="${escapeHTML(d.driver)}">
+    return `<tr>
       <td class="num" style="color: var(--dim)">${i + 1}</td>
       <td><span class="driver-cell">
         <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
@@ -557,6 +539,7 @@ function renderFormTable() {
   };
 
   card.innerHTML = `
+    <div class="table-scroll">
     <table class="data-table">
       <thead>
         <tr>
@@ -572,9 +555,9 @@ function renderFormTable() {
       </thead>
       <tbody>${rows || `<tr><td colspan="99" class="muted" style="padding:40px;text-align:center">No drivers match.</td></tr>`}</tbody>
     </table>
+    </div>
   `;
 
-  // wire sortable headers
   card.querySelectorAll("th.sortable").forEach(th => {
     th.addEventListener("click", () => {
       const key = th.dataset.sort;
@@ -642,7 +625,9 @@ function sparkSVG(finishes, color, w, h) {
   </svg>`;
 }
 
-// ---- Team code / pill rendering ------------------------------------------
+// ============================================================
+// TEAM CODE / PILL
+// ============================================================
 function teamCodeFromName(team) {
   if (!team) return "";
   const m = team.match(/\(([^)]+)\)\s*$/);
@@ -653,15 +638,15 @@ function teamCodeFromName(team) {
     if (/childress/i.test(name)) return "RCR";
     if (/23xi/i.test(name)) return "23XI";
     if (/penske/i.test(name)) return "PEN";
-    if (/rfk|roush/i.test(name)) return "RFR";
+    if (/rfk|roush/i.test(name)) return "RFK";
     if (/front row/i.test(name)) return "FRM";
-    if (/trackhouse/i.test(name)) return "TMS";
+    if (/trackhouse/i.test(name)) return "THR";
     if (/legacy/i.test(name)) return "LMC";
     if (/kaulig/i.test(name)) return "KR";
     if (/spire/i.test(name)) return "SPI";
     if (/jr motorsports/i.test(name)) return "JRM";
     if (/haas/i.test(name)) return "GH";
-    if (/wood brothers/i.test(name)) return "WMS";
+    if (/wood brothers/i.test(name)) return "WBR";
     if (/rick ware/i.test(name)) return "RWR";
     if (/hyak/i.test(name)) return "HYAK";
     return name.split(/\s+/).map(w => w[0]).join("").slice(0, 4).toUpperCase();
@@ -669,21 +654,64 @@ function teamCodeFromName(team) {
   return team.split(/\s+/).map(w => w[0]).join("").slice(0, 4).toUpperCase();
 }
 
-// Render a colored team pill using palette team-code + org color.
-// Falls back to sponsor-string parsing if colors.json doesn't have the entry.
+// Readable team pill — colored background if palette has org, else a
+// subdued fallback pill that's still legible on dark.
 function renderTeamPill(series, carNumber, teamString) {
   const palTeam = teamCodeFromPalette(series, carNumber);
   const orgHex = orgColorFor(series, carNumber);
   const code = palTeam || teamCodeFromName(teamString) || "";
-  if (!code) return `<span class="team-code">—</span>`;
-  const bg = (orgHex && orgHex !== FALLBACK_COLOR) ? orgHex : "transparent";
-  const textCol = contrastTextFor(bg);
-  const borderCol = (bg === "transparent") ? "var(--border)" : "transparent";
-  return `<span class="team-pill" style="background:${bg};color:${textCol};border:1px solid ${borderCol}">${escapeHTML(code)}</span>`;
+  if (!code) return `<span class="team-pill fallback">—</span>`;
+  if (orgHex) {
+    const textCol = contrastTextFor(orgHex);
+    return `<span class="team-pill" style="background:${orgHex};color:${textCol}">${escapeHTML(code)}</span>`;
+  }
+  return `<span class="team-pill fallback">${escapeHTML(code)}</span>`;
 }
 
 // ============================================================
-// VIEW: SEASON ARC (cumulative points line chart)
+// DRIVER GRID (Arc + Breakdown picker)
+// ============================================================
+// mode: "multi" (arc) | "single" (breakdown)
+// filter: ftOnly flag
+// onSelect: (entity) => void
+// isSelected: (entity) => boolean
+function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  let entities = allEntities();
+  if (ftOnly) entities = entities.filter(isFullTime);
+  // sort by current season points desc so the big names float to top
+  entities = entities.map(e => ({
+    ...e, total: e.races.reduce((s, r) => s + r.total, 0),
+  })).sort((a, b) => b.total - a.total);
+
+  host.innerHTML = entities.map(e => {
+    const carHex = colorFor(STATE.series, e.car_number);
+    const txt = contrastTextFor(carHex);
+    const sel = isSelected(e) ? "selected" : "";
+    // keep pill narrow: car# + last name (driver mode) / car# + primary last name (owner mode)
+    const lastName = e.driver.split(/\s+/).slice(-1)[0];
+    const label = (STATE.entity === "owner" && (e.drivers || []).length > 1)
+      ? `${lastName} +${(e.drivers || []).length - 1}`
+      : lastName;
+    return `<div class="driver-pill ${sel}" data-key="${escapeHTML(entityKey(e))}" title="${escapeHTML(displayName(e))}">
+      <span class="dp-num" style="background:${carHex};color:${txt}">${e.car_number}</span>
+      <span class="dp-name">${escapeHTML(label)}</span>
+    </div>`;
+  }).join("");
+
+  host.querySelectorAll(".driver-pill").forEach(el => {
+    el.addEventListener("click", () => {
+      const key = el.dataset.key;
+      const e = entities.find(x => entityKey(x) === key);
+      if (!e) return;
+      onSelect(e);
+    });
+  });
+}
+
+// ============================================================
+// SEASON CUMULATIVE (was Season Arc)
 // ============================================================
 function renderArc() {
   const svg = document.getElementById("arc-svg");
@@ -692,6 +720,7 @@ function renderArc() {
   const races = racesSorted();
   if (races.length === 0) {
     svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">No races loaded.</text>`;
+    renderArcGrid();
     return;
   }
 
@@ -720,8 +749,7 @@ function renderArc() {
     totals.slice(0, 5).forEach(t => STATE.arc.selected.add(entityKey(t)));
   }
 
-  // WIDER right pad so end-of-line labels are never clipped.
-  const W = 980, H = 420, pad = { top: 16, right: 140, bottom: 26, left: 48 };
+  const W = 980, H = 420, pad = { top: 16, right: 150, bottom: 26, left: 48 };
   const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
 
   const maxPts = Math.max(1, ...seriesData.map(s => s.pts[s.pts.length - 1] || 0));
@@ -742,7 +770,6 @@ function renderArc() {
     `<text x="${xScale(i)}" y="${H - 8}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">R${r}</text>`
   ).join("");
 
-  // End-of-line labels: if two labels would collide vertically, nudge them apart.
   const active = seriesData
     .filter(s => STATE.arc.selected.has(s.key))
     .map(s => ({ ...s, labelY: yScale(s.pts[s.pts.length - 1]) }))
@@ -758,7 +785,6 @@ function renderArc() {
     const d = s.pts.map((v, i) => `${xScale(i)},${yScale(v)}`).join(" ");
     const xEnd = xScale(nRaces - 1);
     const yEnd = yScale(s.pts[s.pts.length - 1]);
-    // connector if the label was nudged
     const connector = Math.abs(s.labelY - yEnd) > 2
       ? `<line x1="${xEnd + 2}" y1="${yEnd}" x2="${xEnd + 5}" y2="${s.labelY}" stroke="${s.color}" stroke-width="0.8" opacity="0.6"/>`
       : "";
@@ -773,54 +799,63 @@ function renderArc() {
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   svg.innerHTML = `${gridlines.join("")}${xLabels}${lines}`;
 
-  renderArcChips(seriesData);
+  renderArcGrid();
 }
 
-function renderArcChips(seriesData) {
-  const host = document.getElementById("arc-chips");
-  if (!host) return;
-  const chips = seriesData
-    .filter(s => STATE.arc.selected.has(s.key))
-    .map(s => {
-      const txt = contrastTextFor(s.color);
-      return `<span class="chip" style="background:${s.color};color:${txt}">
-        ${escapeHTML(s.label)}
-        <span class="x" data-key="${escapeHTML(s.key)}">×</span>
-      </span>`;
-    }).join("");
-  host.innerHTML = chips;
-  host.querySelectorAll(".x").forEach(x => {
-    x.addEventListener("click", () => {
-      STATE.arc.selected.delete(x.dataset.key);
+function renderArcGrid() {
+  renderDriverGrid(
+    "arc-driver-grid",
+    "multi",
+    STATE.arc.ftOnly,
+    (e) => {
+      const k = entityKey(e);
+      if (STATE.arc.selected.has(k)) STATE.arc.selected.delete(k);
+      else STATE.arc.selected.add(k);
       renderArc();
-    });
-  });
+    },
+    (e) => STATE.arc.selected.has(entityKey(e))
+  );
 }
 
 // ============================================================
-// VIEW: PER-RACE BREAKDOWN (stacked bars)
+// BREAKDOWN — now with pill grid + hover tooltip
 // ============================================================
 function renderBreakdown() {
   const svg = document.getElementById("breakdown-svg");
+  const tip = document.getElementById("breakdown-tooltip");
   if (!STATE.data) return;
 
-  const picker = document.getElementById("breakdown-driver");
-  const entities = allEntities().sort((a, b) => displayName(a).localeCompare(displayName(b)));
-  if (!STATE.breakdown.driver && entities.length) STATE.breakdown.driver = entities[0].driver;
-  picker.innerHTML = entities.map(d =>
-    `<option value="${escapeHTML(d.driver)}" ${d.driver === STATE.breakdown.driver ? "selected" : ""}>${escapeHTML(displayName(d))}</option>`
-  ).join("");
+  let entities = allEntities();
+  if (!STATE.breakdown.driver && entities.length) {
+    // default selection: current season leader
+    const totals = computeSeasonTotals();
+    STATE.breakdown.driver = totals.length ? totals[0].driver : entities[0].driver;
+  }
 
-  const d = entities.find(x => x.driver === STATE.breakdown.driver) || entities[0];
+  // Look up selected entity (could be filtered out by ft toggle — keep selection
+  // even when the grid hides it)
+  const d = entities.find(x => x.driver === STATE.breakdown.driver)
+    || (entities.length ? entities[0] : null);
+
+  renderBreakdownGrid();
+
   if (!d) { svg.innerHTML = ""; return; }
 
   const races = racesSorted();
   const rounds = races.map(r => r.round);
+  const raceByRound = {};
+  races.forEach(r => { raceByRound[r.round] = r; });
   const byRound = {};
   d.races.forEach(r => { byRound[r.round] = r; });
   const data = rounds.map(rd => {
     const r = byRound[rd] || { s1: 0, s2: 0, fin: 0, fl: 0, total: 0 };
-    return { round: rd, s1: r.s1 || 0, s2: r.s2 || 0, fin: r.fin || 0, fl: r.fl || 0 };
+    const meta = raceByRound[rd];
+    return {
+      round: rd,
+      s1: r.s1 || 0, s2: r.s2 || 0, fin: r.fin || 0, fl: r.fl || 0,
+      finish_pos: r.finish, start_pos: r.start,
+      trackCode: meta?.track_code, trackName: meta?.track, raceName: meta?.name,
+    };
   });
 
   const W = 920, H = 340, pad = { top: 16, right: 14, bottom: 28, left: 40 };
@@ -835,38 +870,121 @@ function renderBreakdown() {
   const COL_FN = "#7280a0";
   const COL_FL = "#fbbf24";
 
-  const bars = data.map((r, i) => {
-    const cx = pad.left + i * xStep + xStep / 2;
-    const x = cx - barW / 2;
-    let y0 = pad.top + innerH;
-    const segs = [
-      { v: r.fin, c: COL_FN, label: "Finish" },
-      { v: r.s1,  c: COL_S1, label: "Stage 1" },
-      { v: r.s2,  c: COL_S2, label: "Stage 2" },
-      { v: r.fl,  c: COL_FL, label: "FL" },
-    ];
-    const segHTML = segs.filter(s => s.v > 0).map(s => {
-      const h = (s.v / maxTot) * innerH;
-      const y = y0 - h;
-      y0 = y;
-      return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${s.c}"><title>${s.label}: ${s.v}</title></rect>`;
-    }).join("");
-    return `<g>${segHTML}
-      <text x="${cx}" y="${H - 10}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">R${r.round}</text>
-    </g>`;
-  }).join("");
+  // Build bars as DOM nodes so we can wire hover
+  const svgNS = "http://www.w3.org/2000/svg";
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.innerHTML = "";
 
-  const grids = [];
+  // gridlines
   for (let i = 0; i <= 5; i++) {
     const y = pad.top + (i / 5) * innerH;
     const v = Math.round(maxTot * (1 - i / 5));
-    grids.push(`<line class="gridline" x1="${pad.left}" x2="${W - pad.right}" y1="${y}" y2="${y}"/>`);
-    grids.push(`<text x="${pad.left - 6}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-family="var(--mono)" font-size="10">${v}</text>`);
+    const line = document.createElementNS(svgNS, "line");
+    line.setAttribute("class", "gridline");
+    line.setAttribute("x1", pad.left); line.setAttribute("x2", W - pad.right);
+    line.setAttribute("y1", y); line.setAttribute("y2", y);
+    svg.appendChild(line);
+    const lbl = document.createElementNS(svgNS, "text");
+    lbl.setAttribute("x", pad.left - 6); lbl.setAttribute("y", y + 3);
+    lbl.setAttribute("text-anchor", "end");
+    lbl.setAttribute("fill", "var(--muted)");
+    lbl.setAttribute("font-family", "var(--mono)"); lbl.setAttribute("font-size", "10");
+    lbl.textContent = v;
+    svg.appendChild(lbl);
   }
 
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  svg.innerHTML = `${grids.join("")}${bars}`;
+  const hideTip = () => { if (tip) tip.hidden = true; };
+  const showTip = (r, cx, bottomY) => {
+    if (!tip) return;
+    const total = r.s1 + r.s2 + r.fin + r.fl;
+    const parts = [];
+    if (r.fin) parts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${COL_FN}"></span>Finish</span><span class="val">${r.fin}</span></div>`);
+    if (r.s1)  parts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${COL_S1}"></span>Stage 1</span><span class="val">${r.s1}</span></div>`);
+    if (r.s2)  parts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${COL_S2}"></span>Stage 2</span><span class="val">${r.s2}</span></div>`);
+    if (r.fl)  parts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${COL_FL}"></span>Fastest Lap</span><span class="val">${r.fl}</span></div>`);
+    if (!parts.length) parts.push(`<div class="tt-row"><span class="lbl">No points</span><span class="val">0</span></div>`);
+    const title = `R${r.round}${r.trackCode ? ` · ${r.trackCode}` : ""}${r.finish_pos ? ` · P${r.finish_pos}` : ""}`;
+    tip.innerHTML = `
+      <div class="tt-hdr">${escapeHTML(title)}</div>
+      ${parts.join("")}
+      <div class="tt-row total"><span class="lbl">Total</span><span class="val">${total}</span></div>
+    `;
+    // position the tooltip in CSS pixels relative to the card-chart container
+    tip.hidden = false;
+    // The SVG fills its parent; compute position by bounding rect
+    const svgRect = svg.getBoundingClientRect();
+    const card = svg.parentElement;
+    const cardRect = card.getBoundingClientRect();
+    // Map SVG-coordinate (cx, bottomY) → pixel within the card
+    const scale = svgRect.width / W;
+    const pxX = (svgRect.left - cardRect.left) + cx * scale;
+    const pxY = (svgRect.top  - cardRect.top)  + bottomY * scale;
+    // default: above the top of the bar
+    const tipRect = tip.getBoundingClientRect();
+    let left = pxX - tipRect.width / 2;
+    let top = pxY - tipRect.height - 10;
+    // clamp horizontally inside card
+    left = Math.max(6, Math.min(left, card.clientWidth - tipRect.width - 6));
+    if (top < 6) top = pxY + 14;  // flip below if no room above
+    tip.style.left = `${left}px`;
+    tip.style.top  = `${top}px`;
+  };
+
+  data.forEach((r, i) => {
+    const cx = pad.left + i * xStep + xStep / 2;
+    const x = cx - barW / 2;
+    let y0 = pad.top + innerH;
+
+    // INVISIBLE HIT-RECT spanning the full stacked column (easier to hover,
+    // especially on mobile, than tiny segments)
+    const total = r.s1 + r.s2 + r.fin + r.fl;
+    const topY = total > 0 ? yScale(total) : (pad.top + innerH - 2);
+    const hit = document.createElementNS(svgNS, "rect");
+    hit.setAttribute("x", x - 2);
+    hit.setAttribute("y", pad.top);
+    hit.setAttribute("width", barW + 4);
+    hit.setAttribute("height", innerH);
+    hit.setAttribute("fill", "transparent");
+    hit.style.cursor = "pointer";
+    hit.addEventListener("mouseenter", () => showTip(r, cx, topY));
+    hit.addEventListener("mousemove",  () => showTip(r, cx, topY));
+    hit.addEventListener("mouseleave", hideTip);
+    // tap support on mobile
+    hit.addEventListener("click", () => showTip(r, cx, topY));
+    svg.appendChild(hit);
+
+    const segs = [
+      { v: r.fin, c: COL_FN },
+      { v: r.s1,  c: COL_S1 },
+      { v: r.s2,  c: COL_S2 },
+      { v: r.fl,  c: COL_FL },
+    ];
+    segs.filter(s => s.v > 0).forEach(s => {
+      const h = (s.v / maxTot) * innerH;
+      const y = y0 - h;
+      y0 = y;
+      const rect = document.createElementNS(svgNS, "rect");
+      rect.setAttribute("x", x);
+      rect.setAttribute("y", y);
+      rect.setAttribute("width", barW);
+      rect.setAttribute("height", h);
+      rect.setAttribute("fill", s.c);
+      rect.style.pointerEvents = "none";
+      svg.appendChild(rect);
+    });
+
+    const lbl = document.createElementNS(svgNS, "text");
+    lbl.setAttribute("x", cx); lbl.setAttribute("y", H - 10);
+    lbl.setAttribute("text-anchor", "middle");
+    lbl.setAttribute("fill", "var(--muted)");
+    lbl.setAttribute("font-family", "var(--mono)"); lbl.setAttribute("font-size", "10");
+    lbl.textContent = `R${r.round}`;
+    svg.appendChild(lbl);
+  });
+
+  // Hide tooltip when cursor leaves the whole svg
+  svg.addEventListener("mouseleave", hideTip);
 
   document.getElementById("breakdown-legend").innerHTML = `
     <span class="legend-item"><span class="legend-swatch" style="background:${COL_FN}"></span>Finish points</span>
@@ -876,17 +994,27 @@ function renderBreakdown() {
   `;
 }
 
+function renderBreakdownGrid() {
+  renderDriverGrid(
+    "breakdown-driver-grid",
+    "single",
+    STATE.breakdown.ftOnly,
+    (e) => {
+      STATE.breakdown.driver = e.driver;
+      renderBreakdown();
+    },
+    (e) => e.driver === STATE.breakdown.driver
+  );
+}
+
 // ============================================================
-// VIEW: TRAJECTORY (stage pts vs finish pts)
+// TRAJECTORY
 // ============================================================
 function renderTrajectory() {
   const svg = document.getElementById("trajectory-svg");
   if (!STATE.data) return;
 
-  const races = racesSorted();
-  const allE = allEntities();
-  // Full-time only (same rule as Form Table default)
-  const eligible = allE.filter(isFullTime);
+  const eligible = allEntities().filter(isFullTime);
 
   if (eligible.length === 0) {
     svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">Not enough data yet.</text>`;
@@ -896,7 +1024,6 @@ function renderTrajectory() {
     return;
   }
 
-  // Compute season avgs and last-5 avgs per entity
   const pts = eligible.map(d => {
     const n = d.races.length;
     const nL5 = Math.min(5, n);
@@ -908,32 +1035,23 @@ function renderTrajectory() {
     const finL5 = last5.reduce((s, r) => s + r.fin, 0) / nL5;
     return {
       entity: d,
-      xSeason: stageSeason,
-      ySeason: finSeason,
-      xForm: stageL5,
-      yForm: finL5,
+      xSeason: stageSeason, ySeason: finSeason,
+      xForm: stageL5, yForm: finL5,
       totalSeason,
       label: displayName(d),
       color: colorFor(STATE.series, d.car_number),
     };
   });
 
-  // Regression on season points (stable baseline)
   const regPts = pts.map(p => ({ x: p.xSeason, y: p.ySeason }));
   const { a, b } = regression(regPts);
 
-  // Residuals (season-based; stable across mode toggles)
-  const withResid = pts.map(p => {
-    const expected = a + b * p.xSeason;
-    return { ...p, expected, resid: p.ySeason - expected };
-  });
+  const withResid = pts.map(p => ({ ...p, expected: a + b * p.xSeason, resid: p.ySeason - (a + b * p.xSeason) }));
 
-  // Filter: outperform / underperform / all
   let shown = withResid;
   if (STATE.trajectory.show === "outperform") shown = withResid.filter(p => p.resid > 0);
   if (STATE.trajectory.show === "underperform") shown = withResid.filter(p => p.resid < 0);
 
-  // Labels: top 12 by total season pts
   const labelKeys = new Set();
   if (STATE.trajectory.labels === "all") {
     shown.forEach(p => labelKeys.add(entityKey(p.entity)));
@@ -942,27 +1060,21 @@ function renderTrajectory() {
     top12.forEach(p => labelKeys.add(entityKey(p.entity)));
   }
 
-  // ===== chart geometry =====
   const W = 980, H = 540;
   const pad = { top: 26, right: 110, bottom: 48, left: 62 };
   const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
 
-  const xMaxRaw = Math.max(8, ...pts.map(p => Math.max(p.xSeason, p.xForm)));
-  const yMaxRaw = Math.max(30, ...pts.map(p => Math.max(p.ySeason, p.yForm)));
-  const xMax = Math.ceil(xMaxRaw / 2) * 2;
-  const yMax = Math.ceil(yMaxRaw / 5) * 5;
+  const xMax = Math.ceil(Math.max(8, ...pts.map(p => Math.max(p.xSeason, p.xForm))) / 2) * 2;
+  const yMax = Math.ceil(Math.max(30, ...pts.map(p => Math.max(p.ySeason, p.yForm))) / 5) * 5;
   const xScale = v => pad.left + (v / xMax) * innerW;
   const yScale = v => pad.top + (1 - v / yMax) * innerH;
 
   const svgNS = "http://www.w3.org/2000/svg";
-  // preserve defs
   const defs = svg.querySelector("defs");
   svg.innerHTML = "";
   if (defs) svg.appendChild(defs);
-
   const g = document.createElementNS(svgNS, "g");
 
-  // gridlines + tick labels
   for (let v = 0; v <= xMax; v += 2) {
     const x = xScale(v);
     const line = document.createElementNS(svgNS, "line");
@@ -994,7 +1106,6 @@ function renderTrajectory() {
     g.appendChild(lbl);
   }
 
-  // axis titles
   const xt = document.createElementNS(svgNS, "text");
   xt.setAttribute("x", pad.left + innerW / 2); xt.setAttribute("y", H - 10);
   xt.setAttribute("text-anchor", "middle"); xt.setAttribute("class", "axis-title");
@@ -1012,7 +1123,6 @@ function renderTrajectory() {
     : "↑  Last-5 avg finish pts / race";
   g.appendChild(yt);
 
-  // regression line
   const rx1 = 0, rx2 = xMax;
   const ry1 = a + b * rx1, ry2 = a + b * rx2;
   const reg = document.createElementNS(svgNS, "line");
@@ -1026,7 +1136,6 @@ function renderTrajectory() {
   rlbl.textContent = "LEAGUE TREND";
   g.appendChild(rlbl);
 
-  // dots / arrows
   shown.forEach(p => {
     const color = p.color;
     const key = entityKey(p.entity);
@@ -1084,22 +1193,17 @@ function renderTrajectory() {
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   svg.appendChild(g);
 
-  // legend
   document.getElementById("trajectory-legend").innerHTML = `
     <span class="legend-item"><span class="legend-dot" style="background:${STATE.trajectory.mode === "trajectory" ? "var(--accent-2)" : "var(--accent)"}"></span>${STATE.entity === "owner" ? "Car" : "Driver"} · ${STATE.trajectory.mode === "trajectory" ? "season → last-5" : "season avg"}</span>
-    <span class="legend-item"><span class="legend-line"></span>League trend (expected finish pts given stage pts)</span>
-    <span class="legend-item" style="color:var(--pos)">▲ above trend = converting pace to results</span>
-    <span class="legend-item" style="color:var(--neg)">▼ below trend = leaving points on the table</span>
+    <span class="legend-item"><span class="legend-line"></span>League trend</span>
+    <span class="legend-item" style="color:var(--pos)">▲ above = converting pace to results</span>
+    <span class="legend-item" style="color:var(--neg)">▼ below = leaving points on the table</span>
   `;
 
-  // callouts (always season-based)
   const sorted = [...withResid].sort((x, y) => y.resid - x.resid);
-  const over = sorted.slice(0, 5);
-  const under = sorted.slice(-5).reverse();
-  fillTrajCallout("trajectory-over", over);
-  fillTrajCallout("trajectory-under", under);
+  fillTrajCallout("trajectory-over", sorted.slice(0, 5));
+  fillTrajCallout("trajectory-under", sorted.slice(-5).reverse());
 
-  // sub-header
   const sub = document.getElementById("trajectory-sub");
   sub.textContent = STATE.trajectory.mode === "trajectory"
     ? "Pace vs. results — arrows from season avg → last-5 avg (momentum direction)"
@@ -1150,7 +1254,7 @@ function fillTrajCallout(hostId, rows) {
 }
 
 // ============================================================
-// VIEW: HEATMAP — brighter greens/reds
+// HEATMAP
 // ============================================================
 function renderHeatmap() {
   const host = document.getElementById("heatmap-wrap");
@@ -1201,8 +1305,7 @@ function renderHeatmap() {
       } else {
         const f = mine.finish;
         cell.textContent = f;
-        const bg = heatmapColor(f);
-        cell.style.background = bg;
+        cell.style.background = heatmapColor(f);
         cell.style.color = heatmapText(f);
       }
       grid.appendChild(cell);
@@ -1219,19 +1322,15 @@ function renderHeatmap() {
   host.appendChild(grid);
 }
 
-// Brighter heatmap scale — saturated green for top finishes, saturated red for back.
 function heatmapColor(finish) {
   if (finish == null) return "transparent";
   const clamp = (a, lo, hi) => Math.max(lo, Math.min(hi, a));
   const t = clamp(finish, 1, 40);
   if (t <= 20) {
-    // 1→1.0, 20→0.0
     const k = 1 - (t - 1) / 19;
-    // alpha 0.18 → 0.75 (bigger jump than before)
     const a = 0.18 + 0.57 * k;
     return `rgba(50, 230, 100, ${a.toFixed(3)})`;
   } else {
-    // 21→0.0, 40→1.0
     const k = (t - 20) / 20;
     const a = 0.15 + 0.55 * k;
     return `rgba(255, 70, 70, ${a.toFixed(3)})`;
@@ -1247,7 +1346,7 @@ function heatmapText(finish) {
 }
 
 // ============================================================
-// VIEW: STANDINGS — bigger numbers, team pills, weekly Δ arrows, sortable
+// STANDINGS
 // ============================================================
 function renderStandings() {
   const table = document.getElementById("standings-table");
@@ -1255,36 +1354,30 @@ function renderStandings() {
 
   const races = racesSorted();
   const lastRaceRound = races.length ? races[races.length - 1].round : null;
-  const nMinus1Cutoff = lastRaceRound; // "current" includes through last race
   const previousCutoff = lastRaceRound ? lastRaceRound - 1 : null;
 
-  // Current totals (through last race)
-  const currentMap = pointsMapThroughRound(nMinus1Cutoff);
+  const currentMap = pointsMapThroughRound(lastRaceRound);
   const currentRows = rankingRowsFrom(currentMap);
 
-  // Previous-week totals (through last race minus 1) — used for Δ-arrows
   const previousMap = previousCutoff && previousCutoff >= 1
     ? pointsMapThroughRound(previousCutoff)
     : new Map();
   const previousRank = new Map();
   Array.from(previousMap.entries())
     .sort((a, b) => b[1].total - a[1].total)
-    .forEach(([k, _v], i) => previousRank.set(k, i + 1));
+    .forEach(([k], i) => previousRank.set(k, i + 1));
 
-  // Decorate
   let rows = currentRows.map((r, i) => {
     const currRank = i + 1;
     const prevRank = previousRank.has(r.key) ? previousRank.get(r.key) : null;
-    const posChange = prevRank != null ? (prevRank - currRank) : null; // positive = moved up
+    const posChange = prevRank != null ? (prevRank - currRank) : null;
     return { ...r, currRank, prevRank, posChange };
   });
 
-  // Sort (default by total desc, which is what currentRows already is)
   const sk = STATE.standings.sortKey;
   const sd = STATE.standings.sortDir;
   if (sk && sk !== "total") {
     rows = sortRows(rows, sk, sd);
-    // rank column always shows current-points rank, which does NOT move when sorting other cols
   } else if (sk === "total" && sd === "asc") {
     rows = rows.slice().reverse();
   }
@@ -1366,7 +1459,6 @@ function renderStandings() {
   });
 }
 
-// Build a points/summary map through a given round (used for last-week deltas).
 function pointsMapThroughRound(maxRound) {
   const map = new Map();
   (STATE.data?.races || []).forEach(r => {
@@ -1376,11 +1468,8 @@ function pointsMapThroughRound(maxRound) {
       const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
       if (!map.has(key)) {
         map.set(key, {
-          key,
-          driver: d.driver,
-          driversSet: new Set(),
-          car_number: d.car_number,
-          team: d.team,
+          key, driver: d.driver, driversSet: new Set(),
+          car_number: d.car_number, team: d.team,
           total: 0, starts: 0, wins: 0, top5: 0, top10: 0,
           finishes: [],
           sumS1: 0, sumS2: 0, sumFin: 0, sumFL: 0,
@@ -1388,7 +1477,7 @@ function pointsMapThroughRound(maxRound) {
       }
       const e = map.get(key);
       e.driversSet.add(d.driver);
-      e.driver = d.driver;           // most-recent
+      e.driver = d.driver;
       e.team = d.team;
       e.car_number = d.car_number;
       e.total += d.race_pts || 0;
@@ -1419,13 +1508,7 @@ function rankingRowsFrom(map) {
           ? `#${e.car_number} · ${e.driver} +${driversArr.length - 1}`
           : `#${e.car_number} · ${e.driver}`)
       : e.driver;
-    return {
-      ...e,
-      avgFinish,
-      displayLabel,
-      // for sorting by driver name, we want the visible label
-      driver: displayLabel,
-    };
+    return { ...e, avgFinish, displayLabel, driver: displayLabel };
   });
   rows.sort((a, b) => b.total - a.total);
   return rows;
@@ -1441,7 +1524,4 @@ function escapeHTML(s) {
   );
 }
 
-// ============================================================
-// GO
-// ============================================================
 boot();
