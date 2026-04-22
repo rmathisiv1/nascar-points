@@ -151,6 +151,20 @@ def discover_race_pages(series_code: str, season: int) -> list[dict]:
     print(f"[{series_code}] schedule HTTP {resp.status_code}, "
           f"{len(html)} bytes from {schedule_url}", file=sys.stderr)
 
+    # Dump first 1500 chars so we can see what kind of page this is
+    print(f"[{series_code}] HTML head (first 1500 chars):", file=sys.stderr)
+    print("----------", file=sys.stderr)
+    print(html[:1500], file=sys.stderr)
+    print("----------", file=sys.stderr)
+
+    # Also search for key markers
+    markers = ["cloudflare", "challenge", "please enable", "cf-browser",
+               "race-results", "schedule", "wp-content", "<article", "<table"]
+    print(f"[{series_code}] marker presence:", file=sys.stderr)
+    for m in markers:
+        print(f"    {m!r}: {'YES' if m.lower() in html.lower() else 'no'}",
+              file=sys.stderr)
+
     soup = BeautifulSoup(html, "html.parser")
     slug = cfg["race_results_slug"]
 
