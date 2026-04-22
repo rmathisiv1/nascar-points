@@ -1,7 +1,7 @@
 {
   "season": 2026,
-  "generated_at": "2026-04-22T00:00:00Z",
-  "source": "initial seed — first GitHub Action run overwrites with Jayski-scraped data",
+  "generated_at": "2026-04-22T15:00:52Z",
+  "source": "jayski.com",
   "series": {
     "NCS": {
       "series_code": "NCS",
