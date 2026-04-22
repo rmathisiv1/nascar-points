@@ -92,6 +92,29 @@ html, body {
 }
 .series-sw button:not(.on):hover { color: var(--text); }
 
+/* Entity (Driver/Owner) switcher — lives next to series-sw */
+.entity-sw {
+  display: flex;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+.entity-sw button {
+  padding: 6px 12px;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted);
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  border-radius: 4px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.entity-sw button.on {
+  background: var(--accent-bg-hi);
+  color: var(--accent-2);
+}
+.entity-sw button:not(.on):hover { color: var(--text); }
+
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .season-select, .select {
   background: var(--card);
@@ -201,6 +224,11 @@ html, body {
   margin: 16px 0 14px;
   flex-wrap: wrap;
 }
+.toolbar-label {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--dim); letter-spacing: 0.1em;
+  text-transform: uppercase; margin-right: 2px;
+}
 .toggle-group {
   display: inline-flex;
   background: var(--card);
@@ -284,16 +312,16 @@ html, body {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 .data-table th {
   text-align: left;
   font-weight: 500;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 10px 12px;
+  padding: 11px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
   position: sticky; top: 0; z-index: 5;
@@ -310,9 +338,9 @@ html, body {
 .data-table th.sort-asc .sort-arrow { color: var(--accent-2); }
 
 .data-table td {
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 .data-table tbody tr:hover td {
@@ -322,16 +350,56 @@ html, body {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13px;
 }
 
-/* car tag (colored chip with number) */
+/* Standings-specific larger numbers and rank cell */
+#standings-table td.num {
+  font-size: 14px;
+  font-weight: 500;
+}
+#standings-table td.num.total-col {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+#standings-table td.rank-cell {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Weekly position-change arrow pill (used in Standings) */
+.pos-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+  min-width: 28px;
+  justify-content: center;
+  vertical-align: middle;
+}
+.pos-change.up   { background: var(--pos-bg-hi); color: var(--pos); }
+.pos-change.down { background: var(--neg-bg-hi); color: var(--neg); }
+.pos-change.flat { color: var(--dim); }
+.pos-change.new  { background: var(--accent-bg-hi); color: var(--accent-2); }
+
+/* car tag (colored chip with number) — bumped up a bit */
 .car-tag {
   display: inline-flex;
   align-items: center; justify-content: center;
-  min-width: 30px; padding: 2px 6px;
+  min-width: 32px; padding: 3px 7px;
   font-family: var(--mono);
-  font-size: 11px; font-weight: 700;
+  font-size: 12px; font-weight: 700;
   border-radius: 3px;
   color: #000;
   text-align: center;
@@ -341,22 +409,33 @@ html, body {
 }
 .team-code {
   font-family: var(--mono);
-  font-size: 10px; color: var(--muted);
+  font-size: 11px; color: var(--muted);
+  font-weight: 600;
+}
+/* Team-code "pill" used on Standings — bigger + colored background */
+.team-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 42px; padding: 3px 9px;
+  font-family: var(--mono);
+  font-size: 12px; font-weight: 800;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+  text-align: center;
 }
 
-/* heat cells (finish position colorized) */
+/* heat cells (finish position colorized) — brighter palette */
 .heat {
   display: inline-block;
   padding: 2px 6px; border-radius: 3px;
-  font-family: var(--mono); font-size: 11px;
+  font-family: var(--mono); font-size: 12px;
   font-variant-numeric: tabular-nums;
-  min-width: 18px; text-align: center;
+  min-width: 20px; text-align: center;
 }
-.heat-top   { background: rgba(63,217,122,0.25); color: #7fe5a3; }
-.heat-up    { background: rgba(63,217,122,0.09); color: #9fe8b8; }
+.heat-top   { background: rgba(50,230,100,0.55); color: #00140a; font-weight:700; }
+.heat-up    { background: rgba(50,230,100,0.20); color: #a7f0bc; }
 .heat-mid   { color: var(--dim); }
-.heat-down  { background: rgba(255,107,107,0.08); color: #ff9e9e; }
-.heat-bot   { background: rgba(255,107,107,0.22); color: #ff9e9e; }
+.heat-down  { background: rgba(255, 70, 70,0.20); color: #ffc2c2; }
+.heat-bot   { background: rgba(255, 70, 70,0.55); color: #230707; font-weight:700; }
 .heat-none  { color: var(--dim); }
 
 /* sparkline + form column */
@@ -397,7 +476,7 @@ html, body {
 .delta-pill.down { background: var(--neg-bg-hi); color: var(--neg); }
 .delta-pill.zero { color: var(--dim); }
 
-/* ========== HEATMAP ========== */
+/* ========== HEATMAP — brighter green/red scale ========== */
 .heatmap-wrap {
   overflow: auto;
   padding: 8px 0;
@@ -413,16 +492,17 @@ html, body {
 }
 .hm-cell {
   font-family: var(--mono);
-  font-size: 10px;
-  padding: 3px 4px;
+  font-size: 11px;
+  padding: 4px 4px;
   text-align: center;
-  min-width: 26px;
+  min-width: 28px;
   border-radius: 2px;
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 .hm-label {
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
   padding: 4px 10px 4px 4px;
   color: var(--text);
   display: flex; align-items: center; gap: 6px;
@@ -433,9 +513,9 @@ html, body {
 }
 .hm-header {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   color: var(--muted);
-  padding: 2px 3px;
+  padding: 3px 3px;
   text-align: center;
   letter-spacing: 0.05em;
   position: sticky; top: 0;
@@ -471,11 +551,56 @@ html, body {
   display: flex; gap: 16px; flex-wrap: wrap;
   padding: 12px 4px 0;
   font-size: 11px; color: var(--muted);
+  align-items: center;
 }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch {
   width: 12px; height: 12px; border-radius: 2px;
 }
+.legend-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+}
+.legend-line {
+  width: 18px; height: 0;
+  border-top: 1px dashed var(--muted);
+}
+
+/* ========== TRAJECTORY-VIEW SPECIFIC ========== */
+.traj-dot { cursor: pointer; transition: r 0.12s, stroke-width 0.12s; }
+.traj-dot:hover { stroke: #fff; stroke-width: 1.8; }
+.traj-label { fill: var(--text-2); font-family: var(--mono); font-size: 10px; pointer-events: none; font-weight: 600; }
+.regline { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.55; }
+.regline-label { fill: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; }
+.axis-title { fill: var(--dim); font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+.callout-rail {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin-top: 14px;
+}
+.callout {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.callout .h {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--muted); letter-spacing: 0.12em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.callout .row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 0; font-size: 12px;
+}
+.callout .row + .row { border-top: 1px solid rgba(255, 255, 255, 0.03); }
+.callout .name { display: inline-flex; align-items: center; gap: 8px; }
+.callout .delta {
+  font-family: var(--mono); font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px; border-radius: 3px;
+}
+.callout .delta.pos { background: var(--pos-bg-hi); color: var(--pos); }
+.callout .delta.neg { background: var(--neg-bg-hi); color: var(--neg); }
 
 /* ========== UTILITY ========== */
 .muted { color: var(--muted); }
@@ -492,6 +617,7 @@ code {
 @media (max-width: 900px) {
   .topbar { padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
   .series-sw { order: 10; margin-left: 0; }
+  .entity-sw { order: 11; }
   .season-pill { display: none; }
   .topbar-right { margin-left: auto; }
   .season-select { display: none; }
@@ -518,6 +644,10 @@ code {
   .toggle-group button { padding: 4px 8px; font-size: 9px; }
   .search-input { min-width: 100%; }
 
-  .data-table th, .data-table td { padding: 6px 8px; font-size: 11px; }
-  .data-table td.num { font-size: 10px; }
+  .data-table th, .data-table td { padding: 7px 8px; font-size: 12px; }
+  .data-table td.num { font-size: 11px; }
+  #standings-table td.num { font-size: 12px; }
+  #standings-table td.num.total-col { font-size: 13px; }
+
+  .callout-rail { grid-template-columns: 1fr; }
 }

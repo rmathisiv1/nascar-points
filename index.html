@@ -19,6 +19,10 @@
     <button data-series="NOS">NOS</button>
     <button data-series="NTS">NTS</button>
   </div>
+  <div class="entity-sw" id="entity-sw" title="Group by driver or by owner/car">
+    <button data-entity="driver" class="on">Driver</button>
+    <button data-entity="owner">Owner/Car</button>
+  </div>
   <div class="topbar-right">
     <select id="season-picker" class="season-select"></select>
     <button id="nav-toggle" class="nav-toggle" aria-label="Menu">☰</button>
@@ -33,6 +37,7 @@
     <a href="#/form"       class="navlink" data-view="form">Form</a>
     <a href="#/arc"        class="navlink" data-view="arc">Season Arc</a>
     <a href="#/breakdown"  class="navlink" data-view="breakdown">Breakdown</a>
+    <a href="#/trajectory" class="navlink" data-view="trajectory">Trajectory</a>
     <a href="#/heatmap"    class="navlink" data-view="heatmap">Heatmap</a>
     <a href="#/standings"  class="navlink" data-view="standings">Standings</a>
     <div class="sidebar-footer">
@@ -53,6 +58,10 @@
           <button class="on" data-val="5">Form L5</button>
           <button data-val="10">Form L10</button>
           <button data-val="season">Season</button>
+        </div>
+        <div class="toggle-group" data-group="ftfilter">
+          <button class="on" data-val="ft">Full-time only</button>
+          <button data-val="all">All entrants</button>
         </div>
         <input type="search" id="form-search" placeholder="Search driver…" class="search-input">
       </div>
@@ -90,10 +99,56 @@
       <div class="legend" id="breakdown-legend"></div>
     </section>
 
+    <section class="view" id="view-trajectory" hidden>
+      <div class="view-head">
+        <h1>Stage Trajectory</h1>
+        <div class="view-sub" id="trajectory-sub">Pace vs. results — season average per driver · dashed line = league trend</div>
+      </div>
+      <div class="toolbar">
+        <span class="toolbar-label">Mode</span>
+        <div class="toggle-group" data-group="traj-mode">
+          <button class="on" data-val="season">Season avg</button>
+          <button data-val="trajectory">Form trajectory</button>
+        </div>
+        <span class="toolbar-label">Show</span>
+        <div class="toggle-group" data-group="traj-show">
+          <button class="on" data-val="all">All</button>
+          <button data-val="outperform">Outperformers</button>
+          <button data-val="underperform">Stage hunters</button>
+        </div>
+        <span class="toolbar-label">Labels</span>
+        <div class="toggle-group" data-group="traj-labels">
+          <button class="on" data-val="top12">Top 12</button>
+          <button data-val="all">All</button>
+          <button data-val="none">None</button>
+        </div>
+      </div>
+      <div class="card card-chart">
+        <svg id="trajectory-svg">
+          <defs>
+            <marker id="traj-arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <polygon points="0 0, 6 3, 0 6" fill="currentColor"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+      <div class="legend" id="trajectory-legend"></div>
+      <div class="callout-rail">
+        <div class="callout">
+          <div class="h">Top outperformers · finish vs. expected</div>
+          <div id="trajectory-over"></div>
+        </div>
+        <div class="callout">
+          <div class="h">Top underperformers · finish vs. expected</div>
+          <div id="trajectory-under"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="view" id="view-heatmap" hidden>
       <div class="view-head">
         <h1>Driver × Race Heatmap</h1>
-        <div class="view-sub">Finish position by race — darker green = better</div>
+        <div class="view-sub">Finish position by race — brighter green = better</div>
       </div>
       <div class="card">
         <div id="heatmap-wrap" class="heatmap-wrap"></div>
@@ -103,7 +158,7 @@
     <section class="view" id="view-standings" hidden>
       <div class="view-head">
         <h1>Standings</h1>
-        <div class="view-sub">Full points breakdown</div>
+        <div class="view-sub">Full points breakdown · click any column to sort</div>
       </div>
       <div class="card">
         <table id="standings-table" class="data-table"></table>
