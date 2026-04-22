@@ -155,6 +155,35 @@ def discover_race_pages(series_code: str, season: int) -> list[dict]:
           f"{len(html)} bytes from {schedule_url}", file=sys.stderr)
 
     soup = BeautifulSoup(html, "html.parser")
+
+    # Diagnostic: what does the schedule table row structure look like?
+    # We want to know whether individual races are even linked.
+    tables = soup.find_all("table")
+    print(f"[{series_code}] page has {len(tables)} <table> element(s)",
+          file=sys.stderr)
+    for ti, tbl in enumerate(tables[:2]):  # only first 2 tables
+        rows = tbl.find_all("tr")
+        print(f"[{series_code}] table {ti}: {len(rows)} rows", file=sys.stderr)
+        # Print first 2 data rows (skip the header) so we see cell layout
+        for ri, row in enumerate(rows[1:4]):
+            cells_text = [c.get_text(" ", strip=True)[:60] for c in row.find_all(["td","th"])]
+            cell_links = [a.get("href","") for a in row.find_all("a", href=True)]
+            print(f"    row {ri}: cells={cells_text}", file=sys.stderr)
+            print(f"            links={cell_links[:3]}", file=sys.stderr)
+
+    # Diagnostic: unique "shapes" of jayski links on the page. Strip year
+    # and race-name specifics so we see just the structural patterns.
+    all_hrefs = [a["href"] for a in soup.find_all("a", href=True)
+                 if "jayski.com" in a["href"] or a["href"].startswith("/")]
+    patterns = set()
+    for h in all_hrefs:
+        # normalize: keep series slug, collapse race-name to <RACE>, keep trailing slug
+        norm = re.sub(r"/\d{4}-[^/]+-at-[^/]+-", "/<YEAR>-<SERIES>-<RACE>-", h)
+        norm = re.sub(r"/\d{4}-", "/<YEAR>-", norm)
+        patterns.add(norm)
+    print(f"[{series_code}] unique link patterns ({len(patterns)}):", file=sys.stderr)
+    for p in sorted(patterns)[:25]:
+        print(f"    {p}", file=sys.stderr)
     slug = cfg["race_results_slug"]
 
     seen: dict[str, dict] = {}
