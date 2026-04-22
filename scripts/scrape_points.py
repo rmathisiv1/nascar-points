@@ -127,15 +127,52 @@ class Race:
 # cookie, making subsequent requests look genuinely browser-originated.
 # Jayski's bot-fight-mode returns 403 to plain `requests` even with a real
 # Chrome UA, but lets cloudscraper through.
-_SCRAPER = cloudscraper.create_scraper(
-    browser={"browser": "chrome", "platform": "windows", "desktop": True}
-)
+_SCRAPER = None
+_DUMPED_SAMPLE = False  # one-shot diagnostic flag
 
 
-def fetch(url: str, **kw) -> requests.Response:
-    r = _SCRAPER.get(url, headers=HEADERS, timeout=45, **kw)
-    r.raise_for_status()
-    return r
+def _new_scraper():
+    return cloudscraper.create_scraper(
+        browser={"browser": "chrome", "platform": "windows", "desktop": True},
+        delay=10,  # give JS challenge time to complete
+    )
+
+
+def fetch(url: str, max_attempts: int = 4, **kw) -> requests.Response:
+    """
+    Fetch with cloudscraper. Retries on 403 (Cloudflare intermittent block)
+    and 5xx with exponential backoff. On repeated 403, recreates the
+    cloudscraper session so a fresh JS-challenge handshake is performed.
+    """
+    global _SCRAPER
+    if _SCRAPER is None:
+        _SCRAPER = _new_scraper()
+
+    last_exc = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            r = _SCRAPER.get(url, headers=HEADERS, timeout=45, **kw)
+            r.raise_for_status()
+            return r
+        except requests.HTTPError as e:
+            last_exc = e
+            code = e.response.status_code if e.response is not None else 0
+            if code == 403:
+                # Cloudflare bounced us — refresh the challenge cookie and wait
+                print(f"    (fetch attempt {attempt}/{max_attempts}: "
+                      f"403, refreshing session)", file=sys.stderr)
+                _SCRAPER = _new_scraper()
+                time.sleep(3 * attempt)
+                continue
+            if 500 <= code < 600:
+                time.sleep(2 * attempt)
+                continue
+            raise  # 4xx other than 403 — don't retry
+        except requests.RequestException as e:
+            last_exc = e
+            time.sleep(2 * attempt)
+    # all retries exhausted
+    raise last_exc
 
 
 def discover_race_pages(series_code: str, season: int) -> list[dict]:
@@ -297,12 +334,102 @@ def row_from_cells(cells: list[str]) -> Optional[DriverRace]:
     )
 
 
+def _parse_text_line(line: str) -> Optional[DriverRace]:
+    """
+    Fallback parser — when pdfplumber's table extraction fails, try to
+    match a results row by shape. Expected token pattern (based on the
+    NASCAR race-results PDF format we examined):
+        Fin Str Car Driver… Team… Laps [Stage1Pos] [Stage2Pos] Pts Status [Tms Laps_led]
+    Rows always start with two integers (Fin, Str), then a car number
+    (which may be prefixed with '_' for leading-zero car numbers, or
+    contain alphanumerics for the #0-#07-style cars).
+    """
+    parts = line.split()
+    if len(parts) < 8:
+        return None
+
+    def to_int(s: str) -> Optional[int]:
+        m = re.match(r"^-?\d+$", s.strip())
+        return int(m.group()) if m else None
+
+    fin = to_int(parts[0])
+    start = to_int(parts[1])
+    if fin is None or start is None:
+        return None
+
+    # Parts[2] is the car number. After that: driver words + team words,
+    # then trailing numerics (laps, [s1], [s2], pts, status, tms, laps_led).
+    car = parts[2]
+
+    # Work backwards: find the status word (non-integer, title-case word
+    # like "Running", "Accident", "DNF", "DVP", "Engine", etc.)
+    status_idx = None
+    for i in range(len(parts) - 1, 3, -1):
+        tok = parts[i]
+        if not re.match(r"^-?\d+$", tok) and tok[0:1].isalpha() and tok.isalpha():
+            status_idx = i
+            break
+    if status_idx is None:
+        return None
+
+    # Trailing ints after status: tms, laps_led (optional)
+    trailing = [to_int(x) for x in parts[status_idx + 1:]]
+    trailing = [x for x in trailing if x is not None]
+    laps_led = trailing[1] if len(trailing) >= 2 else 0
+
+    # Numerics immediately before status: [laps, (s1), (s2), pts]
+    left = parts[3:status_idx]
+    # Find the trailing contiguous block of integers in `left`
+    nums = []
+    for tok in reversed(left):
+        if re.match(r"^-?\d+$", tok):
+            nums.insert(0, int(tok))
+        else:
+            break
+    if len(nums) < 2:
+        return None
+
+    if len(nums) == 2:
+        laps_completed, pts = nums
+        s1 = s2 = None
+    elif len(nums) == 3:
+        # Could be laps/s1/pts or laps/s2/pts — ambiguous, try laps/s2/pts
+        laps_completed, s2, pts = nums
+        s1 = None
+    else:  # 4+
+        laps_completed, s1, s2, pts = nums[0], nums[1], nums[2], nums[3]
+
+    # Driver + team tokens are the words between parts[3] and the start
+    # of the trailing numeric block. We can't cleanly split these without
+    # knowing where the team begins, so we lump both together as "driver".
+    # The table-extractor pass (which runs first) is what gives us clean
+    # driver/team separation; this fallback is best-effort.
+    text = " ".join(left[:len(left) - len(nums)])
+    ineligible = text.startswith("*")
+    if ineligible:
+        text = text.lstrip("* ").strip()
+    # Heuristic: split at the last capitalized word that looks team-like
+    driver, team = text, ""
+
+    return DriverRace(
+        driver=driver, car_number=car, team=team,
+        manufacturer=manufacturer_from_team(team),
+        start_pos=start, finish_pos=fin,
+        laps_completed=laps_completed, laps_led=laps_led or 0,
+        stage_1_pos=s1, stage_2_pos=s2,
+        stage_1_pts=stage_pts(s1), stage_2_pts=stage_pts(s2),
+        race_pts=pts, ineligible=ineligible,
+        status=parts[status_idx],
+    )
+
+
 def parse_race_pdf(pdf_bytes: bytes, source_url: str, series_code: str) -> Optional[Race]:
     race = Race(series=series_code, round=0, date="", track="", track_code="",
                 name="", source_pdf=source_url)
 
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         if not pdf.pages:
+            print("    ! pdf has no pages", file=sys.stderr)
             return None
         page = pdf.pages[0]
         text = page.extract_text() or ""
@@ -325,7 +452,7 @@ def parse_race_pdf(pdf_bytes: bytes, source_url: str, series_code: str) -> Optio
         if m:
             race.fastest_lap_driver_car = m.group(1).lstrip("_")
 
-        # pdfplumber table extraction
+        # Primary: pdfplumber table extraction
         parsed_rows: list[DriverRace] = []
         tables = page.extract_tables(
             table_settings={"vertical_strategy": "text", "horizontal_strategy": "text"}
@@ -338,6 +465,31 @@ def parse_race_pdf(pdf_bytes: bytes, source_url: str, series_code: str) -> Optio
                 dr = row_from_cells(cells)
                 if dr:
                     parsed_rows.append(dr)
+
+        # Fallback: text-stream regex parse
+        if not parsed_rows:
+            for line in text.splitlines():
+                dr = _parse_text_line(line)
+                if dr:
+                    parsed_rows.append(dr)
+            if parsed_rows:
+                print(f"    (used text-stream fallback parser, "
+                      f"{len(parsed_rows)} rows)", file=sys.stderr)
+
+        # Final diagnostic — if still empty, dump first chunk of text so
+        # we can see what the PDF actually looks like. Throttle to once per
+        # process via a module-level flag to keep logs readable.
+        if not parsed_rows:
+            global _DUMPED_SAMPLE
+            snippet = "\n".join(text.splitlines()[:30])
+            if not _DUMPED_SAMPLE:
+                print(f"    ! pdf yielded 0 rows. text sample "
+                      f"(only dumped once per run):", file=sys.stderr)
+                print("    " + snippet.replace("\n", "\n    "), file=sys.stderr)
+                _DUMPED_SAMPLE = True
+            else:
+                print(f"    ! pdf yielded 0 rows (text-sample suppressed)",
+                      file=sys.stderr)
 
     # Apply fastest-lap point
     if race.fastest_lap_driver_car:
