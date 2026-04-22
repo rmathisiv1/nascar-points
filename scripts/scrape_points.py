@@ -220,82 +220,85 @@ PDF_LINK_PATTERNS = [
 
 def find_pdf_url(race_page_url: str) -> Optional[str]:
     """
-    Race-page hubs link to multiple PDFs — contingency awards reports,
-    shade reports, oil consumption reports, and (the one we actually want)
-    the race-results / points report. Score each PDF link by preference
-    and pick the best match.
+    Schedule-page entries link to a "-race-page/" hub. The hub lists
+    rosters, contingency-awards PDFs, and a "Race Results" *link* that
+    points to a separate HTML page ending in "-race-results/". The
+    actual points-report PDF is embedded on THAT page.
+
+    So: fetch the hub, find the -race-results/ page link, fetch that,
+    and find the PDF there.
     """
     try:
-        html = fetch(race_page_url).text
+        hub_html = fetch(race_page_url).text
     except Exception as e:
-        print(f"    ! race page fetch failed: {e}", file=sys.stderr)
+        print(f"    ! hub page fetch failed: {e}", file=sys.stderr)
         return None
-    soup = BeautifulSoup(html, "html.parser")
+    hub_soup = BeautifulSoup(hub_html, "html.parser")
 
-    # Find all PDF candidates on the page with surrounding context
-    candidates: list[tuple[int, str, str]] = []  # (score, href, context)
-    for a in soup.find_all("a", href=True):
+    # Step 1: find the -race-results/ link on the hub page
+    results_page_url = None
+    for a in hub_soup.find_all("a", href=True):
+        href = a["href"].strip()
+        if "-race-results/" in href and "jayski.com" in href:
+            if href.startswith("/"):
+                href = "https://www.jayski.com" + href
+            results_page_url = href
+            break
+
+    if not results_page_url:
+        # Hub doesn't link a -race-results/ page (probably because the race
+        # hasn't happened yet). Not a bug — just skip.
+        return None
+
+    # Step 2: fetch the -race-results/ page and find its PDF
+    try:
+        results_html = fetch(results_page_url).text
+    except Exception as e:
+        print(f"    ! results page fetch failed: {e}", file=sys.stderr)
+        return None
+    results_soup = BeautifulSoup(results_html, "html.parser")
+
+    # On the -race-results/ page, the one PDF link is the points report.
+    # We still score to be safe, because Jayski may embed multiple PDFs
+    # over time.
+    best = None  # (score, href)
+    for a in results_soup.find_all("a", href=True):
         href = a["href"].strip()
         if not href.lower().endswith(".pdf"):
             continue
-        # Context = nearest heading-or-paragraph text around the link
         parent = a.find_parent(["p", "li", "h2", "h3", "h4", "div"])
         context = (parent.get_text(" ", strip=True) if parent
-                   else a.get_text(" ", strip=True))
-        context = context[:200]
+                   else a.get_text(" ", strip=True))[:200]
         text_to_match = (href + " " + context).lower()
 
         score = 0
-        # Strong positive signals — this is the points/results PDF
         if "race-results" in text_to_match or "race results" in text_to_match:
             score += 100
         if "points report" in text_to_match or "points-report" in text_to_match:
             score += 100
-        if "results report" in text_to_match:
-            score += 80
-        # Jayski's points-report PDFs usually live at media.jayski.com/...
-        if "points-report" in href.lower() or "race-results" in href.lower():
-            score += 40
-        # Negative signals — definitely NOT what we want
+        if "click here to download the pdf" in text_to_match:
+            score += 50
         for bad, penalty in [
-            ("contingency", -100),
-            ("awards report", -100),
-            ("shade report", -100),
-            ("oil consumption", -100),
-            ("photo", -100),
-            ("preview", -50),
-            ("pole qualifying", -50),
-            ("qualifying", -30),
-            ("practice", -30),
-            ("starting lineup", -20),
+            ("contingency", -100), ("awards report", -100),
+            ("shade report", -100), ("oil consumption", -100),
+            ("photo", -100), ("roster", -100),
+            ("preview", -50), ("qualifying", -50), ("practice", -50),
+            ("starting lineup", -30),
         ]:
             if bad in text_to_match:
                 score += penalty
-        # Weak positive for a generic "click here to download pdf" that
-        # *isn't* contradicted by a negative signal
-        if score == 0 and "click here to download the pdf" in text_to_match:
-            score = 10
+        if best is None or score > best[0]:
+            best = (score, href)
 
-        candidates.append((score, href, context))
-
-    if not candidates:
+    if best is None:
         return None
-
-    candidates.sort(key=lambda t: t[0], reverse=True)
-    best_score, best_href, best_ctx = candidates[0]
-
-    # Diagnostic: if best is weakly scored, show all candidates
-    if best_score < 50:
-        print(f"    (weak match, score={best_score}) candidates:",
-              file=sys.stderr)
-        for sc, h, c in candidates[:5]:
-            print(f"      [{sc}] {h} — {c[:80]!r}", file=sys.stderr)
-
-    if best_score <= 0:
+    score, href = best
+    if score <= 0:
+        # All PDFs on the page look like non-results material
         return None
-    if best_href.startswith("/"):
-        best_href = "https://www.jayski.com" + best_href
-    return best_href
+    if href.startswith("/"):
+        href = "https://www.jayski.com" + href
+    return href
 
 
 RACE_HEADER_RE = re.compile(
