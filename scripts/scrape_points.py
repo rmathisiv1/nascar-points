@@ -149,54 +149,47 @@ def discover_race_pages(series_code: str, season: int) -> list[dict]:
               f"({schedule_url})", file=sys.stderr)
         return []
 
-    # Debug: response size and a sample of the HTML so we can tell whether
-    # we got the real page vs. a Cloudflare interstitial or a JS shell.
+    # Diagnostic: response size and link count so we can tell at a glance
+    # whether we got the real page vs. a Cloudflare interstitial.
     print(f"[{series_code}] schedule HTTP {resp.status_code}, "
           f"{len(html)} bytes from {schedule_url}", file=sys.stderr)
-
-    # Dump first 1500 chars so we can see what kind of page this is
-    print(f"[{series_code}] HTML head (first 1500 chars):", file=sys.stderr)
-    print("----------", file=sys.stderr)
-    print(html[:1500], file=sys.stderr)
-    print("----------", file=sys.stderr)
-
-    # Also search for key markers
-    markers = ["cloudflare", "challenge", "please enable", "cf-browser",
-               "race-results", "schedule", "wp-content", "<article", "<table"]
-    print(f"[{series_code}] marker presence:", file=sys.stderr)
-    for m in markers:
-        print(f"    {m!r}: {'YES' if m.lower() in html.lower() else 'no'}",
-              file=sys.stderr)
 
     soup = BeautifulSoup(html, "html.parser")
     slug = cfg["race_results_slug"]
 
-    # Debug: sample of all anchor hrefs on the page, so we can see whether
-    # the site is returning links at all and in what shape.
-    all_hrefs = [a["href"] for a in soup.find_all("a", href=True)]
-    print(f"[{series_code}] page contains {len(all_hrefs)} links total",
-          file=sys.stderr)
-    # Print first 5 hrefs that look at all racing-related (for diagnosis)
-    racing_ish = [h for h in all_hrefs if
-                  "race" in h.lower() or "series" in h.lower()
-                  or str(season) in h]
-    print(f"[{series_code}] first {min(10, len(racing_ish))} racing-ish hrefs:",
-          file=sys.stderr)
-    for h in racing_ish[:10]:
-        print(f"    {h}", file=sys.stderr)
-
     seen: dict[str, dict] = {}
     for a in soup.find_all("a", href=True):
         href = a["href"].strip()
-        if slug not in href or "race-results" not in href:
+        # Jayski's schedule pages link each race's "driver-points-standings"
+        # page (e.g. .../2026-nascar-cup-series-adventhealth-400-at-kansas-
+        # speedway-driver-points-standings/). The corresponding race-results
+        # page is the same URL with "driver-points-standings" swapped for
+        # "race-results". Some pages may already link race-results directly.
+        if slug not in href:
             continue
         if str(season) not in href:
             continue
-        if href.startswith("/"):
-            href = "https://www.jayski.com" + href
-        if href in seen:
+        # Skip obvious non-per-race links
+        if any(bad in href for bad in [
+            "-schedule/", "-champions/", "-chase/", "-team-driver-chart/",
+            "/nascar-cup-series/2026-nascar-cup-series-race-results/",
+            "/oreilly-auto-parts-series/2026-nascar-oreilly-auto-parts-series-race-results/",
+            "/truck-series/2026-nascar-craftsman-truck-series-race-results/",
+        ]):
             continue
-        seen[href] = {"url": href, "label": a.get_text(" ", strip=True)}
+        # Transform driver-points-standings → race-results if needed
+        if "driver-points-standings" in href:
+            results_href = href.replace("-driver-points-standings/", "-race-results/")
+        elif "race-results" in href:
+            results_href = href
+        else:
+            # Not a recognized per-race page; skip
+            continue
+        if results_href.startswith("/"):
+            results_href = "https://www.jayski.com" + results_href
+        if results_href in seen:
+            continue
+        seen[results_href] = {"url": results_href, "label": a.get_text(" ", strip=True)}
     return list(seen.values())
 
 
