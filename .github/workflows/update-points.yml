@@ -1,0 +1,48 @@
+name: Update NCS Points Data
+
+on:
+  schedule:
+    # Every Monday 11:00 UTC (~7am ET, after Sunday race data is settled)
+    - cron: '0 11 * * 1'
+  # Allow manual triggering from the Actions tab
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season to refresh'
+        required: false
+        default: '2026'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: pip install requests beautifulsoup4
+
+      - name: Run scraper
+        run: |
+          python scripts/scrape_points.py \
+            --season "${{ github.event.inputs.season || '2026' }}" \
+            --out data/points.json
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet data/points.json; then
+            echo "No changes."
+            exit 0
+          fi
+          git add data/points.json
+          git commit -m "chore(data): refresh points.json [skip ci]"
+          git push

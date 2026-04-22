@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NCS Points Analysis · 2026</title>
+<meta name="description" content="NASCAR Cup Series 2026 points analysis — stage, finish, and fastest-lap breakdown by driver, team, and manufacturer." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
+<style>
+  :root {
+    --bg:        #0a0b0d;
+    --bg-2:      #111316;
+    --bg-3:      #191c21;
+    --line:      #262a31;
+    --line-2:    #333842;
+    --ink:       #e8e6e1;
+    --ink-dim:   #9ea0a5;
+    --ink-faint: #5d6068;
+
+    --tyt:       #eb0a1e;  /* Toyota red */
+    --chv:       #d4af37;  /* Chevy gold */
+    --frd:       #2f6fd1;  /* Ford blue */
+
+    --accent:    #ff7a00;  /* safety-flag orange */
+    --mono:      'JetBrains Mono', ui-monospace, monospace;
+    --display:   'Antonio', 'Oswald', 'Bebas Neue', system-ui, sans-serif;
+    --serif:     'Newsreader', Georgia, serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: var(--serif);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(ellipse at top left,  rgba(235,10,30,0.06), transparent 50%),
+      radial-gradient(ellipse at bottom right, rgba(47,111,209,0.05), transparent 50%);
+    min-height: 100vh;
+  }
+
+  /* ─── Masthead ──────────────────────────────────────────────────── */
+  .masthead {
+    border-bottom: 1px solid var(--line);
+    padding: 28px 32px 20px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    position: relative;
+  }
+  .masthead::before {
+    content: '';
+    position: absolute; left: 0; bottom: -1px; height: 3px; width: 160px;
+    background: linear-gradient(90deg, var(--tyt), var(--tyt) 33%, var(--chv) 33%, var(--chv) 66%, var(--frd) 66%);
+  }
+  .brand {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 42px;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  .brand .sub {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    color: var(--ink-dim);
+    margin-top: 6px;
+  }
+  .masthead-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: right;
+  }
+  .masthead-meta .dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: #3fcf5a; vertical-align: middle; margin-right: 6px;
+    box-shadow: 0 0 10px #3fcf5a;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  /* ─── Manufacturer scoreboard ───────────────────────────────────── */
+  .mfr-board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid var(--line);
+  }
+  .mfr-cell {
+    padding: 20px 32px;
+    border-right: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .mfr-cell:last-child { border-right: none; }
+  .mfr-cell::before {
+    content: '';
+    position: absolute; left: 0; top: 0; height: 100%; width: 4px;
+    background: var(--c, var(--ink));
+  }
+  .mfr-cell .label {
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--c);
+  }
+  .mfr-cell .pts {
+    font-family: var(--mono);
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 4px;
+    letter-spacing: -0.02em;
+  }
+  .mfr-cell .stats {
+    display: flex; gap: 16px;
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .mfr-cell .stats span strong {
+    color: var(--ink);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  /* ─── Filter bar ────────────────────────────────────────────────── */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    padding: 16px 32px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(8px);
+  }
+  .filters .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-faint);
+    margin-right: 4px;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    color: var(--ink-dim);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--ink-faint); }
+  .chip.active {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+  .chip[data-mfr="TYT"].active { background: var(--tyt); border-color: var(--tyt); color: #fff; }
+  .chip[data-mfr="CHV"].active { background: var(--chv); border-color: var(--chv); color: #000; }
+  .chip[data-mfr="FRD"].active { background: var(--frd); border-color: var(--frd); color: #fff; }
+
+  select, input[type=search] {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-3);
+    color: var(--ink);
+    border: 1px solid var(--line-2);
+    padding: 6px 10px;
+    outline: none;
+    min-width: 180px;
+  }
+  select:focus, input[type=search]:focus { border-color: var(--accent); }
+
+  /* ─── Main grid ─────────────────────────────────────────────────── */
+  main {
+    padding: 24px 32px 80px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 24px;
+  }
+
+  .panel {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 20px;
+    position: relative;
+  }
+  .panel > h2 {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    margin: 0 0 4px;
+  }
+  .panel > .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .col-12 { grid-column: span 12; }
+  .col-8  { grid-column: span 8; }
+  .col-6  { grid-column: span 6; }
+  .col-4  { grid-column: span 4; }
+  @media (max-width: 1000px) {
+    .col-8, .col-6, .col-4 { grid-column: span 12; }
+  }
+
+  /* ─── Leaderboards ──────────────────────────────────────────────── */
+  table.lb {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  table.lb th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--line);
+    padding: 8px 8px 10px;
+  }
+  table.lb th.num, table.lb td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.lb td {
+    padding: 9px 8px;
+    border-bottom: 1px dashed var(--line);
+    color: var(--ink);
+  }
+  table.lb tr:hover td { background: rgba(255,255,255,0.02); }
+  table.lb tr.highlight td {
+    background: rgba(255,122,0,0.06);
+    border-bottom-color: rgba(255,122,0,0.2);
+  }
+  .mfr-tag {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    letter-spacing: 0.12em;
+    color: #fff;
+    background: var(--mfr-c, var(--ink-faint));
+  }
+  .mfr-tag.TYT { background: var(--tyt); }
+  .mfr-tag.CHV { background: var(--chv); color: #000; }
+  .mfr-tag.FRD { background: var(--frd); }
+  .car-num {
+    display: inline-block;
+    min-width: 28px;
+    text-align: center;
+    padding: 2px 6px;
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    font-weight: 700;
+    margin-right: 8px;
+  }
+  .rank {
+    display: inline-block;
+    width: 22px; height: 22px;
+    line-height: 22px; text-align: center;
+    font-weight: 700;
+    background: var(--bg-3);
+  }
+  .rank-1 { background: var(--accent); color: #000; }
+  .rank-2 { background: #c0c0c0; color: #000; }
+  .rank-3 { background: #b07030; color: #000; }
+
+  /* ─── Heatmap ───────────────────────────────────────────────────── */
+  .heatmap-wrap { overflow-x: auto; }
+  table.heat {
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 11px;
+    min-width: 100%;
+  }
+  table.heat th, table.heat td {
+    padding: 0; text-align: center;
+    border: 1px solid var(--bg);
+  }
+  table.heat th {
+    font-size: 9px; font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    padding: 6px 4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  table.heat td.driver-name {
+    text-align: left;
+    padding: 0 10px 0 4px;
+    color: var(--ink);
+    font-size: 11px;
+    white-space: nowrap;
+    background: var(--bg-2);
+    min-width: 180px;
+  }
+  table.heat td.cell {
+    width: 48px; height: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    cursor: default;
+  }
+
+  /* Chart containers need height */
+  .chart-wrap { position: relative; height: 340px; margin-top: 8px; }
+  .chart-wrap.tall { height: 480px; }
+
+  /* Empty state */
+  .empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px dashed var(--line-2);
+  }
+
+  footer {
+    padding: 24px 32px;
+    border-top: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  footer a { color: var(--ink-dim); text-decoration: none; border-bottom: 1px dotted var(--line-2); }
+  footer a:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* skeleton */
+  .skel {
+    background: linear-gradient(90deg, var(--bg-3) 0%, #22262c 50%, var(--bg-3) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: 2px;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="brand">
+    NCS Points Control
+    <span class="sub" id="season-sub">2026 Season · Monitoring Live</span>
+  </div>
+  <div class="masthead-meta">
+    <div><span class="dot"></span><span id="status">Loading feed…</span></div>
+    <div id="generated">—</div>
+  </div>
+</header>
+
+<section class="mfr-board" id="mfr-board">
+  <div class="mfr-cell skel" style="height: 120px"></div>
+  <div class="mfr-cell skel" style="height: 120px"></div>
+  <div class="mfr-cell skel" style="height: 120px"></div>
+</section>
+
+<nav class="filters">
+  <span class="label">Manufacturer</span>
+  <button class="chip active" data-mfr="ALL">All</button>
+  <button class="chip" data-mfr="TYT">Toyota</button>
+  <button class="chip" data-mfr="CHV">Chevrolet</button>
+  <button class="chip" data-mfr="FRD">Ford</button>
+
+  <span class="label" style="margin-left:12px">Team</span>
+  <select id="team-filter"><option value="ALL">All teams</option></select>
+
+  <span class="label" style="margin-left:12px">Find driver</span>
+  <input type="search" id="driver-search" placeholder="e.g. Reddick" />
+
+  <span class="label" style="margin-left:12px">Compare</span>
+  <select id="compare-pick" multiple size="4" style="min-width:240px;height:auto"></select>
+  <span style="font-family:var(--mono);font-size:10px;color:var(--ink-faint);letter-spacing:0.1em;text-transform:uppercase">⌘/Ctrl+Click for multi</span>
+</nav>
+
+<main>
+  <!-- Season cumulative trend -->
+  <section class="panel col-12">
+    <div class="eyebrow">§ 01 · Season Arc</div>
+    <h2>Cumulative Points by Round</h2>
+    <div class="chart-wrap tall"><canvas id="chart-cumulative"></canvas></div>
+  </section>
+
+  <!-- Stacked per-race breakdown -->
+  <section class="panel col-12">
+    <div class="eyebrow">§ 02 · Per-Race Deconstruction</div>
+    <h2>Points Earned Each Race — Stage · Finish · Fastest Lap</h2>
+    <div class="chart-wrap tall"><canvas id="chart-breakdown"></canvas></div>
+    <div id="breakdown-note" style="margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);"></div>
+  </section>
+
+  <!-- Stage points leaderboard -->
+  <section class="panel col-6">
+    <div class="eyebrow">§ 03 · Stage Hunters</div>
+    <h2>Stage Points Leaderboard</h2>
+    <table class="lb" id="tbl-stage">
+      <thead><tr><th>#</th><th>Driver</th><th class="num">S1</th><th class="num">S2</th><th class="num">Total</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- Fastest lap leaderboard -->
+  <section class="panel col-6">
+    <div class="eyebrow">§ 04 · Fastest Lap Bonus (2025 rule)</div>
+    <h2>Who's Cashing the +1</h2>
+    <table class="lb" id="tbl-flap">
+      <thead><tr><th>#</th><th>Driver</th><th class="num">FL wins</th><th class="num">Races</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div style="margin-top:10px;font-family:var(--mono);font-size:10px;color:var(--ink-faint);letter-spacing:0.1em;text-transform:uppercase">1 point awarded to the driver with the fastest single lap of each race.</div>
+  </section>
+
+  <!-- Heatmap -->
+  <section class="panel col-12">
+    <div class="eyebrow">§ 05 · Where Points Were Earned</div>
+    <h2>Driver × Race Heatmap</h2>
+    <div class="heatmap-wrap"><table class="heat" id="heatmap"></table></div>
+  </section>
+
+  <!-- Full standings -->
+  <section class="panel col-12">
+    <div class="eyebrow">§ 06 · Garage List</div>
+    <h2>Full Driver Standings</h2>
+    <table class="lb" id="tbl-standings">
+      <thead><tr>
+        <th>#</th><th>Car</th><th>Driver</th><th>Team</th><th>Mfr</th>
+        <th class="num">Pts</th><th class="num">Behind</th><th class="num">Wins</th><th class="num">Stage W</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+
+<footer>
+  <div>Data: Box · TRD Toyota Points Report + Racing-Reference.info</div>
+  <div>Refresh cadence: weekly via GitHub Actions · <a id="src-link" href="#">view data source</a></div>
+</footer>
+
+<script>
+/* ──────────────────────────────────────────────────────────────────
+   Data loader — tries the repo's data/points.json first, falls back
+   gracefully. The GitHub Action refreshes this file weekly.
+   ────────────────────────────────────────────────────────────────── */
+const DATA_URL = 'data/points.json';
+
+async function loadData() {
+  const res = await fetch(DATA_URL, { cache: 'no-store' });
+  if (!res.ok) throw new Error('points.json not reachable');
+  return res.json();
+}
+
+/* Small helpers */
+const MFR_COLORS = { TYT: '#eb0a1e', CHV: '#d4af37', FRD: '#2f6fd1' };
+const MFR_NAMES  = { TYT: 'Toyota', CHV: 'Chevrolet', FRD: 'Ford' };
+const fmt = (n) => n == null ? '—' : n.toLocaleString();
+
+/* State */
+const state = {
+  data: null,
+  filterMfr: 'ALL',
+  filterTeam: 'ALL',
+  search: '',
+  compare: new Set(),   // driver names
+};
+
+/* ──────────────────────────────────────────────────────────────────
+   Renderers
+   ────────────────────────────────────────────────────────────────── */
+
+function renderMasthead(d) {
+  document.getElementById('season-sub').textContent =
+    `${d.season} Season · ${d.races?.length || 0} races w/ full breakdown · ${d.schedule.filter(r => r.round <= lastCompletedRound(d)).length} races run`;
+  document.getElementById('status').textContent = 'Live feed OK';
+  const when = new Date(d.generated_at);
+  document.getElementById('generated').textContent =
+    'Updated ' + when.toISOString().replace('T',' ').slice(0,16) + ' UTC';
+  document.getElementById('src-link').href = DATA_URL;
+}
+
+function lastCompletedRound(d) {
+  // max round present in manufacturer per_race_points array
+  const len = d.manufacturers?.TYT?.per_race_points?.length || 0;
+  return len;
+}
+
+function renderMfrBoard(d) {
+  const el = document.getElementById('mfr-board');
+  el.innerHTML = '';
+  ['TYT','CHV','FRD'].forEach(code => {
+    const m = d.manufacturers[code];
+    const cell = document.createElement('div');
+    cell.className = 'mfr-cell';
+    cell.style.setProperty('--c', MFR_COLORS[code]);
+    cell.innerHTML = `
+      <div class="label">${m.name}</div>
+      <div class="pts">${fmt(m.season_points)}</div>
+      <div class="stats">
+        <span><strong>${m.wins}</strong>wins</span>
+        <span><strong>${fmt(m.season_laps_led)}</strong>laps led</span>
+        <span><strong>${m.season_laps_led_pct.toFixed(1)}%</strong>share</span>
+      </div>
+    `;
+    el.appendChild(cell);
+  });
+}
+
+function populateTeamFilter(d) {
+  const teams = Array.from(new Set(d.driver_season_totals.map(r => r.team).filter(Boolean))).sort();
+  const sel = document.getElementById('team-filter');
+  sel.innerHTML = '<option value="ALL">All teams</option>' +
+    teams.map(t => `<option value="${t}">${t}</option>`).join('');
+}
+
+function populateCompare(d) {
+  const sel = document.getElementById('compare-pick');
+  sel.innerHTML = d.driver_season_totals
+    .filter(r => r.driver)
+    .map(r => `<option value="${r.driver}">${r.driver} (${r.car})</option>`).join('');
+  // sensible defaults: top 5
+  d.driver_season_totals.slice(0,5).forEach(r => state.compare.add(r.driver));
+  Array.from(sel.options).forEach(o => { o.selected = state.compare.has(o.value); });
+}
+
+function filteredDrivers() {
+  const d = state.data;
+  return d.driver_season_totals.filter(row => {
+    if (state.filterMfr !== 'ALL' && row.mfr !== state.filterMfr) return false;
+    if (state.filterTeam !== 'ALL' && row.team !== state.filterTeam) return false;
+    if (state.search && !row.driver.toLowerCase().includes(state.search.toLowerCase())) return false;
+    return true;
+  });
+}
+
+/* §06  Full standings */
+function renderStandings() {
+  const rows = filteredDrivers();
+  const leader = rows[0]?.pts ?? 0;
+  const tb = document.querySelector('#tbl-standings tbody');
+  tb.innerHTML = rows.map(r => `
+    <tr${state.compare.has(r.driver) ? ' class="highlight"' : ''}>
+      <td><span class="rank ${r.pos <= 3 ? 'rank-'+r.pos : ''}">${r.pos}</span></td>
+      <td><span class="car-num">${r.car || '—'}</span></td>
+      <td>${r.driver}</td>
+      <td>${r.team || '<span style="color:var(--ink-faint)">—</span>'}</td>
+      <td>${r.mfr ? `<span class="mfr-tag ${r.mfr}">${r.mfr}</span>` : ''}</td>
+      <td class="num">${fmt(r.pts)}</td>
+      <td class="num" style="color:var(--ink-dim)">${r.pts === leader ? '—' : '-' + (leader - r.pts)}</td>
+      <td class="num">${r.race_wins || '·'}</td>
+      <td class="num">${r.stage_wins || '·'}</td>
+    </tr>
+  `).join('');
+}
+
+/* §03  Stage leaderboard (needs per-race data; falls back to stage wins if missing) */
+function renderStageBoard() {
+  const d = state.data;
+  const tb = document.querySelector('#tbl-stage tbody');
+  const hasBreakdown = (d.races || []).length > 0;
+
+  if (!hasBreakdown) {
+    // fall back to stage_wins count from season totals
+    const rows = filteredDrivers().slice().sort((a,b) => b.stage_wins - a.stage_wins).slice(0, 15);
+    tb.innerHTML = rows.map((r, i) => `
+      <tr>
+        <td><span class="rank ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+        <td>${r.driver} ${r.mfr?`<span class="mfr-tag ${r.mfr}">${r.mfr}</span>`:''}</td>
+        <td class="num" style="color:var(--ink-faint)">—</td>
+        <td class="num" style="color:var(--ink-faint)">—</td>
+        <td class="num">${r.stage_wins} <span style="color:var(--ink-faint);font-size:9px;">wins</span></td>
+      </tr>
+    `).join('');
+    document.querySelector('#tbl-stage thead').innerHTML =
+      '<tr><th>#</th><th>Driver</th><th class="num">S1</th><th class="num">S2</th><th class="num">Stage Wins</th></tr>';
+    return;
+  }
+
+  // Sum stage points from per-race breakdown
+  const agg = new Map();
+  d.races.forEach(race => {
+    race.results.forEach(r => {
+      const k = r.driver;
+      const cur = agg.get(k) || { driver: r.driver, mfr: r.manufacturer, s1: 0, s2: 0 };
+      cur.s1 += r.stage_1_pts || 0;
+      cur.s2 += r.stage_2_pts || 0;
+      agg.set(k, cur);
+    });
+  });
+  let rows = [...agg.values()].map(r => ({ ...r, total: r.s1 + r.s2 }))
+    .sort((a,b) => b.total - a.total);
+  if (state.filterMfr !== 'ALL') rows = rows.filter(r => r.mfr === state.filterMfr);
+  rows = rows.slice(0, 15);
+  tb.innerHTML = rows.map((r, i) => `
+    <tr>
+      <td><span class="rank ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+      <td>${r.driver} ${r.mfr?`<span class="mfr-tag ${r.mfr}">${r.mfr}</span>`:''}</td>
+      <td class="num">${r.s1}</td>
+      <td class="num">${r.s2}</td>
+      <td class="num"><strong>${r.total}</strong></td>
+    </tr>
+  `).join('');
+}
+
+/* §04  Fastest-lap leaderboard */
+function renderFlapBoard() {
+  const d = state.data;
+  const tb = document.querySelector('#tbl-flap tbody');
+  if (!(d.races || []).length) {
+    tb.innerHTML = `<tr><td colspan="4"><div class="empty">Per-race fastest-lap data refreshes with first scrape.<br>Run the "Update NCS Points" Action, or wait for Monday 11:00 UTC.</div></td></tr>`;
+    return;
+  }
+  const agg = new Map();
+  const totalRaces = d.races.length;
+  d.races.forEach(race => {
+    race.results.forEach(r => {
+      if (r.fastest_lap_pt) {
+        const cur = agg.get(r.driver) || { driver: r.driver, mfr: r.manufacturer, wins: 0 };
+        cur.wins += 1;
+        agg.set(r.driver, cur);
+      }
+    });
+  });
+  let rows = [...agg.values()].sort((a,b) => b.wins - a.wins);
+  if (state.filterMfr !== 'ALL') rows = rows.filter(r => r.mfr === state.filterMfr);
+  if (!rows.length) {
+    tb.innerHTML = `<tr><td colspan="4"><div class="empty">No drivers match current filters.</div></td></tr>`;
+    return;
+  }
+  tb.innerHTML = rows.map((r, i) => `
+    <tr>
+      <td><span class="rank ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+      <td>${r.driver} <span class="mfr-tag ${r.mfr}">${r.mfr}</span></td>
+      <td class="num"><strong>${r.wins}</strong></td>
+      <td class="num" style="color:var(--ink-dim)">${totalRaces}</td>
+    </tr>
+  `).join('');
+}
+
+/* §05  Heatmap */
+function renderHeatmap() {
+  const d = state.data;
+  const table = document.getElementById('heatmap');
+  const drivers = filteredDrivers().slice(0, 25); // cap to keep readable
+
+  // If per-race breakdown exists use it; else use manufacturer per-race points split proportionally — fall back gracefully.
+  const hasBreakdown = (d.races || []).length > 0;
+  const rounds = d.schedule.slice(0, lastCompletedRound(d));
+
+  // Find maximum earned to scale color
+  let maxVal = 1;
+  const cellFor = (driver, round) => {
+    if (!hasBreakdown) return null;
+    const race = d.races.find(r => r.round === round);
+    if (!race) return null;
+    const rr = race.results.find(r => r.driver === driver);
+    if (!rr) return null;
+    return rr.race_pts;
+  };
+  drivers.forEach(dr => rounds.forEach(rd => {
+    const v = cellFor(dr.driver, rd.round);
+    if (v != null && v > maxVal) maxVal = v;
+  }));
+
+  const colorFor = (v, mfr) => {
+    if (v == null) return ['transparent', 'var(--ink-faint)'];
+    const intensity = Math.min(1, Math.max(0.1, v / maxVal));
+    const base = MFR_COLORS[mfr] || '#888';
+    // mix with bg using alpha
+    return [hexToRgba(base, 0.15 + intensity * 0.75),
+            intensity > 0.55 ? '#000' : '#fff'];
+  };
+
+  let html = '<thead><tr><th style="text-align:left;padding-left:4px">Driver</th>';
+  rounds.forEach(rd => { html += `<th title="${rd.name}">${rd.track_code}</th>`; });
+  html += '</tr></thead><tbody>';
+  drivers.forEach(dr => {
+    html += `<tr><td class="driver-name">
+      <span class="car-num">${dr.car}</span>${dr.driver}
+      ${dr.mfr?`<span class="mfr-tag ${dr.mfr}" style="margin-left:6px">${dr.mfr}</span>`:''}
+    </td>`;
+    rounds.forEach(rd => {
+      const v = cellFor(dr.driver, rd.round);
+      const [bg, fg] = colorFor(v, dr.mfr);
+      html += `<td class="cell" style="background:${bg};color:${fg}">${v != null ? v : ''}</td>`;
+    });
+    html += '</tr>';
+  });
+  if (!hasBreakdown) {
+    html += `<tr><td colspan="${rounds.length+1}"><div class="empty" style="margin:12px 0 0">Per-race point totals populate after first scrape.</div></td></tr>`;
+  }
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+
+/* §01  Cumulative trend line */
+let chartCumulative = null;
+function renderCumulative() {
+  const d = state.data;
+  const ctx = document.getElementById('chart-cumulative');
+  const rounds = d.schedule.map(r => `R${r.round} ${r.track_code}`);
+  const lastRound = lastCompletedRound(d);
+  const labels = rounds.slice(0, lastRound);
+
+  // Per-driver cumulative: use per-race breakdown if available, else skip drivers we can't reconstruct.
+  const hasBreakdown = (d.races || []).length > 0;
+
+  const picks = state.compare.size ? [...state.compare] : filteredDrivers().slice(0,5).map(r=>r.driver);
+  const driverMap = new Map(d.driver_season_totals.map(r => [r.driver, r]));
+
+  const datasets = picks.map(name => {
+    const meta = driverMap.get(name);
+    if (!meta) return null;
+    const c = MFR_COLORS[meta.mfr] || '#ccc';
+    let data;
+    if (hasBreakdown) {
+      let running = 0;
+      data = [];
+      for (let rd = 1; rd <= lastRound; rd++) {
+        const race = d.races.find(r => r.round === rd);
+        const rr = race?.results.find(r => r.driver === name);
+        running += rr?.race_pts || 0;
+        data.push(running);
+      }
+    } else {
+      // Linear placeholder: distribute season total evenly across completed races.
+      const step = meta.pts / lastRound;
+      data = Array.from({length: lastRound}, (_, i) => Math.round(step * (i + 1)));
+    }
+    return {
+      label: `${meta.car} ${name}`,
+      data,
+      borderColor: c,
+      backgroundColor: c + '33',
+      tension: 0.25,
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+    };
+  }).filter(Boolean);
+
+  if (chartCumulative) chartCumulative.destroy();
+  chartCumulative = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#9ea0a5', font: { family: 'JetBrains Mono', size: 11 } } },
+        tooltip: {
+          backgroundColor: '#111316', borderColor: '#333842', borderWidth: 1,
+          titleFont: { family: 'JetBrains Mono' }, bodyFont: { family: 'JetBrains Mono' },
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#5d6068', font: { family: 'JetBrains Mono', size: 10 } },
+             grid: { color: '#262a31' } },
+        y: { ticks: { color: '#5d6068', font: { family: 'JetBrains Mono', size: 10 } },
+             grid: { color: '#262a31' }, beginAtZero: true },
+      }
+    }
+  });
+}
+
+/* §02  Stacked per-race breakdown */
+let chartBreakdown = null;
+function renderBreakdown() {
+  const d = state.data;
+  const ctx = document.getElementById('chart-breakdown');
+  const note = document.getElementById('breakdown-note');
+  const hasBreakdown = (d.races || []).length > 0;
+
+  if (!hasBreakdown) {
+    if (chartBreakdown) { chartBreakdown.destroy(); chartBreakdown = null; }
+    if (ctx) ctx.style.display = 'none';
+    if (note) note.innerHTML = `<div class="empty" style="margin-top:16px">
+      Stage / finish / fastest-lap split becomes available after the<br>
+      <strong>Update NCS Points</strong> GitHub Action runs (Mondays 11:00 UTC).<br>
+      Until then, the manufacturer board above uses authoritative totals from Box.
+    </div>`;
+    return;
+  }
+  if (ctx) ctx.style.display = '';
+
+  // Single-driver view: pick top from compare set, else leader of filter
+  const picks = state.compare.size ? [...state.compare].slice(0, 4)
+                                   : filteredDrivers().slice(0, 1).map(r => r.driver);
+  const chosen = picks[0];
+  note.textContent = `Viewing: ${picks.join(', ') || 'none'} · Use compare picker to change.`;
+
+  const labels = d.races.map(r => `R${r.round} ${r.track_code}`);
+  const series = (field, color, label) => ({
+    label, data: d.races.map(r => {
+      const rr = r.results.find(x => x.driver === chosen);
+      return rr ? (rr[field] || 0) : 0;
+    }),
+    backgroundColor: color, borderWidth: 0, stack: 'pts',
+  });
+
+  const datasets = [
+    series('stage_1_pts',    '#5d6068', 'Stage 1'),
+    series('stage_2_pts',    '#9ea0a5', 'Stage 2'),
+    series('finish_pts',     MFR_COLORS[state.data.driver_season_totals.find(r=>r.driver===chosen)?.mfr] || '#e8e6e1', 'Finish'),
+    series('fastest_lap_pt', '#ff7a00', 'Fastest Lap'),
+  ];
+
+  if (chartBreakdown) chartBreakdown.destroy();
+  chartBreakdown = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#9ea0a5', font: { family: 'JetBrains Mono', size: 11 } } },
+        tooltip: { backgroundColor: '#111316', titleFont: { family: 'JetBrains Mono' }, bodyFont: { family: 'JetBrains Mono' } },
+        title: { display: true, text: chosen, color: '#e8e6e1', font: { family: 'Antonio', size: 18 } },
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#5d6068', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: '#262a31' } },
+        y: { stacked: true, ticks: { color: '#5d6068', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: '#262a31' }, beginAtZero: true },
+      }
+    }
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Wire up
+   ────────────────────────────────────────────────────────────────── */
+function rerender() {
+  renderStandings();
+  renderStageBoard();
+  renderFlapBoard();
+  renderHeatmap();
+  renderCumulative();
+  renderBreakdown();
+}
+
+function bindFilters() {
+  document.querySelectorAll('.chip[data-mfr]').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('.chip[data-mfr]').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      state.filterMfr = c.dataset.mfr;
+      rerender();
+    });
+  });
+  document.getElementById('team-filter').addEventListener('change', e => {
+    state.filterTeam = e.target.value; rerender();
+  });
+  document.getElementById('driver-search').addEventListener('input', e => {
+    state.search = e.target.value; rerender();
+  });
+  document.getElementById('compare-pick').addEventListener('change', e => {
+    state.compare = new Set(Array.from(e.target.selectedOptions).map(o => o.value));
+    rerender();
+  });
+}
+
+async function boot() {
+  try {
+    const d = await loadData();
+    state.data = d;
+    renderMasthead(d);
+    renderMfrBoard(d);
+    populateTeamFilter(d);
+    populateCompare(d);
+    bindFilters();
+    rerender();
+  } catch (e) {
+    document.getElementById('status').textContent = 'Feed unreachable';
+    document.getElementById('mfr-board').innerHTML =
+      `<div class="mfr-cell" style="grid-column:span 3"><div class="empty">
+        Could not load data/points.json — ${e.message}.<br>
+        If this is a fresh clone, run: <code>python scripts/scrape_points.py --season 2026 --out data/points.json</code>
+      </div></div>`;
+  }
+}
+boot();
+</script>
+</body>
+</html>
