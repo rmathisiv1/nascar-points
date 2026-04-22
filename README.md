@@ -1,14 +1,14 @@
 # NASCAR Points Analysis — 2026 Season
 
 Single-page dashboard for all three NASCAR national series (Cup · O'Reilly Auto Parts · Trucks).
-Breaks every race down into the four things that actually matter:
+Breaks every race down into the four things that matter:
 
 - **Stage 1 points** (top-10 stage bonus, 10..1)
 - **Stage 2 points** (same)
 - **Finish points** (base finishing position)
 - **Fastest-lap bonus** (+1 pt, 2025+ rule)
 
-All derived from the official NASCAR race-results PDFs linked by Jayski.com. Auto-refreshed twice weekly via GitHub Actions.
+Data source: [racing-reference.info](https://www.racing-reference.info/) — the definitive historical NASCAR database. Auto-refreshed twice weekly via GitHub Actions.
 
 ## Views
 
@@ -19,29 +19,27 @@ All derived from the official NASCAR race-results PDFs linked by Jayski.com. Aut
 5. **Driver × Race Heatmap** — where points were earned, colored by manufacturer
 6. **Garage List** — full standings with stage/finish/FL breakdown
 
-**Series switcher** at the top toggles between Cup (NCS), Xfinity (NOS), and Trucks (NTS).
-
-Filters: manufacturer (Toyota/Chevy/Ford), team, driver search, compare picker.
+**Series switcher** at the top toggles between Cup (NCS), O'Reilly/Xfinity (NOS), and Trucks (NTS).
 
 ## Data pipeline
 
 ```
-Jayski.com schedule pages (NCS/NOS/NTS)
+racing-reference.info season pages (NCS/NOS/NTS)
         │
         ▼
-Discover "…-race-results/" links for current season
+ parse schedule table → per-race URLs for completed races
         │
         ▼
-For each race → find "Click here to download the PDF" → fetch
+for each race: fetch page → parse results table + stage top-10 lines
         │
         ▼
-pdfplumber extracts results table → derive stage/finish/FL splits
+derive stage_pts, finish_pts, fastest_lap_pt from race_pts total
         │
         ▼
-   data/points.json  (committed back to repo by Action)
+    data/points.json  (committed back to repo by Action)
         │
         ▼
-   index.html (GitHub Pages, fetches JSON on each load)
+    index.html (static GitHub Pages)
 ```
 
 ## Setup
@@ -49,16 +47,7 @@ pdfplumber extracts results table → derive stage/finish/FL splits
 1. Push this folder to a GitHub repo (via GitHub Desktop or `git push`)
 2. **Settings → Pages** → Deploy from branch `main` / root
 3. **Settings → Actions → General → Workflow permissions** → Read and write
-4. **Actions tab → Update NASCAR Points Data → Run workflow** (populates the JSON for the first time)
-5. Replace `YOUR_USER` in `scripts/scrape_points.py`'s `USER_AGENT` string with your GitHub username (politeness to Jayski)
-
-## Running locally
-
-```bash
-pip install requests beautifulsoup4 pdfplumber
-python scripts/scrape_points.py --season 2026 --out data/points.json
-python -m http.server 8000   # then open http://localhost:8000
-```
+4. **Actions tab → Update NASCAR Points Data → Run workflow** (populates the JSON)
 
 ## Scrape cadence
 
@@ -70,11 +59,22 @@ Manual refresh: **Actions tab → Run workflow** anytime.
 
 ## How the four point components are derived
 
-NASCAR's race-results PDF columns: `Fin, Str, Car, Driver, Team, Laps, Stage 1 Pos, Stage 2 Pos, Pts, Status, Tms, Laps_led`.
+Racing-Reference's race page gives us:
+- A results table with `POS, ST, #, DRIVER, SPONSOR/OWNER, CAR (mfr), LAPS, STATUS, LED, PTS`
+- Two lines near the top: `Top 10 in Stage 1: #x, y, z, ...` and `Top 10 in Stage 2: #...`
 
-- `stage_1_pts` = `11 − stage_1_pos` if `stage_1_pos ≤ 10`, else `0`
-- `stage_2_pts` = same formula for Stage 2
-- `fastest_lap_pt` = `1` for the driver whose car number matches the "Fastest Lap Bonus: #XX lap YYY" line at the bottom of the PDF
-- `finish_pts` = `Pts − stage_1_pts − stage_2_pts − fastest_lap_pt` (includes 5-pt win bonus and 1-pt-per-stage-win bonus since they're rolled into the `Pts` column)
+From those:
+- `stage_N_pts` = `11 − position_in_stage_N` if the car appears in that stage's top 10, else 0
+- `race_pts` is read directly from the table's `PTS` column
+- `fastest_lap_pt` is inferred: find the eligible driver whose `race_pts` exceeds their expected total (finish + stage + stage-win bonus) by exactly 1. Unambiguous for most races.
+- `finish_pts` = `race_pts − stage_1_pts − stage_2_pts − fastest_lap_pt`
 
-Ineligible drivers (`*` prefix in the PDF, e.g. part-timers, crossover drivers in a lower series) are excluded from season standings.
+Ineligible drivers (`*` prefix or `(i)` suffix in Racing-Reference, e.g. crossover drivers from other series) are excluded from standings.
+
+## Running locally
+
+```bash
+pip install -r requirements.txt
+python scripts/scrape_points.py --season 2026 --out data/points.json
+python -m http.server 8000   # then open http://localhost:8000
+```

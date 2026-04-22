@@ -1,30 +1,28 @@
 #!/usr/bin/env python3
 """
-NASCAR per-race points scraper — Jayski edition.
+NASCAR per-race points scraper — Racing-Reference edition.
 
-Discovers race results PDFs from jayski.com for all three national series
-(Cup / Xfinity / Trucks), downloads each official NASCAR "Race Results"
-PDF, and extracts a clean per-driver points breakdown:
+Pulls each race of the current season from racing-reference.info for all
+three national series (Cup / Xfinity (O'Reilly) / Trucks) and produces a
+clean per-driver points breakdown:
 
-    stage_1_pts      derived: (11 - stage_1_pos) if stage_1_pos <= 10 else 0
-    stage_2_pts      derived: (11 - stage_2_pos) if stage_2_pos <= 10 else 0
-    fastest_lap_pt   1 pt to the driver listed in "Fastest Lap Bonus:"
-    finish_pts       Pts (total) minus stage and fastest-lap bonuses
-    race_pts         total awarded this race (Pts column from PDF)
+    stage_1_pts      derived from Stage 1 top-10 car-number list
+    stage_2_pts      derived from Stage 2 top-10 car-number list
+    finish_pts       race_pts - stage_1_pts - stage_2_pts - fastest_lap_pt
+    fastest_lap_pt   1 pt to the driver noted in the race summary (2025+)
+    race_pts         total PTS column from the results table
 
-Writes one JSON file covering all three series to data/points.json.
+Writes to data/points.json.
+
+Runs cleanly on GitHub Actions — Racing-Reference has no Cloudflare/bot
+protection so plain `requests` works fine.
 
 Usage:
     python scripts/scrape_points.py --season 2026 --out data/points.json
-
-Runs clean on GitHub Actions. Robust to individual-race failures — if a
-race's PDF is 404, not yet available, or doesn't parse, it is skipped and
-the rest of the season continues.
 """
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import re
 import sys
@@ -34,51 +32,43 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-import cloudscraper
-import pdfplumber
 from bs4 import BeautifulSoup
 
+# Racing-Reference series codes
+#   W = Cup (NASCAR Cup Series)
+#   B = Xfinity / O'Reilly (their URL path uses the "B" = Busch historically)
+#   C = Craftsman Truck Series
 SERIES = {
     "NCS": {
         "name": "NASCAR Cup Series",
         "short": "Cup",
-        "schedule_url": "https://www.jayski.com/nascar-cup-series/{season}-nascar-cup-series-schedule/",
-        "race_results_slug": "nascar-cup-series",
+        "rr_code": "W",
     },
     "NOS": {
-        # 2025+ rebrand: Xfinity Series → O'Reilly Auto Parts Series.
-        # Jayski's URL path reflects the new sponsor name.
         "name": "O'Reilly Auto Parts Series",
         "short": "O'Reilly",
-        "schedule_url": "https://www.jayski.com/oreilly-auto-parts-series/{season}-nascar-oreilly-auto-parts-series-schedule/",
-        "race_results_slug": "oreilly-auto-parts-series",
+        "rr_code": "B",
     },
     "NTS": {
         "name": "NASCAR Craftsman Truck Series",
         "short": "Trucks",
-        "schedule_url": "https://www.jayski.com/truck-series/{season}-nascar-craftsman-truck-series-schedule/",
-        "race_results_slug": "truck-series",
+        "rr_code": "C",
     },
 }
 
+BASE = "https://www.racing-reference.info"
+
 HEADERS = {
-    # Real Chrome UA — Jayski is behind Cloudflare, which 403s obvious bot UAs.
-    # Identify politely with a referer so traffic looks browser-like.
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    # NOTE: deliberately omitting brotli ("br") — the requests library needs a
-    # separate `brotli` package to decode it and we'd rather avoid that risk.
-    # gzip + deflate are built-in and sufficient.
-    "Accept-Encoding": "gzip, deflate",
-    "Referer": "https://www.jayski.com/",
-    "Upgrade-Insecure-Requests": "1",
 }
 
-MFR_BY_TEAM_KEYWORD = [
+# Manufacturer name/keyword → our internal 3-letter code
+MFR_MAP = [
     ("toyota",    "TYT"),
     ("chevrolet", "CHV"),
     ("chevy",     "CHV"),
@@ -116,234 +106,28 @@ class Race:
     track_code: str
     name: str
     stages: int = 2
-    fastest_lap_driver_car: Optional[str] = None
-    source_pdf: str = ""
-    source_page: str = ""
+    fastest_lap_driver: Optional[str] = None
+    source_url: str = ""
     results: list[DriverRace] = field(default_factory=list)
 
 
-# Module-level cloudscraper session. cloudscraper is a drop-in that solves
-# Cloudflare's JavaScript challenge and attaches the resulting clearance
-# cookie, making subsequent requests look genuinely browser-originated.
-# Jayski's bot-fight-mode returns 403 to plain `requests` even with a real
-# Chrome UA, but lets cloudscraper through.
-_SCRAPER = None
-_DUMPED_SAMPLE = False  # one-shot diagnostic flag
-_DUMPED_HUB_SAMPLE = False  # one-shot hub-links dump
-
-
-def _new_scraper():
-    return cloudscraper.create_scraper(
-        browser={"browser": "chrome", "platform": "windows", "desktop": True},
-        delay=10,  # give JS challenge time to complete
-    )
-
-
-def fetch(url: str, max_attempts: int = 4, **kw) -> requests.Response:
-    """
-    Fetch with cloudscraper. Retries on 403 (Cloudflare intermittent block)
-    and 5xx with exponential backoff. On repeated 403, recreates the
-    cloudscraper session so a fresh JS-challenge handshake is performed.
-    """
-    global _SCRAPER
-    if _SCRAPER is None:
-        _SCRAPER = _new_scraper()
-
-    last_exc = None
-    for attempt in range(1, max_attempts + 1):
-        try:
-            r = _SCRAPER.get(url, headers=HEADERS, timeout=45, **kw)
-            r.raise_for_status()
-            return r
-        except requests.HTTPError as e:
-            last_exc = e
-            code = e.response.status_code if e.response is not None else 0
-            if code == 403:
-                # Cloudflare bounced us — refresh the challenge cookie and wait
-                print(f"    (fetch attempt {attempt}/{max_attempts}: "
-                      f"403, refreshing session)", file=sys.stderr)
-                _SCRAPER = _new_scraper()
-                time.sleep(3 * attempt)
-                continue
-            if 500 <= code < 600:
-                time.sleep(2 * attempt)
-                continue
-            raise  # 4xx other than 403 — don't retry
-        except requests.RequestException as e:
-            last_exc = e
-            time.sleep(2 * attempt)
-    # all retries exhausted
-    raise last_exc
-
-
-def discover_race_pages(series_code: str, season: int) -> list[dict]:
-    cfg = SERIES[series_code]
-    schedule_url = cfg["schedule_url"].format(season=season)
-    try:
-        resp = fetch(schedule_url)
-        html = resp.text
-    except Exception as e:
-        print(f"[{series_code}] schedule fetch failed: {e} "
-              f"({schedule_url})", file=sys.stderr)
-        return []
-
-    # Diagnostic: response size and link count so we can tell at a glance
-    # whether we got the real page vs. a Cloudflare interstitial.
-    print(f"[{series_code}] schedule HTTP {resp.status_code}, "
-          f"{len(html)} bytes from {schedule_url}", file=sys.stderr)
-
-    soup = BeautifulSoup(html, "html.parser")
-    slug = cfg["race_results_slug"]
-
-    seen: dict[str, dict] = {}
-    for a in soup.find_all("a", href=True):
-        href = a["href"].strip()
-        # Each race row on the schedule links to a "-race-page/" hub.
-        # The actual points-report PDF is linked from that hub page.
-        if slug not in href or "-race-page/" not in href:
-            continue
-        if str(season) not in href:
-            continue
-        if href.startswith("/"):
-            href = "https://www.jayski.com" + href
-        if href in seen:
-            continue
-        seen[href] = {"url": href, "label": a.get_text(" ", strip=True)}
-    return list(seen.values())
-
-
-PDF_LINK_PATTERNS = [
-    re.compile(r"click here to download the pdf", re.I),
-    re.compile(r"race results.*pdf",               re.I),
-    re.compile(r"results.*\.pdf$",                 re.I),
-]
-
-
-def find_pdf_url(race_page_url: str) -> Optional[str]:
-    """
-    Schedule-page entries link to a "-race-page/" hub. The hub lists
-    rosters, contingency-awards PDFs, and a "Race Results" *link* that
-    points to a separate HTML page ending in "-race-results/". The
-    actual points-report PDF is embedded on THAT page.
-
-    So: fetch the hub, find the -race-results/ page link, fetch that,
-    and find the PDF there.
-    """
-    global _DUMPED_HUB_SAMPLE
-    try:
-        hub_html = fetch(race_page_url).text
-    except Exception as e:
-        print(f"    ! hub page fetch failed: {e}", file=sys.stderr)
-        return None
-    hub_soup = BeautifulSoup(hub_html, "html.parser")
-
-    # Step 1: find the -race-results/ link on the hub page. Accept relative
-    # URLs and www-or-no-www variants.
-    results_page_url = None
-    for a in hub_soup.find_all("a", href=True):
-        href = a["href"].strip()
-        if "-race-results/" in href:
-            if href.startswith("/"):
-                href = "https://www.jayski.com" + href
-            elif not href.startswith("http"):
-                href = "https://www.jayski.com/" + href.lstrip("/")
-            results_page_url = href
-            break
-
-    if not results_page_url:
-        # Diagnostic: dump the first few jayski links from the hub so we
-        # can see what's actually there (throttled to first failure).
-        if not _DUMPED_HUB_SAMPLE:
-            hrefs = [a["href"] for a in hub_soup.find_all("a", href=True)]
-            jayski_links = [h for h in hrefs
-                            if "jayski" in h or h.startswith("/")]
-            print(f"    ! no -race-results/ link on hub. "
-                  f"sample of hub links (first failure only):",
-                  file=sys.stderr)
-            for h in jayski_links[:20]:
-                print(f"        {h}", file=sys.stderr)
-            _DUMPED_HUB_SAMPLE = True
-        return None
-
-    # Step 2: fetch the -race-results/ page and find its PDF
-    try:
-        results_html = fetch(results_page_url).text
-    except Exception as e:
-        print(f"    ! results page fetch failed: {e}", file=sys.stderr)
-        return None
-    results_soup = BeautifulSoup(results_html, "html.parser")
-
-    best = None  # (score, href)
-    for a in results_soup.find_all("a", href=True):
-        href = a["href"].strip()
-        if not href.lower().endswith(".pdf"):
-            continue
-        parent = a.find_parent(["p", "li", "h2", "h3", "h4", "div"])
-        context = (parent.get_text(" ", strip=True) if parent
-                   else a.get_text(" ", strip=True))[:200]
-        text_to_match = (href + " " + context).lower()
-
-        score = 0
-        if "race-results" in text_to_match or "race results" in text_to_match:
-            score += 100
-        if "points report" in text_to_match or "points-report" in text_to_match:
-            score += 100
-        if "click here to download the pdf" in text_to_match:
-            score += 50
-        for bad, penalty in [
-            ("contingency", -100), ("awards report", -100),
-            ("shade report", -100), ("oil consumption", -100),
-            ("photo", -100), ("roster", -100),
-            ("preview", -50), ("qualifying", -50), ("practice", -50),
-            ("starting lineup", -30),
-        ]:
-            if bad in text_to_match:
-                score += penalty
-        if best is None or score > best[0]:
-            best = (score, href)
-
-    if best is None:
-        return None
-    score, href = best
-    if score <= 0:
-        return None
-    if href.startswith("/"):
-        href = "https://www.jayski.com" + href
-    return href
-
-
-RACE_HEADER_RE = re.compile(
-    r"NASCAR\s+(Cup|Xfinity|Craftsman\s+Truck)\s+Series\s+Race\s+Number\s+(\d+)", re.I)
-TITLE_RE = re.compile(
-    r"Race Results for the\s+(.+?)\s+-\s+(\w+,\s+\w+\s+\d{1,2},\s+\d{4})", re.I)
-FASTEST_LAP_RE = re.compile(r"Fastest\s+Lap\s+Bonus\s*:\s*#?\s*(\S+)\s+lap\s+(\d+)", re.I)
-
-
-def stage_pts(pos: Optional[int]) -> int:
-    if pos is None or pos < 1 or pos > 10:
-        return 0
-    return 11 - pos
-
-
-def manufacturer_from_team(team: str) -> str:
-    t = team.lower()
-    for kw, code in MFR_BY_TEAM_KEYWORD:
-        if kw in t:
-            return code
-    return ""
-
-
 TRACK_CODES = {
-    "daytona": "DAY", "atlanta": "ATL", "circuit of the americas": "AUS",
+    "daytona": "DAY", "atlanta": "ATL", "austin": "AUS",
+    "circuit of the americas": "AUS", "cota": "AUS",
     "phoenix": "PHO", "las vegas": "LAS", "darlington": "DAR",
     "martinsville": "MAR", "bristol": "BRI", "kansas": "KAN",
-    "talladega": "TAL", "texas": "TEX", "watkins glen": "WGI",
+    "talladega": "TAL", "texas": "TEX", "fort worth": "TEX",
+    "watkins glen": "WGI", "glen": "WGI",
     "charlotte": "CLT", "nashville": "NSH", "michigan": "MCH",
     "pocono": "POC", "san diego": "SDG", "sonoma": "SON",
-    "chicago": "CHI", "north wilkesboro": "NWB", "indianapolis": "IND",
-    "iowa": "IOW", "richmond": "RCH", "loudon": "LOU", "new hampshire": "LOU",
+    "chicago": "CHI", "chicagoland": "CHI",
+    "north wilkesboro": "NWB", "indianapolis": "IND",
+    "iowa": "IOW", "richmond": "RCH",
+    "loudon": "LOU", "new hampshire": "LOU",
     "gateway": "GTW", "world wide technology": "GTW",
     "homestead": "HOM", "dover": "DOV", "rockingham": "ROC",
+    "st. petersburg": "STP", "st petersburg": "STP",
+    "lime rock": "LRP",
 }
 
 
@@ -355,265 +139,304 @@ def track_code_from_name(track: str) -> str:
     return re.sub(r"[^A-Za-z]", "", track)[:3].upper()
 
 
+def manufacturer_code(raw: str) -> str:
+    r = (raw or "").lower()
+    for kw, code in MFR_MAP:
+        if kw in r:
+            return code
+    return ""
+
+
+def stage_pts(pos: Optional[int]) -> int:
+    if pos is None or pos < 1 or pos > 10:
+        return 0
+    return 11 - pos
+
+
+def fetch(url: str) -> str:
+    r = requests.get(url, headers=HEADERS, timeout=45)
+    r.raise_for_status()
+    return r.text
+
+
+def parse_stage_line(text: str, stage_num: int) -> dict[str, int]:
+    """
+    Parse a line like:
+        Top 10 in Stage 1: #11, 5, 45, 54, 20, 9, 19, 77, 23, 67
+    into a dict mapping car number → finishing position in the stage.
+    """
+    m = re.search(
+        rf"Top\s*10\s*in\s*Stage\s*{stage_num}\s*:\s*([^\n]+)",
+        text, re.I)
+    if not m:
+        return {}
+    tail = m.group(1)
+    # extract sequence of car numbers — strip '#' and split by comma
+    nums = re.findall(r"#?\s*(\w+)", tail)
+    return {car.strip(): pos + 1 for pos, car in enumerate(nums[:10])}
+
+
+def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race]:
+    try:
+        html = fetch(race_url)
+    except Exception as e:
+        print(f"    ! race fetch failed: {e}", file=sys.stderr)
+        return None
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text("\n", strip=True)
+
+    race = Race(series=series_code, round=round_num, date="", track="",
+                track_code="", name="", source_url=race_url)
+
+    # --- header info ---
+    # h1 holds race name: "2026 AdventHealth 400"
+    h1 = soup.find(["h1", "h2"])
+    if h1:
+        race.name = h1.get_text(strip=True)
+        # strip leading year
+        race.name = re.sub(r"^\d{4}\s+", "", race.name)
+
+    # Date + track line: "Sunday, April 19, 2026 at Kansas Speedway, Kansas City, KS"
+    dm = re.search(
+        r"((?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+"
+        r"[A-Z][a-z]+\s+\d{1,2},\s+\d{4})\s+at\s+([^,]+,[^,]+,\s*[A-Z]{2})",
+        text)
+    if dm:
+        race.date = normalize_date(dm.group(1))
+        # track name is the first part of the location string before first comma
+        race.track = dm.group(2).split(",")[0].strip()
+        race.track_code = track_code_from_name(race.track)
+
+    # --- stage lines ---
+    stage1_map = parse_stage_line(text, 1)
+    stage2_map = parse_stage_line(text, 2)
+    stage3_map = parse_stage_line(text, 3)
+    if stage3_map:
+        race.stages = 3
+
+    # --- results table ---
+    # Find the table whose header row contains "POS" and "DRIVER" and "PTS"
+    results_table = None
+    for tbl in soup.find_all("table"):
+        headers = [th.get_text(strip=True).upper()
+                   for th in tbl.find_all(["th", "td"])[:15]]
+        if "POS" in headers and "DRIVER" in headers and "PTS" in headers:
+            results_table = tbl
+            break
+    if results_table is None:
+        return None
+
+    # map header name → column index
+    header_row = results_table.find("tr")
+    header_cells = [c.get_text(strip=True).upper() for c in header_row.find_all(["th", "td"])]
+    col = {name: i for i, name in enumerate(header_cells)}
+    def cell(row_cells: list, name: str) -> str:
+        idx = col.get(name)
+        if idx is None or idx >= len(row_cells):
+            return ""
+        return row_cells[idx].get_text(" ", strip=True)
+    def to_int(s: str) -> Optional[int]:
+        s = (s or "").replace(",", "").strip()
+        m = re.match(r"^-?\d+$", s)
+        return int(m.group()) if m else None
+
+    for tr in results_table.find_all("tr")[1:]:
+        tds = tr.find_all(["td", "th"])
+        if len(tds) < len(col):
+            continue
+        pos = to_int(cell(tds, "POS"))
+        if pos is None:
+            continue
+        start = to_int(cell(tds, "ST"))
+        car = cell(tds, "#")
+        driver = cell(tds, "DRIVER")
+        # SPONSOR / OWNER column name can vary
+        team = cell(tds, "SPONSOR / OWNER") or cell(tds, "OWNER") or cell(tds, "SPONSOR")
+        mfr_raw = cell(tds, "CAR") or cell(tds, "MAKE")
+        laps = to_int(cell(tds, "LAPS"))
+        led = to_int(cell(tds, "LED")) or 0
+        pts = to_int(cell(tds, "PTS"))
+        status = cell(tds, "STATUS")
+
+        ineligible = driver.startswith("*") or driver.startswith("†")
+        if ineligible:
+            driver = driver.lstrip("*† ").strip()
+
+        # Racing-Reference appends "(i)" to ineligible (crossover) drivers
+        if re.search(r"\(i\)\s*$", driver):
+            ineligible = True
+            driver = re.sub(r"\s*\(i\)\s*$", "", driver).strip()
+
+        s1_pos = stage1_map.get(car)
+        s2_pos = stage2_map.get(car)
+
+        dr = DriverRace(
+            driver=driver, car_number=car, team=team,
+            manufacturer=manufacturer_code(mfr_raw),
+            start_pos=start, finish_pos=pos,
+            laps_completed=laps, laps_led=led,
+            stage_1_pos=s1_pos, stage_2_pos=s2_pos,
+            stage_1_pts=stage_pts(s1_pos),
+            stage_2_pts=stage_pts(s2_pos),
+            race_pts=pts or 0,
+            ineligible=ineligible, status=status,
+        )
+        race.results.append(dr)
+
+    # --- fastest-lap +1 bonus (2025+) ---
+    # Racing-Reference doesn't always label this explicitly in the results
+    # table. We detect it by looking at whichever driver has race_pts that
+    # exceeds their expected stage + finish total by exactly 1.
+    # Expected finish pts schedule (NASCAR rule, 2016+): 1st=40, 2nd=35, 3rd=34, ... 36th=1.
+    # plus 5 for the win.
+    _assign_fastest_lap_bonus(race)
+
+    # Compute finish_pts = race_pts - stage - FL
+    for d in race.results:
+        d.finish_pts = max(0, d.race_pts - d.stage_1_pts - d.stage_2_pts - d.fastest_lap_pt)
+
+    return race if race.results else None
+
+
+def _finish_points_for(finish_pos: int) -> int:
+    """NASCAR base finish-points schedule (2017+, unchanged for 2025)."""
+    if finish_pos == 1:
+        return 40
+    if finish_pos == 2:
+        return 35
+    if finish_pos <= 36:
+        return max(1, 36 - finish_pos + 1)  # 3rd=34, 4th=33, …, 36th=1
+    return 0
+
+
+def _assign_fastest_lap_bonus(race: Race) -> None:
+    """
+    Identify the driver who received the +1 fastest-lap bonus by finding
+    the eligible driver whose race_pts exceeds their expected (finish +
+    stage) total by exactly 1. If no driver fits uniquely, no FL bonus
+    is assigned.
+
+    Note: NASCAR's stage points schedule already includes the 10-point
+    top position, so there's no separate "stage win bonus" to add.
+    Playoff points are a different currency and don't show up in race_pts.
+    """
+    candidates = []
+    for d in race.results:
+        if d.ineligible or d.finish_pos is None:
+            continue
+        expected = _finish_points_for(d.finish_pos) + d.stage_1_pts + d.stage_2_pts
+        delta = d.race_pts - expected
+        if delta == 1:
+            candidates.append(d)
+
+    if len(candidates) == 1:
+        candidates[0].fastest_lap_pt = 1
+        race.fastest_lap_driver = candidates[0].driver
+
+
 def normalize_date(date_str: str) -> str:
+    """'Sunday, April 19, 2026' → '2026-04-19'"""
     try:
         from datetime import datetime
         return datetime.strptime(date_str.strip(), "%A, %B %d, %Y").date().isoformat()
     except ValueError:
-        return date_str
+        try:
+            from datetime import datetime
+            return datetime.strptime(date_str.strip(), "%A %B %d, %Y").date().isoformat()
+        except ValueError:
+            return date_str
 
 
-def row_from_cells(cells: list[str]) -> Optional[DriverRace]:
-    def to_int(s: str) -> Optional[int]:
-        s = (s or "").strip()
-        if not s:
-            return None
-        m = re.match(r"^-?\d+$", s)
-        return int(m.group()) if m else None
-
-    if len(cells) < 9:
-        return None
-    fin = to_int(cells[0])
-    if fin is None:
-        return None
-    start = to_int(cells[1])
-    car = cells[2].strip()
-    driver = cells[3].strip()
-    team = cells[4].strip()
-    laps_completed = to_int(cells[5])
-    s1 = to_int(cells[6]) if len(cells) > 6 else None
-    s2 = to_int(cells[7]) if len(cells) > 7 else None
-    pts = to_int(cells[8]) if len(cells) > 8 else None
-    status = cells[9].strip() if len(cells) > 9 else ""
-    laps_led = to_int(cells[11]) if len(cells) > 11 else 0
-
-    ineligible = driver.startswith("*")
-    if ineligible:
-        driver = driver.lstrip("* ").strip()
-    if pts is None:
-        return None
-
-    return DriverRace(
-        driver=driver, car_number=car, team=team,
-        manufacturer=manufacturer_from_team(team),
-        start_pos=start, finish_pos=fin,
-        laps_completed=laps_completed, laps_led=laps_led or 0,
-        stage_1_pos=s1, stage_2_pos=s2,
-        stage_1_pts=stage_pts(s1), stage_2_pts=stage_pts(s2),
-        race_pts=pts, ineligible=ineligible, status=status,
-    )
-
-
-def _parse_text_line(line: str) -> Optional[DriverRace]:
+def discover_races(series_code: str, season: int) -> list[dict]:
     """
-    Fallback parser — when pdfplumber's table extraction fails, try to
-    match a results row by shape. Expected token pattern (based on the
-    NASCAR race-results PDF format we examined):
-        Fin Str Car Driver… Team… Laps [Stage1Pos] [Stage2Pos] Pts Status [Tms Laps_led]
-    Rows always start with two integers (Fin, Str), then a car number
-    (which may be prefixed with '_' for leading-zero car numbers, or
-    contain alphanumerics for the #0-#07-style cars).
+    Scrape Racing-Reference's season page for a series and return a list
+    of {round, date, track, url} dicts for each race that has been run.
     """
-    parts = line.split()
-    if len(parts) < 8:
-        return None
+    cfg = SERIES[series_code]
+    season_url = f"{BASE}/raceyear/{season}/{cfg['rr_code']}"
+    try:
+        html = fetch(season_url)
+    except Exception as e:
+        print(f"[{series_code}] season page fetch failed: {e}",
+              file=sys.stderr)
+        return []
 
-    def to_int(s: str) -> Optional[int]:
-        m = re.match(r"^-?\d+$", s.strip())
-        return int(m.group()) if m else None
+    print(f"[{series_code}] season HTTP 200, {len(html)} bytes from {season_url}",
+          file=sys.stderr)
 
-    fin = to_int(parts[0])
-    start = to_int(parts[1])
-    if fin is None or start is None:
-        return None
+    soup = BeautifulSoup(html, "html.parser")
 
-    # Parts[2] is the car number. After that: driver words + team words,
-    # then trailing numerics (laps, [s1], [s2], pts, status, tms, laps_led).
-    car = parts[2]
-
-    # Work backwards: find the status word (non-integer, title-case word
-    # like "Running", "Accident", "DNF", "DVP", "Engine", etc.)
-    status_idx = None
-    for i in range(len(parts) - 1, 3, -1):
-        tok = parts[i]
-        if not re.match(r"^-?\d+$", tok) and tok[0:1].isalpha() and tok.isalpha():
-            status_idx = i
+    # The schedule table has columns: #, Date, Site, Cars, Winner(s), …
+    # Race number is linked to the race detail page. Find the table whose
+    # header starts with "#" and contains "Date".
+    schedule_table = None
+    for tbl in soup.find_all("table"):
+        header_cells = [c.get_text(strip=True) for c in tbl.find_all(["th", "td"])[:10]]
+        if "#" in header_cells and "Date" in header_cells and "Site" in header_cells:
+            schedule_table = tbl
             break
-    if status_idx is None:
-        return None
+    if schedule_table is None:
+        print(f"[{series_code}] no schedule table found", file=sys.stderr)
+        return []
 
-    # Trailing ints after status: tms, laps_led (optional)
-    trailing = [to_int(x) for x in parts[status_idx + 1:]]
-    trailing = [x for x in trailing if x is not None]
-    laps_led = trailing[1] if len(trailing) >= 2 else 0
+    header_row = schedule_table.find("tr")
+    header_cells = [c.get_text(strip=True) for c in header_row.find_all(["th", "td"])]
+    col = {name: i for i, name in enumerate(header_cells)}
 
-    # Numerics immediately before status: [laps, (s1), (s2), pts]
-    left = parts[3:status_idx]
-    # Find the trailing contiguous block of integers in `left`
-    nums = []
-    for tok in reversed(left):
-        if re.match(r"^-?\d+$", tok):
-            nums.insert(0, int(tok))
-        else:
-            break
-    if len(nums) < 2:
-        return None
-
-    if len(nums) == 2:
-        laps_completed, pts = nums
-        s1 = s2 = None
-    elif len(nums) == 3:
-        # Could be laps/s1/pts or laps/s2/pts — ambiguous, try laps/s2/pts
-        laps_completed, s2, pts = nums
-        s1 = None
-    else:  # 4+
-        laps_completed, s1, s2, pts = nums[0], nums[1], nums[2], nums[3]
-
-    # Driver + team tokens are the words between parts[3] and the start
-    # of the trailing numeric block. We can't cleanly split these without
-    # knowing where the team begins, so we lump both together as "driver".
-    # The table-extractor pass (which runs first) is what gives us clean
-    # driver/team separation; this fallback is best-effort.
-    text = " ".join(left[:len(left) - len(nums)])
-    ineligible = text.startswith("*")
-    if ineligible:
-        text = text.lstrip("* ").strip()
-    # Heuristic: split at the last capitalized word that looks team-like
-    driver, team = text, ""
-
-    return DriverRace(
-        driver=driver, car_number=car, team=team,
-        manufacturer=manufacturer_from_team(team),
-        start_pos=start, finish_pos=fin,
-        laps_completed=laps_completed, laps_led=laps_led or 0,
-        stage_1_pos=s1, stage_2_pos=s2,
-        stage_1_pts=stage_pts(s1), stage_2_pts=stage_pts(s2),
-        race_pts=pts, ineligible=ineligible,
-        status=parts[status_idx],
-    )
-
-
-def parse_race_pdf(pdf_bytes: bytes, source_url: str, series_code: str) -> Optional[Race]:
-    race = Race(series=series_code, round=0, date="", track="", track_code="",
-                name="", source_pdf=source_url)
-
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        if not pdf.pages:
-            print("    ! pdf has no pages", file=sys.stderr)
-            return None
-        page = pdf.pages[0]
-        text = page.extract_text() or ""
-
-        m = RACE_HEADER_RE.search(text)
-        if m:
-            race.round = int(m.group(2))
-        m = TITLE_RE.search(text)
-        if m:
-            race.name = m.group(1).strip()
-            race.date = normalize_date(m.group(2))
-        for line in text.splitlines():
-            m = re.match(r"^(.+?)\s*-\s*(.+?,\s*[A-Z]{2})\s*-\s*(.+?)$", line.strip())
-            if m and ("mile" in m.group(3).lower() or "km" in m.group(3).lower()):
-                race.track = m.group(1).strip()
-                race.track_code = track_code_from_name(race.track)
-                break
-
-        m = FASTEST_LAP_RE.search(text)
-        if m:
-            race.fastest_lap_driver_car = m.group(1).lstrip("_")
-
-        # Primary: pdfplumber table extraction
-        parsed_rows: list[DriverRace] = []
-        tables = page.extract_tables(
-            table_settings={"vertical_strategy": "text", "horizontal_strategy": "text"}
-        ) or []
-        for tbl in tables:
-            for r in tbl:
-                cells = [(c or "").strip() for c in r]
-                if not cells or not re.match(r"^\d+$", cells[0] or ""):
-                    continue
-                dr = row_from_cells(cells)
-                if dr:
-                    parsed_rows.append(dr)
-
-        # Fallback: text-stream regex parse
-        if not parsed_rows:
-            for line in text.splitlines():
-                dr = _parse_text_line(line)
-                if dr:
-                    parsed_rows.append(dr)
-            if parsed_rows:
-                print(f"    (used text-stream fallback parser, "
-                      f"{len(parsed_rows)} rows)", file=sys.stderr)
-
-        # Final diagnostic — if still empty, dump first chunk of text so
-        # we can see what the PDF actually looks like. Throttle to once per
-        # process via a module-level flag to keep logs readable.
-        if not parsed_rows:
-            global _DUMPED_SAMPLE
-            snippet = "\n".join(text.splitlines()[:30])
-            if not _DUMPED_SAMPLE:
-                print(f"    ! pdf yielded 0 rows. text sample "
-                      f"(only dumped once per run):", file=sys.stderr)
-                print("    " + snippet.replace("\n", "\n    "), file=sys.stderr)
-                _DUMPED_SAMPLE = True
-            else:
-                print(f"    ! pdf yielded 0 rows (text-sample suppressed)",
-                      file=sys.stderr)
-
-    # Apply fastest-lap point
-    if race.fastest_lap_driver_car:
-        for d in parsed_rows:
-            if d.car_number.lstrip("_") == race.fastest_lap_driver_car:
-                d.fastest_lap_pt = 1
-                break
-
-    for d in parsed_rows:
-        d.finish_pts = max(0, d.race_pts - d.stage_1_pts - d.stage_2_pts - d.fastest_lap_pt)
-        if not d.manufacturer:
-            d.manufacturer = manufacturer_from_team(d.team)
-
-    race.results = parsed_rows
-    return race if parsed_rows else None
+    races: list[dict] = []
+    for tr in schedule_table.find_all("tr")[1:]:
+        tds = tr.find_all(["td", "th"])
+        if len(tds) < len(col):
+            continue
+        num_text = tds[col["#"]].get_text(strip=True)
+        if not num_text.isdigit():
+            continue
+        # race detail link lives in the # cell
+        link = tds[col["#"]].find("a", href=True)
+        if not link:
+            # race hasn't run yet
+            continue
+        href = link["href"]
+        if href.startswith("/"):
+            href = BASE + href
+        elif not href.startswith("http"):
+            href = BASE + "/" + href.lstrip("/")
+        date_str = tds[col["Date"]].get_text(strip=True)
+        site_str = tds[col["Site"]].get_text(strip=True)
+        races.append({
+            "round": int(num_text),
+            "date": date_str,
+            "track": site_str,
+            "url": href,
+        })
+    return races
 
 
 def build_series(series_code: str, season: int) -> dict:
     print(f"\n=== {series_code} — discovering schedule ===", file=sys.stderr)
-    race_pages = discover_race_pages(series_code, season)
-    print(f"found {len(race_pages)} race pages", file=sys.stderr)
+    race_list = discover_races(series_code, season)
+    print(f"found {len(race_list)} completed races", file=sys.stderr)
 
-    races: list[dict] = []
-    for i, rp in enumerate(race_pages, start=1):
-        print(f"[{series_code} {i}/{len(race_pages)}] {rp['label'] or rp['url']}", file=sys.stderr)
-        pdf_url = find_pdf_url(rp["url"])
-        if not pdf_url:
-            print("    ! no pdf link found, skipping", file=sys.stderr)
-            continue
-        try:
-            pdf_bytes = fetch(pdf_url).content
-        except Exception as e:
-            print(f"    ! pdf fetch failed: {e}", file=sys.stderr)
-            continue
-        try:
-            race = parse_race_pdf(pdf_bytes, pdf_url, series_code)
-        except Exception as e:
-            print(f"    ! pdf parse failed: {e}", file=sys.stderr)
-            continue
+    out_races: list[dict] = []
+    for i, r in enumerate(race_list, start=1):
+        print(f"[{series_code} {i}/{len(race_list)}] round {r['round']} "
+              f"{r['track']} ({r['date']})", file=sys.stderr)
+        race = parse_race(r["url"], series_code, r["round"])
         if race is None:
-            print("    ! pdf yielded 0 rows, skipping", file=sys.stderr)
+            print("    ! parse failed, skipping", file=sys.stderr)
             continue
-        race.source_page = rp["url"]
-        races.append(asdict(race))
-        print(f"    ok — round {race.round} {race.track_code} · "
-              f"{len(race.results)} drivers", file=sys.stderr)
-        time.sleep(1.2)
+        out_races.append(asdict(race))
+        fl = race.fastest_lap_driver or "—"
+        print(f"    ok · {len(race.results)} drivers · FL bonus: {fl}",
+              file=sys.stderr)
+        time.sleep(0.8)
 
-    races.sort(key=lambda r: (r.get("round") or 0, r.get("date") or ""))
+    out_races.sort(key=lambda x: (x.get("round") or 0, x.get("date") or ""))
     return {
         "series_code": series_code,
         "series_name": SERIES[series_code]["name"],
         "season": season,
-        "races": races,
+        "races": out_races,
     }
 
 
@@ -640,13 +463,13 @@ def main() -> None:
     payload = {
         "season": args.season,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "source": "jayski.com",
+        "source": "racing-reference.info",
         "series": series_out,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, indent=2))
     total = sum(len(s.get("races", [])) for s in series_out.values())
-    print(f"\nwrote {args.out} — {total} races",  file=sys.stderr)
+    print(f"\nwrote {args.out} — {total} races", file=sys.stderr)
 
 
 if __name__ == "__main__":
