@@ -139,20 +139,38 @@ def discover_race_pages(series_code: str, season: int) -> list[dict]:
     cfg = SERIES[series_code]
     schedule_url = cfg["schedule_url"].format(season=season)
     try:
-        html = fetch(schedule_url).text
+        resp = fetch(schedule_url)
+        html = resp.text
     except Exception as e:
         print(f"[{series_code}] schedule fetch failed: {e} "
               f"({schedule_url})", file=sys.stderr)
         return []
 
+    # Debug: response size and a sample of the HTML so we can tell whether
+    # we got the real page vs. a Cloudflare interstitial or a JS shell.
+    print(f"[{series_code}] schedule HTTP {resp.status_code}, "
+          f"{len(html)} bytes from {schedule_url}", file=sys.stderr)
+
     soup = BeautifulSoup(html, "html.parser")
     slug = cfg["race_results_slug"]
+
+    # Debug: sample of all anchor hrefs on the page, so we can see whether
+    # the site is returning links at all and in what shape.
+    all_hrefs = [a["href"] for a in soup.find_all("a", href=True)]
+    print(f"[{series_code}] page contains {len(all_hrefs)} links total",
+          file=sys.stderr)
+    # Print first 5 hrefs that look at all racing-related (for diagnosis)
+    racing_ish = [h for h in all_hrefs if
+                  "race" in h.lower() or "series" in h.lower()
+                  or str(season) in h]
+    print(f"[{series_code}] first {min(10, len(racing_ish))} racing-ish hrefs:",
+          file=sys.stderr)
+    for h in racing_ish[:10]:
+        print(f"    {h}", file=sys.stderr)
+
     seen: dict[str, dict] = {}
     for a in soup.find_all("a", href=True):
         href = a["href"].strip()
-        # Race-results pages contain both the series slug and the words
-        # "race-results" somewhere in the URL. We also require the season
-        # number to appear, to avoid picking up prior-year pages.
         if slug not in href or "race-results" not in href:
             continue
         if str(season) not in href:
