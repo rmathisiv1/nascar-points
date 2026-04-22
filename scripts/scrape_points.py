@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+import cloudscraper
 import pdfplumber
 from bs4 import BeautifulSoup
 
@@ -118,8 +119,18 @@ class Race:
     results: list[DriverRace] = field(default_factory=list)
 
 
+# Module-level cloudscraper session. cloudscraper is a drop-in that solves
+# Cloudflare's JavaScript challenge and attaches the resulting clearance
+# cookie, making subsequent requests look genuinely browser-originated.
+# Jayski's bot-fight-mode returns 403 to plain `requests` even with a real
+# Chrome UA, but lets cloudscraper through.
+_SCRAPER = cloudscraper.create_scraper(
+    browser={"browser": "chrome", "platform": "windows", "desktop": True}
+)
+
+
 def fetch(url: str, **kw) -> requests.Response:
-    r = requests.get(url, headers=HEADERS, timeout=45, **kw)
+    r = _SCRAPER.get(url, headers=HEADERS, timeout=45, **kw)
     r.raise_for_status()
     return r
 
