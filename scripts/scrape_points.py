@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 
 # Racing-Reference series codes
@@ -63,9 +64,26 @@ HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+              "image/avif,image/webp,image/apng,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate",   # omit brotli to avoid needing brotli pkg
+    "Referer": "https://www.racing-reference.info/",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
 }
+
+_SCRAPER = None
+
+
+def _new_scraper():
+    return cloudscraper.create_scraper(
+        browser={"browser": "chrome", "platform": "windows", "desktop": True},
+        delay=10,
+    )
 
 # Manufacturer name/keyword → our internal 3-letter code
 MFR_MAP = [
@@ -153,10 +171,34 @@ def stage_pts(pos: Optional[int]) -> int:
     return 11 - pos
 
 
-def fetch(url: str) -> str:
-    r = requests.get(url, headers=HEADERS, timeout=45)
-    r.raise_for_status()
-    return r.text
+def fetch(url: str, max_attempts: int = 4) -> str:
+    """Fetch via cloudscraper with 403-retry + session reset."""
+    global _SCRAPER
+    if _SCRAPER is None:
+        _SCRAPER = _new_scraper()
+    last_exc = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            r = _SCRAPER.get(url, headers=HEADERS, timeout=45)
+            r.raise_for_status()
+            return r.text
+        except requests.HTTPError as e:
+            last_exc = e
+            code = e.response.status_code if e.response is not None else 0
+            if code == 403:
+                print(f"    (attempt {attempt}/{max_attempts}: 403, "
+                      f"refreshing CF challenge)", file=sys.stderr)
+                _SCRAPER = _new_scraper()
+                time.sleep(2 * attempt)
+                continue
+            if 500 <= code < 600:
+                time.sleep(2 * attempt)
+                continue
+            raise
+        except requests.RequestException as e:
+            last_exc = e
+            time.sleep(2 * attempt)
+    raise last_exc
 
 
 def parse_stage_line(text: str, stage_num: int) -> dict[str, int]:
