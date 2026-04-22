@@ -171,26 +171,36 @@ def stage_pts(pos: Optional[int]) -> int:
     return 11 - pos
 
 
-def fetch(url: str, max_attempts: int = 4) -> str:
-    """Fetch via cloudscraper with 403-retry + session reset."""
+def fetch(url: str, max_attempts: int = 3) -> str:
+    """
+    Fetch a URL. Prefers plain `requests` which works from residential IPs.
+    Falls back to cloudscraper on 403 (datacenter IPs, cloud CI, etc.).
+    """
     global _SCRAPER
-    if _SCRAPER is None:
-        _SCRAPER = _new_scraper()
     last_exc = None
     for attempt in range(1, max_attempts + 1):
         try:
-            r = _SCRAPER.get(url, headers=HEADERS, timeout=45)
+            r = requests.get(url, headers=HEADERS, timeout=45)
             r.raise_for_status()
             return r.text
         except requests.HTTPError as e:
             last_exc = e
             code = e.response.status_code if e.response is not None else 0
             if code == 403:
-                print(f"    (attempt {attempt}/{max_attempts}: 403, "
-                      f"refreshing CF challenge)", file=sys.stderr)
-                _SCRAPER = _new_scraper()
-                time.sleep(2 * attempt)
-                continue
+                # Datacenter IP or CF bot-mode. Escalate to cloudscraper.
+                try:
+                    if _SCRAPER is None:
+                        _SCRAPER = _new_scraper()
+                    print(f"    (attempt {attempt}: 403 via requests, "
+                          f"retrying via cloudscraper)", file=sys.stderr)
+                    r = _SCRAPER.get(url, headers=HEADERS, timeout=45)
+                    r.raise_for_status()
+                    return r.text
+                except Exception as e2:
+                    last_exc = e2
+                    _SCRAPER = _new_scraper()
+                    time.sleep(2 * attempt)
+                    continue
             if 500 <= code < 600:
                 time.sleep(2 * attempt)
                 continue
@@ -257,26 +267,30 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
         race.stages = 3
 
     # --- results table ---
-    # Find the table whose header row contains "POS" and "DRIVER" and "PTS"
-    results_table = None
-    for tbl in soup.find_all("table"):
-        headers = [th.get_text(strip=True).upper()
-                   for th in tbl.find_all(["th", "td"])[:15]]
-        if "POS" in headers and "DRIVER" in headers and "PTS" in headers:
-            results_table = tbl
-            break
+    # Racing-Reference marks the per-driver results table with class="race-results-tbl"
+    # (alongside "tb"). Fall back to header-sniffing if the class isn't present.
+    results_table = soup.find("table", class_="race-results-tbl")
+    if results_table is None:
+        for tbl in soup.find_all("table"):
+            headers = [th.get_text(strip=True).lower()
+                       for th in tbl.find_all(["th", "td"])[:15]]
+            if "pos" in headers and "driver" in headers and "pts" in headers:
+                results_table = tbl
+                break
     if results_table is None:
         return None
 
-    # map header name → column index
+    # map header name (lowercased) → column index
     header_row = results_table.find("tr")
-    header_cells = [c.get_text(strip=True).upper() for c in header_row.find_all(["th", "td"])]
+    header_cells = [c.get_text(strip=True).lower()
+                    for c in header_row.find_all(["th", "td"])]
     col = {name: i for i, name in enumerate(header_cells)}
-    def cell(row_cells: list, name: str) -> str:
-        idx = col.get(name)
-        if idx is None or idx >= len(row_cells):
-            return ""
-        return row_cells[idx].get_text(" ", strip=True)
+    def cell(row_cells: list, *names: str) -> str:
+        for name in names:
+            idx = col.get(name.lower())
+            if idx is not None and idx < len(row_cells):
+                return row_cells[idx].get_text(" ", strip=True)
+        return ""
     def to_int(s: str) -> Optional[int]:
         s = (s or "").replace(",", "").strip()
         m = re.match(r"^-?\d+$", s)
@@ -284,21 +298,20 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
 
     for tr in results_table.find_all("tr")[1:]:
         tds = tr.find_all(["td", "th"])
-        if len(tds) < len(col):
+        if len(tds) < 5:
             continue
-        pos = to_int(cell(tds, "POS"))
+        pos = to_int(cell(tds, "Pos"))
         if pos is None:
             continue
-        start = to_int(cell(tds, "ST"))
+        start = to_int(cell(tds, "St"))
         car = cell(tds, "#")
-        driver = cell(tds, "DRIVER")
-        # SPONSOR / OWNER column name can vary
-        team = cell(tds, "SPONSOR / OWNER") or cell(tds, "OWNER") or cell(tds, "SPONSOR")
-        mfr_raw = cell(tds, "CAR") or cell(tds, "MAKE")
-        laps = to_int(cell(tds, "LAPS"))
-        led = to_int(cell(tds, "LED")) or 0
-        pts = to_int(cell(tds, "PTS"))
-        status = cell(tds, "STATUS")
+        driver = cell(tds, "Driver")
+        team = cell(tds, "Sponsor / Owner", "Owner", "Sponsor")
+        mfr_raw = cell(tds, "Car", "Make")
+        laps = to_int(cell(tds, "Laps"))
+        led = to_int(cell(tds, "Led")) or 0
+        pts = to_int(cell(tds, "Pts"))
+        status = cell(tds, "Status")
 
         ineligible = driver.startswith("*") or driver.startswith("†")
         if ineligible:
@@ -408,49 +421,51 @@ def discover_races(series_code: str, season: int) -> list[dict]:
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # The schedule table has columns: #, Date, Site, Cars, Winner(s), …
-    # Race number is linked to the race detail page. Find the table whose
-    # header starts with "#" and contains "Date".
-    schedule_table = None
-    for tbl in soup.find_all("table"):
-        header_cells = [c.get_text(strip=True) for c in tbl.find_all(["th", "td"])[:10]]
-        if "#" in header_cells and "Date" in header_cells and "Site" in header_cells:
-            schedule_table = tbl
-            break
-    if schedule_table is None:
-        print(f"[{series_code}] no schedule table found", file=sys.stderr)
-        return []
-
-    header_row = schedule_table.find("tr")
-    header_cells = [c.get_text(strip=True) for c in header_row.find_all(["th", "td"])]
-    col = {name: i for i, name in enumerate(header_cells)}
-
-    races: list[dict] = []
-    for tr in schedule_table.find_all("tr")[1:]:
-        tds = tr.find_all(["td", "th"])
-        if len(tds) < len(col):
+    # Racing-Reference's schedule is built with CSS-grid divs (role="cell"),
+    # not <table> elements. Each race is linked by its race-number cell as:
+    #   <div class="race-number" role="cell">
+    #     <a href="https://www.racing-reference.info/race-results/2026_Daytona_500/W"
+    #        aria-label="click here to learn more about Daytona 500 results"
+    #        title="Daytona 500">1</a>
+    #   </div>
+    # So we find all anchors whose href contains "/race-results/<season>_".
+    cfg_code = cfg["rr_code"]
+    race_link_pattern = re.compile(
+        rf"/race-results/{season}_([^/]+)/{cfg_code}(?:/|$)"
+    )
+    seen: dict[str, dict] = {}
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        m = race_link_pattern.search(href)
+        if not m:
             continue
-        num_text = tds[col["#"]].get_text(strip=True)
-        if not num_text.isdigit():
+        if href in seen:
             continue
-        # race detail link lives in the # cell
-        link = tds[col["#"]].find("a", href=True)
-        if not link:
-            # race hasn't run yet
+        # Round number is the <a>'s visible text (e.g. "1", "2")
+        num_text = a.get_text(strip=True)
+        try:
+            round_num = int(num_text)
+        except ValueError:
             continue
-        href = link["href"]
-        if href.startswith("/"):
-            href = BASE + href
-        elif not href.startswith("http"):
-            href = BASE + "/" + href.lstrip("/")
-        date_str = tds[col["Date"]].get_text(strip=True)
-        site_str = tds[col["Site"]].get_text(strip=True)
-        races.append({
-            "round": int(num_text),
-            "date": date_str,
-            "track": site_str,
+        # Track/name info comes from the title attribute or aria-label
+        race_name = a.get("title") or ""
+        if not race_name:
+            aria = a.get("aria-label", "")
+            m2 = re.search(r"about\s+(.+?)\s+results", aria, re.I)
+            race_name = m2.group(1) if m2 else ""
+        seen[href] = {
+            "round": round_num,
             "url": href,
-        })
+            "name": race_name,
+            # date and track filled in during race parsing
+            "date": "",
+            "track": "",
+        }
+
+    races = sorted(seen.values(), key=lambda r: r["round"])
+    if not races:
+        print(f"[{series_code}] no race-results links found on page",
+              file=sys.stderr)
     return races
 
 
