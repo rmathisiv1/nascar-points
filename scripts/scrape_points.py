@@ -41,29 +41,37 @@ SERIES = {
     "NCS": {
         "name": "NASCAR Cup Series",
         "short": "Cup",
-        "schedule_url": "https://www.jayski.com/nascar-cup-series-schedule/",
+        "schedule_url": "https://www.jayski.com/nascar-cup-series/{season}-nascar-cup-series-schedule/",
         "race_results_slug": "nascar-cup-series",
     },
     "NOS": {
-        "name": "NASCAR Xfinity Series",
-        "short": "Xfinity",
-        "schedule_url": "https://www.jayski.com/nascar-xfinity-series-schedule/",
-        "race_results_slug": "nascar-xfinity-series",
+        # 2025+ rebrand: Xfinity Series → O'Reilly Auto Parts Series.
+        # Jayski's URL path reflects the new sponsor name.
+        "name": "O'Reilly Auto Parts Series",
+        "short": "O'Reilly",
+        "schedule_url": "https://www.jayski.com/oreilly-auto-parts-series/{season}-nascar-oreilly-auto-parts-series-schedule/",
+        "race_results_slug": "oreilly-auto-parts-series",
     },
     "NTS": {
         "name": "NASCAR Craftsman Truck Series",
         "short": "Trucks",
-        "schedule_url": "https://www.jayski.com/nascar-craftsman-truck-series-schedule/",
-        "race_results_slug": "nascar-craftsman-truck-series",
+        "schedule_url": "https://www.jayski.com/truck-series/{season}-nascar-craftsman-truck-series-schedule/",
+        "race_results_slug": "truck-series",
     },
 }
 
 HEADERS = {
+    # Real Chrome UA — Jayski is behind Cloudflare, which 403s obvious bot UAs.
+    # Identify politely with a referer so traffic looks browser-like.
     "User-Agent": (
-        "Mozilla/5.0 (compatible; NascarPointsTracker/2.0; "
-        "+https://github.com/YOUR_USER/nascar-points)"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "en-US,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.jayski.com/",
+    "Upgrade-Insecure-Requests": "1",
 }
 
 MFR_BY_TEAM_KEYWORD = [
@@ -118,10 +126,12 @@ def fetch(url: str, **kw) -> requests.Response:
 
 def discover_race_pages(series_code: str, season: int) -> list[dict]:
     cfg = SERIES[series_code]
+    schedule_url = cfg["schedule_url"].format(season=season)
     try:
-        html = fetch(cfg["schedule_url"]).text
+        html = fetch(schedule_url).text
     except Exception as e:
-        print(f"[{series_code}] schedule fetch failed: {e}", file=sys.stderr)
+        print(f"[{series_code}] schedule fetch failed: {e} "
+              f"({schedule_url})", file=sys.stderr)
         return []
 
     soup = BeautifulSoup(html, "html.parser")
@@ -129,9 +139,12 @@ def discover_race_pages(series_code: str, season: int) -> list[dict]:
     seen: dict[str, dict] = {}
     for a in soup.find_all("a", href=True):
         href = a["href"].strip()
+        # Race-results pages contain both the series slug and the words
+        # "race-results" somewhere in the URL. We also require the season
+        # number to appear, to avoid picking up prior-year pages.
         if slug not in href or "race-results" not in href:
             continue
-        if f"/{season}-" not in href and f"{season}-nascar" not in href:
+        if str(season) not in href:
             continue
         if href.startswith("/"):
             href = "https://www.jayski.com" + href

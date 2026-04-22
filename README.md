@@ -1,6 +1,6 @@
 # NASCAR Points Analysis — 2026 Season
 
-Single-page dashboard for all three NASCAR national series (Cup · Xfinity · Trucks).
+Single-page dashboard for all three NASCAR national series (Cup · O'Reilly Auto Parts · Trucks).
 Breaks every race down into the four things that actually matter:
 
 - **Stage 1 points** (top-10 stage bonus, 10..1)
