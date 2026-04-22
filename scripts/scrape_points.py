@@ -70,7 +70,10 @@ HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
+    # NOTE: deliberately omitting brotli ("br") — the requests library needs a
+    # separate `brotli` package to decode it and we'd rather avoid that risk.
+    # gzip + deflate are built-in and sufficient.
+    "Accept-Encoding": "gzip, deflate",
     "Referer": "https://www.jayski.com/",
     "Upgrade-Insecure-Requests": "1",
 }
