@@ -1,50 +1,77 @@
 #!/usr/bin/env python3
 """
-NASCAR Cup Series per-race points scraper.
+NASCAR per-race points scraper — Jayski edition.
 
-Pulls each Cup race of the current season from Racing-Reference.info and
-extracts per-driver points breakdown:
-  - stage_1_pts     (stage 1 top-10 bonus, 10..1)
-  - stage_2_pts     (stage 2 top-10 bonus, 10..1)
-  - finish_pts      (finishing position base points)
-  - fastest_lap_pt  (1 pt to the driver with the race's fastest lap, 2025+)
-  - race_pts        (total awarded this race = sum of the above + any stage/race win bonuses)
+Discovers race results PDFs from jayski.com for all three national series
+(Cup / Xfinity / Trucks), downloads each official NASCAR "Race Results"
+PDF, and extracts a clean per-driver points breakdown:
 
-Outputs a single JSON file at data/points.json that the static site consumes.
+    stage_1_pts      derived: (11 - stage_1_pos) if stage_1_pos <= 10 else 0
+    stage_2_pts      derived: (11 - stage_2_pos) if stage_2_pos <= 10 else 0
+    fastest_lap_pt   1 pt to the driver listed in "Fastest Lap Bonus:"
+    finish_pts       Pts (total) minus stage and fastest-lap bonuses
+    race_pts         total awarded this race (Pts column from PDF)
 
-Designed to run as a GitHub Action cron job. No auth, no secrets required.
-Racing-Reference is polite to well-behaved scrapers; we throttle by race.
+Writes one JSON file covering all three series to data/points.json.
 
 Usage:
-    python scrape_points.py --season 2026 --out ../data/points.json
+    python scripts/scrape_points.py --season 2026 --out data/points.json
+
+Runs clean on GitHub Actions. Robust to individual-race failures — if a
+race's PDF is 404, not yet available, or doesn't parse, it is skipped and
+the rest of the season continues.
 """
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import re
 import sys
 import time
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
 import requests
+import pdfplumber
 from bs4 import BeautifulSoup
 
-RACING_REF_BASE = "https://www.racing-reference.info"
-USER_AGENT = (
-    "Mozilla/5.0 (compatible; NascarPointsTracker/1.0; "
-    "+https://github.com/YOUR_USER/nascar-points)"
-)
-
-# Manufacturer codes seen on Racing-Reference and in the Box points reports
-MFR_MAP = {
-    "Toyota": "TYT",
-    "Chevrolet": "CHV",
-    "Chevy": "CHV",
-    "Ford": "FRD",
+SERIES = {
+    "NCS": {
+        "name": "NASCAR Cup Series",
+        "short": "Cup",
+        "schedule_url": "https://www.jayski.com/nascar-cup-series-schedule/",
+        "race_results_slug": "nascar-cup-series",
+    },
+    "NOS": {
+        "name": "NASCAR Xfinity Series",
+        "short": "Xfinity",
+        "schedule_url": "https://www.jayski.com/nascar-xfinity-series-schedule/",
+        "race_results_slug": "nascar-xfinity-series",
+    },
+    "NTS": {
+        "name": "NASCAR Craftsman Truck Series",
+        "short": "Trucks",
+        "schedule_url": "https://www.jayski.com/nascar-craftsman-truck-series-schedule/",
+        "race_results_slug": "nascar-craftsman-truck-series",
+    },
 }
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; NascarPointsTracker/2.0; "
+        "+https://github.com/YOUR_USER/nascar-points)"
+    ),
+    "Accept-Language": "en-US,en;q=0.8",
+}
+
+MFR_BY_TEAM_KEYWORD = [
+    ("toyota",    "TYT"),
+    ("chevrolet", "CHV"),
+    ("chevy",     "CHV"),
+    ("ford",      "FRD"),
+]
 
 
 @dataclass
@@ -52,208 +79,319 @@ class DriverRace:
     driver: str
     car_number: str
     team: str
-    manufacturer: str  # TYT / CHV / FRD
+    manufacturer: str
     start_pos: Optional[int]
     finish_pos: Optional[int]
+    laps_completed: Optional[int]
     laps_led: int = 0
+    stage_1_pos: Optional[int] = None
+    stage_2_pos: Optional[int] = None
     stage_1_pts: int = 0
     stage_2_pts: int = 0
-    stage_3_pts: int = 0  # some races have 3 stages (Coke 600)
     finish_pts: int = 0
     fastest_lap_pt: int = 0
-    race_pts: int = 0    # total points awarded this race
+    race_pts: int = 0
+    ineligible: bool = False
     status: str = ""
 
 
 @dataclass
 class Race:
+    series: str
     round: int
-    date: str          # ISO yyyy-mm-dd
+    date: str
     track: str
-    track_code: str    # e.g. DAY, ATL, KAN
+    track_code: str
     name: str
-    stages: int
-    fastest_lap_driver: Optional[str] = None
+    stages: int = 2
+    fastest_lap_driver_car: Optional[str] = None
+    source_pdf: str = ""
+    source_page: str = ""
     results: list[DriverRace] = field(default_factory=list)
 
 
-def fetch(url: str) -> str:
-    r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
+def fetch(url: str, **kw) -> requests.Response:
+    r = requests.get(url, headers=HEADERS, timeout=45, **kw)
     r.raise_for_status()
-    return r.text
+    return r
 
 
-def parse_season_schedule(season: int) -> list[dict]:
-    """
-    Hit the Cup-series season page and return a list of races that have
-    already been run (i.e. have a results link).
-    """
-    url = f"{RACING_REF_BASE}/season-stats/{season}/W/"
-    html = fetch(url)
+def discover_race_pages(series_code: str, season: int) -> list[dict]:
+    cfg = SERIES[series_code]
+    try:
+        html = fetch(cfg["schedule_url"]).text
+    except Exception as e:
+        print(f"[{series_code}] schedule fetch failed: {e}", file=sys.stderr)
+        return []
+
     soup = BeautifulSoup(html, "html.parser")
-
-    races: list[dict] = []
-    # Racing-Reference lays out the schedule in a table with class "tb"
-    # Columns: #, Date, Track, Race, Winner, ...
-    for row in soup.select("table.tb tr"):
-        cells = row.find_all("td")
-        if len(cells) < 5:
+    slug = cfg["race_results_slug"]
+    seen: dict[str, dict] = {}
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        if slug not in href or "race-results" not in href:
             continue
-        num_text = cells[0].get_text(strip=True)
-        if not num_text.isdigit():
+        if f"/{season}-" not in href and f"{season}-nascar" not in href:
             continue
-        results_link = cells[3].find("a")
-        if not results_link:
-            # race hasn't run yet
+        if href.startswith("/"):
+            href = "https://www.jayski.com" + href
+        if href in seen:
             continue
-        races.append({
-            "round": int(num_text),
-            "date": cells[1].get_text(strip=True),  # will be normalized later
-            "track": cells[2].get_text(strip=True),
-            "name": results_link.get_text(strip=True),
-            "href": results_link["href"],
-        })
-    return races
+        seen[href] = {"url": href, "label": a.get_text(" ", strip=True)}
+    return list(seen.values())
 
 
-def parse_race_results(race_url: str) -> Race:
-    """
-    Parse a Racing-Reference race results page into a Race object with
-    per-driver points breakdown.
+PDF_LINK_PATTERNS = [
+    re.compile(r"click here to download the pdf", re.I),
+    re.compile(r"race results.*pdf",               re.I),
+    re.compile(r"results.*\.pdf$",                 re.I),
+]
 
-    Racing-Reference's race page has:
-      * A main results table with Pos, Start, #, Driver, Sponsor/Team,
-        Car, Laps, Money, Status, Led, Pts, PPts, FinPts, S1Pts, S2Pts, S3Pts, FLPt
-      * A header block with race name, date, track.
 
-    Not every race page uses the exact same column header text; we match
-    on normalized header names.
-    """
-    html = fetch(race_url)
+def find_pdf_url(race_page_url: str) -> Optional[str]:
+    try:
+        html = fetch(race_page_url).text
+    except Exception as e:
+        print(f"    ! race page fetch failed: {e}", file=sys.stderr)
+        return None
     soup = BeautifulSoup(html, "html.parser")
+    for a in soup.find_all("a", href=True):
+        txt = a.get_text(" ", strip=True)
+        href = a["href"].strip()
+        for pat in PDF_LINK_PATTERNS:
+            if pat.search(txt) or pat.search(href):
+                if href.startswith("/"):
+                    href = "https://www.jayski.com" + href
+                return href
+    for a in soup.find_all("a", href=True):
+        if a["href"].lower().endswith(".pdf"):
+            href = a["href"]
+            if href.startswith("/"):
+                href = "https://www.jayski.com" + href
+            return href
+    return None
 
-    # --- header info ---
-    header = soup.find("h1") or soup.find("title")
-    race_name = header.get_text(strip=True) if header else "Unknown"
 
-    date_iso, track_name, track_code = "", "", ""
-    info_block = soup.find("div", class_="race-info") or soup
-    m = re.search(r"(\d{4}-\d{2}-\d{2})", info_block.get_text(" ", strip=True))
-    if m:
-        date_iso = m.group(1)
+RACE_HEADER_RE = re.compile(
+    r"NASCAR\s+(Cup|Xfinity|Craftsman\s+Truck)\s+Series\s+Race\s+Number\s+(\d+)", re.I)
+TITLE_RE = re.compile(
+    r"Race Results for the\s+(.+?)\s+-\s+(\w+,\s+\w+\s+\d{1,2},\s+\d{4})", re.I)
+FASTEST_LAP_RE = re.compile(r"Fastest\s+Lap\s+Bonus\s*:\s*#?\s*(\S+)\s+lap\s+(\d+)", re.I)
 
-    # --- results table ---
-    tables = soup.select("table.tb")
-    results_table = None
-    for t in tables:
-        headers = [th.get_text(strip=True).lower() for th in t.find_all("th")]
-        if "driver" in headers and ("pts" in headers or "points" in headers):
-            results_table = t
-            break
-    if results_table is None:
-        raise ValueError(f"Could not find results table at {race_url}")
 
-    headers = [th.get_text(strip=True) for th in results_table.find_all("th")]
-    hmap = {h.lower().strip(): i for i, h in enumerate(headers)}
+def stage_pts(pos: Optional[int]) -> int:
+    if pos is None or pos < 1 or pos > 10:
+        return 0
+    return 11 - pos
 
-    def col(row_cells, *candidates) -> str:
-        for c in candidates:
-            if c.lower() in hmap:
-                idx = hmap[c.lower()]
-                if idx < len(row_cells):
-                    return row_cells[idx].get_text(strip=True)
-        return ""
 
-    race = Race(
-        round=0, date=date_iso, track=track_name, track_code=track_code,
-        name=race_name, stages=2,
+def manufacturer_from_team(team: str) -> str:
+    t = team.lower()
+    for kw, code in MFR_BY_TEAM_KEYWORD:
+        if kw in t:
+            return code
+    return ""
+
+
+TRACK_CODES = {
+    "daytona": "DAY", "atlanta": "ATL", "circuit of the americas": "AUS",
+    "phoenix": "PHO", "las vegas": "LAS", "darlington": "DAR",
+    "martinsville": "MAR", "bristol": "BRI", "kansas": "KAN",
+    "talladega": "TAL", "texas": "TEX", "watkins glen": "WGI",
+    "charlotte": "CLT", "nashville": "NSH", "michigan": "MCH",
+    "pocono": "POC", "san diego": "SDG", "sonoma": "SON",
+    "chicago": "CHI", "north wilkesboro": "NWB", "indianapolis": "IND",
+    "iowa": "IOW", "richmond": "RCH", "loudon": "LOU", "new hampshire": "LOU",
+    "gateway": "GTW", "world wide technology": "GTW",
+    "homestead": "HOM", "dover": "DOV", "rockingham": "ROC",
+}
+
+
+def track_code_from_name(track: str) -> str:
+    t = track.lower()
+    for key, code in TRACK_CODES.items():
+        if key in t:
+            return code
+    return re.sub(r"[^A-Za-z]", "", track)[:3].upper()
+
+
+def normalize_date(date_str: str) -> str:
+    try:
+        from datetime import datetime
+        return datetime.strptime(date_str.strip(), "%A, %B %d, %Y").date().isoformat()
+    except ValueError:
+        return date_str
+
+
+def row_from_cells(cells: list[str]) -> Optional[DriverRace]:
+    def to_int(s: str) -> Optional[int]:
+        s = (s or "").strip()
+        if not s:
+            return None
+        m = re.match(r"^-?\d+$", s)
+        return int(m.group()) if m else None
+
+    if len(cells) < 9:
+        return None
+    fin = to_int(cells[0])
+    if fin is None:
+        return None
+    start = to_int(cells[1])
+    car = cells[2].strip()
+    driver = cells[3].strip()
+    team = cells[4].strip()
+    laps_completed = to_int(cells[5])
+    s1 = to_int(cells[6]) if len(cells) > 6 else None
+    s2 = to_int(cells[7]) if len(cells) > 7 else None
+    pts = to_int(cells[8]) if len(cells) > 8 else None
+    status = cells[9].strip() if len(cells) > 9 else ""
+    laps_led = to_int(cells[11]) if len(cells) > 11 else 0
+
+    ineligible = driver.startswith("*")
+    if ineligible:
+        driver = driver.lstrip("* ").strip()
+    if pts is None:
+        return None
+
+    return DriverRace(
+        driver=driver, car_number=car, team=team,
+        manufacturer=manufacturer_from_team(team),
+        start_pos=start, finish_pos=fin,
+        laps_completed=laps_completed, laps_led=laps_led or 0,
+        stage_1_pos=s1, stage_2_pos=s2,
+        stage_1_pts=stage_pts(s1), stage_2_pts=stage_pts(s2),
+        race_pts=pts, ineligible=ineligible, status=status,
     )
 
-    for tr in results_table.find_all("tr"):
-        tds = tr.find_all("td")
-        if len(tds) < 5:
+
+def parse_race_pdf(pdf_bytes: bytes, source_url: str, series_code: str) -> Optional[Race]:
+    race = Race(series=series_code, round=0, date="", track="", track_code="",
+                name="", source_pdf=source_url)
+
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        if not pdf.pages:
+            return None
+        page = pdf.pages[0]
+        text = page.extract_text() or ""
+
+        m = RACE_HEADER_RE.search(text)
+        if m:
+            race.round = int(m.group(2))
+        m = TITLE_RE.search(text)
+        if m:
+            race.name = m.group(1).strip()
+            race.date = normalize_date(m.group(2))
+        for line in text.splitlines():
+            m = re.match(r"^(.+?)\s*-\s*(.+?,\s*[A-Z]{2})\s*-\s*(.+?)$", line.strip())
+            if m and ("mile" in m.group(3).lower() or "km" in m.group(3).lower()):
+                race.track = m.group(1).strip()
+                race.track_code = track_code_from_name(race.track)
+                break
+
+        m = FASTEST_LAP_RE.search(text)
+        if m:
+            race.fastest_lap_driver_car = m.group(1).lstrip("_")
+
+        # pdfplumber table extraction
+        parsed_rows: list[DriverRace] = []
+        tables = page.extract_tables(
+            table_settings={"vertical_strategy": "text", "horizontal_strategy": "text"}
+        ) or []
+        for tbl in tables:
+            for r in tbl:
+                cells = [(c or "").strip() for c in r]
+                if not cells or not re.match(r"^\d+$", cells[0] or ""):
+                    continue
+                dr = row_from_cells(cells)
+                if dr:
+                    parsed_rows.append(dr)
+
+    # Apply fastest-lap point
+    if race.fastest_lap_driver_car:
+        for d in parsed_rows:
+            if d.car_number.lstrip("_") == race.fastest_lap_driver_car:
+                d.fastest_lap_pt = 1
+                break
+
+    for d in parsed_rows:
+        d.finish_pts = max(0, d.race_pts - d.stage_1_pts - d.stage_2_pts - d.fastest_lap_pt)
+        if not d.manufacturer:
+            d.manufacturer = manufacturer_from_team(d.team)
+
+    race.results = parsed_rows
+    return race if parsed_rows else None
+
+
+def build_series(series_code: str, season: int) -> dict:
+    print(f"\n=== {series_code} — discovering schedule ===", file=sys.stderr)
+    race_pages = discover_race_pages(series_code, season)
+    print(f"found {len(race_pages)} race pages", file=sys.stderr)
+
+    races: list[dict] = []
+    for i, rp in enumerate(race_pages, start=1):
+        print(f"[{series_code} {i}/{len(race_pages)}] {rp['label'] or rp['url']}", file=sys.stderr)
+        pdf_url = find_pdf_url(rp["url"])
+        if not pdf_url:
+            print("    ! no pdf link found, skipping", file=sys.stderr)
             continue
-        finish = col(tds, "Pos", "Finish")
-        if not finish.isdigit():
-            continue
-
-        driver = col(tds, "Driver")
-        car_no = col(tds, "#", "Car")
-        team = col(tds, "Sponsor / Owner", "Team", "Owner")
-        mfr_raw = col(tds, "Car", "Make", "Mfr")
-        manufacturer = MFR_MAP.get(mfr_raw, mfr_raw[:3].upper() if mfr_raw else "")
-
-        def to_int(s: str, default: int = 0) -> int:
-            s = s.replace(",", "").strip()
-            try:
-                return int(s)
-            except ValueError:
-                return default
-
-        dr = DriverRace(
-            driver=driver,
-            car_number=car_no,
-            team=team,
-            manufacturer=manufacturer,
-            start_pos=to_int(col(tds, "St", "Start"), 0) or None,
-            finish_pos=int(finish),
-            laps_led=to_int(col(tds, "Led")),
-            finish_pts=to_int(col(tds, "FinPts", "Fin Pts", "Race Pts")),
-            stage_1_pts=to_int(col(tds, "S1Pts", "Stg1", "Stage 1")),
-            stage_2_pts=to_int(col(tds, "S2Pts", "Stg2", "Stage 2")),
-            stage_3_pts=to_int(col(tds, "S3Pts", "Stg3", "Stage 3")),
-            fastest_lap_pt=to_int(col(tds, "FLPt", "FL Pt", "FL")),
-            race_pts=to_int(col(tds, "Pts", "Total")),
-            status=col(tds, "Status"),
-        )
-        race.results.append(dr)
-
-    # Figure out fastest-lap driver (the one row with fastest_lap_pt == 1)
-    fl = [r for r in race.results if r.fastest_lap_pt == 1]
-    if fl:
-        race.fastest_lap_driver = fl[0].driver
-
-    race.stages = 3 if any(r.stage_3_pts for r in race.results) else 2
-    return race
-
-
-def build_season(season: int) -> dict:
-    schedule = parse_season_schedule(season)
-    races_out: list[dict] = []
-    for i, race_meta in enumerate(schedule, start=1):
-        url = race_meta["href"]
-        if url.startswith("/"):
-            url = RACING_REF_BASE + url
-        print(f"[{i}/{len(schedule)}] fetching round {race_meta['round']} – "
-              f"{race_meta['name']}", file=sys.stderr)
         try:
-            race = parse_race_results(url)
-            race.round = race_meta["round"]
-            race.track = race_meta["track"]
-            race.name = race_meta["name"]
-            races_out.append(asdict(race))
-        except Exception as exc:  # noqa: BLE001
-            print(f"  ! failed: {exc}", file=sys.stderr)
-        time.sleep(1.5)  # be polite
+            pdf_bytes = fetch(pdf_url).content
+        except Exception as e:
+            print(f"    ! pdf fetch failed: {e}", file=sys.stderr)
+            continue
+        try:
+            race = parse_race_pdf(pdf_bytes, pdf_url, series_code)
+        except Exception as e:
+            print(f"    ! pdf parse failed: {e}", file=sys.stderr)
+            continue
+        if race is None:
+            print("    ! pdf yielded 0 rows, skipping", file=sys.stderr)
+            continue
+        race.source_page = rp["url"]
+        races.append(asdict(race))
+        print(f"    ok — round {race.round} {race.track_code} · "
+              f"{len(race.results)} drivers", file=sys.stderr)
+        time.sleep(1.2)
 
+    races.sort(key=lambda r: (r.get("round") or 0, r.get("date") or ""))
     return {
+        "series_code": series_code,
+        "series_name": SERIES[series_code]["name"],
         "season": season,
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "source": "racing-reference.info",
-        "races": races_out,
+        "races": races,
     }
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--season", type=int, required=True)
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--out",    type=Path, required=True)
+    ap.add_argument("--only",   type=str, default=None,
+                    help="Comma-separated series codes (NCS,NOS,NTS)")
     args = ap.parse_args()
 
-    payload = build_season(args.season)
+    only = {s.strip() for s in (args.only or "NCS,NOS,NTS").split(",")}
+    series_out = {}
+    for code in SERIES:
+        if code not in only:
+            continue
+        try:
+            series_out[code] = build_series(code, args.season)
+        except Exception as e:
+            print(f"[{code}] FAILED: {e}", file=sys.stderr)
+            series_out[code] = {"series_code": code, "season": args.season,
+                                "races": [], "error": str(e)}
+
+    payload = {
+        "season": args.season,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": "jayski.com",
+        "series": series_out,
+    }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, indent=2))
-    print(f"wrote {args.out} ({len(payload['races'])} races)", file=sys.stderr)
+    total = sum(len(s.get("races", [])) for s in series_out.values())
+    print(f"\nwrote {args.out} — {total} races",  file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -1,110 +1,25 @@
 {
   "season": 2026,
   "generated_at": "2026-04-22T00:00:00Z",
-  "source": "seed (box reports); will be overwritten by scrape_points.py",
-  "notes": [
-    "Per-race driver stage/finish/fastest-lap breakdown is populated by scripts/scrape_points.py on first GitHub Action run.",
-    "Manufacturer totals, season driver totals, stage wins, and pole positions are sourced from TRD Toyota Points Report (Box) and are authoritative."
-  ],
-  "manufacturers": {
-    "TYT": {
-      "name": "Toyota",
-      "color": "#eb0a1e",
-      "per_race_points": [55, 55, 55, 35, 55, 55, 35, 55, 55],
-      "per_race_laps_led": [103, 145, 71, 193, 165, 82, 292, 25, 188],
-      "season_points": 455,
-      "season_laps_led": 1264,
-      "season_laps_led_pct": 48.3,
-      "wins": 7,
-      "second": 2,
-      "third": 0
+  "source": "initial seed — first GitHub Action run overwrites with Jayski-scraped data",
+  "series": {
+    "NCS": {
+      "series_code": "NCS",
+      "series_name": "NASCAR Cup Series",
+      "season": 2026,
+      "races": []
     },
-    "CHV": {
-      "name": "Chevrolet",
-      "color": "#d4af37",
-      "per_race_points": [35, 34, 35, 34, 35, 33, 55, 34, 35],
-      "per_race_laps_led": [67, 62, 13, 1, 90, 28, 104, 290, 85],
-      "season_points": 330,
-      "season_laps_led": 740,
-      "season_laps_led_pct": 28.3,
-      "wins": 1,
-      "second": 5,
-      "third": 3
+    "NOS": {
+      "series_code": "NOS",
+      "series_name": "NASCAR Xfinity Series",
+      "season": 2026,
+      "races": []
     },
-    "FRD": {
-      "name": "Ford",
-      "color": "#003478",
-      "per_race_points": [34, 30, 29, 55, 31, 35, 34, 35, 31],
-      "per_race_laps_led": [30, 64, 11, 118, 12, 183, 4, 190, 1],
-      "season_points": 314,
-      "season_laps_led": 613,
-      "season_laps_led_pct": 23.4,
-      "wins": 1,
-      "second": 2,
-      "third": 6
+    "NTS": {
+      "series_code": "NTS",
+      "series_name": "NASCAR Craftsman Truck Series",
+      "season": 2026,
+      "races": []
     }
-  },
-  "schedule": [
-    {"round": 1, "date": "2026-02-15", "track": "Daytona",        "track_code": "DAY", "name": "Daytona 500"},
-    {"round": 2, "date": "2026-02-22", "track": "Atlanta",        "track_code": "ATL", "name": "Ambetter Health 400"},
-    {"round": 3, "date": "2026-03-01", "track": "Circuit of the Americas", "track_code": "AUS", "name": "EchoPark Automotive Grand Prix"},
-    {"round": 4, "date": "2026-03-08", "track": "Phoenix",        "track_code": "PHO", "name": "Shriners Children's 500"},
-    {"round": 5, "date": "2026-03-15", "track": "Las Vegas",      "track_code": "LAS", "name": "Pennzoil 400"},
-    {"round": 6, "date": "2026-03-22", "track": "Darlington",     "track_code": "DAR", "name": "Goodyear 400"},
-    {"round": 7, "date": "2026-03-29", "track": "Martinsville",   "track_code": "MAR", "name": "Cook Out 400"},
-    {"round": 8, "date": "2026-04-12", "track": "Bristol",        "track_code": "BRI", "name": "Food City 500"},
-    {"round": 9, "date": "2026-04-19", "track": "Kansas",         "track_code": "KAN", "name": "AdventHealth 400"}
-  ],
-  "poles_by_race": [
-    {"round": 1, "car": "8",  "driver": null},
-    {"round": 2, "car": "45", "driver": "Tyler Reddick"},
-    {"round": 3, "car": "45", "driver": "Tyler Reddick"},
-    {"round": 4, "car": "22", "driver": "Joey Logano"},
-    {"round": 5, "car": "20", "driver": "Christopher Bell"},
-    {"round": 6, "car": "45", "driver": "Tyler Reddick"},
-    {"round": 7, "car": "11", "driver": "Denny Hamlin"},
-    {"round": 8, "car": "12", "driver": "Ryan Blaney"},
-    {"round": 9, "car": "45", "driver": "Tyler Reddick"}
-  ],
-  "driver_season_totals": [
-    {"pos": 1,  "driver": "Tyler Reddick",       "car": "45", "mfr": "TYT", "team": "23XI Racing",              "pts": 457, "race_wins": 0, "stage_wins": 5},
-    {"pos": 2,  "driver": "Denny Hamlin",        "car": "11", "mfr": "TYT", "team": "Joe Gibbs Racing",         "pts": 352, "race_wins": 1, "stage_wins": 3},
-    {"pos": 3,  "driver": "Ryan Blaney",         "car": "12", "mfr": "FRD", "team": "Team Penske",              "pts": 337, "race_wins": 1, "stage_wins": 1},
-    {"pos": 4,  "driver": "Ty Gibbs",            "car": "54", "mfr": "TYT", "team": "Joe Gibbs Racing",         "pts": 319, "race_wins": 1, "stage_wins": 1},
-    {"pos": 5,  "driver": "Kyle Larson",         "car": "5",  "mfr": "CHV", "team": "Hendrick Motorsports",     "pts": 314, "race_wins": 0, "stage_wins": 3},
-    {"pos": 6,  "driver": "Chase Elliott",       "car": "9",  "mfr": "CHV", "team": "Hendrick Motorsports",     "pts": 305, "race_wins": 1, "stage_wins": 0},
-    {"pos": 7,  "driver": "William Byron",       "car": "24", "mfr": "CHV", "team": "Hendrick Motorsports",     "pts": 275, "race_wins": 0, "stage_wins": 1},
-    {"pos": 8,  "driver": "Bubba Wallace",       "car": "23", "mfr": "TYT", "team": "23XI Racing",              "pts": 275, "race_wins": 0, "stage_wins": 2},
-    {"pos": 9,  "driver": "Brad Keselowski",     "car": "6",  "mfr": "FRD", "team": "RFK Racing",               "pts": 264, "race_wins": 0, "stage_wins": 2},
-    {"pos": 10, "driver": "Christopher Bell",    "car": "20", "mfr": "TYT", "team": "Joe Gibbs Racing",         "pts": 261, "race_wins": 0, "stage_wins": 2},
-    {"pos": 11, "driver": "Chris Buescher",      "car": "17", "mfr": "FRD", "team": "RFK Racing",               "pts": 259, "race_wins": 0, "stage_wins": 0},
-    {"pos": 12, "driver": "Carson Hocevar",      "car": "77", "mfr": "CHV", "team": "Spire Motorsports",        "pts": 237, "race_wins": 0, "stage_wins": 0},
-    {"pos": 13, "driver": "Ryan Preece",         "car": "60", "mfr": "FRD", "team": "RFK Racing",               "pts": 235, "race_wins": 0, "stage_wins": 0},
-    {"pos": 14, "driver": "Joey Logano",         "car": "22", "mfr": "FRD", "team": "Team Penske",              "pts": 225, "race_wins": 0, "stage_wins": 0},
-    {"pos": 15, "driver": "Chase Briscoe",       "car": "19", "mfr": "TYT", "team": "Joe Gibbs Racing",         "pts": 214, "race_wins": 0, "stage_wins": 0},
-    {"pos": 16, "driver": "Daniel Suarez",       "car": "7",  "mfr": "CHV", "team": "Spire Motorsports",        "pts": 210, "race_wins": 0, "stage_wins": 0},
-    {"pos": 17, "driver": "Austin Cindric",      "car": "2",  "mfr": "FRD", "team": "Team Penske",              "pts": 197, "race_wins": 0, "stage_wins": 1},
-    {"pos": 18, "driver": "Shane Van Gisbergen", "car": "97", "mfr": "CHV", "team": "Trackhouse Racing",        "pts": 178, "race_wins": 0, "stage_wins": 0},
-    {"pos": 19, "driver": "Michael McDowell",    "car": "71", "mfr": "CHV", "team": "Spire Motorsports",        "pts": 174, "race_wins": 0, "stage_wins": 0},
-    {"pos": 20, "driver": "Ross Chastain",       "car": "1",  "mfr": "CHV", "team": "Trackhouse Racing",        "pts": 164, "race_wins": 0, "stage_wins": 1},
-    {"pos": 21, "driver": "AJ Allmendinger",     "car": "16", "mfr": "CHV", "team": "Kaulig Racing",            "pts": 162, "race_wins": 0, "stage_wins": 0},
-    {"pos": 22, "driver": "Zane Smith",          "car": "38", "mfr": "FRD", "team": "Front Row Motorsports",    "pts": 149, "race_wins": 0, "stage_wins": 1},
-    {"pos": 23, "driver": "Todd Gilliland",      "car": "34", "mfr": "FRD", "team": "Front Row Motorsports",    "pts": 147, "race_wins": 0, "stage_wins": 0},
-    {"pos": 24, "driver": "Erik Jones",          "car": "43", "mfr": "TYT", "team": "Legacy Motor Club",        "pts": 147, "race_wins": 0, "stage_wins": 0},
-    {"pos": 25, "driver": "Austin Dillon",       "car": "3",  "mfr": "CHV", "team": "Richard Childress Racing", "pts": 145, "race_wins": 0, "stage_wins": 0},
-    {"pos": 26, "driver": "Josh Berry",          "car": "21", "mfr": "FRD", "team": "Wood Brothers Racing",     "pts": 138, "race_wins": 0, "stage_wins": 0},
-    {"pos": 27, "driver": "Kyle Busch",          "car": "8",  "mfr": "CHV", "team": "Richard Childress Racing", "pts": 133, "race_wins": 0, "stage_wins": 0},
-    {"pos": 28, "driver": "Riley Herbst",        "car": "35", "mfr": "TYT", "team": "23XI Racing",              "pts": 132, "race_wins": 0, "stage_wins": 0},
-    {"pos": 29, "driver": "John Hunter Nemechek","car": "42", "mfr": "TYT", "team": "Legacy Motor Club",        "pts": 126, "race_wins": 0, "stage_wins": 0},
-    {"pos": 30, "driver": "Ricky Stenhouse Jr.", "car": "47", "mfr": "CHV", "team": "HYAK Motorsports",         "pts": 123, "race_wins": 0, "stage_wins": 0},
-    {"pos": 31, "driver": "Noah Gragson",        "car": "4",  "mfr": "FRD", "team": "Front Row Motorsports",    "pts": 113, "race_wins": 0, "stage_wins": 0},
-    {"pos": 32, "driver": "Ty Dillon",           "car": "10", "mfr": "CHV", "team": "Kaulig Racing",            "pts": 99,  "race_wins": 0, "stage_wins": 0},
-    {"pos": 33, "driver": "Connor Zilisch",      "car": "88", "mfr": "CHV", "team": "Trackhouse Racing",        "pts": 92,  "race_wins": 0, "stage_wins": 0},
-    {"pos": 34, "driver": "Cole Custer",         "car": "41", "mfr": "CHV", "team": "Haas Factory Team",        "pts": 88,  "race_wins": 0, "stage_wins": 0},
-    {"pos": 35, "driver": "Cody Ware",           "car": "51", "mfr": "CHV", "team": "Rick Ware Racing",         "pts": 65,  "race_wins": 0, "stage_wins": 0},
-    {"pos": 36, "driver": "Alex Bowman",         "car": "48", "mfr": "CHV", "team": "Hendrick Motorsports",     "pts": 43,  "race_wins": 0, "stage_wins": 0},
-    {"pos": 37, "driver": "Casey Mears",         "car": "",   "mfr": "",    "team": "",                         "pts": 9,   "race_wins": 0, "stage_wins": 0},
-    {"pos": 38, "driver": "BJ McLeod",           "car": "",   "mfr": "",    "team": "",                         "pts": 3,   "race_wins": 0, "stage_wins": 0}
-  ],
-  "races": []
+  }
 }

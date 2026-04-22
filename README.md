@@ -1,134 +1,80 @@
-# NCS Points Analysis — 2026 Season
+# NASCAR Points Analysis — 2026 Season
 
-A single-page NASCAR Cup Series points analysis dashboard, hosted on GitHub Pages, auto-updated weekly.
+Single-page dashboard for all three NASCAR national series (Cup · Xfinity · Trucks).
+Breaks every race down into the four things that actually matter:
 
-Breaks every driver's season down into the three things that actually matter:
-
-- **Stage points** (Stage 1 + Stage 2 top-10 bonuses)
+- **Stage 1 points** (top-10 stage bonus, 10..1)
+- **Stage 2 points** (same)
 - **Finish points** (base finishing position)
-- **Fastest-lap bonus** (+1 point introduced in 2025)
+- **Fastest-lap bonus** (+1 pt, 2025+ rule)
 
-Plus season cumulative trend, a driver × race heatmap, and full driver standings with manufacturer / team / driver filters.
-
----
+All derived from the official NASCAR race-results PDFs linked by Jayski.com. Auto-refreshed twice weekly via GitHub Actions.
 
 ## Views
 
-1. **Season Arc** — cumulative points by round, multi-driver overlay (pick anyone in the Compare picker)
-2. **Per-Race Deconstruction** — stacked bar: Stage 1 · Stage 2 · Finish · Fastest Lap for one driver, per race
+1. **Season Arc** — cumulative points by round, multi-driver overlay
+2. **Per-Race Deconstruction** — stacked bar: Stage 1 · Stage 2 · Finish · FL for one driver
 3. **Stage Hunters** — season stage-points leaderboard
-4. **Fastest Lap Bonus** — who's winning the +1 bonus
-5. **Driver × Race Heatmap** — where each driver earned their points, colored by manufacturer
-6. **Garage List** — full filterable standings
+4. **Fastest Lap Bonus** — who's winning the +1
+5. **Driver × Race Heatmap** — where points were earned, colored by manufacturer
+6. **Garage List** — full standings with stage/finish/FL breakdown
 
-Filters: manufacturer (Toyota/Chevy/Ford/All), team, driver search, compare-multiple-drivers picker.
+**Series switcher** at the top toggles between Cup (NCS), Xfinity (NOS), and Trucks (NTS).
 
----
+Filters: manufacturer (Toyota/Chevy/Ford), team, driver search, compare picker.
 
 ## Data pipeline
 
 ```
-  Racing-Reference.info          Box (TRD Toyota Points Report)
-         │                                 │
-         │ scripts/scrape_points.py        │  (manual: authoritative season
-         ▼                                 ▼   totals, mfr pts, stage wins)
-   data/points.json  ◄── merged, single source of truth for the page
-         │
-         ▼
-    index.html  (static, deployed via GitHub Pages)
+Jayski.com schedule pages (NCS/NOS/NTS)
+        │
+        ▼
+Discover "…-race-results/" links for current season
+        │
+        ▼
+For each race → find "Click here to download the PDF" → fetch
+        │
+        ▼
+pdfplumber extracts results table → derive stage/finish/FL splits
+        │
+        ▼
+   data/points.json  (committed back to repo by Action)
+        │
+        ▼
+   index.html (GitHub Pages, fetches JSON on each load)
 ```
-
-### Authoritative sources
-- **Manufacturer points, laps-led, stage wins, pole positions, season driver totals** → pulled from the weekly *TRD Toyota Points Report* Excel in Box. Seeded into `data/points.json` for day-one use.
-- **Per-race stage / finish / fastest-lap breakdown** → scraped from [Racing-Reference.info](https://www.racing-reference.info/) by `scripts/scrape_points.py`.
-
-The scraper runs **every Monday at 11:00 UTC** (~7am ET) via GitHub Actions, commits a fresh `data/points.json`, which the static page fetches on every load.
-
----
 
 ## Setup
 
-### 1. Push to GitHub
+1. Push this folder to a GitHub repo (via GitHub Desktop or `git push`)
+2. **Settings → Pages** → Deploy from branch `main` / root
+3. **Settings → Actions → General → Workflow permissions** → Read and write
+4. **Actions tab → Update NASCAR Points Data → Run workflow** (populates the JSON for the first time)
+5. Replace `YOUR_USER` in `scripts/scrape_points.py`'s `USER_AGENT` string with your GitHub username (politeness to Jayski)
+
+## Running locally
 
 ```bash
-git init
-git add .
-git commit -m "init: NCS points analysis"
-git remote add origin git@github.com:YOUR_USER/nascar-points.git
-git push -u origin main
-```
-
-### 2. Enable GitHub Pages
-
-Repo **Settings → Pages** → Source: **Deploy from a branch** → Branch: `main` / folder: `/ (root)`.
-
-Your site is live at `https://YOUR_USER.github.io/nascar-points/`.
-
-### 3. Enable the weekly update Action
-
-Repo **Settings → Actions → General** → Workflow permissions → **Read and write permissions** (so the bot can commit the refreshed JSON).
-
-Then in the **Actions** tab, find *Update NCS Points Data* → **Run workflow** once manually to populate the per-race breakdown for the first time. After that, it runs itself every Monday.
-
----
-
-## Running the scraper locally
-
-```bash
-pip install requests beautifulsoup4
+pip install requests beautifulsoup4 pdfplumber
 python scripts/scrape_points.py --season 2026 --out data/points.json
+python -m http.server 8000   # then open http://localhost:8000
 ```
 
-Then open `index.html` with any static server (`python -m http.server 8000`) — browsers won't fetch `data/points.json` from `file://` URLs.
+## Scrape cadence
 
----
+GitHub Action runs:
+- **Monday 11:00 UTC** (catches Sunday Cup + Saturday Xfinity)
+- **Thursday 11:00 UTC** (catches Friday/Saturday Truck races)
 
-## Data schema (`data/points.json`)
+Manual refresh: **Actions tab → Run workflow** anytime.
 
-```jsonc
-{
-  "season": 2026,
-  "generated_at": "2026-04-22T11:00:00Z",
-  "source": "racing-reference.info",
-  "manufacturers": {
-    "TYT": { "name": "Toyota", "color": "#eb0a1e",
-             "per_race_points": [...], "season_points": 455, "wins": 7, ... },
-    "CHV": { ... }, "FRD": { ... }
-  },
-  "schedule": [
-    { "round": 1, "date": "2026-02-15", "track": "Daytona", "track_code": "DAY", "name": "Daytona 500" },
-    ...
-  ],
-  "driver_season_totals": [
-    { "pos": 1, "driver": "Tyler Reddick", "car": "45", "mfr": "TYT",
-      "team": "23XI Racing", "pts": 457, "race_wins": 0, "stage_wins": 5 },
-    ...
-  ],
-  "races": [
-    {
-      "round": 1, "date": "2026-02-15", "track": "Daytona", "track_code": "DAY",
-      "name": "Daytona 500", "stages": 2, "fastest_lap_driver": "...",
-      "results": [
-        { "driver": "...", "car_number": "45", "manufacturer": "TYT",
-          "finish_pos": 1, "laps_led": 35,
-          "stage_1_pts": 10, "stage_2_pts": 8,
-          "finish_pts": 40, "fastest_lap_pt": 0,
-          "race_pts": 58 },
-        ...
-      ]
-    }
-  ]
-}
-```
+## How the four point components are derived
 
----
+NASCAR's race-results PDF columns: `Fin, Str, Car, Driver, Team, Laps, Stage 1 Pos, Stage 2 Pos, Pts, Status, Tms, Laps_led`.
 
-## Why GitHub Actions and not live-from-browser?
+- `stage_1_pts` = `11 − stage_1_pos` if `stage_1_pos ≤ 10`, else `0`
+- `stage_2_pts` = same formula for Stage 2
+- `fastest_lap_pt` = `1` for the driver whose car number matches the "Fastest Lap Bonus: #XX lap YYY" line at the bottom of the PDF
+- `finish_pts` = `Pts − stage_1_pts − stage_2_pts − fastest_lap_pt` (includes 5-pt win bonus and 1-pt-per-stage-win bonus since they're rolled into the `Pts` column)
 
-Racing-Reference and NASCAR.com don't return CORS headers that allow direct browser fetches from a different origin. A scheduled scrape that commits JSON into the repo gives you:
-
-- No third-party CORS proxy dependency
-- Full commit history of point changes (bonus audit trail)
-- Fully static hosting — free forever on GitHub Pages
-
-Tradeoff: data updates on a weekly cadence, not instantaneously. For ad-hoc refresh, hit "Run workflow" in the Actions tab.
+Ineligible drivers (`*` prefix in the PDF, e.g. part-timers, crossover drivers in a lower series) are excluded from season standings.

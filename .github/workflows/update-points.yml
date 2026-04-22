@@ -1,16 +1,20 @@
-name: Update NCS Points Data
+name: Update NASCAR Points Data
 
 on:
   schedule:
-    # Every Monday 11:00 UTC (~7am ET, after Sunday race data is settled)
+    # Monday 11:00 UTC (after Sunday Cup/Xfinity) and Thursday 11:00 UTC (catches Truck races)
     - cron: '0 11 * * 1'
-  # Allow manual triggering from the Actions tab
+    - cron: '0 11 * * 4'
   workflow_dispatch:
     inputs:
       season:
         description: 'Season to refresh'
         required: false
         default: '2026'
+      only:
+        description: 'Series to refresh (NCS,NOS,NTS or subset)'
+        required: false
+        default: 'NCS,NOS,NTS'
 
 permissions:
   contents: write
@@ -27,12 +31,13 @@ jobs:
           cache: 'pip'
 
       - name: Install deps
-        run: pip install requests beautifulsoup4
+        run: pip install requests beautifulsoup4 pdfplumber
 
       - name: Run scraper
         run: |
           python scripts/scrape_points.py \
             --season "${{ github.event.inputs.season || '2026' }}" \
+            --only "${{ github.event.inputs.only || 'NCS,NOS,NTS' }}" \
             --out data/points.json
 
       - name: Commit & push if changed
