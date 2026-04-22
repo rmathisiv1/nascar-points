@@ -129,6 +129,7 @@ class Race:
 # Chrome UA, but lets cloudscraper through.
 _SCRAPER = None
 _DUMPED_SAMPLE = False  # one-shot diagnostic flag
+_DUMPED_HUB_SAMPLE = False  # one-shot hub-links dump
 
 
 def _new_scraper():
@@ -228,6 +229,7 @@ def find_pdf_url(race_page_url: str) -> Optional[str]:
     So: fetch the hub, find the -race-results/ page link, fetch that,
     and find the PDF there.
     """
+    global _DUMPED_HUB_SAMPLE
     try:
         hub_html = fetch(race_page_url).text
     except Exception as e:
@@ -235,19 +237,32 @@ def find_pdf_url(race_page_url: str) -> Optional[str]:
         return None
     hub_soup = BeautifulSoup(hub_html, "html.parser")
 
-    # Step 1: find the -race-results/ link on the hub page
+    # Step 1: find the -race-results/ link on the hub page. Accept relative
+    # URLs and www-or-no-www variants.
     results_page_url = None
     for a in hub_soup.find_all("a", href=True):
         href = a["href"].strip()
-        if "-race-results/" in href and "jayski.com" in href:
+        if "-race-results/" in href:
             if href.startswith("/"):
                 href = "https://www.jayski.com" + href
+            elif not href.startswith("http"):
+                href = "https://www.jayski.com/" + href.lstrip("/")
             results_page_url = href
             break
 
     if not results_page_url:
-        # Hub doesn't link a -race-results/ page (probably because the race
-        # hasn't happened yet). Not a bug — just skip.
+        # Diagnostic: dump the first few jayski links from the hub so we
+        # can see what's actually there (throttled to first failure).
+        if not _DUMPED_HUB_SAMPLE:
+            hrefs = [a["href"] for a in hub_soup.find_all("a", href=True)]
+            jayski_links = [h for h in hrefs
+                            if "jayski" in h or h.startswith("/")]
+            print(f"    ! no -race-results/ link on hub. "
+                  f"sample of hub links (first failure only):",
+                  file=sys.stderr)
+            for h in jayski_links[:20]:
+                print(f"        {h}", file=sys.stderr)
+            _DUMPED_HUB_SAMPLE = True
         return None
 
     # Step 2: fetch the -race-results/ page and find its PDF
@@ -258,9 +273,6 @@ def find_pdf_url(race_page_url: str) -> Optional[str]:
         return None
     results_soup = BeautifulSoup(results_html, "html.parser")
 
-    # On the -race-results/ page, the one PDF link is the points report.
-    # We still score to be safe, because Jayski may embed multiple PDFs
-    # over time.
     best = None  # (score, href)
     for a in results_soup.find_all("a", href=True):
         href = a["href"].strip()
@@ -294,7 +306,6 @@ def find_pdf_url(race_page_url: str) -> Optional[str]:
         return None
     score, href = best
     if score <= 0:
-        # All PDFs on the page look like non-results material
         return None
     if href.startswith("/"):
         href = "https://www.jayski.com" + href
