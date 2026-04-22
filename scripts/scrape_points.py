@@ -155,70 +155,22 @@ def discover_race_pages(series_code: str, season: int) -> list[dict]:
           f"{len(html)} bytes from {schedule_url}", file=sys.stderr)
 
     soup = BeautifulSoup(html, "html.parser")
-
-    # Diagnostic: what does the schedule table row structure look like?
-    # We want to know whether individual races are even linked.
-    tables = soup.find_all("table")
-    print(f"[{series_code}] page has {len(tables)} <table> element(s)",
-          file=sys.stderr)
-    for ti, tbl in enumerate(tables[:2]):  # only first 2 tables
-        rows = tbl.find_all("tr")
-        print(f"[{series_code}] table {ti}: {len(rows)} rows", file=sys.stderr)
-        # Print first 2 data rows (skip the header) so we see cell layout
-        for ri, row in enumerate(rows[1:4]):
-            cells_text = [c.get_text(" ", strip=True)[:60] for c in row.find_all(["td","th"])]
-            cell_links = [a.get("href","") for a in row.find_all("a", href=True)]
-            print(f"    row {ri}: cells={cells_text}", file=sys.stderr)
-            print(f"            links={cell_links[:3]}", file=sys.stderr)
-
-    # Diagnostic: unique "shapes" of jayski links on the page. Strip year
-    # and race-name specifics so we see just the structural patterns.
-    all_hrefs = [a["href"] for a in soup.find_all("a", href=True)
-                 if "jayski.com" in a["href"] or a["href"].startswith("/")]
-    patterns = set()
-    for h in all_hrefs:
-        # normalize: keep series slug, collapse race-name to <RACE>, keep trailing slug
-        norm = re.sub(r"/\d{4}-[^/]+-at-[^/]+-", "/<YEAR>-<SERIES>-<RACE>-", h)
-        norm = re.sub(r"/\d{4}-", "/<YEAR>-", norm)
-        patterns.add(norm)
-    print(f"[{series_code}] unique link patterns ({len(patterns)}):", file=sys.stderr)
-    for p in sorted(patterns)[:25]:
-        print(f"    {p}", file=sys.stderr)
     slug = cfg["race_results_slug"]
 
     seen: dict[str, dict] = {}
     for a in soup.find_all("a", href=True):
         href = a["href"].strip()
-        # Jayski's schedule pages link each race's "driver-points-standings"
-        # page (e.g. .../2026-nascar-cup-series-adventhealth-400-at-kansas-
-        # speedway-driver-points-standings/). The corresponding race-results
-        # page is the same URL with "driver-points-standings" swapped for
-        # "race-results". Some pages may already link race-results directly.
-        if slug not in href:
+        # Each race row on the schedule links to a "-race-page/" hub.
+        # The actual points-report PDF is linked from that hub page.
+        if slug not in href or "-race-page/" not in href:
             continue
         if str(season) not in href:
             continue
-        # Skip obvious non-per-race links
-        if any(bad in href for bad in [
-            "-schedule/", "-champions/", "-chase/", "-team-driver-chart/",
-            "/nascar-cup-series/2026-nascar-cup-series-race-results/",
-            "/oreilly-auto-parts-series/2026-nascar-oreilly-auto-parts-series-race-results/",
-            "/truck-series/2026-nascar-craftsman-truck-series-race-results/",
-        ]):
+        if href.startswith("/"):
+            href = "https://www.jayski.com" + href
+        if href in seen:
             continue
-        # Transform driver-points-standings → race-results if needed
-        if "driver-points-standings" in href:
-            results_href = href.replace("-driver-points-standings/", "-race-results/")
-        elif "race-results" in href:
-            results_href = href
-        else:
-            # Not a recognized per-race page; skip
-            continue
-        if results_href.startswith("/"):
-            results_href = "https://www.jayski.com" + results_href
-        if results_href in seen:
-            continue
-        seen[results_href] = {"url": results_href, "label": a.get_text(" ", strip=True)}
+        seen[href] = {"url": href, "label": a.get_text(" ", strip=True)}
     return list(seen.values())
 
 
