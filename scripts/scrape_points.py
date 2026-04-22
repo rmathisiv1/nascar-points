@@ -219,27 +219,83 @@ PDF_LINK_PATTERNS = [
 
 
 def find_pdf_url(race_page_url: str) -> Optional[str]:
+    """
+    Race-page hubs link to multiple PDFs — contingency awards reports,
+    shade reports, oil consumption reports, and (the one we actually want)
+    the race-results / points report. Score each PDF link by preference
+    and pick the best match.
+    """
     try:
         html = fetch(race_page_url).text
     except Exception as e:
         print(f"    ! race page fetch failed: {e}", file=sys.stderr)
         return None
     soup = BeautifulSoup(html, "html.parser")
+
+    # Find all PDF candidates on the page with surrounding context
+    candidates: list[tuple[int, str, str]] = []  # (score, href, context)
     for a in soup.find_all("a", href=True):
-        txt = a.get_text(" ", strip=True)
         href = a["href"].strip()
-        for pat in PDF_LINK_PATTERNS:
-            if pat.search(txt) or pat.search(href):
-                if href.startswith("/"):
-                    href = "https://www.jayski.com" + href
-                return href
-    for a in soup.find_all("a", href=True):
-        if a["href"].lower().endswith(".pdf"):
-            href = a["href"]
-            if href.startswith("/"):
-                href = "https://www.jayski.com" + href
-            return href
-    return None
+        if not href.lower().endswith(".pdf"):
+            continue
+        # Context = nearest heading-or-paragraph text around the link
+        parent = a.find_parent(["p", "li", "h2", "h3", "h4", "div"])
+        context = (parent.get_text(" ", strip=True) if parent
+                   else a.get_text(" ", strip=True))
+        context = context[:200]
+        text_to_match = (href + " " + context).lower()
+
+        score = 0
+        # Strong positive signals — this is the points/results PDF
+        if "race-results" in text_to_match or "race results" in text_to_match:
+            score += 100
+        if "points report" in text_to_match or "points-report" in text_to_match:
+            score += 100
+        if "results report" in text_to_match:
+            score += 80
+        # Jayski's points-report PDFs usually live at media.jayski.com/...
+        if "points-report" in href.lower() or "race-results" in href.lower():
+            score += 40
+        # Negative signals — definitely NOT what we want
+        for bad, penalty in [
+            ("contingency", -100),
+            ("awards report", -100),
+            ("shade report", -100),
+            ("oil consumption", -100),
+            ("photo", -100),
+            ("preview", -50),
+            ("pole qualifying", -50),
+            ("qualifying", -30),
+            ("practice", -30),
+            ("starting lineup", -20),
+        ]:
+            if bad in text_to_match:
+                score += penalty
+        # Weak positive for a generic "click here to download pdf" that
+        # *isn't* contradicted by a negative signal
+        if score == 0 and "click here to download the pdf" in text_to_match:
+            score = 10
+
+        candidates.append((score, href, context))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda t: t[0], reverse=True)
+    best_score, best_href, best_ctx = candidates[0]
+
+    # Diagnostic: if best is weakly scored, show all candidates
+    if best_score < 50:
+        print(f"    (weak match, score={best_score}) candidates:",
+              file=sys.stderr)
+        for sc, h, c in candidates[:5]:
+            print(f"      [{sc}] {h} — {c[:80]!r}", file=sys.stderr)
+
+    if best_score <= 0:
+        return None
+    if best_href.startswith("/"):
+        best_href = "https://www.jayski.com" + best_href
+    return best_href
 
 
 RACE_HEADER_RE = re.compile(
