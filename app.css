@@ -1091,6 +1091,55 @@ code {
   box-sizing: border-box;
 }
 .tm-shared:hover { background: rgba(59,130,246,0.30); color: #fff; }
+
+/* Co-driver badge (car had multiple drivers) — shared across every view.
+   Smaller than .tm-shared so it fits cleanly inside pill rows / table cells. */
+.co-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px;
+  font-family: var(--sans);
+  font-size: 9px; font-weight: 700; font-style: italic;
+  color: var(--accent-2);
+  cursor: help;
+  border-radius: 50%;
+  background: rgba(59,130,246,0.15);
+  border: 1px solid rgba(59,130,246,0.35);
+  margin-left: 5px;
+  flex-shrink: 0;
+  line-height: 1;
+  padding: 0;
+  letter-spacing: 0;
+  text-indent: 0;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+.co-badge:hover { background: rgba(59,130,246,0.30); color: #fff; }
+
+/* Co-driver tooltip variant of #metric-tooltip */
+#metric-tooltip.co-tip {
+  font-family: var(--mono);
+  min-width: 200px;
+  max-width: 280px;
+}
+#metric-tooltip.co-tip .co-tip-hdr {
+  font-size: 10px;
+  color: var(--accent-2);
+  margin-bottom: 6px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: 4px;
+}
+#metric-tooltip.co-tip .co-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  padding: 3px 0;
+  color: var(--muted);
+}
+#metric-tooltip.co-tip .co-tip-row.primary { color: var(--text); font-weight: 600; }
+#metric-tooltip.co-tip .co-tip-row .n { color: var(--dim); }
 .tm-true-team {
   font-family: var(--mono); font-size: 9px; font-weight: 700;
   color: var(--dim); background: rgba(255,255,255,0.04);

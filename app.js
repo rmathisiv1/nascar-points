@@ -514,6 +514,82 @@ function computeSeasonTotals() {
   }).sort((a, b) => b.total - a.total);
 }
 
+// ============================================================
+// CO-DRIVER BADGE — shared across every view
+// ------------------------------------------------------------
+// A car that had multiple drivers in a season (substitutes, driver changes,
+// one-off relief) gets a small "ⁱ" badge next to its primary driver's name.
+// Hovering the badge reveals all drivers who drove the car, sorted by starts.
+// Data source: entity.driversByStarts, set by entitiesFromRaces().
+// ============================================================
+
+// Returns the HTML for the badge, or "" if the car had a single driver.
+// Pass-through: entity must have `driversByStarts` (or `coDrivers`) populated.
+function renderCoDriverBadge(entity) {
+  const list = entity && entity.driversByStarts;
+  if (!Array.isArray(list) || list.length < 2) return "";
+  const car = entity.car_number || "";
+  // The badge uses data-car so one wire-up call can find and attach to every
+  // badge on the page at once, regardless of which view rendered it.
+  return `<span class="co-badge" data-car="${escapeHTML(String(car))}" title="Shared car — hover for drivers">i</span>`;
+}
+
+// Scans a host element for all .co-badge nodes and wires up a hover tooltip
+// that lists every driver who drove the car (with start counts, primary
+// highlighted). Safe to call multiple times — it re-binds only the nodes
+// inside `host`. Data comes from the current allEntities() snapshot, keyed
+// by car number.
+function wireCoDriverBadges(host) {
+  if (!host) return;
+  const tip = document.getElementById("metric-tooltip");
+  if (!tip) return;
+  // Build a lookup of car_number → entity (for the active dataset).
+  const byCar = new Map();
+  allEntities().forEach(e => byCar.set(String(e.car_number), e));
+
+  host.querySelectorAll(".co-badge").forEach(el => {
+    const car = el.getAttribute("data-car");
+    const ent = byCar.get(String(car));
+    if (!ent || !Array.isArray(ent.driversByStarts) || ent.driversByStarts.length < 2) return;
+
+    const rowsHTML = ent.driversByStarts.map((dc, i) => {
+      const cls = i === 0 ? "primary" : "";
+      const s = dc.starts || 0;
+      return `<div class="co-tip-row ${cls}"><span>${escapeHTML(dc.name)}</span><span class="n">${s} race${s === 1 ? "" : "s"}</span></div>`;
+    }).join("");
+    const totalRaces = ent.races ? ent.races.length : 0;
+    const html = `<div class="co-tip-hdr">Shared Car #${escapeHTML(String(car))} · ${totalRaces} races total</div>${rowsHTML}`;
+
+    const show = (evt) => {
+      tip.innerHTML = html;
+      tip.className = "";
+      ["show", "co-tip"].forEach(c => tip.classList.add(c));
+      const rect = tip.getBoundingClientRect();
+      let left = evt.clientX + 12, top = evt.clientY + 12;
+      if (left + rect.width  > window.innerWidth  - 8) left = evt.clientX - rect.width  - 12;
+      if (top  + rect.height > window.innerHeight - 8) top  = evt.clientY - rect.height - 12;
+      if (left < 8) left = 8;
+      if (top  < 8) top  = 8;
+      tip.style.left = `${left}px`;
+      tip.style.top  = `${top}px`;
+    };
+    const hide = () => tip.classList.remove("show");
+
+    el.addEventListener("mouseenter", show);
+    el.addEventListener("mousemove",  show);
+    el.addEventListener("mouseleave", hide);
+    // Clicking the badge keeps the tooltip open briefly for mobile / tap users.
+    // Simpler than a full popover: on tap, show, then hide after 4s if no move.
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      show(e);
+      clearTimeout(el._coTimer);
+      el._coTimer = setTimeout(hide, 4000);
+    });
+  });
+}
+
 function mean(xs) {
   const a = xs.filter(x => Number.isFinite(x));
   if (a.length === 0) return null;
@@ -745,6 +821,7 @@ function renderFormTable() {
       <td><a class="driver-cell profile-link" href="${profileHref(d)}">
         <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
         <span>${escapeHTML(displayName(d))}</span>
+        ${renderCoDriverBadge(d)}
       </a></td>
       <td>${teamPill}</td>
       ${raceCells}
@@ -803,6 +880,8 @@ function renderFormTable() {
       renderFormTable();
     });
   });
+
+  wireCoDriverBadges(card);
 
   const sub = document.getElementById("form-sub");
   const ftNote = STATE.form.ftOnly ? "full-time only" : "all entrants";
@@ -1023,6 +1102,7 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
     return `<div class="driver-pill ${sel}" data-key="${escapeHTML(entityKey(e))}" title="${escapeHTML(displayName(e))} — click to toggle, ↗ to open profile">
       <span class="dp-num" style="background:${carHex};color:${txt}">${e.car_number}</span>
       <span class="dp-name">${escapeHTML(label)}</span>
+      ${renderCoDriverBadge(e)}
       <a class="dp-jump profile-link" href="${profileHref(e)}" title="Open ${escapeHTML(displayName(e))} profile" aria-label="Open profile">↗</a>
     </div>`;
   }).join("");
@@ -1056,6 +1136,8 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
       });
     });
   }
+
+  wireCoDriverBadges(host);
 }
 
 // ============================================================
@@ -1950,10 +2032,14 @@ function renderTrajectoryDriverGrid(entities) {
     const sel = STATE.trajectory.selected.has(key) ? "selected" : "";
     const carHex = colorFor(STATE.series, e.car_number);
     const txt = contrastTextFor(carHex);
-    const lastName = (e.driver || "").split(/\s+/).slice(-1)[0];
+    const primaryDrv = e.primaryDriver || e.driver || "";
+    const lastName = primaryDrv.split(/\s+/).slice(-1)[0];
+    const coCount = (e.coDrivers || []).length;
+    const label = coCount > 0 ? `${lastName} +${coCount}` : lastName;
     return `<div class="driver-pill ${sel}" data-key="${escapeHTML(key)}" title="${escapeHTML(displayName(e))}">
       <span class="dp-num" style="background:${carHex};color:${txt}">${e.car_number}</span>
-      <span class="dp-name">${escapeHTML(lastName)}</span>
+      <span class="dp-name">${escapeHTML(label)}</span>
+      ${renderCoDriverBadge(e)}
     </div>`;
   }).join("");
 
@@ -1967,6 +2053,8 @@ function renderTrajectoryDriverGrid(entities) {
       renderTrajectory();
     });
   });
+
+  wireCoDriverBadges(host);
 }
 
 function regression(pts) {
@@ -2736,20 +2824,22 @@ function renderProfile() {
 
   const primaryDrv = entity.primaryDriver || entity.driver;
   const coCount = (entity.coDrivers || []).length;
-  const displayTitle = coCount > 0
+  const titleText = coCount > 0
     ? `#${entity.car_number} · ${primaryDrv} +${coCount}`
     : `#${entity.car_number} · ${primaryDrv}`;
+  // Wrap with badge for display contexts that use innerHTML
+  const displayTitle = titleText;
+  const displayTitleHTML = `${escapeHTML(titleText)}${renderCoDriverBadge(entity)}`;
 
   const rows = profileRaceRows(entity);
   const mfr = { TYT: "Toyota", CHE: "Chevrolet", CHV: "Chevrolet", FRD: "Ford", FOR: "Ford" }[entity.manufacturer] || entity.manufacturer || "—";
   const teamName = TEAM_FULL_NAMES[teamCode] || teamCode;
 
-  // Bio lookup — use primary driver for both kinds (car profiles show the main driver's bio/career)
-  const bioDriverName = entity.driver;  // primary driver for this entity
+  // Bio lookup — use the primary driver (car profile shows the primary driver's bio).
+  const bioDriverName = primaryDrv;
   const bio = STATE.driverBios ? STATE.driverBios[slugify(bioDriverName)] : null;
   const bioParts = [];
-  if (bio && kind !== "owner") {
-    // Age + hometown only shown in driver mode — would be misleading in car mode
+  if (bio) {
     if (bio.dob) {
       const age = calcAge(bio.dob);
       if (age != null) bioParts.push(`<span class="v">${age}</span> years old`);
@@ -2785,7 +2875,7 @@ function renderProfile() {
     <div class="profile-hero" style="--driver-color:${carHex}">
       <div class="profile-hero-car" style="background:${carHex};color:${carTxt}">${entity.car_number}</div>
       <div class="profile-hero-info">
-        <h1 class="profile-hero-name">${escapeHTML(displayTitle)}</h1>
+        <h1 class="profile-hero-name">${displayTitleHTML}</h1>
         <div class="profile-hero-meta">
           <span class="team-pill" style="background:${orgHex};color:${orgTxt}">${escapeHTML(teamCode)}</span>
           <span class="profile-hero-team"><strong>${escapeHTML(mfr)}</strong> · ${escapeHTML(teamName)}</span>
@@ -2893,6 +2983,7 @@ function renderProfile() {
   paintProfileTrackSplits(entity);
   paintProfileRaceTable(rows, kind);
   paintProfileTeammates(entity);
+  wireCoDriverBadges(host);
 }
 
 function rankSuffix(n) {
@@ -3338,7 +3429,7 @@ function renderHeatmap() {
     const label = document.createElement("a");
     label.className = "hm-label profile-link";
     label.href = profileHref(d);
-    label.innerHTML = `<span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span><span>${escapeHTML(displayName(d))}</span>`;
+    label.innerHTML = `<span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span><span>${escapeHTML(displayName(d))}</span>${renderCoDriverBadge(d)}`;
     grid.appendChild(label);
     const byRound = {};
     d.races.forEach(r => { byRound[r.round] = r; });
@@ -3370,6 +3461,7 @@ function renderHeatmap() {
 
   host.innerHTML = "";
   host.appendChild(grid);
+  wireCoDriverBadges(grid);
 }
 
 function heatmapColor(finish) {
@@ -3454,6 +3546,7 @@ function renderStandings() {
       <td><a class="driver-cell profile-link" href="#/${profileKind}/${profileSlug}">
         <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span>${escapeHTML(r.displayLabel)}</span>
+        ${renderCoDriverBadge(r)}
       </a></td>
       <td>${teamPill}</td>
       <td class="num">${r.starts}</td>
@@ -3516,6 +3609,8 @@ function renderStandings() {
       renderStandings();
     });
   });
+
+  wireCoDriverBadges(table);
 }
 
 function pointsMapThroughRound(maxRound) {
