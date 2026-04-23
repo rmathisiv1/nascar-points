@@ -446,7 +446,16 @@ function seasonTotalRating(driverRaces) {
 
 function isFullTime(entity) {
   const totalRaces = racesSorted().length;
-  return entity.races.length >= totalRaces && totalRaces > 0;
+  if (totalRaces <= 0) return false;
+  // A driver is "full-time" if they've run at least 90% of the season's races.
+  // This tolerates missed races due to suspension, injury, or DNS while still
+  // excluding part-time entrants, one-race substitutes, and crossover drivers.
+  // Early in the season (few races run), we still require all of them — a
+  // driver at 4/5 is fine (80% >= 90% is false, so we need the small-n guard
+  // below). With fewer than 10 races run, be strict: need to have run them all
+  // minus one.
+  if (totalRaces < 10) return entity.races.length >= totalRaces - 1;
+  return entity.races.length >= Math.ceil(totalRaces * 0.9);
 }
 
 // ============================================================
