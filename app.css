@@ -522,7 +522,9 @@ html, body {
   font-weight: 600;
 }
 /* Team-code pill — always readable. Uses palette org color if present,
-   falls back to a muted card-style pill with a visible border if not. */
+   falls back to a muted card-style pill with a visible border if not.
+   A light inner border is always applied so dark org colors (THR, etc.)
+   don't disappear against the dark background. */
 .team-pill {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 44px; padding: 3px 10px;
@@ -531,6 +533,7 @@ html, body {
   border-radius: 3px;
   letter-spacing: 0.05em;
   text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 .team-pill.fallback {
   background: var(--card-hi);
@@ -855,4 +858,69 @@ code {
   .toolbar { gap: 4px; }
   .toggle-group button { padding: 4px 7px; font-size: 9px; }
   .btn-ghost { padding: 4px 8px; font-size: 10px; }
+}
+
+/* ========== METRIC BAR tooltips ========== */
+.metric[data-tip] { cursor: help; }
+.metric[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 100%; left: 0;
+  margin-top: 6px;
+  background: var(--card-hi);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-2);
+  white-space: normal;
+  max-width: 280px;
+  z-index: 100;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.5;
+}
+.metric { position: relative; }
+
+/* ========== BREAKDOWN grouped-bar legend helper ========== */
+.legend-item.muted {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* "Info" indicator for the FL column header tooltip on Standings */
+.data-table th.has-info {
+  cursor: help;
+}
+.data-table th.has-info::after {
+  content: " ⓘ";
+  color: var(--dim);
+  font-size: 10px;
+  margin-left: 2px;
+  font-weight: 400;
+}
+
+/* Breakdown chart tooltip — multi-driver variant has wider min-width */
+.chart-tooltip.multi { min-width: 200px; }
+.chart-tooltip .tt-driver-block {
+  padding: 4px 0 2px;
+}
+.chart-tooltip .tt-driver-block + .tt-driver-block {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.chart-tooltip .tt-driver-name {
+  display: flex; align-items: center; gap: 6px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 3px;
+  font-size: 10px;
+}
+.chart-tooltip .tt-driver-name .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
 }

@@ -14,7 +14,7 @@ const STATE = {
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
   arc: { selected: new Set(), ftOnly: true },
-  breakdown: { driver: null, ftOnly: true },
+  breakdown: { drivers: [], ftOnly: true },  // array of driver keys, max 4
   trajectory: { mode: "season", show: "all", labels: "top12" },
   standings: { sortKey: "total", sortDir: "desc" },
 };
@@ -137,7 +137,7 @@ function wireUIControls() {
         .forEach(x => x.classList.toggle("on", x === b));
       STATE.series = b.dataset.series;
       STATE.arc.selected.clear();
-      STATE.breakdown.driver = null;
+      STATE.breakdown.drivers = [];
       await loadCurrentData();
       render();
     });
@@ -149,7 +149,7 @@ function wireUIControls() {
         .forEach(x => x.classList.toggle("on", x === b));
       STATE.entity = b.dataset.entity;
       STATE.arc.selected.clear();
-      STATE.breakdown.driver = null;
+      STATE.breakdown.drivers = [];
       render();
     });
   });
@@ -220,10 +220,12 @@ function wireUIControls() {
 
   document.getElementById("arc-clear")?.addEventListener("click", () => {
     STATE.arc.selected.clear();
+    STATE.arc.userCleared = true;
     renderArc();
   });
   document.getElementById("arc-top10")?.addEventListener("click", () => {
     STATE.arc.selected.clear();
+    STATE.arc.userCleared = false;
     const totals = computeSeasonTotals();
     totals.slice(0, 10).forEach(t => STATE.arc.selected.add(entityKey(t)));
     renderArc();
@@ -428,15 +430,19 @@ function renderMetricBar() {
   const hottest = deltas.slice().sort((a,b) => b.delta - a.delta)[0];
   const coldest = deltas.slice().sort((a,b) => a.delta - b.delta)[0];
 
+  const hotColdTip = "Rating delta: last-5-race form rating minus full-season rating. +17.4 means this driver's recent finishes are about 8\u20139 positions better than their season average. \u221213.0 means the opposite \u2014 about 6\u20137 positions worse recently.";
+  const leaderTip = "Points leader through the last completed race.";
+  const raceTip = "Most recent race in the dataset.";
+
   bar.innerHTML = `
-    <div class="metric"><span class="k">Leader</span>
-      <span class="v">${leader ? `${escapeHTML(displayName(leader))} · ${leader.total}` : "—"}</span></div>
-    <div class="metric"><span class="k">Hottest</span>
-      <span class="v hot">${hottest ? `${escapeHTML(displayName(hottest.entity))} ${signed(hottest.delta.toFixed(1))}` : "—"}</span></div>
-    <div class="metric"><span class="k">Coldest</span>
-      <span class="v cold">${coldest ? `${escapeHTML(displayName(coldest.entity))} ${signed(coldest.delta.toFixed(1))}` : "—"}</span></div>
-    <div class="metric"><span class="k">Last Race</span>
-      <span class="v">${lastRace ? `R${lastRace.round} · ${lastRace.track_code || lastRace.track || ""}` : "—"}</span></div>
+    <div class="metric" data-tip="${escapeHTML(leaderTip)}"><span class="k">Leader</span>
+      <span class="v">${leader ? `${escapeHTML(displayName(leader))} \u00b7 ${leader.total}` : "\u2014"}</span></div>
+    <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Hottest</span>
+      <span class="v hot">${hottest ? `${escapeHTML(displayName(hottest.entity))} ${signed(hottest.delta.toFixed(1))}` : "\u2014"}</span></div>
+    <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Coldest</span>
+      <span class="v cold">${coldest ? `${escapeHTML(displayName(coldest.entity))} ${signed(coldest.delta.toFixed(1))}` : "\u2014"}</span></div>
+    <div class="metric" data-tip="${escapeHTML(raceTip)}"><span class="k">Last Race</span>
+      <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${lastRace.track_code || lastRace.track || ""}` : "\u2014"}</span></div>
   `;
 }
 
@@ -469,13 +475,18 @@ function renderFormTable() {
 
   const entities = allEntities();
   const races = racesSorted();
-  const shownRaces = races.slice(-5);
+  // Race columns + sparkline length follow the active window
+  let windowSize;
+  if (STATE.form.window === "5") windowSize = 5;
+  else if (STATE.form.window === "10") windowSize = 10;
+  else windowSize = races.length;        // full season
+  const shownRaces = races.slice(-Math.min(windowSize, races.length));
 
   let decorated = entities.map(d => {
     const formRating = formRatingFor(d.races, STATE.form.window);
     const seasonRating = seasonTotalRating(d.races);
     const deltaR = (formRating != null && seasonRating != null) ? formRating - seasonRating : null;
-    const lastFinishes = d.races.slice(-5).map(r => r.finish);
+    const lastFinishes = d.races.slice(-shownRaces.length).map(r => r.finish);
     const totalPts = d.races.reduce((s, r) => s + r.total, 0);
     return { ...d, formRating, seasonRating, deltaR, lastFinishes, totalPts, fullTime: isFullTime(d) };
   });
@@ -538,6 +549,10 @@ function renderFormTable() {
     return `<th class="${cls}" data-sort="${key}">${label}<span class="sort-arrow">${arrow}</span></th>`;
   };
 
+  const formColLabel = STATE.form.window === "season"
+    ? `Form (Season)`
+    : `Form (L${STATE.form.window})`;
+
   card.innerHTML = `
     <div class="table-scroll">
     <table class="data-table">
@@ -547,7 +562,7 @@ function renderFormTable() {
           ${th("driver", "Driver", false)}
           ${th("team", "Team", false)}
           ${headerCols}
-          <th>Form (L5)</th>
+          <th>${formColLabel}</th>
           ${th("formRating", "Rating", true)}
           ${th("deltaR", "vs Season", true)}
           ${th("totalPts", "Pts", true)}
@@ -744,7 +759,7 @@ function renderArc() {
     };
   });
 
-  if (STATE.arc.selected.size === 0) {
+  if (STATE.arc.selected.size === 0 && !STATE.arc.userCleared) {
     const totals = computeSeasonTotals();
     totals.slice(0, 5).forEach(t => STATE.arc.selected.add(entityKey(t)));
   }
@@ -818,59 +833,117 @@ function renderArcGrid() {
 }
 
 // ============================================================
-// BREAKDOWN — now with pill grid + hover tooltip
+// BREAKDOWN — multi-select up to 4 drivers, car-color-tinted bars
 // ============================================================
 function renderBreakdown() {
   const svg = document.getElementById("breakdown-svg");
   const tip = document.getElementById("breakdown-tooltip");
   if (!STATE.data) return;
 
-  let entities = allEntities();
-  if (!STATE.breakdown.driver && entities.length) {
-    // default selection: current season leader
+  const entities = allEntities();
+  // Default: if nothing selected, pick current leader
+  if (STATE.breakdown.drivers.length === 0 && entities.length) {
     const totals = computeSeasonTotals();
-    STATE.breakdown.driver = totals.length ? totals[0].driver : entities[0].driver;
+    if (totals.length) STATE.breakdown.drivers = [totals[0].driver];
   }
-
-  // Look up selected entity (could be filtered out by ft toggle — keep selection
-  // even when the grid hides it)
-  const d = entities.find(x => x.driver === STATE.breakdown.driver)
-    || (entities.length ? entities[0] : null);
+  // Resolve selected entities (keep selections even if hidden by ft filter)
+  const selected = STATE.breakdown.drivers
+    .map(key => entities.find(x => x.driver === key))
+    .filter(Boolean);
 
   renderBreakdownGrid();
 
-  if (!d) { svg.innerHTML = ""; return; }
+  if (selected.length === 0) {
+    svg.innerHTML = `<text x="20" y="40" fill="var(--muted)" font-family="var(--mono)" font-size="11">Select a driver below to see their per-race breakdown.</text>`;
+    svg.setAttribute("viewBox", "0 0 920 200");
+    document.getElementById("breakdown-legend").innerHTML = "";
+    return;
+  }
 
   const races = racesSorted();
   const rounds = races.map(r => r.round);
   const raceByRound = {};
   races.forEach(r => { raceByRound[r.round] = r; });
-  const byRound = {};
-  d.races.forEach(r => { byRound[r.round] = r; });
-  const data = rounds.map(rd => {
-    const r = byRound[rd] || { s1: 0, s2: 0, fin: 0, fl: 0, total: 0 };
-    const meta = raceByRound[rd];
+
+  // Per-driver race-indexed data
+  const driverData = selected.map(d => {
+    const byRound = {};
+    d.races.forEach(r => { byRound[r.round] = r; });
     return {
-      round: rd,
-      s1: r.s1 || 0, s2: r.s2 || 0, fin: r.fin || 0, fl: r.fl || 0,
-      finish_pos: r.finish, start_pos: r.start,
-      trackCode: meta?.track_code, trackName: meta?.track, raceName: meta?.name,
+      entity: d,
+      color: colorFor(STATE.series, d.car_number),
+      byRound,
+      rows: rounds.map(rd => {
+        const r = byRound[rd] || { s1: 0, s2: 0, fin: 0, fl: 0 };
+        return {
+          round: rd,
+          s1: r.s1 || 0, s2: r.s2 || 0, fin: r.fin || 0, fl: r.fl || 0,
+          finish_pos: r.finish, start_pos: r.start,
+        };
+      }),
     };
   });
 
-  const W = 920, H = 340, pad = { top: 16, right: 14, bottom: 28, left: 40 };
+  // Chart geometry
+  const W = 920;
+  const H = driverData.length > 1 ? 380 : 340;
+  const pad = { top: 20, right: 16, bottom: 34, left: 44 };
   const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
-  const maxTot = Math.max(1, ...data.map(r => r.s1 + r.s2 + r.fin + r.fl));
-  const barW = innerW / data.length * 0.75;
-  const xStep = innerW / data.length;
+
+  // Max total across ALL selected drivers (shared y-scale so comparison is honest)
+  let maxTot = 1;
+  driverData.forEach(dd => {
+    dd.rows.forEach(r => {
+      const t = r.s1 + r.s2 + r.fin + r.fl;
+      if (t > maxTot) maxTot = t;
+    });
+  });
+
+  const nRaces = rounds.length;
+  const groupWidth = innerW / nRaces;
+  const nDrivers = driverData.length;
+  // Leave ~25% of group as gaps between groups when multi-driver
+  const groupInnerPad = nDrivers > 1 ? 0.18 : 0.25;  // fraction of group
+  const availPerGroup = groupWidth * (1 - groupInnerPad);
+  const barW = availPerGroup / nDrivers;
+  const xStep = groupWidth;
   const yScale = v => pad.top + (1 - v / maxTot) * innerH;
 
+  // Semantic colors (used in SINGLE-driver mode)
   const COL_S1 = "#60a5fa";
   const COL_S2 = "#3b82f6";
   const COL_FN = "#7280a0";
   const COL_FL = "#fbbf24";
 
-  // Build bars as DOM nodes so we can wire hover
+  // Helper: given a car hex and a segment type, produce a tinted shade.
+  // This is used in MULTI-driver mode so all 4 segments of a driver share a hue.
+  function tintedShade(hexOrHsl, segment) {
+    // Parse hex to rgb, then lighten / darken / tint
+    const rgb = hexToRgb(hexOrHsl) || { r: 110, g: 110, b: 180 };
+    const mix = (r, g, b, t) => ({
+      r: Math.round(rgb.r + (r - rgb.r) * t),
+      g: Math.round(rgb.g + (g - rgb.g) * t),
+      b: Math.round(rgb.b + (b - rgb.b) * t),
+    });
+    let c;
+    if (segment === "fin")      c = rgb;                           // base car color
+    else if (segment === "s1")  c = mix(255, 255, 255, 0.40);      // lighter
+    else if (segment === "s2")  c = mix(255, 255, 255, 0.20);      // slightly lighter
+    else if (segment === "fl")  c = mix(255, 215, 0, 0.55);        // golden tint
+    else c = rgb;
+    return `rgb(${c.r}, ${c.g}, ${c.b})`;
+  }
+  function hexToRgb(hex) {
+    if (!hex) return null;
+    // Accept #abc, #abcdef, or rgb()/hsl() — for hsl we give up and return null (fallback happens above).
+    const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.replace("#",""));
+    if (!m) return null;
+    let s = m[1];
+    if (s.length === 3) s = s.split("").map(ch => ch + ch).join("");
+    return { r: parseInt(s.slice(0,2), 16), g: parseInt(s.slice(2,4), 16), b: parseInt(s.slice(4,6), 16) };
+  }
+
+  // Build SVG
   const svgNS = "http://www.w3.org/2000/svg";
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
@@ -894,116 +967,174 @@ function renderBreakdown() {
     svg.appendChild(lbl);
   }
 
+  // Tooltip showing breakdown for all selected drivers in this race
   const hideTip = () => { if (tip) tip.hidden = true; };
-  const showTip = (r, cx, bottomY) => {
+  const showTip = (rd, groupCx, groupTopY) => {
     if (!tip) return;
-    const total = r.s1 + r.s2 + r.fin + r.fl;
-    const parts = [];
-    if (r.fin) parts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${COL_FN}"></span>Finish</span><span class="val">${r.fin}</span></div>`);
-    if (r.s1)  parts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${COL_S1}"></span>Stage 1</span><span class="val">${r.s1}</span></div>`);
-    if (r.s2)  parts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${COL_S2}"></span>Stage 2</span><span class="val">${r.s2}</span></div>`);
-    if (r.fl)  parts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${COL_FL}"></span>Fastest Lap</span><span class="val">${r.fl}</span></div>`);
-    if (!parts.length) parts.push(`<div class="tt-row"><span class="lbl">No points</span><span class="val">0</span></div>`);
-    const title = `R${r.round}${r.trackCode ? ` · ${r.trackCode}` : ""}${r.finish_pos ? ` · P${r.finish_pos}` : ""}`;
-    tip.innerHTML = `
-      <div class="tt-hdr">${escapeHTML(title)}</div>
-      ${parts.join("")}
-      <div class="tt-row total"><span class="lbl">Total</span><span class="val">${total}</span></div>
-    `;
-    // position the tooltip in CSS pixels relative to the card-chart container
+    const meta = raceByRound[rd];
+    const title = `R${rd}${meta?.track_code ? ` · ${meta.track_code}` : ""}${meta?.name ? "" : ""}`;
+    const isMulti = driverData.length > 1;
+    let body = "";
+    driverData.forEach(dd => {
+      const r = dd.byRound[rd];
+      const hasData = !!r;
+      const s1 = r?.s1 || 0, s2 = r?.s2 || 0, fin = r?.fin || 0, fl = r?.fl || 0;
+      const total = s1 + s2 + fin + fl;
+      const carHex = dd.color;
+      const blockParts = [];
+      if (isMulti) {
+        blockParts.push(`<div class="tt-driver-name"><span class="dot" style="background:${carHex}"></span>#${dd.entity.car_number} ${escapeHTML(dd.entity.driver)}${r?.finish ? ` · P${r.finish}` : ""}</div>`);
+      }
+      if (!hasData) {
+        blockParts.push(`<div class="tt-row"><span class="lbl">did not start</span><span class="val">—</span></div>`);
+      } else {
+        if (fin) blockParts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${isMulti ? tintedShade(carHex, "fin") : COL_FN}"></span>Finish</span><span class="val">${fin}</span></div>`);
+        if (s1)  blockParts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${isMulti ? tintedShade(carHex, "s1") : COL_S1}"></span>Stage 1</span><span class="val">${s1}</span></div>`);
+        if (s2)  blockParts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${isMulti ? tintedShade(carHex, "s2") : COL_S2}"></span>Stage 2</span><span class="val">${s2}</span></div>`);
+        if (fl)  blockParts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${isMulti ? tintedShade(carHex, "fl") : COL_FL}"></span>Fastest Lap</span><span class="val">${fl}</span></div>`);
+        if (!fin && !s1 && !s2 && !fl) blockParts.push(`<div class="tt-row"><span class="lbl">No points</span><span class="val">0</span></div>`);
+        blockParts.push(`<div class="tt-row total"><span class="lbl">Total</span><span class="val">${total}</span></div>`);
+      }
+      body += `<div class="tt-driver-block">${blockParts.join("")}</div>`;
+    });
+
+    tip.classList.toggle("multi", isMulti);
+    tip.innerHTML = `<div class="tt-hdr">${escapeHTML(title)}</div>${body}`;
     tip.hidden = false;
-    // The SVG fills its parent; compute position by bounding rect
+
     const svgRect = svg.getBoundingClientRect();
     const card = svg.parentElement;
     const cardRect = card.getBoundingClientRect();
-    // Map SVG-coordinate (cx, bottomY) → pixel within the card
     const scale = svgRect.width / W;
-    const pxX = (svgRect.left - cardRect.left) + cx * scale;
-    const pxY = (svgRect.top  - cardRect.top)  + bottomY * scale;
-    // default: above the top of the bar
+    const pxX = (svgRect.left - cardRect.left) + groupCx * scale;
+    const pxY = (svgRect.top  - cardRect.top)  + groupTopY * scale;
     const tipRect = tip.getBoundingClientRect();
     let left = pxX - tipRect.width / 2;
     let top = pxY - tipRect.height - 10;
-    // clamp horizontally inside card
     left = Math.max(6, Math.min(left, card.clientWidth - tipRect.width - 6));
-    if (top < 6) top = pxY + 14;  // flip below if no room above
+    if (top < 6) top = pxY + 14;
     tip.style.left = `${left}px`;
     tip.style.top  = `${top}px`;
   };
 
-  data.forEach((r, i) => {
-    const cx = pad.left + i * xStep + xStep / 2;
-    const x = cx - barW / 2;
-    let y0 = pad.top + innerH;
+  // Render each race group
+  rounds.forEach((rd, i) => {
+    const groupCx = pad.left + i * xStep + xStep / 2;
+    const groupLeft = pad.left + i * xStep + (xStep - availPerGroup) / 2;
+    const isMulti = driverData.length > 1;
 
-    // INVISIBLE HIT-RECT spanning the full stacked column (easier to hover,
-    // especially on mobile, than tiny segments)
-    const total = r.s1 + r.s2 + r.fin + r.fl;
-    const topY = total > 0 ? yScale(total) : (pad.top + innerH - 2);
+    // Hit-rect spans the whole race column for hovering
+    let topBound = pad.top + innerH;
+    driverData.forEach(dd => {
+      const r = dd.byRound[rd];
+      if (!r) return;
+      const total = r.s1 + r.s2 + r.fin + r.fl;
+      const y = yScale(total);
+      if (y < topBound) topBound = y;
+    });
     const hit = document.createElementNS(svgNS, "rect");
-    hit.setAttribute("x", x - 2);
+    hit.setAttribute("x", pad.left + i * xStep);
     hit.setAttribute("y", pad.top);
-    hit.setAttribute("width", barW + 4);
+    hit.setAttribute("width", xStep);
     hit.setAttribute("height", innerH);
     hit.setAttribute("fill", "transparent");
     hit.style.cursor = "pointer";
-    hit.addEventListener("mouseenter", () => showTip(r, cx, topY));
-    hit.addEventListener("mousemove",  () => showTip(r, cx, topY));
+    hit.addEventListener("mouseenter", () => showTip(rd, groupCx, topBound));
+    hit.addEventListener("mousemove",  () => showTip(rd, groupCx, topBound));
     hit.addEventListener("mouseleave", hideTip);
-    // tap support on mobile
-    hit.addEventListener("click", () => showTip(r, cx, topY));
+    hit.addEventListener("click",      () => showTip(rd, groupCx, topBound));
     svg.appendChild(hit);
 
-    const segs = [
-      { v: r.fin, c: COL_FN },
-      { v: r.s1,  c: COL_S1 },
-      { v: r.s2,  c: COL_S2 },
-      { v: r.fl,  c: COL_FL },
-    ];
-    segs.filter(s => s.v > 0).forEach(s => {
-      const h = (s.v / maxTot) * innerH;
-      const y = y0 - h;
-      y0 = y;
-      const rect = document.createElementNS(svgNS, "rect");
-      rect.setAttribute("x", x);
-      rect.setAttribute("y", y);
-      rect.setAttribute("width", barW);
-      rect.setAttribute("height", h);
-      rect.setAttribute("fill", s.c);
-      rect.style.pointerEvents = "none";
-      svg.appendChild(rect);
+    // Per-driver stacked bars inside the group
+    driverData.forEach((dd, dIdx) => {
+      const r = dd.byRound[rd];
+      if (!r) return;
+      const xBar = groupLeft + dIdx * barW;
+      let y0 = pad.top + innerH;
+      const segs = isMulti
+        ? [
+            { v: r.fin, c: tintedShade(dd.color, "fin") },
+            { v: r.s1,  c: tintedShade(dd.color, "s1")  },
+            { v: r.s2,  c: tintedShade(dd.color, "s2")  },
+            { v: r.fl,  c: tintedShade(dd.color, "fl")  },
+          ]
+        : [
+            { v: r.fin, c: COL_FN },
+            { v: r.s1,  c: COL_S1 },
+            { v: r.s2,  c: COL_S2 },
+            { v: r.fl,  c: COL_FL },
+          ];
+      segs.filter(s => s.v > 0).forEach(s => {
+        const h = (s.v / maxTot) * innerH;
+        const y = y0 - h;
+        y0 = y;
+        const rect = document.createElementNS(svgNS, "rect");
+        rect.setAttribute("x", xBar);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", Math.max(1, barW - (isMulti ? 1 : 0)));
+        rect.setAttribute("height", h);
+        rect.setAttribute("fill", s.c);
+        rect.style.pointerEvents = "none";
+        svg.appendChild(rect);
+      });
     });
 
+    // Round label
     const lbl = document.createElementNS(svgNS, "text");
-    lbl.setAttribute("x", cx); lbl.setAttribute("y", H - 10);
+    lbl.setAttribute("x", groupCx); lbl.setAttribute("y", H - 14);
     lbl.setAttribute("text-anchor", "middle");
     lbl.setAttribute("fill", "var(--muted)");
     lbl.setAttribute("font-family", "var(--mono)"); lbl.setAttribute("font-size", "10");
-    lbl.textContent = `R${r.round}`;
+    lbl.textContent = `R${rd}`;
     svg.appendChild(lbl);
   });
 
-  // Hide tooltip when cursor leaves the whole svg
   svg.addEventListener("mouseleave", hideTip);
 
-  document.getElementById("breakdown-legend").innerHTML = `
-    <span class="legend-item"><span class="legend-swatch" style="background:${COL_FN}"></span>Finish points</span>
-    <span class="legend-item"><span class="legend-swatch" style="background:${COL_S1}"></span>Stage 1</span>
-    <span class="legend-item"><span class="legend-swatch" style="background:${COL_S2}"></span>Stage 2</span>
-    <span class="legend-item"><span class="legend-swatch" style="background:${COL_FL}"></span>Fastest lap</span>
-  `;
+  // Legend
+  const isMulti = driverData.length > 1;
+  if (isMulti) {
+    // In multi-driver mode: one legend entry per driver (color) + a note about the tint gradient
+    const driverItems = driverData.map(dd =>
+      `<span class="legend-item"><span class="legend-dot" style="background:${dd.color}"></span>#${dd.entity.car_number} ${escapeHTML(dd.entity.driver.split(/\s+/).slice(-1)[0])}</span>`
+    ).join("");
+    document.getElementById("breakdown-legend").innerHTML = `
+      ${driverItems}
+      <span class="legend-item muted" style="margin-left:12px">darker = Finish · lighter = Stages · gold tint = FL</span>
+    `;
+  } else {
+    document.getElementById("breakdown-legend").innerHTML = `
+      <span class="legend-item"><span class="legend-swatch" style="background:${COL_FN}"></span>Finish points</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:${COL_S1}"></span>Stage 1</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:${COL_S2}"></span>Stage 2</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:${COL_FL}"></span>Fastest lap</span>
+    `;
+  }
 }
 
 function renderBreakdownGrid() {
   renderDriverGrid(
     "breakdown-driver-grid",
-    "single",
+    "multi",
     STATE.breakdown.ftOnly,
     (e) => {
-      STATE.breakdown.driver = e.driver;
+      const key = e.driver;
+      const idx = STATE.breakdown.drivers.indexOf(key);
+      if (idx >= 0) {
+        // Deselect — but prevent going below 1 selected driver
+        if (STATE.breakdown.drivers.length > 1) {
+          STATE.breakdown.drivers.splice(idx, 1);
+        }
+      } else {
+        if (STATE.breakdown.drivers.length >= 4) {
+          // At max — replace the first-selected driver with the new one
+          STATE.breakdown.drivers.shift();
+        }
+        STATE.breakdown.drivers.push(key);
+      }
       renderBreakdown();
     },
-    (e) => e.driver === STATE.breakdown.driver
+    (e) => STATE.breakdown.drivers.includes(e.driver)
   );
 }
 
@@ -1136,6 +1267,52 @@ function renderTrajectory() {
   rlbl.textContent = "LEAGUE TREND";
   g.appendChild(rlbl);
 
+  // Season points rank (for tooltip "P3 / 47")
+  const totals = computeSeasonTotals();
+  const rankByKey = new Map();
+  const totalN = totals.length;
+  totals.forEach((e, i) => rankByKey.set(entityKey(e), i + 1));
+
+  // Real hover tooltip (replaces the native SVG <title>)
+  const tip = document.getElementById("trajectory-tooltip");
+  const showTrajTip = (p, evt) => {
+    if (!tip) return;
+    const rank = rankByKey.get(entityKey(p.entity)) || "—";
+    const residStr = p.resid >= 0 ? `+${p.resid.toFixed(1)}` : p.resid.toFixed(1);
+    const residCls = p.resid >= 0 ? "pos" : "neg";
+    const carHex = colorFor(STATE.series, p.entity.car_number);
+    tip.classList.remove("multi");
+    tip.innerHTML = `
+      <div class="tt-hdr" style="color:${carHex}">${escapeHTML(p.entity.driver)} · #${p.entity.car_number}</div>
+      <div class="tt-row"><span class="lbl">Avg stage pts</span><span class="val">${p.xSeason.toFixed(1)}</span></div>
+      <div class="tt-row"><span class="lbl">Avg finish pts</span><span class="val">${p.ySeason.toFixed(1)}</span></div>
+      <div class="tt-row"><span class="lbl">Last-5 stage</span><span class="val">${p.xForm.toFixed(1)}</span></div>
+      <div class="tt-row"><span class="lbl">Last-5 finish</span><span class="val">${p.yForm.toFixed(1)}</span></div>
+      <div class="tt-row"><span class="lbl">vs trend</span><span class="val" style="color:var(--${residCls === "pos" ? "pos" : "neg"})">${residStr}</span></div>
+      <div class="tt-row total"><span class="lbl">Season pts rank</span><span class="val">P${rank} / ${totalN}</span></div>
+    `;
+    tip.hidden = false;
+    // Position relative to the card-chart parent of the svg
+    const card = svg.parentElement;
+    const cardRect = card.getBoundingClientRect();
+    // Place near the cursor
+    let left = (evt.clientX - cardRect.left) + 14;
+    let top = (evt.clientY - cardRect.top) - 10;
+    const tipRect = tip.getBoundingClientRect();
+    left = Math.max(6, Math.min(left, card.clientWidth - tipRect.width - 6));
+    if (top + tipRect.height > card.clientHeight) top = card.clientHeight - tipRect.height - 6;
+    if (top < 6) top = 6;
+    tip.style.left = `${left}px`;
+    tip.style.top  = `${top}px`;
+  };
+  const hideTrajTip = () => { if (tip) tip.hidden = true; };
+  const wireDot = (el, p) => {
+    el.addEventListener("mouseenter", (e) => showTrajTip(p, e));
+    el.addEventListener("mousemove",  (e) => showTrajTip(p, e));
+    el.addEventListener("mouseleave", hideTrajTip);
+    el.addEventListener("click",      (e) => showTrajTip(p, e));
+  };
+
   shown.forEach(p => {
     const color = p.color;
     const key = entityKey(p.entity);
@@ -1159,7 +1336,7 @@ function renderTrajectory() {
       head.setAttribute("class", "traj-dot");
       head.setAttribute("cx", x2); head.setAttribute("cy", y2); head.setAttribute("r", 5);
       head.setAttribute("fill", color); head.setAttribute("stroke", "var(--bg)"); head.setAttribute("stroke-width", "1");
-      head.appendChild(trajTitle(p));
+      wireDot(head, p);
       g.appendChild(head);
       if (labelKeys.has(key)) {
         const lbl = document.createElementNS(svgNS, "text");
@@ -1177,7 +1354,7 @@ function renderTrajectory() {
       dot.setAttribute("fill", color);
       dot.setAttribute("stroke", "var(--bg)");
       dot.setAttribute("stroke-width", "1.2");
-      dot.appendChild(trajTitle(p));
+      wireDot(dot, p);
       g.appendChild(dot);
       if (labelKeys.has(key)) {
         const lbl = document.createElementNS(svgNS, "text");
@@ -1188,6 +1365,9 @@ function renderTrajectory() {
       }
     }
   });
+
+  // Hide tooltip when leaving the chart area
+  svg.addEventListener("mouseleave", hideTrajTip);
 
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
@@ -1222,17 +1402,6 @@ function regression(pts) {
   const b = (n * sxy - sx * sy) / denom;
   const a = (sy - b * sx) / n;
   return { a, b };
-}
-
-function trajTitle(p) {
-  const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
-  const residStr = p.resid >= 0 ? `+${p.resid.toFixed(1)}` : p.resid.toFixed(1);
-  t.textContent =
-    `${p.entity.driver}  #${p.entity.car_number}\n` +
-    `Season  stg ${p.xSeason.toFixed(1)}  fin ${p.ySeason.toFixed(1)}\n` +
-    `Last-5  stg ${p.xForm.toFixed(1)}  fin ${p.yForm.toFixed(1)}\n` +
-    `vs trend  ${residStr}`;
-  return t;
 }
 
 function fillTrajCallout(hostId, rows) {
@@ -1412,7 +1581,6 @@ function renderStandings() {
       <td class="num">${r.sumS1}</td>
       <td class="num">${r.sumS2}</td>
       <td class="num">${r.sumFL}</td>
-      <td class="num">${r.sumFin}</td>
       <td class="num total-col">${r.total}</td>
     </tr>`;
   }).join("");
@@ -1422,6 +1590,15 @@ function renderStandings() {
     const cls = `sortable ${numeric ? "num" : ""} ${active ? "sort-" + STATE.standings.sortDir : ""}`.trim();
     const arrow = active ? (STATE.standings.sortDir === "asc" ? "▲" : "▼") : "↕";
     return `<th class="${cls}" data-sort="${key}">${label}<span class="sort-arrow">${arrow}</span></th>`;
+  };
+  // Special header with a tooltip indicator for the FL column (data is incomplete)
+  const thFL = () => {
+    const key = "sumFL";
+    const active = STATE.standings.sortKey === key;
+    const cls = `sortable num has-info ${active ? "sort-" + STATE.standings.sortDir : ""}`.trim();
+    const arrow = active ? (STATE.standings.sortDir === "asc" ? "▲" : "▼") : "↕";
+    const tip = "FL data incomplete — being refined. The scraper's fastest-lap inference is imperfect and often can't uniquely identify the FL driver, so many races show 0 here even when a real FL bonus was awarded.";
+    return `<th class="${cls}" data-sort="${key}" title="${escapeHTML(tip)}">FL<span class="sort-arrow">${arrow}</span></th>`;
   };
 
   table.innerHTML = `
@@ -1437,8 +1614,7 @@ function renderStandings() {
         ${th("avgFinish", "Avg Fin", true)}
         ${th("sumS1", "S1", true)}
         ${th("sumS2", "S2", true)}
-        ${th("sumFL", "FL", true)}
-        ${th("sumFin", "Finish Pts", true)}
+        ${thFL()}
         ${th("total", "Total", true)}
       </tr>
     </thead>

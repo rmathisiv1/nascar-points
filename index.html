@@ -34,10 +34,10 @@
 <div class="app">
 
   <nav class="sidebar" id="sidebar">
-    <a href="#/form"       class="navlink" data-view="form">Form</a>
+    <a href="#/form"       class="navlink" data-view="form">Trending</a>
     <a href="#/arc"        class="navlink" data-view="arc">Season Cumulative</a>
     <a href="#/breakdown"  class="navlink" data-view="breakdown">Breakdown</a>
-    <a href="#/trajectory" class="navlink" data-view="trajectory">Trajectory</a>
+    <a href="#/trajectory" class="navlink" data-view="trajectory">Stage Trajectory</a>
     <a href="#/heatmap"    class="navlink" data-view="heatmap">Heatmap</a>
     <a href="#/standings"  class="navlink" data-view="standings">Standings</a>
     <div class="sidebar-footer">
@@ -50,7 +50,7 @@
 
     <section class="view" id="view-form">
       <div class="view-head">
-        <h1>Form Table</h1>
+        <h1>Trending</h1>
         <div class="view-sub" id="form-sub">Rolling 5-race form · sorted by form rating</div>
       </div>
       <div class="toolbar">
@@ -93,7 +93,7 @@
     <section class="view" id="view-breakdown" hidden>
       <div class="view-head">
         <h1>Per-Race Breakdown</h1>
-        <div class="view-sub">Stage 1 · Stage 2 · Finish · Fastest Lap, stacked · hover bars for details</div>
+        <div class="view-sub">Stage 1 · Stage 2 · Finish · Fastest Lap · pick up to 4 drivers to compare</div>
       </div>
       <div class="toolbar">
         <div class="toggle-group" data-group="breakdown-ft">
@@ -106,7 +106,7 @@
         <div id="breakdown-tooltip" class="chart-tooltip" hidden></div>
       </div>
       <div class="legend" id="breakdown-legend"></div>
-      <div class="picker-label">Select driver</div>
+      <div class="picker-label">Select up to 4 drivers</div>
       <div class="driver-grid" id="breakdown-driver-grid"></div>
     </section>
 
@@ -142,6 +142,7 @@
             </marker>
           </defs>
         </svg>
+        <div id="trajectory-tooltip" class="chart-tooltip" hidden></div>
       </div>
       <div class="legend" id="trajectory-legend"></div>
       <div class="callout-rail">
