@@ -1683,7 +1683,7 @@ function renderTeammates() {
         <div class="tm-name">
           <div class="tm-name-row">
             <span class="tm-name-primary">${escapeHTML(d.primary_driver)}</span>${ptTag}
-            ${isShared ? `<span class="tm-shared" data-car="${d.car_number}" title="Shared car — hover for details">ⁱ</span>` : ""}
+            ${isShared ? `<span class="tm-shared" data-car="${d.car_number}" title="Shared car — hover for details">i</span>` : ""}
             ${showWbrTag ? `<span class="tm-true-team">${escapeHTML(d.team)}</span>` : ""}
           </div>
           <div class="tm-name-sub">${d.n_races} race${d.n_races === 1 ? "" : "s"}</div>

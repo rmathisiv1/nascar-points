@@ -900,7 +900,8 @@ code {
 /* ========== TEAMMATE DELTA ========== */
 .tm-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* auto-fill with a min card width so the grid packs more columns on wider screens */
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
   gap: 14px;
   margin-top: 14px;
 }
@@ -973,8 +974,11 @@ code {
 }
 .tm-shared {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 14px; height: 14px;
-  font-size: 10px; font-weight: 700;
+  width: 16px; height: 16px;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 700;
+  font-style: italic;
   color: var(--accent-2);
   cursor: help;
   border-radius: 50%;
@@ -982,6 +986,10 @@ code {
   border: 1px solid rgba(59,130,246,0.35);
   flex-shrink: 0;
   line-height: 1;
+  padding: 0;
+  letter-spacing: 0;
+  text-indent: 0;
+  box-sizing: border-box;
 }
 .tm-shared:hover { background: rgba(59,130,246,0.30); color: #fff; }
 .tm-true-team {
@@ -1074,15 +1082,14 @@ code {
   line-height: 1.5;
 }
 
-@media (max-width: 900px) {
-  .tm-grid { grid-template-columns: 1fr; }
-}
 @media (max-width: 500px) {
   .tm-col-headers, .tm-row {
     grid-template-columns: 30px minmax(70px, 1fr) minmax(60px, 1.5fr) 44px 36px;
     gap: 6px; padding: 7px 8px;
   }
   .tm-avg { font-size: 11px; padding: 1px 3px; }
+  /* On very narrow screens, relax the min so 1 card fits comfortably */
+  .tm-grid { grid-template-columns: 1fr; }
 }
 
 /* "Info" indicator for the FL column header tooltip on Standings */
