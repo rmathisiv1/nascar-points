@@ -30,6 +30,7 @@
 </header>
 
 <div class="metricbar" id="metricbar"></div>
+<div id="metric-tooltip"></div>
 
 <div class="app">
 
@@ -38,6 +39,7 @@
     <a href="#/arc"        class="navlink" data-view="arc">Season Cumulative</a>
     <a href="#/breakdown"  class="navlink" data-view="breakdown">Breakdown</a>
     <a href="#/trajectory" class="navlink" data-view="trajectory">Stage Trajectory</a>
+    <a href="#/teammates"  class="navlink" data-view="teammates">Teammate Delta</a>
     <a href="#/heatmap"    class="navlink" data-view="heatmap">Heatmap</a>
     <a href="#/standings"  class="navlink" data-view="standings">Standings</a>
     <div class="sidebar-footer">
@@ -155,6 +157,32 @@
           <div id="trajectory-under"></div>
         </div>
       </div>
+    </section>
+
+    <section class="view" id="view-teammates" hidden>
+      <div class="view-head">
+        <h1>Teammate Delta</h1>
+        <div class="view-sub" id="teammates-sub">Each car vs. the best full-time teammate per race · teams ranked by best car's season points</div>
+      </div>
+      <div class="toolbar">
+        <span class="toolbar-label">Compare on</span>
+        <div class="toggle-group" data-group="teammates-metric">
+          <button class="on" data-val="fin">Finish position</button>
+          <button data-val="tot">Race points</button>
+        </div>
+        <span class="toolbar-label">Part-timers</span>
+        <div class="toggle-group" data-group="teammates-ft">
+          <button class="on" data-val="ft">Full-time cars only</button>
+          <button data-val="all">Include all</button>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--accent-2)"></span>Per-race delta (hover for details)</span>
+        <span class="legend-item"><span class="legend-dot" style="background:transparent;border:1.5px solid #fff"></span>Team-leader race</span>
+        <span class="legend-item" style="color:var(--dim)">Wood Brothers groups with Penske (shared shop)</span>
+      </div>
+      <div class="tm-grid" id="teammates-grid"></div>
+      <div id="teammates-empty" class="muted" hidden style="padding:32px;text-align:center;">No multi-car teams in this series / season yet.</div>
     </section>
 
     <section class="view" id="view-heatmap" hidden>

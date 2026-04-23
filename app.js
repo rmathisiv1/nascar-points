@@ -16,12 +16,13 @@ const STATE = {
   arc: { selected: new Set(), ftOnly: true },
   breakdown: { drivers: [], ftOnly: true },  // array of driver keys, max 4
   trajectory: { mode: "season", show: "all", labels: "top12" },
+  teammates: { metric: "fin", ftOnly: true },
   standings: { sortKey: "total", sortDir: "desc" },
 };
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["form", "arc", "breakdown", "trajectory", "heatmap", "standings"];
+const VIEWS = ["form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
 
 // ============================================================
 // BOOT
@@ -209,6 +210,19 @@ function wireUIControls() {
     });
   });
 
+  // Teammate view toggles
+  document.querySelectorAll("#view-teammates .toggle-group").forEach(g => {
+    const group = g.dataset.group;
+    g.querySelectorAll("button").forEach(b => {
+      b.addEventListener("click", () => {
+        g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+        if (group === "teammates-metric") STATE.teammates.metric = b.dataset.val;
+        if (group === "teammates-ft")     STATE.teammates.ftOnly = (b.dataset.val === "ft");
+        renderTeammates();
+      });
+    });
+  });
+
   document.querySelectorAll(".navlink").forEach(a => {
     a.addEventListener("click", () => {
       document.getElementById("sidebar")?.classList.remove("open");
@@ -264,6 +278,7 @@ function render() {
     case "arc":        renderArc(); break;
     case "breakdown":  renderBreakdown(); break;
     case "trajectory": renderTrajectory(); break;
+    case "teammates":  renderTeammates(); break;
     case "heatmap":    renderHeatmap(); break;
     case "standings":  renderStandings(); break;
   }
@@ -444,6 +459,35 @@ function renderMetricBar() {
     <div class="metric" data-tip="${escapeHTML(raceTip)}"><span class="k">Last Race</span>
       <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${lastRace.track_code || lastRace.track || ""}` : "\u2014"}</span></div>
   `;
+
+  // Wire hover handlers for the floating metric tooltip
+  const tip = document.getElementById("metric-tooltip");
+  if (tip) {
+    bar.querySelectorAll(".metric[data-tip]").forEach(el => {
+      el.addEventListener("mouseenter", () => {
+        tip.textContent = el.getAttribute("data-tip") || "";
+        tip.classList.add("show");
+        // position below the metric element using viewport coords (fixed positioning)
+        const rect = el.getBoundingClientRect();
+        // measure tooltip after content is set
+        const tipW = tip.offsetWidth || 280;
+        const tipH = tip.offsetHeight || 60;
+        let left = rect.left;
+        // don't let it run off the right edge
+        const vw = window.innerWidth;
+        if (left + tipW > vw - 8) left = vw - tipW - 8;
+        if (left < 8) left = 8;
+        let top = rect.bottom + 8;
+        // if no room below, flip above
+        if (top + tipH > window.innerHeight - 8) top = rect.top - tipH - 8;
+        tip.style.left = `${left}px`;
+        tip.style.top  = `${top}px`;
+      });
+      el.addEventListener("mouseleave", () => {
+        tip.classList.remove("show");
+      });
+    });
+  }
 }
 
 function signed(n) {
@@ -1420,6 +1464,366 @@ function fillTrajCallout(hostId, rows) {
       <span class="delta ${cls}">${sign}${v}</span>
     </div>`;
   }).join("");
+}
+
+// ============================================================
+// TEAMMATE DELTA
+// ============================================================
+// Alliance map (view-level only; does NOT change the underlying team tag in colors.json).
+// WBR rides in the Penske shop so we compare #21 against the PEN cars.
+const TEAM_ALLIANCE = { "WBR": "PEN" };
+function teamGroup(team) { return TEAM_ALLIANCE[team] || team; }
+
+// Friendly team names for the card header; fall back to the team code itself
+const TEAM_FULL_NAMES = {
+  "JGR": "Joe Gibbs Racing", "HMS": "Hendrick Motorsports", "RCR": "Richard Childress Racing",
+  "23XI": "23XI Racing", "PEN": "Team Penske", "RFK": "RFK Racing",
+  "FRM": "Front Row Motorsports", "THR": "Trackhouse Racing", "LMC": "Legacy Motor Club",
+  "SPI": "Spire Motorsports", "KR": "Kaulig Racing", "HFT": "Haas Factory Team",
+  "HYAK": "HYAK Motorsports", "WBR": "Wood Brothers",
+  "JTG": "JTG Daugherty", "RWR": "Rick Ware Racing",
+  // NOS / NTS teams
+  "JRM": "JR Motorsports", "APR": "Alpha Prime", "SSG": "Sam Hunt Racing",
+  "JAR": "Jordan Anderson Racing", "RSS": "RSS Racing", "JGM": "Joey Gase Motorsports",
+  "MHR": "MBM/Motorsports", "BMR": "Big Machine Racing", "JCR": "Jesse Iwuji Motorsports",
+  "MBM": "Mike Beam Motorsports", "DGM": "DGM Racing", "YM": "Young's Motorsports",
+  "CFR": "Reaume Brothers", "OM": "Our Motorsports", "SH": "Stewart-Haas",
+  "BMM": "Bassett Motorsports", "PRG": "Precision Racing",
+  "VM": "Viking Motorsports", "AMR": "AM Racing",
+  "TRICON": "Tricon Garage", "KBM": "Kyle Busch Motorsports", "HAT": "Hattori Racing",
+  "CR7": "CR7 Motorsports", "HTM": "Halmar Friesen", "BAP": "Bret Holmes Racing",
+};
+// Display label for the card header when an alliance groups multiple teams together
+const GROUP_DISPLAY_NAMES = {
+  "PEN": "Team Penske + Wood Brothers",
+};
+
+function renderTeammates() {
+  const host = document.getElementById("teammates-grid");
+  const empty = document.getElementById("teammates-empty");
+  if (!STATE.data) return;
+
+  const races = racesSorted();
+  const totalRacesInSeason = races.length;
+  if (totalRacesInSeason === 0) {
+    if (empty) empty.hidden = false;
+    if (host) host.innerHTML = "";
+    return;
+  }
+
+  // Which cars ran every scheduled race = full-time
+  const carRaceCount = {};
+  races.forEach(r => {
+    const seen = new Set();
+    (r.results || []).forEach(d => {
+      if (d.ineligible) return;
+      if (seen.has(d.car_number)) return;
+      seen.add(d.car_number);
+      carRaceCount[d.car_number] = (carRaceCount[d.car_number] || 0) + 1;
+    });
+  });
+  const fullTimeCars = new Set(
+    Object.keys(carRaceCount).filter(c => carRaceCount[c] >= totalRacesInSeason)
+  );
+
+  // Walk each race, compute per-car deltas vs. the best FULL-TIME teammate in the same group
+  const carData = new Map();   // car_number -> aggregated entry
+  const trackByRound = {};
+  races.forEach(r => { trackByRound[r.round] = { code: r.track_code || "", name: r.track || "" }; });
+
+  races.forEach(r => {
+    // Bucket this race's results by group
+    const groupAll = {};     // group -> [entry, ...]
+    const groupFt  = {};     // group -> [FT-only entries]
+    (r.results || []).forEach(d => {
+      if (d.ineligible) return;
+      const team = teamCodeFromPalette(STATE.series, d.car_number);
+      if (!team) return;
+      const grp = teamGroup(team);
+      const rec = {
+        car: d.car_number, driver: d.driver, team, grp,
+        finish: d.finish_pos,
+        total: d.race_pts || 0,
+      };
+      (groupAll[grp] ||= []).push(rec);
+      if (fullTimeCars.has(d.car_number)) {
+        (groupFt[grp] ||= []).push(rec);
+      }
+    });
+
+    // For each group, compute benchmark (best FT car) + each member's delta
+    Object.keys(groupAll).forEach(grp => {
+      const ftArr = groupFt[grp] || [];
+      if (ftArr.length < 2) return;   // need ≥2 FT cars for a benchmark
+      const finishes = ftArr.map(e => e.finish).filter(f => f != null);
+      if (finishes.length === 0) return;
+      const bestFinish = Math.min(...finishes);
+      const bestTotal  = Math.max(...ftArr.map(e => e.total));
+
+      groupAll[grp].forEach(e => {
+        const isFt = fullTimeCars.has(e.car);
+        const deltaFin = (e.finish != null) ? (bestFinish - e.finish) : null;
+        const deltaTot = e.total - bestTotal;
+        const tlFin = isFt && e.finish != null && e.finish === bestFinish;
+
+        let agg = carData.get(e.car);
+        if (!agg) {
+          agg = {
+            car_number: e.car,
+            team: e.team,          // real team code (e.g. WBR)
+            group: e.grp,          // alliance group (e.g. PEN)
+            drivers: new Map(),    // driver name -> race count
+            series: [],
+            car_full_time: isFt,
+          };
+          carData.set(e.car, agg);
+        }
+        agg.drivers.set(e.driver, (agg.drivers.get(e.driver) || 0) + 1);
+        agg.series.push({
+          round: r.round,
+          driver: e.driver,
+          finish: e.finish,
+          total: e.total,
+          delta_fin: deltaFin,
+          delta_tot: deltaTot,
+          tl_fin: tlFin,
+          track_code: trackByRound[r.round]?.code || "",
+          track_name: trackByRound[r.round]?.name || "",
+        });
+      });
+    });
+  });
+
+  // Season points per car (for group/team ranking)
+  const seasonPts = {};
+  races.forEach(r => {
+    (r.results || []).forEach(d => {
+      if (d.ineligible) return;
+      seasonPts[d.car_number] = (seasonPts[d.car_number] || 0) + (d.race_pts || 0);
+    });
+  });
+
+  // Build final per-car records
+  const cars = [];
+  carData.forEach((agg, car) => {
+    const driversRanked = [...agg.drivers.entries()].sort((a, b) => b[1] - a[1]);
+    const fins = agg.series.map(s => s.delta_fin).filter(x => x != null);
+    const avgFin = fins.length ? fins.reduce((s,x) => s+x, 0) / fins.length : 0;
+    const tots = agg.series.map(s => s.delta_tot);
+    const avgTot = tots.length ? tots.reduce((s,x) => s+x, 0) / tots.length : 0;
+    const tl = agg.series.filter(s => s.tl_fin).length;
+    cars.push({
+      car_number: car,
+      team: agg.team,
+      group: agg.group,
+      primary_driver: driversRanked[0][0],
+      drivers: driversRanked.map(([n]) => n),
+      driver_counts: driversRanked.map(([n, c]) => ({ name: n, races: c })),
+      n_races: agg.series.length,
+      car_full_time: agg.car_full_time,
+      season_points: seasonPts[car] || 0,
+      avg_delta_fin: avgFin,
+      avg_delta_tot: avgTot,
+      tl_races_fin: tl,
+      series: agg.series.slice().sort((a, b) => a.round - b.round),
+    });
+  });
+
+  // Filter part-timers if the toggle says so
+  const visibleCars = STATE.teammates.ftOnly
+    ? cars.filter(c => c.car_full_time)
+    : cars;
+
+  // Bucket by group (alliance-aware)
+  const byGroup = {};
+  visibleCars.forEach(c => { (byGroup[c.group] ||= []).push(c); });
+  const groups = Object.entries(byGroup).filter(([_, arr]) => arr.length >= 2);
+
+  if (groups.length === 0) {
+    host.innerHTML = "";
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+
+  // Sort groups by best-car season points desc
+  groups.sort((a, b) =>
+    Math.max(...b[1].map(d => d.season_points)) -
+    Math.max(...a[1].map(d => d.season_points))
+  );
+  groups.forEach(([_, arr]) => arr.sort((a, b) => b.season_points - a.season_points));
+
+  const metric = STATE.teammates.metric;
+  const avgKey = metric === "fin" ? "avg_delta_fin" : "avg_delta_tot";
+  const deltaField = metric === "fin" ? "delta_fin" : "delta_tot";
+
+  const html = groups.map(([grp, members]) => {
+    // Team pill color derived from the GROUP's org color (look up any member with the group's team code,
+    // else fall back to the first member's org color)
+    const repCar = members.find(m => m.team === grp) || members[0];
+    const orgHex = orgColorFor(STATE.series, repCar.car_number) || "#9ca3af";
+    const orgTxt = contrastTextFor(orgHex);
+    const displayName = GROUP_DISPLAY_NAMES[grp] || TEAM_FULL_NAMES[grp] || grp;
+    const bestCar = members[0];
+    const ftCount = members.filter(m => m.car_full_time).length;
+    const ptCount = members.length - ftCount;
+
+    const rows = members.map(d => {
+      const carHex = colorFor(STATE.series, d.car_number);
+      const carTxt = contrastTextFor(carHex);
+      const avg = d[avgKey];
+      const avgCls = tmDeltaClass(metric, avg);
+      const sparkPts = d.series.map(s => ({ v: s[deltaField], tl: s.tl_fin, round: s.round }));
+      const svg = tmSparkline(sparkPts, carHex, metric, d.car_number);
+      const isShared = d.drivers.length > 1;
+      const showWbrTag = (d.team !== d.group);
+      const ptTag = d.car_full_time ? "" : ` <span class="tm-pt-tag">PT</span>`;
+      return `<div class="tm-row${d.car_full_time ? "" : " part-time"}">
+        <span class="tm-car" style="background:${carHex};color:${carTxt}">${d.car_number}</span>
+        <div class="tm-name">
+          <div class="tm-name-row">
+            <span class="tm-name-primary">${escapeHTML(d.primary_driver)}</span>${ptTag}
+            ${isShared ? `<span class="tm-shared" data-car="${d.car_number}" title="Shared car — hover for details">ⁱ</span>` : ""}
+            ${showWbrTag ? `<span class="tm-true-team">${escapeHTML(d.team)}</span>` : ""}
+          </div>
+          <div class="tm-name-sub">${d.n_races} race${d.n_races === 1 ? "" : "s"}</div>
+        </div>
+        <div class="tm-spark">${svg}</div>
+        <div class="tm-avg ${avgCls}">${avg >= 0 ? "+" : ""}${avg.toFixed(1)}</div>
+        <div class="tm-tl"><span class="big">${d.tl_races_fin}</span>/${d.n_races}</div>
+      </div>`;
+    }).join("");
+
+    return `<div class="tm-card">
+      <div class="tm-card-head">
+        <span class="team-pill" style="background:${orgHex};color:${orgTxt}">${escapeHTML(grp)}</span>
+        <span class="tm-team-name">${escapeHTML(displayName)}</span>
+        <span class="tm-team-meta">${ftCount} FT${ptCount > 0 ? ` + ${ptCount} PT` : ""} · ${bestCar.season_points}pts</span>
+      </div>
+      <div class="tm-col-headers">
+        <span></span>
+        <span>Driver</span>
+        <span style="text-align:center">Per-race Δ</span>
+        <span class="tm-right tm-help" data-explain="avg">Δ AVG</span>
+        <span class="tm-right tm-help" data-explain="best">BEST</span>
+      </div>
+      ${rows}
+    </div>`;
+  }).join("");
+
+  host.innerHTML = html;
+
+  // ---- Wire hover tooltips ----
+  const tip = document.getElementById("metric-tooltip");
+  if (!tip) return;
+
+  const carMap = new Map(cars.map(c => [c.car_number, c]));
+  const seriesLookup = new Map();
+  cars.forEach(c => c.series.forEach(s => seriesLookup.set(`${c.car_number}|${s.round}`, { ...s, primary_driver: c.primary_driver })));
+
+  function showTip(html, evt, className) {
+    tip.innerHTML = html;
+    tip.className = "";
+    if (className) tip.classList.add(className);
+    tip.classList.add("show");
+    const rect = tip.getBoundingClientRect();
+    let left = evt.clientX + 12, top = evt.clientY + 12;
+    if (left + rect.width > window.innerWidth - 8) left = evt.clientX - rect.width - 12;
+    if (top + rect.height > window.innerHeight - 8) top = evt.clientY - rect.height - 12;
+    if (left < 8) left = 8;
+    if (top < 8) top = 8;
+    tip.style.left = `${left}px`;
+    tip.style.top  = `${top}px`;
+  }
+  function hideTip() { tip.classList.remove("show"); }
+
+  // Dot tooltips
+  host.querySelectorAll(".tm-dot-hit").forEach(el => {
+    const round = el.getAttribute("data-round");
+    const car = el.getAttribute("data-car");
+    const s = seriesLookup.get(`${car}|${round}`);
+    if (!s) return;
+    const v = metric === "fin" ? s.delta_fin : s.delta_tot;
+    const cls = v >= 0 ? "pos" : "neg";
+    const vStr = v >= 0 ? `+${v}` : `${v}`;
+    const trackLabel = s.track_name || s.track_code || "";
+    const driverLine = s.driver !== s.primary_driver
+      ? `<div class="tm-tt-driver">Driver: ${escapeHTML(s.driver)}</div>`
+      : "";
+    const html = `
+      <div class="tm-tt-hdr">#${car} · R${s.round}${trackLabel ? " · " + escapeHTML(trackLabel) : ""}</div>
+      ${driverLine}
+      <div class="tm-tt-row"><span class="lbl">Finish</span><span class="val">P${s.finish ?? "—"}</span></div>
+      <div class="tm-tt-row"><span class="lbl">Race pts</span><span class="val">${s.total}</span></div>
+      <div class="tm-tt-row ${cls}"><span class="lbl">vs best FT teammate</span><span class="val">${vStr}${s.tl_fin ? " ★" : ""}</span></div>
+    `;
+    el.addEventListener("mouseenter", e => showTip(html, e, "tm-tip"));
+    el.addEventListener("mousemove",  e => showTip(html, e, "tm-tip"));
+    el.addEventListener("mouseleave", hideTip);
+  });
+
+  // Shared-car "ⁱ" popovers
+  host.querySelectorAll(".tm-shared").forEach(el => {
+    const car = el.getAttribute("data-car");
+    const c = carMap.get(car);
+    if (!c || !c.driver_counts || c.driver_counts.length < 2) return;
+    const rows = c.driver_counts.map((dc, i) => {
+      const cls = i === 0 ? "primary" : "";
+      return `<div class="tm-sl-row ${cls}"><span>${escapeHTML(dc.name)}</span><span class="n">${dc.races} race${dc.races === 1 ? "" : "s"}</span></div>`;
+    }).join("");
+    const html = `<div class="tm-sl-hdr">Shared Car #${car} · ${c.n_races} races total</div>${rows}`;
+    el.addEventListener("mouseenter", e => showTip(html, e, "tm-tip tm-sl"));
+    el.addEventListener("mousemove",  e => showTip(html, e, "tm-tip tm-sl"));
+    el.addEventListener("mouseleave", hideTip);
+  });
+
+  // Column-header explainers
+  host.querySelectorAll(".tm-help").forEach(el => {
+    const k = el.getAttribute("data-explain");
+    const msg = k === "avg"
+      ? "Δ AVG: season average delta vs. the best full-time car on the team each race. Closer to 0 = consistently near the team's top performer."
+      : "BEST: races this car was the best-finishing full-time car on the team, out of total races run.";
+    el.addEventListener("mouseenter", e => showTip(msg, e, "tm-tip tm-explain"));
+    el.addEventListener("mousemove",  e => showTip(msg, e, "tm-tip tm-explain"));
+    el.addEventListener("mouseleave", hideTip);
+  });
+}
+
+// Build the sparkline SVG for a teammate row
+function tmSparkline(seriesPts, color, metric, carLabel) {
+  const clipCap = metric === "fin" ? 40 : 50;
+  if (seriesPts.length === 0) return "";
+  const width = 180, height = 38;
+  const pad = { t: 5, b: 5, l: 3, r: 3 };
+  const innerW = width - pad.l - pad.r, innerH = height - pad.t - pad.b;
+  const xScale = i => pad.l + (seriesPts.length === 1 ? innerW/2 : (i / (seriesPts.length - 1)) * innerW);
+  const yScale = v => {
+    const clipped = Math.max(-clipCap, Math.min(0, v));
+    return pad.t + ((0 - clipped) / clipCap) * innerH;
+  };
+  const zeroY = yScale(0);
+  const zero = `<line class="tm-spk-zero" x1="${pad.l}" x2="${width - pad.r}" y1="${zeroY}" y2="${zeroY}"/>`;
+  const pathD = seriesPts.map((p, i) => `${xScale(i)},${yScale(p.v)}`).join(" ");
+  const line = `<polyline class="tm-spk-line" points="${pathD}" stroke="${color}"/>`;
+  const dots = seriesPts.map((p, i) => {
+    const x = xScale(i), y = yScale(p.v);
+    const r = p.tl ? 3 : 2.4;
+    const fill = p.tl ? "transparent" : color;
+    const stroke = p.tl ? color : "none";
+    const sw = p.tl ? 1.4 : 0;
+    return `<g class="tm-dot-hit" data-round="${p.round}" data-car="${carLabel}">
+      <circle cx="${x}" cy="${y}" r="7" fill="transparent"/>
+      <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
+    </g>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="max-width:100%;height:${height}px">${zero}${line}${dots}</svg>`;
+}
+
+function tmDeltaClass(metric, avg) {
+  const scale = metric === "fin" ? 1 : 3;
+  if (avg >= -2 * scale) return "good";
+  if (avg <= -8 * scale) return "bad";
+  return "meh";
 }
 
 // ============================================================

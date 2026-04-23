@@ -861,12 +861,12 @@ code {
 }
 
 /* ========== METRIC BAR tooltips ========== */
+/* A shared floating div (#metric-tooltip) is positioned by JS on hover.
+   position:fixed so the metricbar's overflow-x:auto can't clip it. */
 .metric[data-tip] { cursor: help; }
-.metric[data-tip]:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: 100%; left: 0;
-  margin-top: 6px;
+#metric-tooltip {
+  position: fixed;
+  top: 0; left: 0;
   background: var(--card-hi);
   border: 1px solid var(--border-hi);
   border-radius: 6px;
@@ -875,20 +875,214 @@ code {
   font-size: 11px;
   font-weight: 400;
   color: var(--text-2);
-  white-space: normal;
-  max-width: 280px;
-  z-index: 100;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
-  text-transform: none;
-  letter-spacing: normal;
   line-height: 1.5;
+  max-width: 280px;
+  z-index: 1000;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.1s, transform 0.1s;
 }
-.metric { position: relative; }
+#metric-tooltip.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
 
 /* ========== BREAKDOWN grouped-bar legend helper ========== */
 .legend-item.muted {
   opacity: 0.7;
   font-style: italic;
+}
+
+/* ========== TEAMMATE DELTA ========== */
+.tm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+.tm-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+.tm-card-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.tm-team-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.tm-team-meta {
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+  margin-left: auto; letter-spacing: 0.06em; flex-shrink: 0; white-space: nowrap;
+}
+
+.tm-col-headers,
+.tm-row {
+  display: grid;
+  grid-template-columns: 36px minmax(110px, 1fr) minmax(80px, 2fr) 52px 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  min-width: 0;
+}
+.tm-col-headers {
+  background: rgba(255,255,255,0.015);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono); font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+}
+.tm-right { text-align: right; }
+.tm-help { cursor: help; }
+.tm-help:hover { color: var(--text-2); }
+
+.tm-row { border-bottom: 1px solid rgba(255,255,255,0.03); }
+.tm-row:last-child { border-bottom: none; }
+.tm-row:hover { background: rgba(255,255,255,0.02); }
+.tm-row.part-time { opacity: 0.82; }
+
+.tm-car {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; padding: 3px 7px;
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  border-radius: 3px; color: #000; text-align: center;
+}
+.tm-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tm-name-row {
+  display: flex; align-items: center; gap: 4px; flex-wrap: nowrap;
+  overflow: hidden; min-width: 0;
+}
+.tm-name-primary {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tm-name-sub {
+  font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tm-shared {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px;
+  font-size: 10px; font-weight: 700;
+  color: var(--accent-2);
+  cursor: help;
+  border-radius: 50%;
+  background: rgba(59,130,246,0.15);
+  border: 1px solid rgba(59,130,246,0.35);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.tm-shared:hover { background: rgba(59,130,246,0.30); color: #fff; }
+.tm-true-team {
+  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  color: var(--dim); background: rgba(255,255,255,0.04);
+  padding: 1px 4px; border-radius: 2px;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+.tm-pt-tag {
+  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  color: var(--dim);
+  letter-spacing: 0.08em;
+}
+
+.tm-spark { display: flex; align-items: center; justify-content: center; min-width: 0; }
+.tm-spark svg { display: block; width: 100%; height: auto; max-width: 100%; cursor: default; }
+
+.tm-avg {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding: 2px 4px;
+  border-radius: 3px;
+  min-width: 0;
+}
+.tm-avg.good { color: var(--pos); background: rgba(63,217,122,0.10); }
+.tm-avg.meh  { color: var(--text-2); }
+.tm-avg.bad  { color: var(--neg); background: rgba(255,107,107,0.10); }
+
+.tm-tl {
+  text-align: right; font-family: var(--mono); font-size: 11px;
+  color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.tm-tl .big {
+  color: var(--accent-2); font-size: 13px; font-weight: 700; margin-right: 2px;
+}
+
+/* Sparkline styling */
+.tm-spk-zero { stroke: rgba(255, 255, 255, 0.22); stroke-width: 1; }
+.tm-spk-line { fill: none; stroke-width: 1.4; }
+
+/* Teammate tooltip variants — reuses the #metric-tooltip floating div */
+#metric-tooltip.tm-tip {
+  font-family: var(--mono);
+  min-width: 180px;
+}
+#metric-tooltip.tm-tip .tm-tt-hdr {
+  font-weight: 700; color: var(--accent-2);
+  padding-bottom: 4px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+#metric-tooltip.tm-tip .tm-tt-row {
+  display: flex; justify-content: space-between; gap: 14px;
+}
+#metric-tooltip.tm-tip .tm-tt-row .lbl { color: var(--muted); }
+#metric-tooltip.tm-tip .tm-tt-row .val { color: var(--text); font-weight: 600; }
+#metric-tooltip.tm-tip .tm-tt-row.neg .val { color: var(--neg); }
+#metric-tooltip.tm-tip .tm-tt-row.pos .val { color: var(--pos); }
+#metric-tooltip.tm-tip .tm-tt-driver {
+  padding: 4px 6px; margin: 4px -5px 6px;
+  background: rgba(59,130,246,0.12);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 3px 3px 0;
+  color: var(--accent-2);
+  font-weight: 700;
+}
+/* Shared-car list variant */
+#metric-tooltip.tm-sl { min-width: 200px; }
+#metric-tooltip.tm-sl .tm-sl-hdr {
+  font-size: 10px; color: var(--muted);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 5px; font-family: var(--mono);
+  border-bottom: 1px solid var(--border); padding-bottom: 4px;
+}
+#metric-tooltip.tm-sl .tm-sl-row {
+  display: flex; justify-content: space-between; gap: 16px; padding: 2px 0;
+}
+#metric-tooltip.tm-sl .tm-sl-row.primary {
+  color: var(--accent-2); font-weight: 700;
+}
+#metric-tooltip.tm-sl .tm-sl-row .n {
+  color: var(--muted); font-weight: 500;
+}
+/* Explainer variant (column-header helpers) */
+#metric-tooltip.tm-explain {
+  font-family: var(--sans);
+  font-size: 11px; font-weight: 400;
+  color: var(--text-2); max-width: 280px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .tm-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 500px) {
+  .tm-col-headers, .tm-row {
+    grid-template-columns: 30px minmax(70px, 1fr) minmax(60px, 1.5fr) 44px 36px;
+    gap: 6px; padding: 7px 8px;
+  }
+  .tm-avg { font-size: 11px; padding: 1px 3px; }
 }
 
 /* "Info" indicator for the FL column header tooltip on Standings */
