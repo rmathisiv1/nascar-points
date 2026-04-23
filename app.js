@@ -849,6 +849,14 @@ function teamCodeFromName(team, seriesCode, carNumber) {
     if (OWNER_TO_TEAM_CODE[bare]) owner = bare;
   }
   if (owner && OWNER_TO_TEAM_CODE[owner]) return OWNER_TO_TEAM_CODE[owner];
+  // Format 3: substring match — RR sometimes omits the parens or the sponsor
+  // prefix is embedded weirdly. Scan the team string for any known owner.
+  const lowerTeam = team.toLowerCase();
+  for (const knownOwner of Object.keys(OWNER_TO_TEAM_CODE)) {
+    if (lowerTeam.includes(knownOwner.toLowerCase())) {
+      return OWNER_TO_TEAM_CODE[knownOwner];
+    }
+  }
   // Fallback by car number
   if (seriesCode && carNumber) {
     const fb = CAR_FALLBACK_CODES[seriesCode + "|" + carNumber];
