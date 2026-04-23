@@ -26,7 +26,7 @@ OWNER_TO_TEAM_CODE = {
     "Matthew Kaulig":           "KR",
     "HYAK Motorsports":         "HYAK",
     "Rick Ware":                "RWR",
-    "Gene Haas":                "HFT",   # Haas Factory Team
+    "Gene Haas":                "HAAS",   # Haas Factory Team
     "JR Motorsports":           "JRM",
     "Bob Jenkins":              "FRM",   # Front Row Motorsports
     "Carl Long":                "MBM",

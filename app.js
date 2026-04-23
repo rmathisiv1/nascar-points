@@ -342,12 +342,15 @@ function allEntities() {
       if (d.ineligible) return;
       const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
 
-      // Three-tier team code resolution:
-      // 1. Scraper provided team_code on the race record (preferred, all future data)
-      // 2. colors.json palette has a team code for this car (legacy override)
-      // 3. Parse the owner out of sponsor string
+      // Three-tier team code resolution (scraper-first priority):
+      // 1. d.team_code from scraper — authoritative, built from current race data
+      // 2. Fallback: owner parse from team string (for pre-upgrade historical data)
+      // 3. Last resort: colors.json palette (legacy overrides, may be stale)
       const paletteCode = teamCodeFromPalette(STATE.series, d.car_number);
-      const teamCode = d.team_code || paletteCode || teamCodeFromName(d.team, seriesKey, d.car_number) || null;
+      const teamCode = d.team_code
+        || teamCodeFromName(d.team, seriesKey, d.car_number)
+        || paletteCode
+        || null;
 
       if (!map.has(key)) {
         map.set(key, {
@@ -767,7 +770,7 @@ const OWNER_TO_TEAM_CODE = {
   "Matthew Kaulig":           "KR",
   "HYAK Motorsports":         "HYAK",
   "Rick Ware":                "RWR",
-  "Gene Haas":                "HFT",
+  "Gene Haas":                "HAAS",
   "JR Motorsports":           "JRM",
   "Bob Jenkins":              "FRM",
   "Carl Long":                "MBM",
@@ -1963,7 +1966,7 @@ const TEAM_FULL_NAMES = {
   "JGR": "Joe Gibbs Racing", "HMS": "Hendrick Motorsports", "RCR": "Richard Childress Racing",
   "23XI": "23XI Racing", "PEN": "Team Penske", "RFK": "RFK Racing",
   "FRM": "Front Row Motorsports", "THR": "Trackhouse Racing", "LMC": "Legacy Motor Club",
-  "SPI": "Spire Motorsports", "KR": "Kaulig Racing", "HFT": "Haas Factory Team",
+  "SPI": "Spire Motorsports", "KR": "Kaulig Racing", "HAAS": "Haas Factory Team",
   "HYAK": "HYAK Motorsports", "WBR": "Wood Brothers",
   "JTG": "JTG Daugherty", "RWR": "Rick Ware Racing",
   // NOS / NTS teams
@@ -2037,10 +2040,10 @@ function renderTeammates() {
     const groupFt  = {};     // group -> [FT-only entries]
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      // Same 3-tier resolution as allEntities(): scraper field → palette → owner parse
+      // Resolution: scraper field → owner parse → palette (palette is last because it's stale)
       const team = d.team_code
-        || teamCodeFromPalette(STATE.series, d.car_number)
-        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number);
+        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number)
+        || teamCodeFromPalette(STATE.series, d.car_number);
       if (!team) return;
       const grp = teamGroup(team);
       const rec = {
@@ -2494,8 +2497,8 @@ function profileTeammates(entity) {
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
       const t = d.team_code
-        || teamCodeFromPalette(STATE.series, d.car_number)
-        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number);
+        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number)
+        || teamCodeFromPalette(STATE.series, d.car_number);
       if (!t) return;
       const g = ALLIANCE[t] || t;
       if (g !== myGroup) return;
