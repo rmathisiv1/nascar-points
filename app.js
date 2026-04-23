@@ -1724,7 +1724,10 @@ function renderTeammates() {
   function showTip(html, evt, className) {
     tip.innerHTML = html;
     tip.className = "";
-    if (className) tip.classList.add(className);
+    if (className) {
+      // classList.add throws on tokens with spaces — split and spread
+      className.split(/\s+/).filter(Boolean).forEach(c => tip.classList.add(c));
+    }
     tip.classList.add("show");
     const rect = tip.getBoundingClientRect();
     let left = evt.clientX + 12, top = evt.clientY + 12;
