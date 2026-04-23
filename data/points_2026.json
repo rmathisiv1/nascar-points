@@ -1,6 +1,6 @@
 {
   "season": 2026,
-  "generated_at": "2026-04-23T17:49:08Z",
+  "generated_at": "2026-04-23T17:52:54Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -16,7 +16,7 @@
           "track_code": "DAY",
           "name": "Daytona 500",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Connor Zilisch",
           "source_url": "https://www.racing-reference.info/race-results/2026_Daytona_500/W",
           "results": [
             {
@@ -673,8 +673,8 @@
               "stage_2_pos": null,
               "stage_1_pts": 0,
               "stage_2_pts": 0,
-              "finish_pts": 5,
-              "fastest_lap_pt": 0,
+              "finish_pts": 4,
+              "fastest_lap_pt": 1,
               "race_pts": 5,
               "ineligible": false,
               "status": "running"
@@ -849,7 +849,7 @@
           "track_code": "ECH",
           "name": "Autotrader 400 at EchoPark Speedway",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Cole Custer",
           "source_url": "https://www.racing-reference.info/race-results/2026_Autotrader_Echopark_Speedway_400/W",
           "results": [
             {
@@ -1286,8 +1286,8 @@
               "stage_2_pos": null,
               "stage_1_pts": 0,
               "stage_2_pts": 0,
-              "finish_pts": 16,
-              "fastest_lap_pt": 0,
+              "finish_pts": 15,
+              "fastest_lap_pt": 1,
               "race_pts": 16,
               "ineligible": false,
               "status": "running"
@@ -1622,7 +1622,7 @@
           "track_code": "AUS",
           "name": "DuraMax Texas Grand Prix Presented by RelaDyne",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Ross Chastain",
           "source_url": "https://www.racing-reference.info/race-results/2026_DuraMax_Texas_Grand_Prix/W",
           "results": [
             {
@@ -2319,8 +2319,8 @@
               "stage_2_pos": null,
               "stage_1_pts": 10,
               "stage_2_pts": 0,
-              "finish_pts": 3,
-              "fastest_lap_pt": 0,
+              "finish_pts": 2,
+              "fastest_lap_pt": 1,
               "race_pts": 13,
               "ineligible": false,
               "status": "running"
@@ -2375,7 +2375,7 @@
           "track_code": "PHO",
           "name": "Straight Talk Wireless 500",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Joey Logano",
           "source_url": "https://www.racing-reference.info/race-results/2026_Straight_Talk_Wireless_500/W",
           "results": [
             {
@@ -2992,8 +2992,8 @@
               "stage_2_pos": 3,
               "stage_1_pts": 8,
               "stage_2_pts": 8,
-              "finish_pts": 7,
-              "fastest_lap_pt": 0,
+              "finish_pts": 6,
+              "fastest_lap_pt": 1,
               "race_pts": 23,
               "ineligible": false,
               "status": "crash"
@@ -3128,7 +3128,7 @@
           "track_code": "LAS",
           "name": "Pennzoil 400 Presented by Jiffy Lube",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Denny Hamlin",
           "source_url": "https://www.racing-reference.info/race-results/2026_Pennzoil_400_Presented_by_Jiffy_Lube/W",
           "results": [
             {
@@ -3145,8 +3145,8 @@
               "stage_2_pos": 5,
               "stage_1_pts": 8,
               "stage_2_pts": 6,
-              "finish_pts": 56,
-              "fastest_lap_pt": 0,
+              "finish_pts": 55,
+              "fastest_lap_pt": 1,
               "race_pts": 70,
               "ineligible": false,
               "status": "running"
@@ -4614,7 +4614,7 @@
           "track_code": "MAR",
           "name": "Cook Out 400",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Denny Hamlin",
           "source_url": "https://www.racing-reference.info/race-results/2026_Cook_Out_400/W",
           "results": [
             {
@@ -4651,8 +4651,8 @@
               "stage_2_pos": 1,
               "stage_1_pts": 10,
               "stage_2_pts": 10,
-              "finish_pts": 36,
-              "fastest_lap_pt": 0,
+              "finish_pts": 35,
+              "fastest_lap_pt": 1,
               "race_pts": 56,
               "ineligible": false,
               "status": "running"
@@ -5367,7 +5367,7 @@
           "track_code": "BRI",
           "name": "Food City 500",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Ryan Blaney",
           "source_url": "https://www.racing-reference.info/race-results/2026_Food_City_500/W",
           "results": [
             {
@@ -5404,8 +5404,8 @@
               "stage_2_pos": 2,
               "stage_1_pts": 8,
               "stage_2_pts": 9,
-              "finish_pts": 36,
-              "fastest_lap_pt": 0,
+              "finish_pts": 35,
+              "fastest_lap_pt": 1,
               "race_pts": 53,
               "ineligible": false,
               "status": "running"
@@ -6120,7 +6120,7 @@
           "track_code": "KAN",
           "name": "AdventHealth 400",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Christopher Bell",
           "source_url": "https://www.racing-reference.info/race-results/2026_AdventHealth_400/W",
           "results": [
             {
@@ -6517,8 +6517,8 @@
               "stage_2_pos": 5,
               "stage_1_pts": 6,
               "stage_2_pts": 6,
-              "finish_pts": 18,
-              "fastest_lap_pt": 0,
+              "finish_pts": 17,
+              "fastest_lap_pt": 1,
               "race_pts": 30,
               "ineligible": false,
               "status": "running"
@@ -6880,7 +6880,7 @@
           "track_code": "DAY",
           "name": "United Rentals 300",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Rajah Caruth",
           "source_url": "https://www.racing-reference.info/race-results/2026_United_Rentals_300/B",
           "results": [
             {
@@ -7077,8 +7077,8 @@
               "stage_2_pos": 5,
               "stage_1_pts": 0,
               "stage_2_pts": 6,
-              "finish_pts": 28,
-              "fastest_lap_pt": 0,
+              "finish_pts": 27,
+              "fastest_lap_pt": 1,
               "race_pts": 34,
               "ineligible": false,
               "status": "running"
@@ -7653,7 +7653,7 @@
           "track_code": "ECH",
           "name": "Bennett Transportation & Logistics 250",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Jeb Burton",
           "source_url": "https://www.racing-reference.info/race-results/2026_Bennett_Transportation_Logistics_250/B",
           "results": [
             {
@@ -7970,8 +7970,8 @@
               "stage_2_pos": null,
               "stage_1_pts": 0,
               "stage_2_pts": 0,
-              "finish_pts": 22,
-              "fastest_lap_pt": 0,
+              "finish_pts": 21,
+              "fastest_lap_pt": 1,
               "race_pts": 22,
               "ineligible": false,
               "status": "running"
@@ -8426,7 +8426,7 @@
           "track_code": "AUS",
           "name": "Focused Health 250",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Baltazar Leguizamon",
           "source_url": "https://www.racing-reference.info/race-results/2026_Focused_Health_COTA/B",
           "results": [
             {
@@ -9163,8 +9163,8 @@
               "stage_2_pos": null,
               "stage_1_pts": 0,
               "stage_2_pts": 0,
-              "finish_pts": 1,
-              "fastest_lap_pt": 0,
+              "finish_pts": 0,
+              "fastest_lap_pt": 1,
               "race_pts": 1,
               "ineligible": false,
               "status": "crash"
@@ -9199,7 +9199,7 @@
           "track_code": "PHO",
           "name": "GOVX 200",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Jesse Love",
           "source_url": "https://www.racing-reference.info/race-results/2026_GOVX_200/B",
           "results": [
             {
@@ -9236,8 +9236,8 @@
               "stage_2_pos": 1,
               "stage_1_pts": 9,
               "stage_2_pts": 10,
-              "finish_pts": 36,
-              "fastest_lap_pt": 0,
+              "finish_pts": 35,
+              "fastest_lap_pt": 1,
               "race_pts": 55,
               "ineligible": false,
               "status": "running"
@@ -9972,7 +9972,7 @@
           "track_code": "LAS",
           "name": "The LiUNA!",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Sam Mayer",
           "source_url": "https://www.racing-reference.info/race-results/2026_The_LiUNA/B",
           "results": [
             {
@@ -10669,8 +10669,8 @@
               "stage_2_pos": null,
               "stage_1_pts": 9,
               "stage_2_pts": 0,
-              "finish_pts": 3,
-              "fastest_lap_pt": 0,
+              "finish_pts": 2,
+              "fastest_lap_pt": 1,
               "race_pts": 12,
               "ineligible": false,
               "status": "running"
@@ -10745,7 +10745,7 @@
           "track_code": "DAR",
           "name": "Sport Clips Haircuts VFW Help a Hero 200",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Justin Allgaier",
           "source_url": "https://www.racing-reference.info/race-results/2026_Sport_Clip_Haircuts_250/B",
           "results": [
             {
@@ -10762,8 +10762,8 @@
               "stage_2_pos": 4,
               "stage_1_pts": 6,
               "stage_2_pts": 7,
-              "finish_pts": 56,
-              "fastest_lap_pt": 0,
+              "finish_pts": 55,
+              "fastest_lap_pt": 1,
               "race_pts": 69,
               "ineligible": false,
               "status": "running"
@@ -11518,7 +11518,7 @@
           "track_code": "MAR",
           "name": "NFPA 250",
           "stages": 2,
-          "fastest_lap_driver": "Jeremy Clements",
+          "fastest_lap_driver": "Justin Allgaier",
           "source_url": "https://www.racing-reference.info/race-results/2026_NFPA_250/B",
           "results": [
             {
@@ -11535,8 +11535,8 @@
               "stage_2_pos": 10,
               "stage_1_pts": 10,
               "stage_2_pts": 1,
-              "finish_pts": 56,
-              "fastest_lap_pt": 0,
+              "finish_pts": 55,
+              "fastest_lap_pt": 1,
               "race_pts": 67,
               "ineligible": false,
               "status": "running"
@@ -12255,8 +12255,8 @@
               "stage_2_pos": null,
               "stage_1_pts": 0,
               "stage_2_pts": 0,
-              "finish_pts": 0,
-              "fastest_lap_pt": 1,
+              "finish_pts": 1,
+              "fastest_lap_pt": 0,
               "race_pts": 1,
               "ineligible": false,
               "status": "oil cooler"
@@ -12291,7 +12291,7 @@
           "track_code": "ROC",
           "name": "North Carolina Education Lottery 250",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "William Sawalich",
           "source_url": "https://www.racing-reference.info/race-results/2026_North_Carolina_Education_Lottery_250/B",
           "results": [
             {
@@ -12308,8 +12308,8 @@
               "stage_2_pos": 2,
               "stage_1_pts": 6,
               "stage_2_pts": 9,
-              "finish_pts": 56,
-              "fastest_lap_pt": 0,
+              "finish_pts": 55,
+              "fastest_lap_pt": 1,
               "race_pts": 71,
               "ineligible": false,
               "status": "running"
@@ -13064,7 +13064,7 @@
           "track_code": "BRI",
           "name": "Suburban Propane 300",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Brent Crews",
           "source_url": "https://www.racing-reference.info/race-results/2026_Suburban_Propane_300/B",
           "results": [
             {
@@ -13121,8 +13121,8 @@
               "stage_2_pos": 5,
               "stage_1_pts": 0,
               "stage_2_pts": 6,
-              "finish_pts": 35,
-              "fastest_lap_pt": 0,
+              "finish_pts": 34,
+              "fastest_lap_pt": 1,
               "race_pts": 41,
               "ineligible": false,
               "status": "running"
@@ -13837,7 +13837,7 @@
           "track_code": "KAN",
           "name": "Kansas Lottery 300",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Sheldon Creed",
           "source_url": "https://www.racing-reference.info/race-results/2026_Kansas_Lottery_300/B",
           "results": [
             {
@@ -13874,8 +13874,8 @@
               "stage_2_pos": 2,
               "stage_1_pts": 4,
               "stage_2_pts": 9,
-              "finish_pts": 36,
-              "fastest_lap_pt": 0,
+              "finish_pts": 35,
+              "fastest_lap_pt": 1,
               "race_pts": 49,
               "ineligible": false,
               "status": "running"
@@ -14597,7 +14597,7 @@
           "track_code": "DAY",
           "name": "Fresh From Florida 250",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Daniel Hemric",
           "source_url": "https://www.racing-reference.info/race-results/2026_Fresh_From_Florida_250/C",
           "results": [
             {
@@ -15114,8 +15114,8 @@
               "stage_2_pos": null,
               "stage_1_pts": 0,
               "stage_2_pts": 0,
-              "finish_pts": 12,
-              "fastest_lap_pt": 0,
+              "finish_pts": 11,
+              "fastest_lap_pt": 1,
               "race_pts": 12,
               "ineligible": false,
               "status": "running"
@@ -16083,7 +16083,7 @@
           "track_code": "STP",
           "name": "OnlyBulls Green Flag 150",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Layne Riggs",
           "source_url": "https://www.racing-reference.info/race-results/2026_OnlyBulls_Green_Flag_150/C",
           "results": [
             {
@@ -16100,8 +16100,8 @@
               "stage_2_pos": 1,
               "stage_1_pts": 4,
               "stage_2_pts": 10,
-              "finish_pts": 56,
-              "fastest_lap_pt": 0,
+              "finish_pts": 55,
+              "fastest_lap_pt": 1,
               "race_pts": 70,
               "ineligible": false,
               "status": "running"
@@ -17549,7 +17549,7 @@
           "track_code": "ROC",
           "name": "Black's Tire 200",
           "stages": 2,
-          "fastest_lap_driver": null,
+          "fastest_lap_driver": "Corey Heim",
           "source_url": "https://www.racing-reference.info/race-results/2026_Blacks_Tire_200/C",
           "results": [
             {
@@ -17566,8 +17566,8 @@
               "stage_2_pos": 1,
               "stage_1_pts": 10,
               "stage_2_pts": 10,
-              "finish_pts": 56,
-              "fastest_lap_pt": 0,
+              "finish_pts": 55,
+              "fastest_lap_pt": 1,
               "race_pts": 76,
               "ineligible": false,
               "status": "running"
