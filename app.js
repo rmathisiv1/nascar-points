@@ -503,7 +503,7 @@ function renderMetricBar() {
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Coldest</span>
       <span class="v cold">${coldest ? `${escapeHTML(displayName(coldest.entity))} ${signed(coldest.delta.toFixed(1))}` : "\u2014"}</span></div>
     <div class="metric" data-tip="${escapeHTML(raceTip)}"><span class="k">Last Race</span>
-      <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${lastRace.track_code || lastRace.track || ""}` : "\u2014"}</span></div>
+      <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}` : "\u2014"}</span></div>
   `;
 
   // Wire hover handlers for the floating metric tooltip
@@ -1065,7 +1065,7 @@ function renderBreakdown() {
   const showTip = (rd, groupCx, groupTopY) => {
     if (!tip) return;
     const meta = raceByRound[rd];
-    const title = `R${rd}${meta?.track_code ? ` · ${meta.track_code}` : ""}${meta?.name ? "" : ""}`;
+    const title = `R${rd} · ${escapeHTML(prettyTrack(meta?.track_code, meta?.track))}`;
     const isMulti = driverData.length > 1;
     let body = "";
     driverData.forEach(dd => {
@@ -1524,6 +1524,81 @@ const TEAM_ALLIANCE = { "WBR": "PEN" };
 function teamGroup(team) { return TEAM_ALLIANCE[team] || team; }
 
 // Friendly team names for the card header; fall back to the team code itself
+// Track display names — maps racing-reference track codes to the common industry name
+// people actually say. When in doubt, use what a NASCAR fan/insider would call it in
+// conversation, not the official venue name.
+const TRACK_NAMES = {
+  DAY: "Daytona",
+  ECH: "Atlanta",        // rebranded EchoPark Speedway, still called Atlanta
+  ATL: "Atlanta",        // older code for the same track
+  AUS: "COTA",           // Circuit of the Americas
+  PHO: "Phoenix",
+  LAS: "Las Vegas",
+  DAR: "Darlington",
+  MAR: "Martinsville",
+  BRI: "Bristol",
+  BRD: "Bristol Dirt",   // dirt configuration, when applicable
+  KAN: "Kansas",
+  TAL: "Talladega",
+  TEX: "Texas",
+  DOV: "Dover",
+  CLT: "Charlotte",
+  CHA: "Roval",          // Charlotte Roval config
+  ROV: "Roval",          // alt code
+  NHA: "New Hampshire",
+  LOU: "New Hampshire",  // Loudon — same track
+  POC: "Pocono",
+  CHI: "Chicago Street",
+  CHG: "Chicago Street",
+  NSH: "Nashville",
+  MIA: "Homestead",
+  HOM: "Homestead",
+  IOW: "Iowa",
+  GWY: "Gateway",
+  WWT: "Gateway",
+  SON: "Sonoma",
+  WGI: "Watkins Glen",
+  MCH: "Michigan",
+  RCH: "Richmond",
+  IRC: "Indy RC",        // Indianapolis Road Course
+  IND: "Indy",           // Indianapolis Motor Speedway (oval)
+  BGR: "Bowman Gray",    // BG Stadium (Clash venue)
+  NWB: "North Wilkesboro",
+  NWK: "North Wilkesboro",
+  MXI: "Mexico City",    // 2026 international date
+  MEX: "Mexico City",
+};
+
+// Return the short, insider-friendly track name.
+// Prefers code lookup; falls back to the raw name if code is missing/unknown.
+function prettyTrack(code, fallbackName) {
+  if (code && TRACK_NAMES[code]) return TRACK_NAMES[code];
+  // If we only got a name (no code), try common substrings
+  if (fallbackName) {
+    const n = fallbackName;
+    if (/echopark/i.test(n)) return "Atlanta";
+    if (/circuit of the americas/i.test(n)) return "COTA";
+    if (/indianapolis/i.test(n) && /road/i.test(n)) return "Indy RC";
+    if (/indianapolis/i.test(n)) return "Indy";
+    if (/charlotte/i.test(n) && /roval/i.test(n)) return "Roval";
+    if (/homestead/i.test(n)) return "Homestead";
+    if (/new hampshire|loudon/i.test(n)) return "New Hampshire";
+    if (/chicago.*street/i.test(n)) return "Chicago Street";
+    if (/gateway|world wide/i.test(n)) return "Gateway";
+    if (/bowman gray/i.test(n)) return "Bowman Gray";
+    if (/north wilkesboro/i.test(n)) return "North Wilkesboro";
+    // Default: strip common suffixes "Speedway", "Motor Speedway", "Raceway", "International Speedway"
+    return n
+      .replace(/\s+International Speedway\s*$/i, "")
+      .replace(/\s+Motor Speedway\s*$/i, "")
+      .replace(/\s+Superspeedway\s*$/i, "")
+      .replace(/\s+Speedway\s*$/i, "")
+      .replace(/\s+Raceway\s*$/i, "")
+      .trim();
+  }
+  return code || "";
+}
+
 const TEAM_FULL_NAMES = {
   "JGR": "Joe Gibbs Racing", "HMS": "Hendrick Motorsports", "RCR": "Richard Childress Racing",
   "23XI": "23XI Racing", "PEN": "Team Penske", "RFK": "RFK Racing",
@@ -1818,7 +1893,7 @@ function renderTeammates() {
     const v = metric === "fin" ? s.delta_fin : s.delta_tot;
     const cls = v >= 0 ? "pos" : "neg";
     const vStr = v >= 0 ? `+${v}` : `${v}`;
-    const trackLabel = s.track_name || s.track_code || "";
+    const trackLabel = prettyTrack(s.track_code, s.track_name);
     const driverLine = s.driver !== s.primary_driver
       ? `<div class="tm-tt-driver">Driver: ${escapeHTML(s.driver)}</div>`
       : "";
@@ -2408,8 +2483,7 @@ function paintProfileChart(entity, rows) {
       else if (r.finish <= 10) cls = "f-t10";
       else if (r.finish > 25) cls = "f-bad";
       const html = `
-        <div class="tm-tt-hdr">R${r.round}${r.track_code ? " · " + escapeHTML(r.track_code) : ""}</div>
-        <div class="tm-tt-row"><span class="lbl">Track</span><span class="val">${escapeHTML(r.track || "—")}</span></div>
+        <div class="tm-tt-hdr">R${r.round} · ${escapeHTML(prettyTrack(r.track_code, r.track))}</div>
         <div class="tm-tt-row"><span class="lbl">Start</span><span class="val">${r.start ?? "—"}</span></div>
         <div class="tm-tt-row"><span class="lbl">Finish</span><span class="val"><span class="finish-badge ${cls}">${r.finish ?? "—"}</span></span></div>
         <div class="tm-tt-row"><span class="lbl">Race points</span><span class="val">${r.total ?? 0}</span></div>
@@ -2469,10 +2543,10 @@ function paintProfileHeatStrip(rows) {
     const r = rowsByRound[round];
     if (!r) return;
     let html;
+    const tt = escapeHTML(prettyTrack(r.track_code, r.track));
     if (r.dns) {
       html = `
-        <div class="tm-tt-hdr">R${r.round}${r.track_code ? " · " + escapeHTML(r.track_code) : ""}</div>
-        <div class="tm-tt-row"><span class="lbl">Track</span><span class="val">${escapeHTML(r.track || "—")}</span></div>
+        <div class="tm-tt-hdr">R${r.round} · ${tt}</div>
         <div class="tm-tt-row"><span class="lbl">Result</span><span class="val" style="color:var(--dim);font-style:italic;">Did not start</span></div>
       `;
     } else {
@@ -2482,8 +2556,7 @@ function paintProfileHeatStrip(rows) {
       else if (r.finish <= 10) cls = "f-t10";
       else if (r.finish > 25) cls = "f-bad";
       html = `
-        <div class="tm-tt-hdr">R${r.round}${r.track_code ? " · " + escapeHTML(r.track_code) : ""}</div>
-        <div class="tm-tt-row"><span class="lbl">Track</span><span class="val">${escapeHTML(r.track || "—")}</span></div>
+        <div class="tm-tt-hdr">R${r.round} · ${tt}</div>
         <div class="tm-tt-row"><span class="lbl">Start</span><span class="val">${r.start ?? "—"}</span></div>
         <div class="tm-tt-row"><span class="lbl">Finish</span><span class="val"><span class="finish-badge ${cls}">${r.finish}</span></span></div>
         <div class="tm-tt-row"><span class="lbl">Race points</span><span class="val">${r.total ?? 0}</span></div>
@@ -2517,10 +2590,11 @@ function paintProfileRaceTable(rows, kind) {
   const tbody = document.getElementById("profile-race-tbody");
   if (!tbody) return;
   tbody.innerHTML = rows.map(r => {
+    const trackDisplay = escapeHTML(prettyTrack(r.track_code, r.track));
     if (r.dns) {
       return `<tr style="opacity:0.4">
         <td class="rnd">R${r.round}</td>
-        <td class="track"><strong>${escapeHTML(r.track_code || '')}</strong> · ${escapeHTML(r.track || '')}</td>
+        <td class="track"><strong>${escapeHTML(r.track_code || '')}</strong> · ${trackDisplay}</td>
         <td colspan="8" style="color:var(--dim);font-style:italic">DNS</td>
       </tr>`;
     }
@@ -2532,7 +2606,7 @@ function paintProfileRaceTable(rows, kind) {
     const driverNote = (kind === "owner" && r.driver) ? `<div class="race-driver-tag">${escapeHTML(r.driver)}</div>` : "";
     return `<tr>
       <td class="rnd">R${r.round}</td>
-      <td class="track"><strong>${escapeHTML(r.track_code || '')}</strong> · ${escapeHTML(r.track || '')}${driverNote}</td>
+      <td class="track"><strong>${escapeHTML(r.track_code || '')}</strong> · ${trackDisplay}${driverNote}</td>
       <td style="color:var(--muted)">${escapeHTML(r.name || '')}</td>
       <td class="num">${r.start ?? '—'}</td>
       <td class="num"><span class="finish-badge ${cls}">${r.finish ?? '—'}</span></td>
@@ -2597,7 +2671,7 @@ function renderHeatmap() {
     const h = document.createElement("div");
     h.className = "hm-header";
     h.textContent = `R${r.round}`;
-    h.title = r.name || r.track || "";
+    h.title = prettyTrack(r.track_code, r.track) + (r.name ? ` — ${r.name}` : "");
     grid.appendChild(h);
   });
   const totalHdr = document.createElement("div");
@@ -2619,14 +2693,17 @@ function renderHeatmap() {
       const mine = byRound[r.round];
       const cell = document.createElement("div");
       cell.className = "hm-cell";
+      const trackLabel = prettyTrack(r.track_code, r.track);
       if (!mine || mine.finish == null) {
         cell.textContent = "·";
         cell.style.color = "var(--dim)";
+        cell.title = `R${r.round} · ${trackLabel} — DNS`;
       } else {
         const f = mine.finish;
         cell.textContent = f;
         cell.style.background = heatmapColor(f);
         cell.style.color = heatmapText(f);
+        cell.title = `R${r.round} · ${trackLabel} · ${d.driver} — P${f}`;
       }
       grid.appendChild(cell);
     });
