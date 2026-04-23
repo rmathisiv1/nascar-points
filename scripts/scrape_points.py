@@ -35,6 +35,14 @@ import requests
 import cloudscraper
 from bs4 import BeautifulSoup
 
+# Local module: owner → team_code resolver. Kept in same dir as this script.
+try:
+    from team_codes import resolve_team_code
+except ImportError:
+    # Fallback if the module isn't present — scraper still works without team_code
+    def resolve_team_code(sponsor_owner, series_key=None, car_number=None):
+        return None
+
 # Racing-Reference series codes
 #   W = Cup (NASCAR Cup Series)
 #   B = Xfinity / O'Reilly (their URL path uses the "B" = Busch historically)
@@ -99,6 +107,7 @@ class DriverRace:
     driver: str
     car_number: str
     team: str
+    team_code: Optional[str]   # resolved 3-letter code (JGR, PEN, etc.), None if unresolved
     manufacturer: str
     start_pos: Optional[int]
     finish_pos: Optional[int]
@@ -325,8 +334,11 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
         s1_pos = stage1_map.get(car)
         s2_pos = stage2_map.get(car)
 
+        # Resolve 3-letter team code from owner string (falls back to car-number map)
+        team_code = resolve_team_code(team, series_key=series_code, car_number=car)
+
         dr = DriverRace(
-            driver=driver, car_number=car, team=team,
+            driver=driver, car_number=car, team=team, team_code=team_code,
             manufacturer=manufacturer_code(mfr_raw),
             start_pos=start, finish_pos=pos,
             laps_completed=laps, laps_led=led,

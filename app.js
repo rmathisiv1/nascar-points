@@ -335,11 +335,20 @@ function racesSorted() {
 }
 
 function allEntities() {
+  const seriesKey = SERIES_TO_KEY[STATE.series];
   const map = new Map();
   racesSorted().forEach(r => {
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
       const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
+
+      // Three-tier team code resolution:
+      // 1. Scraper provided team_code on the race record (preferred, all future data)
+      // 2. colors.json palette has a team code for this car (legacy override)
+      // 3. Parse the owner out of sponsor string
+      const paletteCode = teamCodeFromPalette(STATE.series, d.car_number);
+      const teamCode = d.team_code || paletteCode || teamCodeFromName(d.team, seriesKey, d.car_number) || null;
+
       if (!map.has(key)) {
         map.set(key, {
           key,
@@ -347,6 +356,7 @@ function allEntities() {
           driversSet: new Set(),
           car_number: d.car_number,
           team: d.team,
+          team_code: teamCode,
           manufacturer: d.manufacturer,
           races: [],
         });
@@ -355,6 +365,7 @@ function allEntities() {
       e.driversSet.add(d.driver);
       e.driver = d.driver;
       e.team = d.team;
+      if (teamCode) e.team_code = teamCode;
       e.manufacturer = d.manufacturer || e.manufacturer;
       e.races.push({
         round: r.round,
@@ -737,30 +748,97 @@ function sparkSVG(finishes, color, w, h) {
 // ============================================================
 // TEAM CODE / PILL
 // ============================================================
-function teamCodeFromName(team) {
-  if (!team) return "";
-  const m = team.match(/\(([^)]+)\)\s*$/);
-  if (m) {
-    const name = m[1];
-    if (/joe gibbs/i.test(name)) return "JGR";
-    if (/hendrick/i.test(name)) return "HMS";
-    if (/childress/i.test(name)) return "RCR";
-    if (/23xi/i.test(name)) return "23XI";
-    if (/penske/i.test(name)) return "PEN";
-    if (/rfk|roush/i.test(name)) return "RFK";
-    if (/front row/i.test(name)) return "FRM";
-    if (/trackhouse/i.test(name)) return "THR";
-    if (/legacy/i.test(name)) return "LMC";
-    if (/kaulig/i.test(name)) return "KR";
-    if (/spire/i.test(name)) return "SPI";
-    if (/jr motorsports/i.test(name)) return "JRM";
-    if (/haas/i.test(name)) return "GH";
-    if (/wood brothers/i.test(name)) return "WBR";
-    if (/rick ware/i.test(name)) return "RWR";
-    if (/hyak/i.test(name)) return "HYAK";
-    return name.split(/\s+/).map(w => w[0]).join("").slice(0, 4).toUpperCase();
+// Owner string → 3-letter team code. Kept in sync with scripts/team_codes.py.
+// When scraper produces `team_code` directly on the race record, that takes
+// precedence; this is the fallback for historical data scraped before the
+// scraper-side resolution was added.
+const OWNER_TO_TEAM_CODE = {
+  // Cup / Xfinity / Truck primary teams
+  "Joe Gibbs":                "JGR",
+  "Rick Hendrick":            "HMS",
+  "Roger Penske":             "PEN",
+  "Wood Brothers":            "WBR",
+  "23XI Racing":              "23XI",
+  "Richard Childress":        "RCR",
+  "Jack Roush":               "RFK",
+  "Trackhouse Racing":        "THR",
+  "Legacy Motor Club":        "LMC",
+  "Spire Motorsports":        "SPI",
+  "Matthew Kaulig":           "KR",
+  "HYAK Motorsports":         "HYAK",
+  "Rick Ware":                "RWR",
+  "Gene Haas":                "HFT",
+  "JR Motorsports":           "JRM",
+  "Bob Jenkins":              "FRM",
+  "Carl Long":                "MBM",
+  "B.J. McLeod":              "BJM",
+  // Xfinity-only
+  "Jeremy Clements":          "JCR",
+  "Jimmy Means":              "JMR",
+  "Jordan Anderson":          "JAR",
+  "Mike Harmon":              "MHR",
+  "Mario Gosselin":           "DGM",
+  "Sam Hunt":                 "SHR",
+  "Joey Gase Motorsports  With Sc": "JGM",
+  "Joey Gase Motorsports":    "JGM",
+  "Bobby Dotter":             "SSG",
+  "Stanton Barrett":          "BAR",
+  "Scott Borchetta":          "BMR",
+  "Randy Young":              "RSS",
+  "Tommy Joe Martins":        "AMR",
+  "Chris Hettinger":          "HET",
+  "Dan Pardus":               "PAR",
+  "Don Sackett":              "VAV",
+  "Rod Sieg":                 "SIE",
+  "Tim Self":                 "SEL",
+  "Wayne Peterson":           "WPR",
+  // Truck-only
+  "Kyle Busch":               "KBM",
+  "Bill McAnally":            "BMA",
+  "David Gilliland":          "TRICON",
+  "Al Niece":                 "AMR",
+  "Duke Thorson":             "TTM",
+  "Kevin Cywinski":           "MHR",
+  "Rackley W.A.R.":           "RWM",
+  "Codie Rohrbaugh":          "CR7",
+  "Mike Curb":                "HAT",
+  "Charlie Henderson":        "CHR",
+  "Chris Larsen":             "HLR",
+  "Josh Reaume":              "CFR",
+  "Johnny Gray":              "JGR2",
+  "Terry Carroll":            "TCM",
+  "Larry Berg":               "LBM",
+  "Timmy Hill":               "HLL",
+  "Freedom Racing":            "FRR",
+};
+
+// Rare unparseable rows — fallback by (series_code, car_number)
+const CAR_FALLBACK_CODES = {
+  "C|93": "CST", "C|69": "MCR", "C|95": "BBM", "W|44": "NYR",
+};
+
+function teamCodeFromName(team, seriesCode, carNumber) {
+  if (!team) {
+    // Still try the car-number fallback when sponsor is missing
+    return seriesCode && carNumber ? (CAR_FALLBACK_CODES[seriesCode + "|" + carNumber] || "") : "";
   }
-  return team.split(/\s+/).map(w => w[0]).join("").slice(0, 4).toUpperCase();
+  // Format 1: "Sponsor Name ( Owner Name )"
+  const m = team.match(/\(\s*([^)]+?)\s*\)\s*$/);
+  let owner = null;
+  if (m) {
+    owner = m[1].trim();
+  } else {
+    // Format 2: bare owner name
+    const bare = team.trim();
+    if (OWNER_TO_TEAM_CODE[bare]) owner = bare;
+  }
+  if (owner && OWNER_TO_TEAM_CODE[owner]) return OWNER_TO_TEAM_CODE[owner];
+  // Fallback by car number
+  if (seriesCode && carNumber) {
+    const fb = CAR_FALLBACK_CODES[seriesCode + "|" + carNumber];
+    if (fb) return fb;
+  }
+  return "";
 }
 
 // Readable team pill — colored background if palette has org, else a
@@ -805,9 +883,9 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
   if (onTeamSelect && STATE.entity === "driver") {
     const teamMap = new Map();
     entities.forEach(e => {
-      // Get the 3-letter team code from the color palette (e.team is a sponsor string, not useful)
-      const rawCode = teamCodeFromPalette(STATE.series, e.car_number);
-      if (!rawCode) return;  // skip drivers with no team code in palette
+      // e.team_code is pre-resolved (scraper field → palette → owner parse fallback)
+      const rawCode = e.team_code;
+      if (!rawCode) return;  // skip drivers with no resolvable team code
       // Apply alliance grouping (e.g. WBR rolls up into PEN)
       const teamKey = TEAM_ALLIANCE[rawCode] || rawCode;
       if (!teamMap.has(teamKey)) teamMap.set(teamKey, []);
@@ -879,9 +957,9 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
     host.querySelectorAll(".team-pill-btn").forEach(el => {
       el.addEventListener("click", () => {
         const teamKey = el.dataset.team;
-        // Rebuild the team's driver list from current entities using palette lookup
+        // Rebuild the team's driver list from current entities using resolved team_code
         const teamDrivers = entities.filter(e => {
-          const rawCode = teamCodeFromPalette(STATE.series, e.car_number);
+          const rawCode = e.team_code;
           if (!rawCode) return false;
           return (TEAM_ALLIANCE[rawCode] || rawCode) === teamKey;
         });
@@ -1959,7 +2037,10 @@ function renderTeammates() {
     const groupFt  = {};     // group -> [FT-only entries]
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      const team = teamCodeFromPalette(STATE.series, d.car_number);
+      // Same 3-tier resolution as allEntities(): scraper field → palette → owner parse
+      const team = d.team_code
+        || teamCodeFromPalette(STATE.series, d.car_number)
+        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number);
       if (!team) return;
       const grp = teamGroup(team);
       const rec = {
@@ -2398,7 +2479,7 @@ function profileTeammates(entity) {
   });
   const ftCars = new Set(Object.keys(carCount).filter(c => carCount[c] >= totalSeason));
 
-  const myTeam = teamCodeFromPalette(STATE.series, entity.car_number);
+  const myTeam = entity.team_code || teamCodeFromPalette(STATE.series, entity.car_number);
   if (!myTeam) return [];
 
   // Alliance: WBR rides with PEN
@@ -2412,7 +2493,9 @@ function profileTeammates(entity) {
     const teamEntries = [];
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      const t = teamCodeFromPalette(STATE.series, d.car_number);
+      const t = d.team_code
+        || teamCodeFromPalette(STATE.series, d.car_number)
+        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number);
       if (!t) return;
       const g = ALLIANCE[t] || t;
       if (g !== myGroup) return;
@@ -2461,7 +2544,7 @@ function renderProfile() {
   const { rank, of } = profileRank(entity);
   const carHex = colorFor(STATE.series, entity.car_number);
   const carTxt = contrastTextFor(carHex);
-  const teamCode = teamCodeFromPalette(STATE.series, entity.car_number) || "";
+  const teamCode = entity.team_code || teamCodeFromPalette(STATE.series, entity.car_number) || "";
   const orgHex = orgColorFor(STATE.series, entity.car_number) || "#555";
   const orgTxt = contrastTextFor(orgHex);
 
