@@ -26,7 +26,10 @@ OWNER_TO_TEAM_CODE = {
     "Matthew Kaulig":           "KR",
     "HYAK Motorsports":         "HYAK",
     "Rick Ware":                "RWR",
-    "Gene Haas":                "HAAS",   # Haas Factory Team
+    "Gene Haas":                "HAAS",   # Haas Factory Team (2025+, post SHR split)
+    "Tony Stewart":             "SHR",    # Stewart-Haas Racing (2014-2024)
+    "Stewart-Haas":             "SHR",    # alt form seen in RR
+    "Stewart-Haas Racing":      "SHR",
     "JR Motorsports":           "JRM",
     "Bob Jenkins":              "FRM",   # Front Row Motorsports
     "Carl Long":                "MBM",

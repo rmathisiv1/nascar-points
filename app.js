@@ -342,14 +342,11 @@ function allEntities() {
       if (d.ineligible) return;
       const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
 
-      // Three-tier team code resolution (scraper-first priority):
+      // Two-tier team code resolution (palette no longer stores team codes):
       // 1. d.team_code from scraper — authoritative, built from current race data
       // 2. Fallback: owner parse from team string (for pre-upgrade historical data)
-      // 3. Last resort: colors.json palette (legacy overrides, may be stale)
-      const paletteCode = teamCodeFromPalette(STATE.series, d.car_number);
       const teamCode = d.team_code
         || teamCodeFromName(d.team, seriesKey, d.car_number)
-        || paletteCode
         || null;
 
       if (!map.has(key)) {
@@ -461,16 +458,29 @@ function colorFor(series, carNumber) {
   if (pal && pal[carNumber] && pal[carNumber].car) return pal[carNumber].car;
   return hashColor(`${series}:${carNumber}`);
 }
-function orgColorFor(series, carNumber) {
-  const k = SERIES_TO_KEY[series];
-  const pal = STATE.colors && STATE.colors[k];
-  if (pal && pal[carNumber] && pal[carNumber].org) return pal[carNumber].org;
+// Team org color — looked up by team code, not car number. This is the
+// single source of truth: one team == one color, any series, any season.
+// Fall back to the JS-side constants (TEAM_FULL_NAMES / TEAM_ALLIANCE) for
+// metadata if colors.json doesn't have the team entry yet.
+function orgColorForTeam(teamCode) {
+  if (!teamCode) return null;
+  const teams = STATE.colors && STATE.colors.teams;
+  if (teams && teams[teamCode] && teams[teamCode].org) return teams[teamCode].org;
   return null;
 }
-function teamCodeFromPalette(series, carNumber) {
-  const k = SERIES_TO_KEY[series];
-  const pal = STATE.colors && STATE.colors[k];
-  if (pal && pal[carNumber] && pal[carNumber].team) return pal[carNumber].team;
+// Back-compat shim: some call sites still pass (series, carNumber). They all
+// ultimately want the team color, so resolve car -> team_code -> org via the
+// entity map if possible. Prefer callers pass team_code directly.
+function orgColorFor(series, carNumber) {
+  // Find the entity for this car in the current series and use its team_code.
+  if (!STATE.data) return null;
+  for (const race of (STATE.data.races || [])) {
+    for (const d of (race.results || [])) {
+      if (d.car_number === carNumber && d.team_code) {
+        return orgColorForTeam(d.team_code);
+      }
+    }
+  }
   return null;
 }
 function hashColor(str) {
@@ -629,7 +639,7 @@ function renderFormTable() {
     const spark = sparkSVG(d.lastFinishes, carHex, 58, 18);
     const trend = trendArrow(d.deltaR);
     const ratingCls = d.deltaR == null ? "" : d.deltaR > 6 ? "hot" : d.deltaR < -6 ? "cold" : "";
-    const teamPill = renderTeamPill(STATE.series, d.car_number, d.team);
+    const teamPill = renderTeamPill(d.team_code);
     return `<tr>
       <td class="num" style="color: var(--dim)">${i + 1}</td>
       <td><a class="driver-cell profile-link" href="${profileHref(d)}">
@@ -771,6 +781,9 @@ const OWNER_TO_TEAM_CODE = {
   "HYAK Motorsports":         "HYAK",
   "Rick Ware":                "RWR",
   "Gene Haas":                "HAAS",
+  "Tony Stewart":             "SHR",
+  "Stewart-Haas":             "SHR",
+  "Stewart-Haas Racing":      "SHR",
   "JR Motorsports":           "JRM",
   "Bob Jenkins":              "FRM",
   "Carl Long":                "MBM",
@@ -844,18 +857,19 @@ function teamCodeFromName(team, seriesCode, carNumber) {
   return "";
 }
 
-// Readable team pill — colored background if palette has org, else a
-// subdued fallback pill that's still legible on dark.
-function renderTeamPill(series, carNumber, teamString) {
-  const palTeam = teamCodeFromPalette(series, carNumber);
-  const orgHex = orgColorFor(series, carNumber);
-  const code = palTeam || teamCodeFromName(teamString) || "";
-  if (!code) return `<span class="team-pill fallback">—</span>`;
+// Readable team pill — takes the pre-resolved team code from the entity
+// (entity.team_code, produced by the scraper or the owner-parse fallback)
+// and looks up the team's brand color from colors.json's team-keyed section.
+// `seriesAndCar` kept as a trailing arg for back-compat with old call sites;
+// it's now unused for color resolution.
+function renderTeamPill(teamCode, _seriesUnused, _carUnused) {
+  if (!teamCode) return `<span class="team-pill fallback">—</span>`;
+  const orgHex = orgColorForTeam(teamCode);
   if (orgHex) {
     const textCol = contrastTextFor(orgHex);
-    return `<span class="team-pill" style="background:${orgHex};color:${textCol}">${escapeHTML(code)}</span>`;
+    return `<span class="team-pill" style="background:${orgHex};color:${textCol}">${escapeHTML(teamCode)}</span>`;
   }
-  return `<span class="team-pill fallback">${escapeHTML(code)}</span>`;
+  return `<span class="team-pill fallback">${escapeHTML(teamCode)}</span>`;
 }
 
 // ============================================================
@@ -906,9 +920,9 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
 
     if (teamGroups.length > 0) {
       const teamPillsHTML = teamGroups.map(g => {
-        // Pull team color from the top-scoring driver in this team
+        // Team color comes from the team code itself — no per-car lookup.
         const topDriver = g.drivers[0];
-        const orgHex = orgColorFor(STATE.series, topDriver.car_number)
+        const orgHex = orgColorForTeam(g.teamKey)
           || colorFor(STATE.series, topDriver.car_number);
         const orgTxt = contrastTextFor(orgHex);
         // Binary selected: all drivers selected → on
@@ -2040,10 +2054,9 @@ function renderTeammates() {
     const groupFt  = {};     // group -> [FT-only entries]
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      // Resolution: scraper field → owner parse → palette (palette is last because it's stale)
+      // Resolution: scraper field → owner parse (palette no longer stores team codes)
       const team = d.team_code
-        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number)
-        || teamCodeFromPalette(STATE.series, d.car_number);
+        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number);
       if (!team) return;
       const grp = teamGroup(team);
       const rec = {
@@ -2164,10 +2177,8 @@ function renderTeammates() {
   const deltaField = metric === "fin" ? "delta_fin" : "delta_tot";
 
   const html = groups.map(([grp, members]) => {
-    // Team pill color derived from the GROUP's org color (look up any member with the group's team code,
-    // else fall back to the first member's org color)
-    const repCar = members.find(m => m.team === grp) || members[0];
-    const orgHex = orgColorFor(STATE.series, repCar.car_number) || "#9ca3af";
+    // Team pill color is keyed by the group's team code directly.
+    const orgHex = orgColorForTeam(grp) || "#9ca3af";
     const orgTxt = contrastTextFor(orgHex);
     const displayName = GROUP_DISPLAY_NAMES[grp] || TEAM_FULL_NAMES[grp] || grp;
     const bestCar = members[0];
@@ -2482,7 +2493,7 @@ function profileTeammates(entity) {
   });
   const ftCars = new Set(Object.keys(carCount).filter(c => carCount[c] >= totalSeason));
 
-  const myTeam = entity.team_code || teamCodeFromPalette(STATE.series, entity.car_number);
+  const myTeam = entity.team_code;
   if (!myTeam) return [];
 
   // Alliance: WBR rides with PEN
@@ -2497,8 +2508,7 @@ function profileTeammates(entity) {
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
       const t = d.team_code
-        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number)
-        || teamCodeFromPalette(STATE.series, d.car_number);
+        || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number);
       if (!t) return;
       const g = ALLIANCE[t] || t;
       if (g !== myGroup) return;
@@ -2547,8 +2557,8 @@ function renderProfile() {
   const { rank, of } = profileRank(entity);
   const carHex = colorFor(STATE.series, entity.car_number);
   const carTxt = contrastTextFor(carHex);
-  const teamCode = entity.team_code || teamCodeFromPalette(STATE.series, entity.car_number) || "";
-  const orgHex = orgColorFor(STATE.series, entity.car_number) || "#555";
+  const teamCode = entity.team_code || "";
+  const orgHex = orgColorForTeam(teamCode) || "#555";
   const orgTxt = contrastTextFor(orgHex);
 
   const displayTitle = (kind === "owner")
@@ -3252,7 +3262,7 @@ function renderStandings() {
   const body = rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
-    const teamPill = renderTeamPill(STATE.series, r.car_number, r.team);
+    const teamPill = renderTeamPill(r.team_code);
     const pc = r.posChange;
     let pcPill;
     if (r.prevRank == null) {
