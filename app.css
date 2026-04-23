@@ -284,6 +284,31 @@ html, body {
 }
 .btn-ghost:hover { color: var(--text); border-color: var(--border-hi); }
 
+/* Stage Analysis: multi-select seasons strip + inline clear button + hint text */
+.toggle-group.traj-seasons {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.toggle-group.traj-seasons button.on {
+  /* Multi-select "on" state — slightly different from single-select so it
+     reads as additive rather than exclusive. Same color family, brighter fg. */
+  background: var(--accent-bg-hi);
+  color: var(--accent-2);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.toolbar-hint {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+  font-style: italic;
+}
+.btn-inline {
+  margin-left: 10px;
+  padding: 2px 8px;
+  font-size: 9px;
+}
+
 /* ========== DRIVER GRID (used on Season Cumulative + Breakdown) ========== */
 .picker-label {
   font-family: var(--mono); font-size: 10px;

@@ -16,7 +16,8 @@ const STATE = {
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
   arc: { selected: new Set(), ftOnly: true, metric: "points" },
   breakdown: { drivers: [], ftOnly: true },  // array of driver keys, max 4
-  trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all" },
+  trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
+                selected: new Set(), seasons: new Set() },
   teammates: { metric: "fin", ftOnly: true },
   profile: { kind: null, slug: null },
   standings: { sortKey: "total", sortDir: "desc" },
@@ -155,6 +156,35 @@ function scheduleLengthForSeries(series) {
   return { NCS: 36, NOS: 33, NTS: 25 }[series] || "—";
 }
 
+// ============================================================
+// MULTI-SEASON CACHE (used by Stage Analysis for cross-year views)
+// Keyed by year → { [seriesCode]: seriesBlock }
+// ============================================================
+const SEASON_CACHE = {};
+
+async function loadSeasonIntoCache(year) {
+  // Returns the full payload (all series) for a year. Cached after first hit.
+  if (SEASON_CACHE[year]) return SEASON_CACHE[year];
+  const urls = [`data/points_${year}.json`, `data/points.json`];
+  for (const u of urls) {
+    try {
+      const r = await fetch(u);
+      if (!r.ok) continue;
+      const payload = await r.json();
+      SEASON_CACHE[year] = payload.series || {};
+      return SEASON_CACHE[year];
+    } catch (e) { /* try next */ }
+  }
+  return null;
+}
+
+// Fetches every year in STATE.trajectory.seasons that isn't already cached.
+// Resolves when all are loaded.
+async function ensureTrajectorySeasonsLoaded() {
+  const years = [...STATE.trajectory.seasons];
+  await Promise.all(years.map(y => loadSeasonIntoCache(y)));
+}
+
 function showError(msg) {
   document.querySelectorAll(".view").forEach(v => v.hidden = true);
   const ev = document.getElementById("view-error");
@@ -177,6 +207,8 @@ function wireUIControls() {
       STATE.series = b.dataset.series;
       STATE.arc.selected.clear();
       STATE.breakdown.drivers = [];
+      STATE.trajectory.selected.clear();
+      STATE.trajectory.seasons.clear();
       await loadCurrentData();
       render();
     });
@@ -189,6 +221,7 @@ function wireUIControls() {
       STATE.entity = b.dataset.entity;
       STATE.arc.selected.clear();
       STATE.breakdown.drivers = [];
+      STATE.trajectory.selected.clear();
       render();
     });
   });
@@ -235,9 +268,12 @@ function wireUIControls() {
     });
   });
 
-  // Trajectory toggles
+  // Trajectory toggles — exclude traj-seasons, which is a multi-select group
+  // managed by renderTrajectorySeasonChips() (different selection semantics
+  // and it needs to re-wire on every render as data loads).
   document.querySelectorAll("#view-trajectory .toggle-group").forEach(g => {
     const group = g.dataset.group;
+    if (group === "traj-seasons") return;
     g.querySelectorAll("button").forEach(b => {
       b.addEventListener("click", () => {
         g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
@@ -284,6 +320,11 @@ function wireUIControls() {
     totals.slice(0, 10).forEach(t => STATE.arc.selected.add(entityKey(t)));
     renderArc();
   });
+
+  document.getElementById("traj-clear")?.addEventListener("click", () => {
+    STATE.trajectory.selected.clear();
+    renderTrajectory();
+  });
 }
 
 function populateSeasonPicker() {
@@ -294,6 +335,8 @@ function populateSeasonPicker() {
     .join("");
   sel.addEventListener("change", async () => {
     STATE.season = parseInt(sel.value);
+    STATE.trajectory.selected.clear();
+    STATE.trajectory.seasons.clear();
     await loadCurrentData();
     render();
   });
@@ -335,9 +378,15 @@ function racesSorted() {
 }
 
 function allEntities() {
+  return entitiesFromRaces(racesSorted());
+}
+
+// Pure helper: build the entity map from any races array. Used by allEntities
+// (single-season, the default) and by trajectoryEntities() (multi-season).
+function entitiesFromRaces(races) {
   const seriesKey = SERIES_TO_KEY[STATE.series];
   const map = new Map();
-  racesSorted().forEach(r => {
+  races.forEach(r => {
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
       const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
@@ -369,6 +418,7 @@ function allEntities() {
       e.manufacturer = d.manufacturer || e.manufacturer;
       e.races.push({
         round: r.round,
+        season: r.season,   // set by trajectoryEntities for multi-year; undefined for single-season
         finish: d.finish_pos,
         start: d.start_pos,
         s1: d.stage_1_pts || 0,
@@ -389,6 +439,43 @@ function allEntities() {
     const drivers = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
     return { ...e, drivers };
   });
+}
+
+// Builds entities across the seasons selected in the Stage Analysis view.
+// When no seasons are selected, falls back to the current single season.
+// Returns { entities, totalRaces, seasonsUsed } — totalRaces is the combined
+// race count across all selected seasons (used for the 90% full-time threshold).
+function trajectoryEntities() {
+  const selected = [...STATE.trajectory.seasons].sort();
+  const sCode = STATE.series;
+
+  // Fast path: no multi-season selection → reuse current single-season data
+  if (selected.length === 0 ||
+      (selected.length === 1 && selected[0] === STATE.season)) {
+    return {
+      entities: allEntities(),
+      totalRaces: racesSorted().length,
+      seasonsUsed: [STATE.season],
+    };
+  }
+
+  // Multi-season: concatenate races from the cache
+  const combined = [];
+  selected.forEach(year => {
+    const seriesBlock = SEASON_CACHE[year] && SEASON_CACHE[year][sCode];
+    if (!seriesBlock) return;
+    (seriesBlock.races || []).forEach(r => {
+      // Tag each race with its season so we can dedupe / display per-year later
+      combined.push({ ...r, season: year });
+    });
+  });
+  // Sort combined races chronologically: by year, then by round (within year)
+  combined.sort((a, b) => (a.season - b.season) || (a.round - b.round));
+  return {
+    entities: entitiesFromRaces(combined),
+    totalRaces: combined.length,
+    seasonsUsed: selected,
+  };
 }
 
 function allDrivers() { return allEntities(); }
@@ -1548,7 +1635,7 @@ function renderBreakdownGrid() {
 }
 
 // ============================================================
-// TRAJECTORY
+// TRAJECTORY (a.k.a. Stage Analysis)
 // ============================================================
 function renderTrajectory() {
   const svg = document.getElementById("trajectory-svg");
@@ -1560,19 +1647,47 @@ function renderTrajectory() {
     return trackType(race.track_code) === trackFilter;
   };
 
+  // Pull entities + metadata. In single-season mode this is allEntities();
+  // in multi-season mode it's the combined cross-year roll-up.
+  const { entities, totalRaces, seasonsUsed } = trajectoryEntities();
+
+  // Full-time: ≥90% of races in the combined pool (or all of them if few).
+  // This generalizes isFullTime() across multi-year aggregations.
+  const ftThreshold = totalRaces < 10 ? Math.max(1, totalRaces - 1)
+                                      : Math.ceil(totalRaces * 0.9);
+  const isFtHere = (d) => d.races.length >= ftThreshold;
+
   // Filter each driver's races by track type + require >= 1 race after filtering
   // to avoid divide-by-zero on the average calculations.
-  const eligible = allEntities()
-    .filter(isFullTime)
+  let eligible = entities
+    .filter(isFtHere)
     .map(d => ({ ...d, races: d.races.filter(includeRace) }))
     .filter(d => d.races.length >= 1);
+
+  // Driver-pill filter — if the user has picked specific drivers in the picker,
+  // narrow the chart to those only. Empty selection = show everyone (default).
+  if (STATE.trajectory.selected.size > 0) {
+    eligible = eligible.filter(d => STATE.trajectory.selected.has(entityKey(d)));
+  }
 
   // Update the sub-title to reflect the current filter
   const subEl = document.getElementById("trajectory-sub");
   if (subEl) {
-    const filterLabel = (trackFilter === "all") ? "" : ` · ${TRACK_TYPE_LABELS[trackFilter] || trackFilter} only`;
-    subEl.textContent = `Stage points vs. finish points${filterLabel}`;
+    const entityWord = STATE.entity === "owner" ? "car" : "driver";
+    const modeDesc = STATE.trajectory.mode === "trajectory"
+      ? `arrows from season avg → last-5 avg (momentum direction)`
+      : `season average per ${entityWord}`;
+    const trackPart = (trackFilter === "all") ? "" : ` · ${TRACK_TYPE_LABELS[trackFilter] || trackFilter} only`;
+    const seasonsPart = seasonsUsed.length > 1
+      ? ` · ${seasonsUsed[0]}–${seasonsUsed[seasonsUsed.length - 1]} combined (${totalRaces} races)`
+      : "";
+    subEl.textContent = `Pace vs. results — ${modeDesc}${seasonsPart}${trackPart}`;
   }
+
+  // Paint the season-chips toolbar + driver picker (both always present;
+  // they're idempotent and cheap to re-render on every data refresh).
+  renderTrajectorySeasonChips();
+  renderTrajectoryDriverGrid(entities);
 
   if (eligible.length === 0) {
     svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">No races match this filter yet.</text>`;
@@ -1810,11 +1925,86 @@ function renderTrajectory() {
   const sorted = [...withResid].sort((x, y) => y.resid - x.resid);
   fillTrajCallout("trajectory-over", sorted.slice(0, 5));
   fillTrajCallout("trajectory-under", sorted.slice(-5).reverse());
+}
 
-  const sub = document.getElementById("trajectory-sub");
-  sub.textContent = STATE.trajectory.mode === "trajectory"
-    ? "Pace vs. results — arrows from season avg → last-5 avg (momentum direction)"
-    : "Pace vs. results — season average per " + (STATE.entity === "owner" ? "car" : "driver") + " · dashed line = league trend";
+// Paint the multi-season toggle chips under the main toolbar. Empty selection
+// = single-season (current year from header picker). Any toggle adds/removes
+// that year to the combined aggregation.
+function renderTrajectorySeasonChips() {
+  const host = document.getElementById("traj-seasons");
+  if (!host) return;
+  const available = STATE.seasonsAvailable || [];
+  const selected = STATE.trajectory.seasons;
+  // If nothing selected, show current header season as implicitly "on"
+  const implicitSelected = selected.size === 0 ? new Set([STATE.season]) : selected;
+  host.innerHTML = available.map(y => {
+    const on = implicitSelected.has(y) ? "on" : "";
+    return `<button class="${on}" data-year="${y}">${y}</button>`;
+  }).join("");
+  host.querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const y = parseInt(btn.dataset.year, 10);
+      // If user taps the current implicit selection with no others set, seed
+      // the set with just that year first so we have something concrete to toggle.
+      if (STATE.trajectory.seasons.size === 0) {
+        STATE.trajectory.seasons.add(STATE.season);
+      }
+      if (STATE.trajectory.seasons.has(y)) {
+        STATE.trajectory.seasons.delete(y);
+      } else {
+        STATE.trajectory.seasons.add(y);
+      }
+      // Fetch any newly-selected years that aren't cached yet, then re-render.
+      await ensureTrajectorySeasonsLoaded();
+      // Whenever the season set changes, reset the driver selection — different
+      // years may not share drivers, so keeping a stale selection would confuse.
+      STATE.trajectory.selected.clear();
+      renderTrajectory();
+    });
+  });
+}
+
+// Driver-pill picker for Stage Analysis. Mirrors the Arc view's picker but
+// wires into STATE.trajectory.selected. entities = the pool to pick from
+// (already aggregated across whatever seasons are selected).
+function renderTrajectoryDriverGrid(entities) {
+  const host = document.getElementById("trajectory-driver-grid");
+  if (!host) return;
+  // The shared renderDriverGrid pulls from allEntities(). For multi-season
+  // views we need our aggregated entity list instead, so we paint the pills
+  // ourselves using the same pattern but fed by the passed-in `entities`.
+
+  // Filter to entities that actually have race data, sort by total points desc
+  const decorated = entities
+    .map(e => ({ ...e, _total: e.races.reduce((s, r) => s + (r.total || 0), 0) }))
+    .sort((a, b) => b._total - a._total);
+
+  // Optional: trim to a manageable max so the grid doesn't sprawl on multi-year
+  const MAX_PILLS = 80;
+  const shown = decorated.slice(0, MAX_PILLS);
+
+  const html = shown.map(e => {
+    const key = entityKey(e);
+    const sel = STATE.trajectory.selected.has(key) ? "selected" : "";
+    const carHex = colorFor(STATE.series, e.car_number);
+    const txt = contrastTextFor(carHex);
+    const lastName = (e.driver || "").split(/\s+/).slice(-1)[0];
+    return `<div class="driver-pill ${sel}" data-key="${escapeHTML(key)}" title="${escapeHTML(displayName(e))}">
+      <span class="dp-num" style="background:${carHex};color:${txt}">${e.car_number}</span>
+      <span class="dp-name">${escapeHTML(lastName)}</span>
+    </div>`;
+  }).join("");
+
+  host.innerHTML = `<div class="driver-grid">${html}</div>`;
+
+  host.querySelectorAll(".driver-pill").forEach(el => {
+    el.addEventListener("click", () => {
+      const key = el.dataset.key;
+      if (STATE.trajectory.selected.has(key)) STATE.trajectory.selected.delete(key);
+      else STATE.trajectory.selected.add(key);
+      renderTrajectory();
+    });
+  });
 }
 
 function regression(pts) {

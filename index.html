@@ -38,7 +38,7 @@
     <a href="#/form"       class="navlink" data-view="form">Trending</a>
     <a href="#/arc"        class="navlink" data-view="arc">Season Cumulative</a>
     <a href="#/breakdown"  class="navlink" data-view="breakdown">Breakdown</a>
-    <a href="#/trajectory" class="navlink" data-view="trajectory">Stage Trajectory</a>
+    <a href="#/trajectory" class="navlink" data-view="trajectory">Stage Analysis</a>
     <a href="#/teammates"  class="navlink" data-view="teammates">Teammate Delta</a>
     <a href="#/heatmap"    class="navlink" data-view="heatmap">Heatmap</a>
     <a href="#/standings"  class="navlink" data-view="standings">Standings</a>
@@ -117,7 +117,7 @@
 
     <section class="view" id="view-trajectory" hidden>
       <div class="view-head">
-        <h1>Stage Trajectory</h1>
+        <h1>Stage Analysis</h1>
         <div class="view-sub" id="trajectory-sub">Pace vs. results — season average per driver · dashed line = league trend</div>
       </div>
       <div class="toolbar">
@@ -147,6 +147,11 @@
           <button data-val="road">Road</button>
         </div>
       </div>
+      <div class="toolbar" id="traj-seasons-toolbar">
+        <span class="toolbar-label">Seasons</span>
+        <div class="toggle-group traj-seasons" id="traj-seasons" data-group="traj-seasons"></div>
+        <span class="toolbar-hint" id="traj-seasons-hint">Multi-select to combine years</span>
+      </div>
       <div class="card card-chart">
         <svg id="trajectory-svg">
           <defs>
@@ -168,6 +173,11 @@
           <div id="trajectory-under"></div>
         </div>
       </div>
+      <div class="picker-label">
+        Select drivers
+        <button class="btn-ghost btn-inline" id="traj-clear">Clear selection</button>
+      </div>
+      <div class="driver-picker" id="trajectory-driver-grid"></div>
     </section>
 
     <section class="view" id="view-teammates" hidden>
