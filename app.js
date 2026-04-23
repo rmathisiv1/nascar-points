@@ -14,7 +14,7 @@ const STATE = {
   driverBios: null,
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
-  arc: { selected: new Set(), ftOnly: true },
+  arc: { selected: new Set(), ftOnly: true, metric: "points" },
   breakdown: { drivers: [], ftOnly: true },  // array of driver keys, max 4
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all" },
   teammates: { metric: "fin", ftOnly: true },
@@ -217,6 +217,7 @@ function wireUIControls() {
       b.addEventListener("click", () => {
         g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
         if (group === "arc-ft") STATE.arc.ftOnly = (b.dataset.val === "ft");
+        if (group === "arc-metric") STATE.arc.metric = b.dataset.val;
         renderArc();
       });
     });
@@ -832,8 +833,9 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
         // Binary selected: all drivers selected → on
         const allOn = g.drivers.every(d => isSelected(d));
         const sel = allOn ? "selected" : "";
-        const teamLabel = GROUP_DISPLAY_NAMES[g.teamKey] || TEAM_FULL_NAMES[g.teamKey] || g.teamKey;
-        return `<div class="team-pill-btn ${sel}" data-team="${escapeHTML(g.teamKey)}" title="${escapeHTML(teamLabel)} — click to add all drivers">
+        const teamLabel = TEAM_PILL_LABELS[g.teamKey] || TEAM_FULL_NAMES[g.teamKey] || g.teamKey;
+        const fullLabel = GROUP_DISPLAY_NAMES[g.teamKey] || TEAM_FULL_NAMES[g.teamKey] || g.teamKey;
+        return `<div class="team-pill-btn ${sel}" data-team="${escapeHTML(g.teamKey)}" title="${escapeHTML(fullLabel)} — click to add all drivers">
           <span class="tp-code" style="background:${orgHex};color:${orgTxt}">${escapeHTML(g.teamKey)}</span>
           <span class="tp-name">${escapeHTML(teamLabel)}</span>
           <span class="tp-count">${g.drivers.length}</span>
@@ -906,7 +908,9 @@ function renderArc() {
 
   const entities = allEntities();
   const roundsPresent = races.map(r => r.round);
-  const seriesData = entities.map(d => {
+
+  // Compute per-round cumulative points for every entity
+  const cumByEntity = entities.map(d => {
     const byRound = {};
     d.races.forEach(r => { byRound[r.round] = r.total || 0; });
     let cum = 0;
@@ -924,6 +928,51 @@ function renderArc() {
     };
   });
 
+  // If metric is 'position', convert each round's points to a standings rank.
+  // Rank is computed across ALL entities that have at least one start by that round
+  // (so back-markers who run 2 races don't rank ahead of full-timers who haven't raced yet).
+  const metric = STATE.arc.metric || "points";
+  const isPosition = metric === "position";
+
+  const seriesData = cumByEntity.map(s => ({
+    ...s,
+    // In position mode we overwrite `pts` with per-round ranks (1 = best)
+    // Null sentinel for "no data yet" (hasn't started a race by that round)
+    values: s.pts.slice(),
+  }));
+
+  if (isPosition) {
+    // Mark drivers who have no starts up to each round
+    // We need a Set per entity: set of rounds in which they participated
+    const participatedByEntity = {};
+    cumByEntity.forEach(s => {
+      participatedByEntity[s.key] = new Set();
+      s.entity.races.forEach(r => participatedByEntity[s.key].add(r.round));
+    });
+
+    // For each round index, rank everyone who has participated in at least one race by then
+    roundsPresent.forEach((_, i) => {
+      // Track whether each entity has raced yet by this round
+      const hasRacedYet = cumByEntity.map(s => {
+        for (let j = 0; j <= i; j++) {
+          if (participatedByEntity[s.key].has(roundsPresent[j])) return true;
+        }
+        return false;
+      });
+      // Ranked by cumulative points at this round (desc), ties broken arbitrarily
+      const indexed = cumByEntity.map((s, idx) => ({ idx, pts: s.pts[i], hasRaced: hasRacedYet[idx] }));
+      const ranked = indexed
+        .filter(x => x.hasRaced)
+        .sort((a, b) => b.pts - a.pts);
+      // Build rank lookup
+      const rankByIdx = {};
+      ranked.forEach((x, rank) => { rankByIdx[x.idx] = rank + 1; });
+      seriesData.forEach((s, idx) => {
+        s.values[i] = rankByIdx[idx] ?? null;
+      });
+    });
+  }
+
   if (STATE.arc.selected.size === 0 && !STATE.arc.userCleared) {
     const totals = computeSeasonTotals();
     totals.slice(0, 5).forEach(t => STATE.arc.selected.add(entityKey(t)));
@@ -932,17 +981,45 @@ function renderArc() {
   const W = 980, H = 420, pad = { top: 16, right: 150, bottom: 26, left: 48 };
   const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
 
-  const maxPts = Math.max(1, ...seriesData.map(s => s.pts[s.pts.length - 1] || 0));
+  // Scale computation differs by metric
+  let yMax, yMin;
+  if (isPosition) {
+    // Find the worst rank any SELECTED driver reached (so axis adapts)
+    const allRanksInSelected = seriesData
+      .filter(s => STATE.arc.selected.has(s.key))
+      .flatMap(s => s.values.filter(v => v != null));
+    yMax = allRanksInSelected.length ? Math.max(...allRanksInSelected) : 30;
+    // Pad slightly and round up to nearest 5
+    yMax = Math.ceil((yMax + 2) / 5) * 5;
+    yMin = 1;
+  } else {
+    yMax = Math.max(1, ...seriesData.map(s => s.values[s.values.length - 1] || 0));
+    yMin = 0;
+  }
   const nRaces = roundsPresent.length;
 
   const xScale = (i) => pad.left + (i / Math.max(1, nRaces - 1)) * innerW;
-  const yScale = (v) => pad.top + (1 - v / maxPts) * innerH;
+  // For points: low values at bottom, high at top.
+  // For position: P1 at top, higher numbers at bottom (inverted scale).
+  const yScale = (v) => {
+    if (isPosition) {
+      return pad.top + ((v - yMin) / (yMax - yMin)) * innerH;
+    }
+    return pad.top + (1 - v / yMax) * innerH;
+  };
 
+  // Gridlines + labels
   const gridlines = [];
   const gridSteps = 5;
   for (let i = 0; i <= gridSteps; i++) {
     const y = pad.top + (i / gridSteps) * innerH;
-    const val = Math.round(maxPts * (1 - i / gridSteps));
+    let val;
+    if (isPosition) {
+      val = Math.round(yMin + (yMax - yMin) * (i / gridSteps));
+      val = `P${val}`;
+    } else {
+      val = Math.round(yMax * (1 - i / gridSteps));
+    }
     gridlines.push(`<line class="gridline" x1="${pad.left}" x2="${W - pad.right}" y1="${y}" y2="${y}"/>`);
     gridlines.push(`<text x="${pad.left - 6}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-family="var(--mono)" font-size="10">${val}</text>`);
   }
@@ -952,7 +1029,11 @@ function renderArc() {
 
   const active = seriesData
     .filter(s => STATE.arc.selected.has(s.key))
-    .map(s => ({ ...s, labelY: yScale(s.pts[s.pts.length - 1]) }))
+    .map(s => {
+      const last = s.values[s.values.length - 1];
+      return { ...s, labelY: last != null ? yScale(last) : null };
+    })
+    .filter(s => s.labelY != null)
     .sort((a, b) => a.labelY - b.labelY);
   const MIN_GAP = 12;
   for (let i = 1; i < active.length; i++) {
@@ -962,14 +1043,27 @@ function renderArc() {
   }
 
   const lines = active.map(s => {
-    const d = s.pts.map((v, i) => `${xScale(i)},${yScale(v)}`).join(" ");
+    // Skip null values (entity hadn't raced yet)
+    const segs = [];
+    let current = [];
+    s.values.forEach((v, i) => {
+      if (v == null) {
+        if (current.length >= 2) segs.push(current);
+        current = [];
+      } else {
+        current.push(`${xScale(i)},${yScale(v)}`);
+      }
+    });
+    if (current.length >= 2) segs.push(current);
+    const polylines = segs.map(pts => `<polyline points="${pts.join(" ")}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round"/>`).join("");
+    const lastVal = s.values[s.values.length - 1];
     const xEnd = xScale(nRaces - 1);
-    const yEnd = yScale(s.pts[s.pts.length - 1]);
+    const yEnd = lastVal != null ? yScale(lastVal) : s.labelY;
     const connector = Math.abs(s.labelY - yEnd) > 2
       ? `<line x1="${xEnd + 2}" y1="${yEnd}" x2="${xEnd + 5}" y2="${s.labelY}" stroke="${s.color}" stroke-width="0.8" opacity="0.6"/>`
       : "";
     return `<g>
-      <polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round"/>
+      ${polylines}
       ${connector}
       <text x="${xEnd + 7}" y="${s.labelY + 3}" fill="${s.color}" font-family="var(--mono)" font-size="10">${escapeHTML(s.label)}</text>
     </g>`;
@@ -1139,7 +1233,7 @@ function renderBreakdown() {
 
   // Tooltip showing breakdown for all selected drivers in this race
   const hideTip = () => { if (tip) tip.hidden = true; };
-  const showTip = (rd, groupCx, groupTopY) => {
+  const showTip = (rd, groupCx, groupTopY, evt) => {
     if (!tip) return;
     const meta = raceByRound[rd];
     const title = `R${rd} · ${escapeHTML(prettyTrack(meta?.track_code, meta?.track))}`;
@@ -1172,17 +1266,35 @@ function renderBreakdown() {
     tip.innerHTML = `<div class="tt-hdr">${escapeHTML(title)}</div>${body}`;
     tip.hidden = false;
 
-    const svgRect = svg.getBoundingClientRect();
     const card = svg.parentElement;
     const cardRect = card.getBoundingClientRect();
-    const scale = svgRect.width / W;
-    const pxX = (svgRect.left - cardRect.left) + groupCx * scale;
-    const pxY = (svgRect.top  - cardRect.top)  + groupTopY * scale;
     const tipRect = tip.getBoundingClientRect();
-    let left = pxX - tipRect.width / 2;
-    let top = pxY - tipRect.height - 10;
-    left = Math.max(6, Math.min(left, card.clientWidth - tipRect.width - 6));
-    if (top < 6) top = pxY + 14;
+
+    // Prefer placing the tooltip offset to the right of the cursor (24px gap),
+    // flipping to the left side if we'd run off the card's right edge.
+    let left, top;
+    if (evt && typeof evt.clientX === "number") {
+      const cx = evt.clientX - cardRect.left;
+      const cy = evt.clientY - cardRect.top;
+      left = cx + 24;
+      if (left + tipRect.width > card.clientWidth - 6) {
+        left = cx - tipRect.width - 24;
+      }
+      // Vertically try to keep centered on cursor, but clamp inside card
+      top = cy - tipRect.height / 2;
+      if (top < 6) top = 6;
+      if (top + tipRect.height > card.clientHeight - 6) top = card.clientHeight - tipRect.height - 6;
+    } else {
+      // Fallback: old anchored-to-group behavior
+      const svgRect = svg.getBoundingClientRect();
+      const scale = svgRect.width / W;
+      const pxX = (svgRect.left - cardRect.left) + groupCx * scale;
+      const pxY = (svgRect.top  - cardRect.top)  + groupTopY * scale;
+      left = pxX - tipRect.width / 2;
+      top = pxY - tipRect.height - 10;
+      left = Math.max(6, Math.min(left, card.clientWidth - tipRect.width - 6));
+      if (top < 6) top = pxY + 14;
+    }
     tip.style.left = `${left}px`;
     tip.style.top  = `${top}px`;
   };
@@ -1209,10 +1321,10 @@ function renderBreakdown() {
     hit.setAttribute("height", innerH);
     hit.setAttribute("fill", "transparent");
     hit.style.cursor = "pointer";
-    hit.addEventListener("mouseenter", () => showTip(rd, groupCx, topBound));
-    hit.addEventListener("mousemove",  () => showTip(rd, groupCx, topBound));
+    hit.addEventListener("mouseenter", (e) => showTip(rd, groupCx, topBound, e));
+    hit.addEventListener("mousemove",  (e) => showTip(rd, groupCx, topBound, e));
     hit.addEventListener("mouseleave", hideTip);
-    hit.addEventListener("click",      () => showTip(rd, groupCx, topBound));
+    hit.addEventListener("click",      (e) => showTip(rd, groupCx, topBound, e));
     svg.appendChild(hit);
 
     // Per-driver stacked bars inside the group
@@ -1306,18 +1418,15 @@ function renderBreakdownGrid() {
     },
     (e) => STATE.breakdown.drivers.includes(e.driver),
     (teamDrivers) => {
-      // Fill-to-cap: add this team's drivers (sorted by pts desc) up to the 4-driver max,
-      // evicting oldest-selected if needed. Drivers already selected are skipped.
+      // Replace selection with this team's top drivers (up to 4).
+      // Clearer mental model than "fill to cap": clicking a team gives you
+      // exactly that team's drivers on the chart, nothing else.
       const CAP = 4;
-      teamDrivers.forEach(e => {
-        const key = e.driver;
-        if (STATE.breakdown.drivers.includes(key)) return;
-        if (STATE.breakdown.drivers.length >= CAP) {
-          STATE.breakdown.drivers.shift();
-        }
-        STATE.breakdown.drivers.push(key);
-      });
-      renderBreakdown();
+      const picks = teamDrivers.slice(0, CAP).map(e => e.driver);
+      if (picks.length > 0) {
+        STATE.breakdown.drivers = picks;
+        renderBreakdown();
+      }
     }
   );
 }
@@ -1793,6 +1902,22 @@ const TEAM_FULL_NAMES = {
 // Display label for the card header when an alliance groups multiple teams together
 const GROUP_DISPLAY_NAMES = {
   "PEN": "Team Penske + Wood Brothers",
+};
+
+// Compact labels for the team pill row (smaller space). Falls back through
+// GROUP_DISPLAY_NAMES → TEAM_FULL_NAMES → team code.
+const TEAM_PILL_LABELS = {
+  "PEN": "Penske + WBR",
+  "FRM": "Front Row",
+  "RCR": "Richard Childress",
+  "HMS": "Hendrick",
+  "THR": "Trackhouse",
+  "LMC": "Legacy MC",
+  "KR":  "Kaulig",
+  "SPI": "Spire",
+  "RFK": "RFK",
+  "JGR": "Joe Gibbs",
+  "23XI": "23XI",
 };
 
 function renderTeammates() {
