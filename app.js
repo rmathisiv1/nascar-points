@@ -2352,6 +2352,21 @@ function renderProfile() {
 
       <div class="profile-panel full">
         <div class="profile-panel-head">
+          <span class="profile-panel-title">${STATE.season} Track Splits</span>
+          <div class="profile-panel-head-right">
+            <div class="toggle-group mini" data-group="splits-range">
+              <button class="on" data-val="season">Season</button>
+              <button data-val="career" disabled title="Career-wide splits require multi-year data (coming with lazy-load feature)">Career</button>
+            </div>
+          </div>
+        </div>
+        <div class="profile-panel-body">
+          <div class="track-splits-grid" id="profile-track-splits"></div>
+        </div>
+      </div>
+
+      <div class="profile-panel full">
+        <div class="profile-panel-head">
           <span class="profile-panel-title">${STATE.season} Race-by-Race</span>
           <span class="profile-panel-sub">${rows.filter(r => !r.dns).length} starts</span>
         </div>
@@ -2393,6 +2408,7 @@ function renderProfile() {
   // --- Fill in the chart ---
   paintProfileChart(entity, rows);
   paintProfileHeatStrip(rows);
+  paintProfileTrackSplits(entity);
   paintProfileRaceTable(rows, kind);
   paintProfileTeammates(entity);
 }
@@ -2701,6 +2717,76 @@ function paintProfileRaceTable(rows, kind) {
       <td class="num">${r.fin}</td>
       <td class="num" style="font-weight:700">${r.total}</td>
     </tr>`;
+  }).join("");
+}
+
+// Compute per-track-type stats for a single entity's races.
+// Returns an object keyed by track type code (super/short/inter/road) with
+// stats: starts, wins, top5, top10, avgFinish, avgStagePts.
+// Uncategorized tracks (null from trackType()) are excluded.
+function computeTrackSplits(entity) {
+  const buckets = { super: [], short: [], inter: [], road: [] };
+  entity.races.forEach(r => {
+    const t = trackType(r.track_code);
+    if (t && buckets[t]) buckets[t].push(r);
+  });
+
+  const result = {};
+  for (const [key, races] of Object.entries(buckets)) {
+    const finishes = races.map(r => r.finish).filter(x => x != null);
+    const starts = races.length;
+    const stagePts = races.map(r => (r.s1 || 0) + (r.s2 || 0));
+    result[key] = {
+      starts,
+      wins: finishes.filter(f => f === 1).length,
+      top5: finishes.filter(f => f <= 5).length,
+      top10: finishes.filter(f => f <= 10).length,
+      avgFinish: finishes.length ? finishes.reduce((s, x) => s + x, 0) / finishes.length : null,
+      avgStagePts: stagePts.length ? stagePts.reduce((s, x) => s + x, 0) / stagePts.length : null,
+      bestFinish: finishes.length ? Math.min(...finishes) : null,
+    };
+  }
+  return result;
+}
+
+function paintProfileTrackSplits(entity) {
+  const host = document.getElementById("profile-track-splits");
+  if (!host) return;
+  const splits = computeTrackSplits(entity);
+  const ORDER = ["super", "short", "inter", "road"];
+
+  host.innerHTML = ORDER.map(key => {
+    const s = splits[key];
+    const label = TRACK_TYPE_LABELS[key];
+    if (s.starts === 0) {
+      return `<div class="track-split-card empty">
+        <div class="track-split-head">
+          <span class="track-split-label">${label}</span>
+          <span class="track-split-count muted">0 races</span>
+        </div>
+        <div class="track-split-empty">— no races yet —</div>
+      </div>`;
+    }
+    // Color avg finish: green for <=10, neutral 11-20, red 21+
+    let avgCls = "";
+    if (s.avgFinish != null) {
+      if (s.avgFinish <= 10) avgCls = "hot";
+      else if (s.avgFinish >= 21) avgCls = "cold";
+    }
+    return `<div class="track-split-card">
+      <div class="track-split-head">
+        <span class="track-split-label">${label}</span>
+        <span class="track-split-count">${s.starts} race${s.starts === 1 ? "" : "s"}</span>
+      </div>
+      <div class="track-split-body">
+        <div class="track-split-stat"><span class="k">Wins</span><span class="v ${s.wins > 0 ? 'hot' : ''}">${s.wins}</span></div>
+        <div class="track-split-stat"><span class="k">Top 5</span><span class="v">${s.top5}</span></div>
+        <div class="track-split-stat"><span class="k">Top 10</span><span class="v">${s.top10}</span></div>
+        <div class="track-split-stat"><span class="k">Avg Fin</span><span class="v ${avgCls}">${s.avgFinish != null ? s.avgFinish.toFixed(1) : '—'}</span></div>
+        <div class="track-split-stat"><span class="k">Stage pts/race</span><span class="v">${s.avgStagePts != null ? s.avgStagePts.toFixed(1) : '—'}</span></div>
+        <div class="track-split-stat"><span class="k">Best</span><span class="v">P${s.bestFinish ?? '—'}</span></div>
+      </div>
+    </div>`;
   }).join("");
 }
 

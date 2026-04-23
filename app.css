@@ -1372,6 +1372,98 @@ code {
 .profile-heat-cell.heat-bot { background: rgba(255,70,70,0.55); color: #230707; }
 .profile-heat-cell.heat-dns { background: rgba(255,255,255,0.02); color: var(--dim); font-style: italic; }
 
+/* Track Splits panel */
+.profile-panel-head-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.toggle-group.mini { padding: 1px; }
+.toggle-group.mini button {
+  padding: 3px 10px;
+  font-size: 9px;
+}
+.toggle-group.mini button[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.track-splits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.track-split-card {
+  background: rgba(255,255,255,0.015);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.track-split-card.empty { opacity: 0.45; }
+.track-split-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+.track-split-label {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.track-split-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+.track-split-count.muted { color: var(--dim); }
+.track-split-empty {
+  padding: 14px 12px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  font-style: italic;
+  letter-spacing: 0.04em;
+}
+.track-split-body {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+.track-split-stat {
+  padding: 7px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-right: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.track-split-stat:nth-child(2n) { border-right: none; }
+.track-split-stat:nth-last-child(-n+2) { border-bottom: none; }
+.track-split-stat .k {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  min-width: 62px;
+}
+.track-split-stat .v {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.track-split-stat .v.hot { color: var(--pos); }
+.track-split-stat .v.cold { color: var(--neg); }
+
 /* Race table */
 .profile-race-table {
   width: 100%;
