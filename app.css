@@ -273,10 +273,13 @@ html, body {
   background: var(--card);
   border: 1px solid var(--border);
   color: var(--muted);
-  padding: 5px 10px;
+  padding: 5px 11px;
   border-radius: 5px;
-  font-size: 11px;
-  font-weight: 500;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 .btn-ghost:hover { color: var(--text); border-color: var(--border-hi); }
@@ -290,16 +293,16 @@ html, body {
 }
 .driver-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 5px;
 }
 .driver-pill {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 9px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 7px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 12px;
+  border-radius: 4px;
+  font-size: 11px;
   cursor: pointer;
   transition: background 0.1s, border-color 0.1s;
   user-select: none;
@@ -319,8 +322,8 @@ html, body {
 }
 .driver-pill .dp-num {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 30px; padding: 2px 6px;
-  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  min-width: 24px; padding: 1px 5px;
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
   border-radius: 3px;
   color: #000;
   flex-shrink: 0;
@@ -855,15 +858,15 @@ code {
 
   /* Driver grid — tighter on mobile */
   .driver-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 5px;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: 4px;
   }
   .driver-pill {
-    padding: 6px 7px;
-    font-size: 11px;
+    padding: 4px 6px;
+    font-size: 10px;
   }
   .driver-pill .dp-num {
-    min-width: 26px; font-size: 10px; padding: 2px 4px;
+    min-width: 22px; font-size: 10px; padding: 1px 4px;
   }
 
   /* Chart tooltip — constrain so it doesn't escape */
