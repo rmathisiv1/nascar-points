@@ -30,6 +30,10 @@ OWNER_TO_TEAM_CODE = {
     "Tony Stewart":             "SHR",    # Stewart-Haas Racing (2014-2024)
     "Stewart-Haas":             "SHR",    # alt form seen in RR
     "Stewart-Haas Racing":      "SHR",
+    "Stewart Haas":             "SHR",    # RR sometimes omits the hyphen
+    "Stewart Haas Racing":      "SHR",
+    "Greg Zipadelli":           "SHR",    # SHR VP of competition — listed as owner of some Xfinity SHR cars
+    "Joe Custer":               "SHR",    # SHR president — another listed owner name
     "JR Motorsports":           "JRM",
     "Bob Jenkins":              "FRM",   # Front Row Motorsports
     "Carl Long":                "MBM",
