@@ -11,6 +11,7 @@ const STATE = {
   entity: "driver",
   data: null,
   colors: null,
+  driverBios: null,
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
   arc: { selected: new Set(), ftOnly: true },
@@ -31,6 +32,7 @@ const VIEWS = ["form", "arc", "breakdown", "trajectory", "teammates", "heatmap",
 async function boot() {
   wireUIControls();
   await loadColors();
+  loadDriverBios();  // async, not awaited — profile will use it whenever it arrives
   await discoverSeasons();
   parseHash();
   if (!STATE.seasonsAvailable.includes(STATE.season)) {
@@ -81,6 +83,21 @@ async function loadColors() {
   } catch (e) {
     console.warn("Colors file unavailable, using fallbacks", e);
     STATE.colors = { W: {}, B: {}, C: {} };
+  }
+}
+
+// Load optional driver biographies (DOB, hometown, career totals by series).
+// Silently no-ops if data/drivers.json doesn't exist — profile view renders
+// bio-less in that case.
+async function loadDriverBios() {
+  try {
+    const r = await fetch("data/drivers.json");
+    if (!r.ok) { STATE.driverBios = null; return; }
+    const payload = await r.json();
+    STATE.driverBios = payload.drivers || {};
+  } catch (e) {
+    // Missing file is the common case early on — not an error
+    STATE.driverBios = null;
   }
 }
 
@@ -1788,10 +1805,14 @@ function renderTeammates() {
   }
   function hideTip() { tip.classList.remove("show"); }
 
-  // Dot tooltips
-  host.querySelectorAll(".tm-dot-hit").forEach(el => {
-    const round = el.getAttribute("data-round");
-    const car = el.getAttribute("data-car");
+  // Dot tooltips — use event delegation on the host because dots are painted
+  // asynchronously (next animation frame) by tmPaintSparklines. Direct listeners
+  // would attach before the dots exist.
+  function handleDotHover(ev) {
+    const hit = ev.target.closest(".tm-dot-hit");
+    if (!hit || !host.contains(hit)) return;
+    const round = hit.getAttribute("data-round");
+    const car = hit.getAttribute("data-car");
     const s = seriesLookup.get(`${car}|${round}`);
     if (!s) return;
     const v = metric === "fin" ? s.delta_fin : s.delta_tot;
@@ -1808,10 +1829,21 @@ function renderTeammates() {
       <div class="tm-tt-row"><span class="lbl">Race pts</span><span class="val">${s.total}</span></div>
       <div class="tm-tt-row ${cls}"><span class="lbl">vs best FT teammate</span><span class="val">${vStr}${s.tl_fin ? " ★" : ""}</span></div>
     `;
-    el.addEventListener("mouseenter", e => showTip(html, e, "tm-tip"));
-    el.addEventListener("mousemove",  e => showTip(html, e, "tm-tip"));
-    el.addEventListener("mouseleave", hideTip);
-  });
+    showTip(html, ev, "tm-tip");
+  }
+  function handleDotLeave(ev) {
+    // Only hide when actually leaving a .tm-dot-hit (not when moving between children of one)
+    const hit = ev.target.closest(".tm-dot-hit");
+    const going = ev.relatedTarget && ev.relatedTarget.closest ? ev.relatedTarget.closest(".tm-dot-hit") : null;
+    if (hit && !going) hideTip();
+  }
+  // Remove any stale listeners from prior renders on the same host
+  if (host._dotMove) host.removeEventListener("mousemove", host._dotMove);
+  if (host._dotOut)  host.removeEventListener("mouseout",  host._dotOut);
+  host._dotMove = handleDotHover;
+  host._dotOut  = handleDotLeave;
+  host.addEventListener("mousemove", host._dotMove);
+  host.addEventListener("mouseout",  host._dotOut);
 
   // Shared-car "ⁱ" popovers
   host.querySelectorAll(".tm-shared").forEach(el => {
@@ -2070,6 +2102,35 @@ function renderProfile() {
   const mfr = { TYT: "Toyota", CHE: "Chevrolet", CHV: "Chevrolet", FRD: "Ford", FOR: "Ford" }[entity.manufacturer] || entity.manufacturer || "—";
   const teamName = TEAM_FULL_NAMES[teamCode] || teamCode;
 
+  // Optional bio (only available in driver mode, and only if scraper has run)
+  const bio = (kind !== "owner" && STATE.driverBios)
+    ? STATE.driverBios[slugify(entity.driver)]
+    : null;
+  const bioParts = [];
+  if (bio) {
+    if (bio.dob) {
+      const age = calcAge(bio.dob);
+      if (age != null) bioParts.push(`<span class="v">${age}</span> years old`);
+    }
+    if (bio.hometown) bioParts.push(`<span class="v">${escapeHTML(bio.hometown)}</span>`);
+  }
+  const bioLine = bioParts.length
+    ? `<span class="profile-hero-bio">${bioParts.join(" · ")}</span>`
+    : "";
+
+  // Career totals panel HTML (only shown when bio has career data)
+  const careerPanelHTML = (bio && bio.career && Object.keys(bio.career).length > 0)
+    ? renderCareerTotalsPanel(bio.career)
+    : `<div class="profile-panel full">
+         <div class="profile-panel-head">
+           <span class="profile-panel-title">Career By Series</span>
+           <span class="profile-panel-sub">${STATE.driverBios === null ? "Driver bios haven't been scraped yet" : "No career data available for this driver"}</span>
+         </div>
+         <div class="profile-panel-body">
+           <div class="muted" style="padding:10px 4px;font-size:12px;">Run <code>python scrape_drivers.py</code> to populate bio + career totals.</div>
+         </div>
+       </div>`;
+
   host.innerHTML = `
     <div class="profile-breadcrumb">
       <a href="#/standings" class="profile-backlink">← Standings</a>
@@ -2084,6 +2145,7 @@ function renderProfile() {
         <div class="profile-hero-meta">
           <span class="team-pill" style="background:${orgHex};color:${orgTxt}">${escapeHTML(teamCode)}</span>
           <span class="profile-hero-team"><strong>${escapeHTML(mfr)}</strong> · ${escapeHTML(teamName)}</span>
+          ${bioLine}
         </div>
       </div>
       <div class="profile-hero-rank">
@@ -2161,15 +2223,7 @@ function renderProfile() {
         </div>
       </div>
 
-      <div class="profile-panel full">
-        <div class="profile-panel-head">
-          <span class="profile-panel-title">Career By Season</span>
-          <span class="profile-panel-sub">Multi-year data coming in a future update</span>
-        </div>
-        <div class="profile-panel-body">
-          <div class="muted" style="padding:10px 4px;font-size:12px;">Career-wide view will populate as prior seasons are loaded. Currently showing ${STATE.season} only.</div>
-        </div>
-      </div>
+      ${careerPanelHTML}
     </div>
   `;
 
@@ -2186,6 +2240,70 @@ function rankSuffix(n) {
   if (mod10 === 2 && mod100 !== 12) return "nd";
   if (mod10 === 3 && mod100 !== 13) return "rd";
   return "th";
+}
+
+// Compute age in whole years given a YYYY-MM-DD birthdate string
+function calcAge(dobIso) {
+  if (!dobIso) return null;
+  const parts = dobIso.split("-").map(Number);
+  if (parts.length !== 3) return null;
+  const [y, m, d] = parts;
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  const hadBirthday = (now.getMonth() + 1) > m || ((now.getMonth() + 1) === m && now.getDate() >= d);
+  if (!hadBirthday) age -= 1;
+  return (age >= 0 && age < 120) ? age : null;
+}
+
+// Render the career-totals panel using scraped per-series totals
+function renderCareerTotalsPanel(career) {
+  const SERIES_ORDER = ["NCS", "NOS", "NTS"];
+  const SERIES_NAMES = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" };
+  const availableSeries = SERIES_ORDER.filter(s => career[s]);
+  if (availableSeries.length === 0) {
+    return `<div class="profile-panel full">
+      <div class="profile-panel-head">
+        <span class="profile-panel-title">Career By Series</span>
+      </div>
+      <div class="profile-panel-body">
+        <div class="muted" style="padding:10px 4px;font-size:12px;">No career data available.</div>
+      </div>
+    </div>`;
+  }
+
+  const cards = availableSeries.map(code => {
+    const c = career[code];
+    const winPct = (c.starts && c.wins != null) ? ((c.wins / c.starts) * 100).toFixed(1) : null;
+    const t5Pct = (c.starts && c.top5 != null) ? ((c.top5 / c.starts) * 100).toFixed(1) : null;
+    const t10Pct = (c.starts && c.top10 != null) ? ((c.top10 / c.starts) * 100).toFixed(1) : null;
+    return `<div class="career-card">
+      <div class="career-card-head">
+        <span class="career-series-code">${code}</span>
+        <span class="career-series-name">${SERIES_NAMES[code]}</span>
+        <span class="career-years">${c.years != null ? c.years + ' yrs' : ''}</span>
+      </div>
+      <div class="career-card-body">
+        <div class="career-stat"><span class="k">Starts</span><span class="v">${c.starts ?? '—'}</span></div>
+        <div class="career-stat"><span class="k">Wins</span><span class="v ${c.wins > 0 ? 'hot' : ''}">${c.wins ?? '—'}</span>${winPct ? `<span class="pct">${winPct}%</span>` : ''}</div>
+        <div class="career-stat"><span class="k">Top 5</span><span class="v">${c.top5 ?? '—'}</span>${t5Pct ? `<span class="pct">${t5Pct}%</span>` : ''}</div>
+        <div class="career-stat"><span class="k">Top 10</span><span class="v">${c.top10 ?? '—'}</span>${t10Pct ? `<span class="pct">${t10Pct}%</span>` : ''}</div>
+        <div class="career-stat"><span class="k">Poles</span><span class="v">${c.poles ?? '—'}</span></div>
+        <div class="career-stat"><span class="k">Laps Led</span><span class="v">${c.laps_led != null ? c.laps_led.toLocaleString() : '—'}</span></div>
+        <div class="career-stat"><span class="k">Avg Start</span><span class="v">${c.avg_start != null ? c.avg_start.toFixed(1) : '—'}</span></div>
+        <div class="career-stat"><span class="k">Avg Finish</span><span class="v">${c.avg_finish != null ? c.avg_finish.toFixed(1) : '—'}</span></div>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<div class="profile-panel full">
+    <div class="profile-panel-head">
+      <span class="profile-panel-title">Career By Series</span>
+      <span class="profile-panel-sub">Lifetime totals · source: racing-reference.info</span>
+    </div>
+    <div class="profile-panel-body">
+      <div class="career-cards">${cards}</div>
+    </div>
+  </div>`;
 }
 
 function paintProfileChart(entity, rows) {

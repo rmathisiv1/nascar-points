@@ -1158,6 +1158,103 @@ code {
 }
 .profile-hero-team { color: var(--muted); }
 .profile-hero-team strong { color: var(--text); }
+.profile-hero-bio {
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+  margin-left: 2px;
+}
+.profile-hero-bio .v {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Career-by-series cards */
+.career-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.career-card {
+  background: rgba(255,255,255,0.015);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.career-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+.career-series-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+}
+.career-series-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.career-years {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.career-card-body {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+}
+.career-stat {
+  padding: 7px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  border-right: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  position: relative;
+}
+.career-stat:nth-child(2n) { border-right: none; }
+.career-stat:nth-last-child(-n+2) { border-bottom: none; }
+.career-stat .k {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  min-width: 58px;
+}
+.career-stat .v {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.career-stat .v.hot { color: var(--pos); }
+.career-stat .pct {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  margin-left: auto;
+}
 
 .profile-hero-rank {
   display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
