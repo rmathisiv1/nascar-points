@@ -16,7 +16,7 @@ const STATE = {
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
   arc: { selected: new Set(), ftOnly: true },
   breakdown: { drivers: [], ftOnly: true },  // array of driver keys, max 4
-  trajectory: { mode: "season", show: "all", labels: "top12" },
+  trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all" },
   teammates: { metric: "fin", ftOnly: true },
   profile: { kind: null, slug: null },
   standings: { sortKey: "total", sortDir: "desc" },
@@ -243,6 +243,7 @@ function wireUIControls() {
         if (group === "traj-mode") STATE.trajectory.mode = b.dataset.val;
         if (group === "traj-show") STATE.trajectory.show = b.dataset.val;
         if (group === "traj-labels") STATE.trajectory.labels = b.dataset.val;
+        if (group === "traj-tracks") STATE.trajectory.tracks = b.dataset.val;
         renderTrajectory();
       });
     });
@@ -365,6 +366,8 @@ function allEntities() {
         total: d.race_pts || 0,
         status: d.status,
         driver: d.driver,
+        track_code: r.track_code,
+        track: r.track,
       });
     });
   });
@@ -1238,10 +1241,28 @@ function renderTrajectory() {
   const svg = document.getElementById("trajectory-svg");
   if (!STATE.data) return;
 
-  const eligible = allEntities().filter(isFullTime);
+  const trackFilter = STATE.trajectory.tracks;
+  const includeRace = (race) => {
+    if (trackFilter === "all") return true;
+    return trackType(race.track_code) === trackFilter;
+  };
+
+  // Filter each driver's races by track type + require >= 1 race after filtering
+  // to avoid divide-by-zero on the average calculations.
+  const eligible = allEntities()
+    .filter(isFullTime)
+    .map(d => ({ ...d, races: d.races.filter(includeRace) }))
+    .filter(d => d.races.length >= 1);
+
+  // Update the sub-title to reflect the current filter
+  const subEl = document.getElementById("trajectory-sub");
+  if (subEl) {
+    const filterLabel = (trackFilter === "all") ? "" : ` · ${TRACK_TYPE_LABELS[trackFilter] || trackFilter} only`;
+    subEl.textContent = `Stage points vs. finish points${filterLabel}`;
+  }
 
   if (eligible.length === 0) {
-    svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">Not enough data yet.</text>`;
+    svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">No races match this filter yet.</text>`;
     document.getElementById("trajectory-legend").innerHTML = "";
     document.getElementById("trajectory-over").innerHTML = "";
     document.getElementById("trajectory-under").innerHTML = "";
@@ -1524,6 +1545,70 @@ const TEAM_ALLIANCE = { "WBR": "PEN" };
 function teamGroup(team) { return TEAM_ALLIANCE[team] || team; }
 
 // Friendly team names for the card header; fall back to the team code itself
+// Track type classification — standard 4-category NASCAR split.
+// Used by Stage Trajectory's track-type filter and any future track-type splits.
+// Categories: super (drafting/plate), short (<1 mile), inter (1.5mi ovals + drafting-style),
+// road (twisty circuits + street courses).
+const TRACK_TYPES = {
+  // Superspeedways — pack drafting, plates/tapered spacers
+  DAY: "super",
+  TAL: "super",
+
+  // Short tracks — <1 mile ovals
+  BRI: "short",
+  BRD: "short",
+  MAR: "short",
+  RCH: "short",
+  PHO: "short",        // 1mi flat but universally called a short track
+  NWB: "short",
+  NWK: "short",
+  BGR: "short",        // Bowman Gray (Clash venue)
+  IOW: "short",        // 0.875mi oval
+
+  // Intermediate — 1.5mi-ish ovals + atlanta-as-drafting + dover (1mi concrete)
+  ECH: "inter",        // Atlanta — pack racing now but still classed intermediate by teams
+  ATL: "inter",
+  LAS: "inter",
+  KAN: "inter",
+  CLT: "inter",
+  TEX: "inter",
+  NSH: "inter",        // Nashville Superspeedway (1.33mi)
+  MIA: "inter",
+  HOM: "inter",
+  MCH: "inter",        // Michigan 2mi
+  NHA: "inter",        // New Hampshire 1.058mi
+  LOU: "inter",
+  DOV: "inter",        // 1mi concrete — behaves like an intermediate for setup
+  GWY: "inter",        // Gateway 1.25mi
+  WWT: "inter",
+  POC: "inter",        // Pocono 2.5mi tri-oval
+  DAR: "inter",        // Darlington 1.366mi — not truly intermediate but slots here
+  IND: "inter",        // Indy oval — rarely run but fits here
+
+  // Road courses + street courses
+  AUS: "road",         // COTA
+  SON: "road",
+  WGI: "road",
+  CHA: "road",         // Charlotte Roval
+  ROV: "road",
+  IRC: "road",         // Indy RC
+  CHI: "road",         // Chicago Street
+  CHG: "road",
+  MXI: "road",         // Mexico City (road course for 2026)
+  MEX: "road",
+};
+
+const TRACK_TYPE_LABELS = {
+  super: "Superspeedway",
+  short: "Short Track",
+  inter: "Intermediate",
+  road: "Road Course",
+};
+
+function trackType(trackCode) {
+  return TRACK_TYPES[trackCode] || null;
+}
+
 // Track display names — maps racing-reference track codes to the common industry name
 // people actually say. When in doubt, use what a NASCAR fan/insider would call it in
 // conversation, not the official venue name.
