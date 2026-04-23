@@ -291,6 +291,69 @@ html, body {
   text-transform: uppercase;
   margin: 18px 0 8px;
 }
+
+/* Team pill row — sits above driver grid in same host */
+.team-pill-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
+}
+.team-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, transform 0.05s;
+  user-select: none;
+  overflow: hidden;
+  position: relative;
+  min-height: 38px;
+}
+.team-pill-btn:hover {
+  background: var(--card-hi);
+  border-color: var(--border-hi);
+}
+.team-pill-btn:active { transform: translateY(1px); }
+.team-pill-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.team-pill-btn .tp-code {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; padding: 3px 8px;
+  font-family: var(--mono); font-size: 11px; font-weight: 800;
+  letter-spacing: 0.06em;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.team-pill-btn .tp-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.team-pill-btn .tp-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
 .driver-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
@@ -868,6 +931,21 @@ code {
   .driver-pill .dp-num {
     min-width: 22px; font-size: 10px; padding: 1px 4px;
   }
+
+  /* Team pills — smaller on mobile */
+  .team-pill-row {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 5px;
+  }
+  .team-pill-btn {
+    padding: 6px 9px;
+    min-height: 32px;
+    gap: 7px;
+  }
+  .team-pill-btn .tp-code {
+    min-width: 34px; font-size: 10px; padding: 2px 6px;
+  }
+  .team-pill-btn .tp-name { font-size: 12px; }
 
   /* Chart tooltip — constrain so it doesn't escape */
   .chart-tooltip { font-size: 10px; padding: 6px 9px; min-width: 120px; }

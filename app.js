@@ -783,7 +783,12 @@ function renderTeamPill(series, carNumber, teamString) {
 // filter: ftOnly flag
 // onSelect: (entity) => void
 // isSelected: (entity) => boolean
-function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected) {
+// Renders team pills (optional) + driver pills.
+// onSelect(entity) — driver pill click handler
+// isSelected(entity) — returns true if entity is currently selected
+// onTeamSelect(teamDrivers) — optional: if present, clicking team pill will call this
+//   with an array of sorted entities for that team. If omitted, no team row is shown.
+function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSelect) {
   const host = document.getElementById(hostId);
   if (!host) return;
   let entities = allEntities();
@@ -793,7 +798,52 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected) {
     ...e, total: e.races.reduce((s, r) => s + r.total, 0),
   })).sort((a, b) => b.total - a.total);
 
-  host.innerHTML = entities.map(e => {
+  // -------- Build team groups for the team pill row --------
+  // Only shown in driver mode + when onTeamSelect is provided + in driver view (not car).
+  let teamRowHTML = "";
+  if (onTeamSelect && STATE.entity === "driver") {
+    const teamMap = new Map();
+    entities.forEach(e => {
+      // Get the 3-letter team code from the color palette (e.team is a sponsor string, not useful)
+      const rawCode = teamCodeFromPalette(STATE.series, e.car_number);
+      if (!rawCode) return;  // skip drivers with no team code in palette
+      // Apply alliance grouping (e.g. WBR rolls up into PEN)
+      const teamKey = TEAM_ALLIANCE[rawCode] || rawCode;
+      if (!teamMap.has(teamKey)) teamMap.set(teamKey, []);
+      teamMap.get(teamKey).push(e);
+    });
+    // Filter to teams with >= 2 drivers (single-car teams don't need a team pill)
+    const teamGroups = Array.from(teamMap.entries())
+      .filter(([_, ds]) => ds.length >= 2)
+      .map(([teamKey, ds]) => ({
+        teamKey,
+        drivers: ds.sort((a, b) => b.total - a.total),
+        totalPts: ds.reduce((s, d) => s + d.total, 0),
+      }))
+      .sort((a, b) => b.totalPts - a.totalPts);
+
+    if (teamGroups.length > 0) {
+      const teamPillsHTML = teamGroups.map(g => {
+        // Pull team color from the top-scoring driver in this team
+        const topDriver = g.drivers[0];
+        const orgHex = orgColorFor(STATE.series, topDriver.car_number)
+          || colorFor(STATE.series, topDriver.car_number);
+        const orgTxt = contrastTextFor(orgHex);
+        // Binary selected: all drivers selected → on
+        const allOn = g.drivers.every(d => isSelected(d));
+        const sel = allOn ? "selected" : "";
+        const teamLabel = GROUP_DISPLAY_NAMES[g.teamKey] || TEAM_FULL_NAMES[g.teamKey] || g.teamKey;
+        return `<div class="team-pill-btn ${sel}" data-team="${escapeHTML(g.teamKey)}" title="${escapeHTML(teamLabel)} — click to add all drivers">
+          <span class="tp-code" style="background:${orgHex};color:${orgTxt}">${escapeHTML(g.teamKey)}</span>
+          <span class="tp-name">${escapeHTML(teamLabel)}</span>
+          <span class="tp-count">${g.drivers.length}</span>
+        </div>`;
+      }).join("");
+      teamRowHTML = `<div class="team-pill-row">${teamPillsHTML}</div>`;
+    }
+  }
+
+  const driverPillsHTML = entities.map(e => {
     const carHex = colorFor(STATE.series, e.car_number);
     const txt = contrastTextFor(carHex);
     const sel = isSelected(e) ? "selected" : "";
@@ -809,9 +859,11 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected) {
     </div>`;
   }).join("");
 
+  host.innerHTML = teamRowHTML + `<div class="driver-grid">${driverPillsHTML}</div>`;
+
+  // Driver pill click
   host.querySelectorAll(".driver-pill").forEach(el => {
     el.addEventListener("click", (ev) => {
-      // Don't toggle selection if the jump arrow was clicked
       if (ev.target.closest(".dp-jump")) return;
       const key = el.dataset.key;
       const e = entities.find(x => entityKey(x) === key);
@@ -819,6 +871,23 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected) {
       onSelect(e);
     });
   });
+
+  // Team pill click — invokes onTeamSelect with the sorted array of team drivers
+  if (onTeamSelect) {
+    host.querySelectorAll(".team-pill-btn").forEach(el => {
+      el.addEventListener("click", () => {
+        const teamKey = el.dataset.team;
+        // Rebuild the team's driver list from current entities using palette lookup
+        const teamDrivers = entities.filter(e => {
+          const rawCode = teamCodeFromPalette(STATE.series, e.car_number);
+          if (!rawCode) return false;
+          return (TEAM_ALLIANCE[rawCode] || rawCode) === teamKey;
+        });
+        teamDrivers.sort((a, b) => b.total - a.total);
+        onTeamSelect(teamDrivers);
+      });
+    });
+  }
 }
 
 // ============================================================
@@ -924,7 +993,12 @@ function renderArcGrid() {
       else STATE.arc.selected.add(k);
       renderArc();
     },
-    (e) => STATE.arc.selected.has(entityKey(e))
+    (e) => STATE.arc.selected.has(entityKey(e)),
+    (teamDrivers) => {
+      // Additive: add all team drivers to the selection set
+      teamDrivers.forEach(e => STATE.arc.selected.add(entityKey(e)));
+      renderArc();
+    }
   );
 }
 
@@ -1230,7 +1304,21 @@ function renderBreakdownGrid() {
       }
       renderBreakdown();
     },
-    (e) => STATE.breakdown.drivers.includes(e.driver)
+    (e) => STATE.breakdown.drivers.includes(e.driver),
+    (teamDrivers) => {
+      // Fill-to-cap: add this team's drivers (sorted by pts desc) up to the 4-driver max,
+      // evicting oldest-selected if needed. Drivers already selected are skipped.
+      const CAP = 4;
+      teamDrivers.forEach(e => {
+        const key = e.driver;
+        if (STATE.breakdown.drivers.includes(key)) return;
+        if (STATE.breakdown.drivers.length >= CAP) {
+          STATE.breakdown.drivers.shift();
+        }
+        STATE.breakdown.drivers.push(key);
+      });
+      renderBreakdown();
+    }
   );
 }
 
