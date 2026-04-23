@@ -378,27 +378,48 @@ def _finish_points_for(finish_pos: int) -> int:
 
 def _assign_fastest_lap_bonus(race: Race) -> None:
     """
-    Identify the driver who received the +1 fastest-lap bonus by finding
-    the eligible driver whose race_pts exceeds their expected (finish +
-    stage) total by exactly 1. If no driver fits uniquely, no FL bonus
-    is assigned.
+    Identify the driver who received the +1 fastest-lap bonus.
 
-    Note: NASCAR's stage points schedule already includes the 10-point
-    top position, so there's no separate "stage win bonus" to add.
-    Playoff points are a different currency and don't show up in race_pts.
+    Formula for race_pts in NASCAR's current scoring (2017+):
+      race_pts = finish_base + stage_1_pts + stage_2_pts + win_bonus + fl_bonus
+
+    Where:
+      finish_base  — 40 for P1, 35 for P2, 34 for P3, ..., 1 for P36
+      win_bonus    — 15 (ONLY for race winner: +5 for win, +10 for stage 3/final)
+      fl_bonus     — 1 for the driver with fastest lap (ineligible to some; optional)
+
+    We compute each eligible driver's expected points from everything except FL,
+    then the driver(s) with race_pts exactly 1 over expected earned the FL bonus.
+
+    If multiple drivers match (rare; typically superspeedway anomalies with
+    odd stage credits), we tie-break by giving it to the best finisher.
     """
     candidates = []
     for d in race.results:
-        if d.ineligible or d.finish_pos is None:
+        if d.ineligible or d.finish_pos is None or d.race_pts == 0:
+            # Skip ineligible crossovers (race_pts == 0 is also the signal)
             continue
         expected = _finish_points_for(d.finish_pos) + d.stage_1_pts + d.stage_2_pts
+        # Add the +15 race winner bonus (win + final stage) — only the race winner
+        if d.finish_pos == 1:
+            expected += 15
         delta = d.race_pts - expected
         if delta == 1:
             candidates.append(d)
 
+    if not candidates:
+        return
     if len(candidates) == 1:
         candidates[0].fastest_lap_pt = 1
         race.fastest_lap_driver = candidates[0].driver
+        return
+
+    # Tie-break: multiple candidates. Prefer the best finisher.
+    # This handles superspeedway edge cases where stage points for ties produce
+    # +1 anomalies across multiple drivers.
+    candidates.sort(key=lambda d: d.finish_pos)
+    candidates[0].fastest_lap_pt = 1
+    race.fastest_lap_driver = candidates[0].driver
 
 
 def normalize_date(date_str: str) -> str:
