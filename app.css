@@ -96,28 +96,6 @@ html, body {
 }
 .series-sw button:not(.on):hover { color: var(--text); }
 
-.entity-sw {
-  display: flex;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px;
-}
-.entity-sw button {
-  padding: 6px 12px;
-  background: none; border: none; cursor: pointer;
-  color: var(--muted);
-  font-family: var(--mono); font-size: 10px; font-weight: 600;
-  border-radius: 4px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.entity-sw button.on {
-  background: var(--accent-bg-hi);
-  color: var(--accent-2);
-}
-.entity-sw button:not(.on):hover { color: var(--text); }
-
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .season-select, .select {
   background: var(--card);
@@ -869,16 +847,6 @@ code {
     font-size: 10px;
     flex: 1;
     min-width: 0;
-  }
-  .entity-sw {
-    order: 11;
-    flex: 1 1 auto;
-    justify-content: center;
-  }
-  .entity-sw button {
-    padding: 6px 10px;
-    flex: 1;
-    font-size: 9px;
   }
   .season-select { display: none; }
   .nav-toggle { display: inline-flex; align-items: center; justify-content: center; }

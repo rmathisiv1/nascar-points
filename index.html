@@ -19,10 +19,6 @@
     <button data-series="NOS">NOS</button>
     <button data-series="NTS">NTS</button>
   </div>
-  <div class="entity-sw" id="entity-sw" title="Group by driver or by owner/car">
-    <button data-entity="driver" class="on">Driver</button>
-    <button data-entity="owner">Owner/Car</button>
-  </div>
   <div class="topbar-right">
     <select id="season-picker" class="season-select"></select>
     <button id="nav-toggle" class="nav-toggle" aria-label="Menu">☰</button>
@@ -64,7 +60,7 @@
           <button class="on" data-val="ft">Full-time only</button>
           <button data-val="all">All entrants</button>
         </div>
-        <input type="search" id="form-search" placeholder="Search driver…" class="search-input">
+        <input type="search" id="form-search" placeholder="Search car or driver…" class="search-input">
       </div>
       <div class="card" id="form-card">
         <div class="loading">Loading…</div>
@@ -74,7 +70,7 @@
     <section class="view" id="view-arc" hidden>
       <div class="view-head">
         <h1>Season Cumulative</h1>
-        <div class="view-sub">Cumulative points by race · tap drivers below to add/remove</div>
+        <div class="view-sub">Cumulative points by race · tap cars below to add/remove</div>
       </div>
       <div class="toolbar">
         <button class="btn-ghost" id="arc-top10">Top 10</button>
@@ -91,14 +87,14 @@
       <div class="card card-chart">
         <svg id="arc-svg"></svg>
       </div>
-      <div class="picker-label">Select drivers</div>
+      <div class="picker-label">Select cars</div>
       <div class="driver-picker" id="arc-driver-grid"></div>
     </section>
 
     <section class="view" id="view-breakdown" hidden>
       <div class="view-head">
         <h1>Per-Race Breakdown</h1>
-        <div class="view-sub">Stage 1 · Stage 2 · Finish · Fastest Lap · pick up to 4 drivers to compare</div>
+        <div class="view-sub">Stage 1 · Stage 2 · Finish · Fastest Lap · pick up to 4 cars to compare</div>
       </div>
       <div class="toolbar">
         <div class="toggle-group" data-group="breakdown-ft">
@@ -111,14 +107,14 @@
         <div id="breakdown-tooltip" class="chart-tooltip" hidden></div>
       </div>
       <div class="legend" id="breakdown-legend"></div>
-      <div class="picker-label">Select up to 4 drivers</div>
+      <div class="picker-label">Select up to 4 cars</div>
       <div class="driver-picker" id="breakdown-driver-grid"></div>
     </section>
 
     <section class="view" id="view-trajectory" hidden>
       <div class="view-head">
         <h1>Stage Analysis</h1>
-        <div class="view-sub" id="trajectory-sub">Pace vs. results — season average per driver · dashed line = league trend</div>
+        <div class="view-sub" id="trajectory-sub">Pace vs. results — season average per car · dashed line = league trend</div>
       </div>
       <div class="toolbar">
         <span class="toolbar-label">Mode</span>
@@ -174,7 +170,7 @@
         </div>
       </div>
       <div class="picker-label">
-        Select drivers
+        Select cars
         <button class="btn-ghost btn-inline" id="traj-clear">Clear selection</button>
       </div>
       <div class="driver-picker" id="trajectory-driver-grid"></div>
@@ -208,7 +204,7 @@
 
     <section class="view" id="view-heatmap" hidden>
       <div class="view-head">
-        <h1>Driver × Race Heatmap</h1>
+        <h1>Car × Race Heatmap</h1>
         <div class="view-sub">Finish position by race — brighter green = better</div>
       </div>
       <div class="card">

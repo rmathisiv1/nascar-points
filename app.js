@@ -8,7 +8,12 @@ const STATE = {
   series: "NCS",
   season: 2026,
   view: "form",
-  entity: "driver",
+  // Identity model: the app is car-centric. Every primary row is a car
+  // (#car_number). If multiple drivers drove that car in a season, the UI
+  // surfaces them via an "i" tooltip next to the car's primary driver name.
+  // `entity` is kept as a constant for backward compatibility with code paths
+  // that still read it; do not mutate.
+  entity: "owner",
   data: null,
   colors: null,
   driverBios: null,
@@ -214,18 +219,6 @@ function wireUIControls() {
     });
   });
 
-  document.querySelectorAll("#entity-sw button").forEach(b => {
-    b.addEventListener("click", () => {
-      document.querySelectorAll("#entity-sw button")
-        .forEach(x => x.classList.toggle("on", x === b));
-      STATE.entity = b.dataset.entity;
-      STATE.arc.selected.clear();
-      STATE.breakdown.drivers = [];
-      STATE.trajectory.selected.clear();
-      render();
-    });
-  });
-
   // Form view toggles
   document.querySelectorAll("#view-form .toggle-group").forEach(g => {
     const group = g.dataset.group;
@@ -389,7 +382,10 @@ function entitiesFromRaces(races) {
   races.forEach(r => {
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
+      // Car-centric: key is always car number. Multiple drivers across a
+      // season roll up into the same entity row and get surfaced via the
+      // "i" tooltip in each view.
+      const key = `#${d.car_number}`;
 
       // Two-tier team code resolution (palette no longer stores team codes):
       // 1. d.team_code from scraper — authoritative, built from current race data
@@ -403,6 +399,7 @@ function entitiesFromRaces(races) {
           key,
           driver: d.driver,
           driversSet: new Set(),
+          driverStarts: {},   // driver name → number of starts in this car
           car_number: d.car_number,
           team: d.team,
           team_code: teamCode,
@@ -412,7 +409,8 @@ function entitiesFromRaces(races) {
       }
       const e = map.get(key);
       e.driversSet.add(d.driver);
-      e.driver = d.driver;
+      e.driverStarts[d.driver] = (e.driverStarts[d.driver] || 0) + 1;
+      e.driver = d.driver;  // keeps the "most recent driver seen" for legacy callers
       e.team = d.team;
       if (teamCode) e.team_code = teamCode;
       e.manufacturer = d.manufacturer || e.manufacturer;
@@ -433,11 +431,21 @@ function entitiesFromRaces(races) {
       });
     });
   });
+  // Finalize each entity: sort drivers by starts desc, derive primary + co-drivers.
   return Array.from(map.values()).map(e => {
-    const counts = {};
-    e.races.forEach(r => { counts[r.driver] = (counts[r.driver] || 0) + 1; });
-    const drivers = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-    return { ...e, drivers };
+    const driversByStarts = Object.entries(e.driverStarts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, starts]) => ({ name, starts }));
+    const primaryDriver = driversByStarts[0] ? driversByStarts[0].name : e.driver;
+    const coDrivers = driversByStarts.slice(1);  // [{name, starts}, ...]
+    return {
+      ...e,
+      drivers: driversByStarts.map(d => d.name),   // legacy field: ordered driver list
+      driversByStarts,                              // [{name, starts}] ordered most → least
+      primaryDriver,                                // headline driver for this car
+      coDrivers,                                    // non-primary drivers, with their start counts
+      driver: primaryDriver,                        // the main "driver" label is now the primary
+    };
   });
 }
 
@@ -481,24 +489,20 @@ function trajectoryEntities() {
 function allDrivers() { return allEntities(); }
 
 function displayName(entity) {
-  if (STATE.entity === "owner") {
-    if (entity.drivers && entity.drivers.length > 1) {
-      return `#${entity.car_number} · ${entity.drivers[0]} +${entity.drivers.length - 1}`;
-    }
-    return `#${entity.car_number} · ${entity.driver}`;
+  if (entity.drivers && entity.drivers.length > 1) {
+    return `#${entity.car_number} · ${entity.primaryDriver} +${entity.drivers.length - 1}`;
   }
-  return entity.driver;
+  return `#${entity.car_number} · ${entity.primaryDriver || entity.driver}`;
 }
 
 function entityKey(entity) {
-  return (STATE.entity === "owner") ? `#${entity.car_number}` : entity.driver;
+  return `#${entity.car_number}`;
 }
 
 // Returns the hash URL for this entity's profile page.
-// In driver mode: #/profile/<driver-slug>. In owner mode: #/car/<car-number>.
+// Car-centric app: every profile is a car profile.
 function profileHref(entity) {
-  if (STATE.entity === "owner") return `#/car/${entity.car_number}`;
-  return `#/profile/${slugify(entity.driver)}`;
+  return `#/car/${entity.car_number}`;
 }
 
 function computeSeasonTotals() {
@@ -802,7 +806,7 @@ function renderFormTable() {
 
   const sub = document.getElementById("form-sub");
   const ftNote = STATE.form.ftOnly ? "full-time only" : "all entrants";
-  sub.textContent = `${decorated.length} ${STATE.entity === "owner" ? "cars" : "drivers"} · ${ftNote} · window: ${STATE.form.window === "season" ? "full season" : `last ${STATE.form.window} races`}`;
+  sub.textContent = `${decorated.length} cars · ${ftNote} · window: ${STATE.form.window === "season" ? "full season" : `last ${STATE.form.window} races`}`;
 }
 
 function heatCell(finish) {
@@ -1002,61 +1006,20 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
     ...e, total: e.races.reduce((s, r) => s + r.total, 0),
   })).sort((a, b) => b.total - a.total);
 
-  // -------- Build team groups for the team pill row --------
-  // Only shown in driver mode + when onTeamSelect is provided + in driver view (not car).
-  let teamRowHTML = "";
-  if (onTeamSelect && STATE.entity === "driver") {
-    const teamMap = new Map();
-    entities.forEach(e => {
-      // e.team_code is pre-resolved (scraper field → palette → owner parse fallback)
-      const rawCode = e.team_code;
-      if (!rawCode) return;  // skip drivers with no resolvable team code
-      // Apply alliance grouping (e.g. WBR rolls up into PEN)
-      const teamKey = TEAM_ALLIANCE[rawCode] || rawCode;
-      if (!teamMap.has(teamKey)) teamMap.set(teamKey, []);
-      teamMap.get(teamKey).push(e);
-    });
-    // Filter to teams with >= 2 drivers (single-car teams don't need a team pill)
-    const teamGroups = Array.from(teamMap.entries())
-      .filter(([_, ds]) => ds.length >= 2)
-      .map(([teamKey, ds]) => ({
-        teamKey,
-        drivers: ds.sort((a, b) => b.total - a.total),
-        totalPts: ds.reduce((s, d) => s + d.total, 0),
-      }))
-      .sort((a, b) => b.totalPts - a.totalPts);
-
-    if (teamGroups.length > 0) {
-      const teamPillsHTML = teamGroups.map(g => {
-        // Team color comes from the team code itself — no per-car lookup.
-        const topDriver = g.drivers[0];
-        const orgHex = orgColorForTeam(g.teamKey)
-          || colorFor(STATE.series, topDriver.car_number);
-        const orgTxt = contrastTextFor(orgHex);
-        // Binary selected: all drivers selected → on
-        const allOn = g.drivers.every(d => isSelected(d));
-        const sel = allOn ? "selected" : "";
-        const teamLabel = TEAM_PILL_LABELS[g.teamKey] || TEAM_FULL_NAMES[g.teamKey] || g.teamKey;
-        const fullLabel = GROUP_DISPLAY_NAMES[g.teamKey] || TEAM_FULL_NAMES[g.teamKey] || g.teamKey;
-        return `<div class="team-pill-btn ${sel}" data-team="${escapeHTML(g.teamKey)}" title="${escapeHTML(fullLabel)} — click to add all drivers">
-          <span class="tp-code" style="background:${orgHex};color:${orgTxt}">${escapeHTML(g.teamKey)}</span>
-          <span class="tp-name">${escapeHTML(teamLabel)}</span>
-          <span class="tp-count">${g.drivers.length}</span>
-        </div>`;
-      }).join("");
-      teamRowHTML = `<div class="team-pill-row">${teamPillsHTML}</div>`;
-    }
-  }
+  // -------- Team-pill row --------
+  // Was driver-mode-only. In car-mode, team grouping is less meaningful at the
+  // picker level (each car already carries its own team via the car-number
+  // color), so we skip it and just render the car grid.
+  const teamRowHTML = "";
 
   const driverPillsHTML = entities.map(e => {
     const carHex = colorFor(STATE.series, e.car_number);
     const txt = contrastTextFor(carHex);
     const sel = isSelected(e) ? "selected" : "";
-    // keep pill narrow: car# + last name (driver mode) / car# + primary last name (owner mode)
-    const lastName = e.driver.split(/\s+/).slice(-1)[0];
-    const label = (STATE.entity === "owner" && (e.drivers || []).length > 1)
-      ? `${lastName} +${(e.drivers || []).length - 1}`
-      : lastName;
+    // car# + primary driver's last name; append "+N" if the car had co-drivers
+    const lastName = (e.primaryDriver || e.driver || "").split(/\s+/).slice(-1)[0];
+    const coCount = (e.coDrivers || []).length;
+    const label = coCount > 0 ? `${lastName} +${coCount}` : lastName;
     return `<div class="driver-pill ${sel}" data-key="${escapeHTML(entityKey(e))}" title="${escapeHTML(displayName(e))} — click to toggle, ↗ to open profile">
       <span class="dp-num" style="background:${carHex};color:${txt}">${e.car_number}</span>
       <span class="dp-name">${escapeHTML(label)}</span>
@@ -1673,10 +1636,9 @@ function renderTrajectory() {
   // Update the sub-title to reflect the current filter
   const subEl = document.getElementById("trajectory-sub");
   if (subEl) {
-    const entityWord = STATE.entity === "owner" ? "car" : "driver";
     const modeDesc = STATE.trajectory.mode === "trajectory"
       ? `arrows from season avg → last-5 avg (momentum direction)`
-      : `season average per ${entityWord}`;
+      : `season average per car`;
     const trackPart = (trackFilter === "all") ? "" : ` · ${TRACK_TYPE_LABELS[trackFilter] || trackFilter} only`;
     const seasonsPart = seasonsUsed.length > 1
       ? ` · ${seasonsUsed[0]}–${seasonsUsed[seasonsUsed.length - 1]} combined (${totalRaces} races)`
@@ -1916,7 +1878,7 @@ function renderTrajectory() {
   svg.appendChild(g);
 
   document.getElementById("trajectory-legend").innerHTML = `
-    <span class="legend-item"><span class="legend-dot" style="background:${STATE.trajectory.mode === "trajectory" ? "var(--accent-2)" : "var(--accent)"}"></span>${STATE.entity === "owner" ? "Car" : "Driver"} · ${STATE.trajectory.mode === "trajectory" ? "season → last-5" : "season avg"}</span>
+    <span class="legend-item"><span class="legend-dot" style="background:${STATE.trajectory.mode === "trajectory" ? "var(--accent-2)" : "var(--accent)"}"></span>Car · ${STATE.trajectory.mode === "trajectory" ? "season → last-5" : "season avg"}</span>
     <span class="legend-item"><span class="legend-line"></span>League trend</span>
     <span class="legend-item" style="color:var(--pos)">▲ above = converting pace to results</span>
     <span class="legend-item" style="color:var(--neg)">▼ below = leaving points on the table</span>
@@ -2406,7 +2368,7 @@ function renderTeammates() {
       const isShared = d.drivers.length > 1;
       const showWbrTag = (d.team !== d.group);
       const ptTag = d.car_full_time ? "" : ` <span class="tm-pt-tag">PT</span>`;
-      const tmHref = (STATE.entity === "owner") ? `#/car/${d.car_number}` : `#/profile/${slugify(d.primary_driver)}`;
+      const tmHref = `#/car/${d.car_number}`;
       return `<div class="tm-row${d.car_full_time ? "" : " part-time"}">
         <span class="tm-car" style="background:${carHex};color:${carTxt}">${d.car_number}</span>
         <div class="tm-name">
@@ -2760,10 +2722,10 @@ function renderProfile() {
     return;
   }
 
-  // Resolve display entity based on current DRIVER/OWNER toggle.
-  // In owner mode, profile is a CAR (aggregated); in driver mode, a DRIVER.
-  // Currently this is the natural entity shape from allEntities(), which respects the toggle.
-  const kind = STATE.entity;  // "driver" | "owner"
+  // Car-centric app: every profile is a car profile. `kind` remains as "owner"
+  // for any code paths downstream that still branch on it (will be cleaned up
+  // incrementally).
+  const kind = "owner";
   const summary = profileSummary(entity);
   const { rank, of } = profileRank(entity);
   const carHex = colorFor(STATE.series, entity.car_number);
@@ -2772,11 +2734,11 @@ function renderProfile() {
   const orgHex = orgColorForTeam(teamCode) || "#555";
   const orgTxt = contrastTextFor(orgHex);
 
-  const displayTitle = (kind === "owner")
-    ? (entity.drivers && entity.drivers.length > 1
-        ? `#${entity.car_number} · ${entity.driver} +${entity.drivers.length - 1}`
-        : `#${entity.car_number} · ${entity.driver}`)
-    : entity.driver;
+  const primaryDrv = entity.primaryDriver || entity.driver;
+  const coCount = (entity.coDrivers || []).length;
+  const displayTitle = coCount > 0
+    ? `#${entity.car_number} · ${primaryDrv} +${coCount}`
+    : `#${entity.car_number} · ${primaryDrv}`;
 
   const rows = profileRaceRows(entity);
   const mfr = { TYT: "Toyota", CHE: "Chevrolet", CHV: "Chevrolet", FRD: "Ford", FOR: "Ford" }[entity.manufacturer] || entity.manufacturer || "—";
@@ -3356,7 +3318,7 @@ function renderHeatmap() {
 
   const corner = document.createElement("div");
   corner.className = "hm-header hm-header-corner";
-  corner.textContent = STATE.entity === "owner" ? "Car" : "Driver";
+  corner.textContent = "Car";
   grid.appendChild(corner);
   races.forEach(r => {
     const h = document.createElement("div");
@@ -3485,8 +3447,8 @@ function renderStandings() {
     } else {
       pcPill = `<span class="pos-change down">▼${Math.abs(pc)}</span>`;
     }
-    const profileSlug = (STATE.entity === "owner") ? r.car_number : slugify(r.primaryDriver);
-    const profileKind = (STATE.entity === "owner") ? "car" : "profile";
+    const profileSlug = r.car_number;
+    const profileKind = "car";
     return `<tr>
       <td class="rank-cell">${r.currRank}${pcPill}</td>
       <td><a class="driver-cell profile-link" href="#/${profileKind}/${profileSlug}">
@@ -3563,7 +3525,8 @@ function pointsMapThroughRound(maxRound) {
     if (r.round > maxRound) return;
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
+      // Car-centric identity: key is always car number.
+      const key = `#${d.car_number}`;
       // Same team-code resolution used in allEntities: scraper field → owner parse
       const teamCode = d.team_code
         || teamCodeFromName(d.team, seriesKey, d.car_number)
@@ -3571,6 +3534,7 @@ function pointsMapThroughRound(maxRound) {
       if (!map.has(key)) {
         map.set(key, {
           key, driver: d.driver, driversSet: new Set(),
+          driverStarts: {},
           car_number: d.car_number, team: d.team, team_code: teamCode,
           total: 0, starts: 0, wins: 0, top5: 0, top10: 0,
           finishes: [],
@@ -3579,6 +3543,7 @@ function pointsMapThroughRound(maxRound) {
       }
       const e = map.get(key);
       e.driversSet.add(d.driver);
+      e.driverStarts[d.driver] = (e.driverStarts[d.driver] || 0) + 1;
       e.driver = d.driver;
       e.team = d.team;
       if (teamCode) e.team_code = teamCode;
@@ -3605,14 +3570,17 @@ function rankingRowsFrom(map) {
     const avgFinish = e.finishes.length
       ? e.finishes.reduce((s, x) => s + x, 0) / e.finishes.length
       : null;
-    const driversArr = Array.from(e.driversSet);
-    const primaryDriver = e.driver;  // keep the original driver name for slugging
-    const displayLabel = (STATE.entity === "owner")
-      ? (driversArr.length > 1
-          ? `#${e.car_number} · ${e.driver} +${driversArr.length - 1}`
-          : `#${e.car_number} · ${e.driver}`)
-      : e.driver;
-    return { ...e, avgFinish, displayLabel, primaryDriver, driver: displayLabel };
+    // Primary = driver with most starts in this car; co-drivers = the rest.
+    const driversByStarts = Object.entries(e.driverStarts || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, starts]) => ({ name, starts }));
+    const primaryDriver = driversByStarts[0] ? driversByStarts[0].name : e.driver;
+    const coDrivers = driversByStarts.slice(1);
+    const coCount = coDrivers.length;
+    const displayLabel = coCount > 0
+      ? `#${e.car_number} · ${primaryDriver} +${coCount}`
+      : `#${e.car_number} · ${primaryDriver}`;
+    return { ...e, avgFinish, displayLabel, primaryDriver, coDrivers, driversByStarts, driver: displayLabel };
   });
   rows.sort((a, b) => b.total - a.total);
   return rows;
