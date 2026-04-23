@@ -2102,12 +2102,12 @@ function renderProfile() {
   const mfr = { TYT: "Toyota", CHE: "Chevrolet", CHV: "Chevrolet", FRD: "Ford", FOR: "Ford" }[entity.manufacturer] || entity.manufacturer || "—";
   const teamName = TEAM_FULL_NAMES[teamCode] || teamCode;
 
-  // Optional bio (only available in driver mode, and only if scraper has run)
-  const bio = (kind !== "owner" && STATE.driverBios)
-    ? STATE.driverBios[slugify(entity.driver)]
-    : null;
+  // Bio lookup — use primary driver for both kinds (car profiles show the main driver's bio/career)
+  const bioDriverName = entity.driver;  // primary driver for this entity
+  const bio = STATE.driverBios ? STATE.driverBios[slugify(bioDriverName)] : null;
   const bioParts = [];
-  if (bio) {
+  if (bio && kind !== "owner") {
+    // Age + hometown only shown in driver mode — would be misleading in car mode
     if (bio.dob) {
       const age = calcAge(bio.dob);
       if (age != null) bioParts.push(`<span class="v">${age}</span> years old`);
@@ -2118,18 +2118,20 @@ function renderProfile() {
     ? `<span class="profile-hero-bio">${bioParts.join(" · ")}</span>`
     : "";
 
-  // Career totals panel HTML (only shown when bio has career data)
+  // Career totals panel: works for both driver and car profiles.
+  // Car profiles label it explicitly as being the primary driver's career.
   const careerPanelHTML = (bio && bio.career && Object.keys(bio.career).length > 0)
-    ? renderCareerTotalsPanel(bio.career)
-    : `<div class="profile-panel full">
-         <div class="profile-panel-head">
-           <span class="profile-panel-title">Career By Series</span>
-           <span class="profile-panel-sub">${STATE.driverBios === null ? "Driver bios haven't been scraped yet" : "No career data available for this driver"}</span>
-         </div>
-         <div class="profile-panel-body">
-           <div class="muted" style="padding:10px 4px;font-size:12px;">Run <code>python scrape_drivers.py</code> to populate bio + career totals.</div>
-         </div>
-       </div>`;
+    ? renderCareerTotalsPanel(bio.career, kind === "owner" ? bioDriverName : null)
+    : (STATE.driverBios === null
+        ? "" // no data file yet — just hide the panel instead of showing a nag
+        : `<div class="profile-panel full">
+             <div class="profile-panel-head">
+               <span class="profile-panel-title">Career By Series</span>
+             </div>
+             <div class="profile-panel-body">
+               <div class="muted" style="padding:10px 4px;font-size:12px;">No career data available for ${escapeHTML(bioDriverName)} yet.</div>
+             </div>
+           </div>`);
 
   host.innerHTML = `
     <div class="profile-breadcrumb">
@@ -2155,6 +2157,9 @@ function renderProfile() {
       </div>
     </div>
 
+    ${careerPanelHTML}
+
+    <div class="profile-section-label">${STATE.season} Season</div>
     <div class="profile-stats">
       <div class="stat"><span class="k">Starts</span><span class="v">${summary.starts}</span></div>
       <div class="stat"><span class="k">Wins</span><span class="v ${summary.wins > 0 ? 'hot' : ''}">${summary.wins}</span></div>
@@ -2222,8 +2227,6 @@ function renderProfile() {
           <div id="profile-teammates"></div>
         </div>
       </div>
-
-      ${careerPanelHTML}
     </div>
   `;
 
@@ -2255,8 +2258,10 @@ function calcAge(dobIso) {
   return (age >= 0 && age < 120) ? age : null;
 }
 
-// Render the career-totals panel using scraped per-series totals
-function renderCareerTotalsPanel(career) {
+// Render the career-totals panel using scraped per-series totals.
+// If `carModeDriverName` is non-null, we're on a car profile and should note
+// that the career stats belong to the primary driver of the car, not the car.
+function renderCareerTotalsPanel(career, carModeDriverName) {
   const SERIES_ORDER = ["NCS", "NOS", "NTS"];
   const SERIES_NAMES = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" };
   const availableSeries = SERIES_ORDER.filter(s => career[s]);
@@ -2295,10 +2300,14 @@ function renderCareerTotalsPanel(career) {
     </div>`;
   }).join("");
 
+  const subLabel = carModeDriverName
+    ? `Career of primary driver: ${escapeHTML(carModeDriverName)}`
+    : "Lifetime totals";
+
   return `<div class="profile-panel full">
     <div class="profile-panel-head">
       <span class="profile-panel-title">Career By Series</span>
-      <span class="profile-panel-sub">Lifetime totals · source: racing-reference.info</span>
+      <span class="profile-panel-sub">${subLabel}</span>
     </div>
     <div class="profile-panel-body">
       <div class="career-cards">${cards}</div>
@@ -2348,7 +2357,11 @@ function paintProfileChart(entity, rows) {
       const isWin = p.finish === 1;
       const r = isWin ? 5 : 3.5;
       const stroke = isWin ? "#fff" : "none";
-      return `<circle cx="${xScale(i)}" cy="${yScale(p.cum)}" r="${r}" fill="${carHex}" stroke="${stroke}" stroke-width="${isWin ? 1.5 : 0}"><title>R${p.round} ${p.track_code || ""} · P${p.finish} · ${p.cum}pts</title></circle>`;
+      const x = xScale(i), y = yScale(p.cum);
+      return `<g class="profile-chart-hit" data-round="${p.round}" data-finish="${p.finish ?? ''}" data-track="${escapeHTML(p.track || '')}" data-track-code="${escapeHTML(p.track_code || '')}" data-cum="${p.cum}">
+        <circle cx="${x}" cy="${y}" r="10" fill="transparent"/>
+        <circle cx="${x}" cy="${y}" r="${r}" fill="${carHex}" stroke="${stroke}" stroke-width="${isWin ? 1.5 : 0}"/>
+      </g>`;
     }).join("");
 
     const last = pts[pts.length - 1];
@@ -2376,21 +2389,128 @@ function paintProfileChart(entity, rows) {
     svg._ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(draw, 80); });
     svg._ro.observe(svg);
   }
+
+  // Hover tooltip — event delegation survives re-draws
+  const tip = document.getElementById("metric-tooltip");
+  if (tip) {
+    const rowsByRound = {};
+    rows.forEach(r => { rowsByRound[r.round] = r; });
+
+    function showChartTip(ev) {
+      const hit = ev.target.closest(".profile-chart-hit");
+      if (!hit) return;
+      const round = parseInt(hit.getAttribute("data-round"), 10);
+      const r = rowsByRound[round];
+      if (!r) return;
+      let cls = "f-normal";
+      if (r.finish === 1) cls = "f-win";
+      else if (r.finish <= 5) cls = "f-t5";
+      else if (r.finish <= 10) cls = "f-t10";
+      else if (r.finish > 25) cls = "f-bad";
+      const html = `
+        <div class="tm-tt-hdr">R${r.round}${r.track_code ? " · " + escapeHTML(r.track_code) : ""}</div>
+        <div class="tm-tt-row"><span class="lbl">Track</span><span class="val">${escapeHTML(r.track || "—")}</span></div>
+        <div class="tm-tt-row"><span class="lbl">Start</span><span class="val">${r.start ?? "—"}</span></div>
+        <div class="tm-tt-row"><span class="lbl">Finish</span><span class="val"><span class="finish-badge ${cls}">${r.finish ?? "—"}</span></span></div>
+        <div class="tm-tt-row"><span class="lbl">Race points</span><span class="val">${r.total ?? 0}</span></div>
+        <div class="tm-tt-row"><span class="lbl">Cumulative</span><span class="val">${hit.getAttribute("data-cum")}</span></div>
+      `;
+      tip.innerHTML = html;
+      tip.className = "tm-tip show";
+      const rect = tip.getBoundingClientRect();
+      let left = ev.clientX + 12, top = ev.clientY + 12;
+      if (left + rect.width > window.innerWidth - 8) left = ev.clientX - rect.width - 12;
+      if (top + rect.height > window.innerHeight - 8) top = ev.clientY - rect.height - 12;
+      if (left < 8) left = 8;
+      if (top < 8) top = 8;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+    }
+    function hideChartTip(ev) {
+      const hit = ev.target.closest(".profile-chart-hit");
+      const going = ev.relatedTarget && ev.relatedTarget.closest ? ev.relatedTarget.closest(".profile-chart-hit") : null;
+      if (hit && !going) tip.classList.remove("show");
+    }
+    if (svg._chartMove) svg.removeEventListener("mousemove", svg._chartMove);
+    if (svg._chartOut)  svg.removeEventListener("mouseout",  svg._chartOut);
+    svg._chartMove = showChartTip;
+    svg._chartOut  = hideChartTip;
+    svg.addEventListener("mousemove", svg._chartMove);
+    svg.addEventListener("mouseout",  svg._chartOut);
+  }
 }
 
 function paintProfileHeatStrip(rows) {
   const host = document.getElementById("profile-heat-strip");
   if (!host) return;
   host.innerHTML = rows.map(r => {
-    if (r.dns) return `<div class="profile-heat-cell heat-dns" title="R${r.round} · DNS"><span>—</span><span class="r">R${r.round}</span></div>`;
+    if (r.dns) {
+      return `<div class="profile-heat-cell heat-dns" data-round="${r.round}" data-dns="1"><span>—</span><span class="r">R${r.round}</span></div>`;
+    }
     let cls = "heat-mid";
     if (r.finish === 1) cls = "heat-top";
     else if (r.finish <= 5) cls = "heat-up";
     else if (r.finish <= 10) cls = "heat-mid";
     else if (r.finish <= 20) cls = "heat-down";
     else cls = "heat-bot";
-    return `<div class="profile-heat-cell ${cls}" title="R${r.round} · ${escapeHTML(r.track || '')} · P${r.finish}">${r.finish}<span class="r">R${r.round}</span></div>`;
+    return `<div class="profile-heat-cell ${cls}" data-round="${r.round}">${r.finish}<span class="r">R${r.round}</span></div>`;
   }).join("");
+
+  // Hover wiring
+  const tip = document.getElementById("metric-tooltip");
+  if (!tip) return;
+  const rowsByRound = {};
+  rows.forEach(r => { rowsByRound[r.round] = r; });
+
+  function showHeatTip(ev) {
+    const cell = ev.target.closest(".profile-heat-cell");
+    if (!cell || !host.contains(cell)) return;
+    const round = parseInt(cell.getAttribute("data-round"), 10);
+    const r = rowsByRound[round];
+    if (!r) return;
+    let html;
+    if (r.dns) {
+      html = `
+        <div class="tm-tt-hdr">R${r.round}${r.track_code ? " · " + escapeHTML(r.track_code) : ""}</div>
+        <div class="tm-tt-row"><span class="lbl">Track</span><span class="val">${escapeHTML(r.track || "—")}</span></div>
+        <div class="tm-tt-row"><span class="lbl">Result</span><span class="val" style="color:var(--dim);font-style:italic;">Did not start</span></div>
+      `;
+    } else {
+      let cls = "f-normal";
+      if (r.finish === 1) cls = "f-win";
+      else if (r.finish <= 5) cls = "f-t5";
+      else if (r.finish <= 10) cls = "f-t10";
+      else if (r.finish > 25) cls = "f-bad";
+      html = `
+        <div class="tm-tt-hdr">R${r.round}${r.track_code ? " · " + escapeHTML(r.track_code) : ""}</div>
+        <div class="tm-tt-row"><span class="lbl">Track</span><span class="val">${escapeHTML(r.track || "—")}</span></div>
+        <div class="tm-tt-row"><span class="lbl">Start</span><span class="val">${r.start ?? "—"}</span></div>
+        <div class="tm-tt-row"><span class="lbl">Finish</span><span class="val"><span class="finish-badge ${cls}">${r.finish}</span></span></div>
+        <div class="tm-tt-row"><span class="lbl">Race points</span><span class="val">${r.total ?? 0}</span></div>
+      `;
+    }
+    tip.innerHTML = html;
+    tip.className = "tm-tip show";
+    const rect = tip.getBoundingClientRect();
+    let left = ev.clientX + 12, top = ev.clientY + 12;
+    if (left + rect.width > window.innerWidth - 8) left = ev.clientX - rect.width - 12;
+    if (top + rect.height > window.innerHeight - 8) top = ev.clientY - rect.height - 12;
+    if (left < 8) left = 8;
+    if (top < 8) top = 8;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+  function hideHeatTip(ev) {
+    const cell = ev.target.closest(".profile-heat-cell");
+    const going = ev.relatedTarget && ev.relatedTarget.closest ? ev.relatedTarget.closest(".profile-heat-cell") : null;
+    if (cell && !going) tip.classList.remove("show");
+  }
+  if (host._heatMove) host.removeEventListener("mousemove", host._heatMove);
+  if (host._heatOut)  host.removeEventListener("mouseout",  host._heatOut);
+  host._heatMove = showHeatTip;
+  host._heatOut  = hideHeatTip;
+  host.addEventListener("mousemove", host._heatMove);
+  host.addEventListener("mouseout",  host._heatOut);
 }
 
 function paintProfileRaceTable(rows, kind) {
