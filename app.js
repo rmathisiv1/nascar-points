@@ -17,12 +17,13 @@ const STATE = {
   breakdown: { drivers: [], ftOnly: true },  // array of driver keys, max 4
   trajectory: { mode: "season", show: "all", labels: "top12" },
   teammates: { metric: "fin", ftOnly: true },
+  profile: { kind: null, slug: null },
   standings: { sortKey: "total", sortDir: "desc" },
 };
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
+const VIEWS = ["form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "profile"];
 
 // ============================================================
 // BOOT
@@ -47,7 +48,27 @@ async function boot() {
 function parseHash() {
   const h = location.hash.replace("#/", "").split("/");
   const view = h[0];
+  // Profile routes: #/profile/tyler-reddick or #/car/45
+  if (view === "profile" || view === "car") {
+    STATE.view = "profile";
+    STATE.profile = {
+      kind: view,              // "profile" (driver) or "car"
+      slug: h[1] || null,
+    };
+    return;
+  }
   STATE.view = VIEWS.includes(view) ? view : "form";
+}
+
+// Slug helper: "A.J. Allmendinger" → "a-j-allmendinger"
+function slugify(name) {
+  if (!name) return "";
+  return String(name)
+    .toLowerCase()
+    .replace(/[.']/g, "")            // drop periods/apostrophes
+    .replace(/[^a-z0-9]+/g, "-")     // non-alphanumeric → dash
+    .replace(/^-+|-+$/g, "")         // trim leading/trailing dashes
+    || "driver";
 }
 
 // ============================================================
@@ -279,6 +300,7 @@ function render() {
     case "breakdown":  renderBreakdown(); break;
     case "trajectory": renderTrajectory(); break;
     case "teammates":  renderTeammates(); break;
+    case "profile":    renderProfile(); break;
     case "heatmap":    renderHeatmap(); break;
     case "standings":  renderStandings(); break;
   }
@@ -351,6 +373,13 @@ function displayName(entity) {
 
 function entityKey(entity) {
   return (STATE.entity === "owner") ? `#${entity.car_number}` : entity.driver;
+}
+
+// Returns the hash URL for this entity's profile page.
+// In driver mode: #/profile/<driver-slug>. In owner mode: #/car/<car-number>.
+function profileHref(entity) {
+  if (STATE.entity === "owner") return `#/car/${entity.car_number}`;
+  return `#/profile/${slugify(entity.driver)}`;
 }
 
 function computeSeasonTotals() {
@@ -568,10 +597,10 @@ function renderFormTable() {
     const teamPill = renderTeamPill(STATE.series, d.car_number, d.team);
     return `<tr>
       <td class="num" style="color: var(--dim)">${i + 1}</td>
-      <td><span class="driver-cell">
+      <td><a class="driver-cell profile-link" href="${profileHref(d)}">
         <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
         <span>${escapeHTML(displayName(d))}</span>
-      </span></td>
+      </a></td>
       <td>${teamPill}</td>
       ${raceCells}
       <td><span class="form-wrap">${spark}<span class="trend ${trend.cls}">${trend.a}</span></span></td>
@@ -753,14 +782,17 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected) {
     const label = (STATE.entity === "owner" && (e.drivers || []).length > 1)
       ? `${lastName} +${(e.drivers || []).length - 1}`
       : lastName;
-    return `<div class="driver-pill ${sel}" data-key="${escapeHTML(entityKey(e))}" title="${escapeHTML(displayName(e))}">
+    return `<div class="driver-pill ${sel}" data-key="${escapeHTML(entityKey(e))}" title="${escapeHTML(displayName(e))} — click to toggle, ↗ to open profile">
       <span class="dp-num" style="background:${carHex};color:${txt}">${e.car_number}</span>
       <span class="dp-name">${escapeHTML(label)}</span>
+      <a class="dp-jump profile-link" href="${profileHref(e)}" title="Open ${escapeHTML(displayName(e))} profile" aria-label="Open profile">↗</a>
     </div>`;
   }).join("");
 
   host.querySelectorAll(".driver-pill").forEach(el => {
-    el.addEventListener("click", () => {
+    el.addEventListener("click", (ev) => {
+      // Don't toggle selection if the jump arrow was clicked
+      if (ev.target.closest(".dp-jump")) return;
       const key = el.dataset.key;
       const e = entities.find(x => entityKey(x) === key);
       if (!e) return;
@@ -1457,10 +1489,10 @@ function fillTrajCallout(hostId, rows) {
     const cls = r.resid >= 0 ? "pos" : "neg";
     const sign = r.resid >= 0 ? "+" : "";
     return `<div class="row">
-      <span class="name">
+      <a class="name profile-link" href="${profileHref(r.entity)}">
         <span class="car-tag" style="background:${col};color:${txt}">${r.entity.car_number}</span>
         <span>${escapeHTML(r.entity.driver)}</span>
-      </span>
+      </a>
       <span class="delta ${cls}">${sign}${v}</span>
     </div>`;
   }).join("");
@@ -1678,11 +1710,12 @@ function renderTeammates() {
       const isShared = d.drivers.length > 1;
       const showWbrTag = (d.team !== d.group);
       const ptTag = d.car_full_time ? "" : ` <span class="tm-pt-tag">PT</span>`;
+      const tmHref = (STATE.entity === "owner") ? `#/car/${d.car_number}` : `#/profile/${slugify(d.primary_driver)}`;
       return `<div class="tm-row${d.car_full_time ? "" : " part-time"}">
         <span class="tm-car" style="background:${carHex};color:${carTxt}">${d.car_number}</span>
         <div class="tm-name">
           <div class="tm-name-row">
-            <span class="tm-name-primary">${escapeHTML(d.primary_driver)}</span>${ptTag}
+            <a class="tm-name-primary profile-link" href="${tmHref}">${escapeHTML(d.primary_driver)}</a>${ptTag}
             ${isShared ? `<span class="tm-shared" data-car="${d.car_number}" title="Shared car — hover for details">i</span>` : ""}
             ${showWbrTag ? `<span class="tm-true-team">${escapeHTML(d.team)}</span>` : ""}
           </div>
@@ -1712,6 +1745,21 @@ function renderTeammates() {
   }).join("");
 
   host.innerHTML = html;
+
+  // Paint sparklines at their actual rendered widths so circles stay truly round.
+  // Waiting one frame lets the browser complete layout before we measure.
+  requestAnimationFrame(() => tmPaintSparklines(host));
+
+  // Watch for container width changes and repaint sparklines (not the full render).
+  // One observer on the grid, not one per SVG — saves a ton of observer overhead.
+  if (!host._tmResizeObserver && typeof ResizeObserver !== "undefined") {
+    let timer = null;
+    host._tmResizeObserver = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => tmPaintSparklines(host), 80);
+    });
+    host._tmResizeObserver.observe(host);
+  }
 
   // ---- Wire hover tooltips ----
   const tip = document.getElementById("metric-tooltip");
@@ -1794,32 +1842,57 @@ function renderTeammates() {
 
 // Build the sparkline SVG for a teammate row
 function tmSparkline(seriesPts, color, metric, carLabel) {
-  const clipCap = metric === "fin" ? 40 : 50;
+  // Emit a placeholder SVG with the data encoded. After the DOM is inserted,
+  // tmPaintSparklines() measures each SVG's actual rendered width and draws
+  // using viewBox = pixel dimensions (so circles stay truly round).
   if (seriesPts.length === 0) return "";
-  const width = 180, height = 38;
-  const pad = { t: 5, b: 5, l: 3, r: 3 };
-  const innerW = width - pad.l - pad.r, innerH = height - pad.t - pad.b;
-  const xScale = i => pad.l + (seriesPts.length === 1 ? innerW/2 : (i / (seriesPts.length - 1)) * innerW);
-  const yScale = v => {
-    const clipped = Math.max(-clipCap, Math.min(0, v));
-    return pad.t + ((0 - clipped) / clipCap) * innerH;
-  };
-  const zeroY = yScale(0);
-  const zero = `<line class="tm-spk-zero" x1="${pad.l}" x2="${width - pad.r}" y1="${zeroY}" y2="${zeroY}"/>`;
-  const pathD = seriesPts.map((p, i) => `${xScale(i)},${yScale(p.v)}`).join(" ");
-  const line = `<polyline class="tm-spk-line" points="${pathD}" stroke="${color}"/>`;
-  const dots = seriesPts.map((p, i) => {
-    const x = xScale(i), y = yScale(p.v);
-    const r = p.tl ? 3 : 2.4;
-    const fill = p.tl ? "transparent" : color;
-    const stroke = p.tl ? color : "none";
-    const sw = p.tl ? 1.4 : 0;
-    return `<g class="tm-dot-hit" data-round="${p.round}" data-car="${carLabel}">
-      <circle cx="${x}" cy="${y}" r="7" fill="transparent"/>
-      <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
-    </g>`;
-  }).join("");
-  return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="max-width:100%;height:${height}px">${zero}${line}${dots}</svg>`;
+  const data = encodeURIComponent(JSON.stringify(seriesPts));
+  return `<svg class="tm-spk" data-series="${data}" data-color="${color}" data-metric="${metric}" data-car="${carLabel}" style="width:100%;height:38px;display:block;"></svg>`;
+}
+
+// Measure every .tm-spk SVG and draw it at its real pixel dimensions so circles stay round.
+function tmPaintSparklines(root) {
+  const svgs = (root || document).querySelectorAll("svg.tm-spk");
+  svgs.forEach(svg => {
+    const rect = svg.getBoundingClientRect();
+    const W = Math.max(80, Math.floor(rect.width));
+    const H = 38;
+    const pad = { t: 5, b: 5, l: 3, r: 3 };
+    const innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
+
+    const seriesPts = JSON.parse(decodeURIComponent(svg.getAttribute("data-series") || "[]"));
+    const color = svg.getAttribute("data-color") || "#9ca3af";
+    const metric = svg.getAttribute("data-metric") || "fin";
+    const carLabel = svg.getAttribute("data-car") || "";
+    const clipCap = metric === "fin" ? 40 : 50;
+
+    const xScale = i => pad.l + (seriesPts.length === 1 ? innerW / 2 : (i / (seriesPts.length - 1)) * innerW);
+    const yScale = v => {
+      const clipped = Math.max(-clipCap, Math.min(0, v));
+      return pad.t + ((0 - clipped) / clipCap) * innerH;
+    };
+
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.removeAttribute("preserveAspectRatio");  // default = xMidYMid meet, preserves circle shape
+
+    const zeroY = yScale(0);
+    const zero = `<line class="tm-spk-zero" x1="${pad.l}" x2="${W - pad.r}" y1="${zeroY}" y2="${zeroY}"/>`;
+    const pathD = seriesPts.map((p, i) => `${xScale(i)},${yScale(p.v)}`).join(" ");
+    const line = `<polyline class="tm-spk-line" points="${pathD}" stroke="${color}"/>`;
+    const dots = seriesPts.map((p, i) => {
+      const x = xScale(i), y = yScale(p.v);
+      const r = p.tl ? 3 : 2.4;
+      const fill = p.tl ? "transparent" : color;
+      const stroke = p.tl ? color : "none";
+      const sw = p.tl ? 1.4 : 0;
+      return `<g class="tm-dot-hit" data-round="${p.round}" data-car="${carLabel}">
+        <circle cx="${x}" cy="${y}" r="7" fill="transparent"/>
+        <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>
+      </g>`;
+    }).join("");
+
+    svg.innerHTML = `${zero}${line}${dots}`;
+  });
 }
 
 function tmDeltaClass(metric, avg) {
@@ -1827,6 +1900,438 @@ function tmDeltaClass(metric, avg) {
   if (avg >= -2 * scale) return "good";
   if (avg <= -8 * scale) return "bad";
   return "meh";
+}
+
+// ============================================================
+// PROFILE (driver or car)
+// ============================================================
+// Resolves a slug to an entity from the current season's data.
+// Returns null if not found. This is the current-season view — career-wide
+// aggregation will come in a later pass with lazy-loaded other seasons.
+function findEntityFromSlug() {
+  if (!STATE.data || !STATE.profile.slug) return null;
+  const races = racesSorted();
+  if (STATE.profile.kind === "car") {
+    // Find any race where this car_number appears
+    for (const r of races) {
+      for (const d of (r.results || [])) {
+        if (d.ineligible) continue;
+        if (d.car_number === STATE.profile.slug) {
+          // Return an entity wrapped like allEntities() would
+          return allEntities().find(e => e.car_number === d.car_number) || null;
+        }
+      }
+    }
+    return null;
+  }
+  // driver profile (default)
+  for (const e of allEntities()) {
+    if (slugify(e.driver) === STATE.profile.slug) return e;
+    // Also check every driver who ever drove this car (shared-car case)
+    if (e.drivers && e.drivers.some(dn => slugify(dn) === STATE.profile.slug)) {
+      return allEntities().find(x => x.driver === e.drivers.find(dn => slugify(dn) === STATE.profile.slug)) || e;
+    }
+  }
+  return null;
+}
+
+// Determine which season a car ran (needed for the career table once lazy-loaded).
+// For now just the current season.
+function profileRaceRows(entity) {
+  const races = racesSorted();
+  const byRound = {};
+  entity.races.forEach(r => { byRound[r.round] = r; });
+  return races.map(r => {
+    const mine = byRound[r.round];
+    const meta = { round: r.round, date: r.date, track: r.track, track_code: r.track_code, name: r.name };
+    if (!mine) return { ...meta, dns: true };
+    return {
+      ...meta,
+      start: mine.start,
+      finish: mine.finish,
+      s1: mine.s1, s2: mine.s2, fin: mine.fin, fl: mine.fl,
+      total: mine.total,
+      status: mine.status,
+      driver: mine.driver,
+    };
+  });
+}
+
+function profileSummary(entity) {
+  const rows = entity.races;
+  const finishes = rows.map(r => r.finish).filter(x => x != null);
+  const starts = rows.length;
+  const wins = finishes.filter(f => f === 1).length;
+  const t5 = finishes.filter(f => f <= 5).length;
+  const t10 = finishes.filter(f => f <= 10).length;
+  const avgFin = finishes.length ? (finishes.reduce((s, x) => s + x, 0) / finishes.length) : null;
+  const totalPts = rows.reduce((s, r) => s + (r.total || 0), 0);
+  return { starts, wins, t5, t10, avgFin, totalPts };
+}
+
+function profileRank(entity) {
+  const totals = computeSeasonTotals();
+  const idx = totals.findIndex(t => t.driver === entity.driver && t.car_number === entity.car_number);
+  return { rank: idx + 1, of: totals.length };
+}
+
+// Compute teammate deltas just for this driver this season (reuses teammate view's logic lightly)
+function profileTeammates(entity) {
+  if (!STATE.data) return [];
+  const races = racesSorted();
+  const totalSeason = races.length;
+  // Build full-time car set
+  const carCount = {};
+  races.forEach(r => {
+    const seen = new Set();
+    (r.results || []).forEach(d => {
+      if (d.ineligible) return;
+      if (seen.has(d.car_number)) return;
+      seen.add(d.car_number);
+      carCount[d.car_number] = (carCount[d.car_number] || 0) + 1;
+    });
+  });
+  const ftCars = new Set(Object.keys(carCount).filter(c => carCount[c] >= totalSeason));
+
+  const myTeam = teamCodeFromPalette(STATE.series, entity.car_number);
+  if (!myTeam) return [];
+
+  // Alliance: WBR rides with PEN
+  const ALLIANCE = { WBR: "PEN" };
+  const myGroup = ALLIANCE[myTeam] || myTeam;
+
+  // Head-to-head record per teammate + avg delta
+  const mates = {};  // teammate driver name → { car, beat, lost, tied, deltas: [] }
+  races.forEach(r => {
+    let myEntry = null;
+    const teamEntries = [];
+    (r.results || []).forEach(d => {
+      if (d.ineligible) return;
+      const t = teamCodeFromPalette(STATE.series, d.car_number);
+      if (!t) return;
+      const g = ALLIANCE[t] || t;
+      if (g !== myGroup) return;
+      if (d.car_number === entity.car_number) myEntry = d;
+      else teamEntries.push(d);
+    });
+    if (!myEntry || myEntry.finish_pos == null) return;
+    teamEntries.forEach(te => {
+      if (te.finish_pos == null) return;
+      const key = te.driver;
+      if (!mates[key]) mates[key] = { driver: te.driver, car: te.car_number, beat: 0, lost: 0, tied: 0, deltaSum: 0, races: 0 };
+      if (myEntry.finish_pos < te.finish_pos) mates[key].beat++;
+      else if (myEntry.finish_pos > te.finish_pos) mates[key].lost++;
+      else mates[key].tied++;
+      mates[key].deltaSum += (te.finish_pos - myEntry.finish_pos);  // positive = I beat them
+      mates[key].races++;
+    });
+  });
+  return Object.values(mates)
+    .map(m => ({ ...m, avgDelta: m.races ? m.deltaSum / m.races : 0 }))
+    .sort((a, b) => b.avgDelta - a.avgDelta);
+}
+
+function renderProfile() {
+  const host = document.getElementById("view-profile");
+  if (!host) return;
+  if (!STATE.data) {
+    host.innerHTML = `<div class="view-head"><h1>Profile</h1><div class="view-sub">No data loaded.</div></div>`;
+    return;
+  }
+
+  const entity = findEntityFromSlug();
+  if (!entity) {
+    host.innerHTML = `
+      <div class="view-head"><h1>Profile not found</h1>
+        <div class="view-sub">No driver or car matched "${escapeHTML(STATE.profile.slug || "")}" in ${STATE.season} ${STATE.series}. <a href="#/standings" class="profile-backlink">Back to Standings →</a></div>
+      </div>`;
+    return;
+  }
+
+  // Resolve display entity based on current DRIVER/OWNER toggle.
+  // In owner mode, profile is a CAR (aggregated); in driver mode, a DRIVER.
+  // Currently this is the natural entity shape from allEntities(), which respects the toggle.
+  const kind = STATE.entity;  // "driver" | "owner"
+  const summary = profileSummary(entity);
+  const { rank, of } = profileRank(entity);
+  const carHex = colorFor(STATE.series, entity.car_number);
+  const carTxt = contrastTextFor(carHex);
+  const teamCode = teamCodeFromPalette(STATE.series, entity.car_number) || "";
+  const orgHex = orgColorFor(STATE.series, entity.car_number) || "#555";
+  const orgTxt = contrastTextFor(orgHex);
+
+  const displayTitle = (kind === "owner")
+    ? (entity.drivers && entity.drivers.length > 1
+        ? `#${entity.car_number} · ${entity.driver} +${entity.drivers.length - 1}`
+        : `#${entity.car_number} · ${entity.driver}`)
+    : entity.driver;
+
+  const rows = profileRaceRows(entity);
+  const mfr = { TYT: "Toyota", CHE: "Chevrolet", CHV: "Chevrolet", FRD: "Ford", FOR: "Ford" }[entity.manufacturer] || entity.manufacturer || "—";
+  const teamName = TEAM_FULL_NAMES[teamCode] || teamCode;
+
+  host.innerHTML = `
+    <div class="profile-breadcrumb">
+      <a href="#/standings" class="profile-backlink">← Standings</a>
+      <span class="sep">/</span>
+      <span>${escapeHTML(displayTitle)}</span>
+    </div>
+
+    <div class="profile-hero" style="--driver-color:${carHex}">
+      <div class="profile-hero-car" style="background:${carHex};color:${carTxt}">${entity.car_number}</div>
+      <div class="profile-hero-info">
+        <h1 class="profile-hero-name">${escapeHTML(displayTitle)}</h1>
+        <div class="profile-hero-meta">
+          <span class="team-pill" style="background:${orgHex};color:${orgTxt}">${escapeHTML(teamCode)}</span>
+          <span class="profile-hero-team"><strong>${escapeHTML(mfr)}</strong> · ${escapeHTML(teamName)}</span>
+        </div>
+      </div>
+      <div class="profile-hero-rank">
+        <div class="profile-rank-num" style="color:${carHex}">${rank}${rankSuffix(rank)}</div>
+        <div class="profile-rank-label">${STATE.season} ${STATE.series}</div>
+        <div class="profile-rank-pts">${summary.totalPts} pts</div>
+      </div>
+    </div>
+
+    <div class="profile-stats">
+      <div class="stat"><span class="k">Starts</span><span class="v">${summary.starts}</span></div>
+      <div class="stat"><span class="k">Wins</span><span class="v ${summary.wins > 0 ? 'hot' : ''}">${summary.wins}</span></div>
+      <div class="stat"><span class="k">Top 5</span><span class="v">${summary.t5}</span></div>
+      <div class="stat"><span class="k">Top 10</span><span class="v">${summary.t10}</span></div>
+      <div class="stat"><span class="k">Avg Finish</span><span class="v">${summary.avgFin ? summary.avgFin.toFixed(1) : '—'}</span></div>
+      <div class="stat"><span class="k">Points rank</span><span class="v">${rank} / ${of}</span></div>
+    </div>
+
+    <div class="profile-panels">
+      <div class="profile-panel">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">${STATE.season} Season Cumulative</span>
+          <span class="profile-panel-sub">Points accrued by race</span>
+        </div>
+        <div class="profile-panel-body">
+          <svg id="profile-chart" style="width:100%;height:260px;display:block;"></svg>
+        </div>
+      </div>
+
+      <div class="profile-panel">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">${STATE.season} Finish Per Race</span>
+          <span class="profile-panel-sub">Green = top · Red = bad day</span>
+        </div>
+        <div class="profile-panel-body">
+          <div class="profile-heat-strip" id="profile-heat-strip"></div>
+        </div>
+      </div>
+
+      <div class="profile-panel full">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">${STATE.season} Race-by-Race</span>
+          <span class="profile-panel-sub">${rows.filter(r => !r.dns).length} starts</span>
+        </div>
+        <div class="profile-panel-body" style="padding:0;">
+          <div style="overflow-x:auto;">
+          <table class="profile-race-table">
+            <thead>
+              <tr>
+                <th>R</th>
+                <th>Track</th>
+                <th>Race</th>
+                <th class="num">Start</th>
+                <th class="num">Finish</th>
+                <th class="num">S1</th>
+                <th class="num">S2</th>
+                <th class="num">FL</th>
+                <th class="num">Fin pts</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody id="profile-race-tbody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-panel full">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">${STATE.season} Teammates</span>
+          <span class="profile-panel-sub">Head-to-head vs. ${escapeHTML(teamCode)} drivers</span>
+        </div>
+        <div class="profile-panel-body">
+          <div id="profile-teammates"></div>
+        </div>
+      </div>
+
+      <div class="profile-panel full">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">Career By Season</span>
+          <span class="profile-panel-sub">Multi-year data coming in a future update</span>
+        </div>
+        <div class="profile-panel-body">
+          <div class="muted" style="padding:10px 4px;font-size:12px;">Career-wide view will populate as prior seasons are loaded. Currently showing ${STATE.season} only.</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // --- Fill in the chart ---
+  paintProfileChart(entity, rows);
+  paintProfileHeatStrip(rows);
+  paintProfileRaceTable(rows, kind);
+  paintProfileTeammates(entity);
+}
+
+function rankSuffix(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "st";
+  if (mod10 === 2 && mod100 !== 12) return "nd";
+  if (mod10 === 3 && mod100 !== 13) return "rd";
+  return "th";
+}
+
+function paintProfileChart(entity, rows) {
+  const svg = document.getElementById("profile-chart");
+  if (!svg) return;
+  const carHex = colorFor(STATE.series, entity.car_number);
+
+  // Cumulative
+  let cum = 0;
+  const pts = rows.filter(r => !r.dns).map(r => { cum += r.total || 0; return { round: r.round, cum, finish: r.finish, track_code: r.track_code, track: r.track }; });
+  if (pts.length === 0) { svg.innerHTML = ""; return; }
+  const rawMax = pts[pts.length - 1].cum;
+  const maxPts = Math.max(50, Math.ceil((rawMax * 1.08) / 50) * 50);
+
+  function draw() {
+    const rect = svg.getBoundingClientRect();
+    const W = Math.max(320, Math.floor(rect.width));
+    const H = 260;
+    const pad = { t: 16, r: 48, b: 32, l: 52 };
+    const innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.removeAttribute("preserveAspectRatio");
+
+    const xScale = i => pad.l + (pts.length === 1 ? innerW / 2 : (i / (pts.length - 1)) * innerW);
+    const yScale = v => pad.t + (1 - v / maxPts) * innerH;
+
+    const gridY = [];
+    for (let i = 0; i <= 5; i++) {
+      const y = pad.t + (i / 5) * innerH;
+      const v = Math.round(maxPts * (1 - i / 5));
+      gridY.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
+      gridY.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
+    }
+    const xLabels = pts.map((p, i) =>
+      `<text class="axis-label" x="${xScale(i)}" y="${H - 10}" text-anchor="middle">R${p.round}</text>`
+    ).join("");
+
+    const lineD = pts.map((p, i) => `${xScale(i)},${yScale(p.cum)}`).join(" ");
+    const areaD = `M${xScale(0)},${pad.t + innerH} L${pts.map((p, i) => `${xScale(i)},${yScale(p.cum)}`).join(" L")} L${xScale(pts.length - 1)},${pad.t + innerH} Z`;
+
+    const dots = pts.map((p, i) => {
+      const isWin = p.finish === 1;
+      const r = isWin ? 5 : 3.5;
+      const stroke = isWin ? "#fff" : "none";
+      return `<circle cx="${xScale(i)}" cy="${yScale(p.cum)}" r="${r}" fill="${carHex}" stroke="${stroke}" stroke-width="${isWin ? 1.5 : 0}"><title>R${p.round} ${p.track_code || ""} · P${p.finish} · ${p.cum}pts</title></circle>`;
+    }).join("");
+
+    const last = pts[pts.length - 1];
+    const lastX = xScale(pts.length - 1), lastY = yScale(last.cum);
+    const labelTotal = `<text x="${lastX + 8}" y="${lastY + 4}" font-family="var(--mono)" font-size="12" font-weight="700" fill="${carHex}">${last.cum}</text>`;
+
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="profile-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${carHex}" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="${carHex}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${gridY.join("")}
+      ${xLabels}
+      <path d="${areaD}" fill="url(#profile-grad)" opacity="0.4"/>
+      <polyline points="${lineD}" fill="none" stroke="${carHex}" stroke-width="2"/>
+      ${dots}
+      ${labelTotal}
+    `;
+  }
+  requestAnimationFrame(draw);
+  if (typeof ResizeObserver !== "undefined" && !svg._ro) {
+    let t = null;
+    svg._ro = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(draw, 80); });
+    svg._ro.observe(svg);
+  }
+}
+
+function paintProfileHeatStrip(rows) {
+  const host = document.getElementById("profile-heat-strip");
+  if (!host) return;
+  host.innerHTML = rows.map(r => {
+    if (r.dns) return `<div class="profile-heat-cell heat-dns" title="R${r.round} · DNS"><span>—</span><span class="r">R${r.round}</span></div>`;
+    let cls = "heat-mid";
+    if (r.finish === 1) cls = "heat-top";
+    else if (r.finish <= 5) cls = "heat-up";
+    else if (r.finish <= 10) cls = "heat-mid";
+    else if (r.finish <= 20) cls = "heat-down";
+    else cls = "heat-bot";
+    return `<div class="profile-heat-cell ${cls}" title="R${r.round} · ${escapeHTML(r.track || '')} · P${r.finish}">${r.finish}<span class="r">R${r.round}</span></div>`;
+  }).join("");
+}
+
+function paintProfileRaceTable(rows, kind) {
+  const tbody = document.getElementById("profile-race-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(r => {
+    if (r.dns) {
+      return `<tr style="opacity:0.4">
+        <td class="rnd">R${r.round}</td>
+        <td class="track"><strong>${escapeHTML(r.track_code || '')}</strong> · ${escapeHTML(r.track || '')}</td>
+        <td colspan="8" style="color:var(--dim);font-style:italic">DNS</td>
+      </tr>`;
+    }
+    let cls = "f-normal";
+    if (r.finish === 1) cls = "f-win";
+    else if (r.finish <= 5) cls = "f-t5";
+    else if (r.finish <= 10) cls = "f-t10";
+    else if (r.finish > 25) cls = "f-bad";
+    const driverNote = (kind === "owner" && r.driver) ? `<div class="race-driver-tag">${escapeHTML(r.driver)}</div>` : "";
+    return `<tr>
+      <td class="rnd">R${r.round}</td>
+      <td class="track"><strong>${escapeHTML(r.track_code || '')}</strong> · ${escapeHTML(r.track || '')}${driverNote}</td>
+      <td style="color:var(--muted)">${escapeHTML(r.name || '')}</td>
+      <td class="num">${r.start ?? '—'}</td>
+      <td class="num"><span class="finish-badge ${cls}">${r.finish ?? '—'}</span></td>
+      <td class="num">${r.s1 || '—'}</td>
+      <td class="num">${r.s2 || '—'}</td>
+      <td class="num">${r.fl || '—'}</td>
+      <td class="num">${r.fin}</td>
+      <td class="num" style="font-weight:700">${r.total}</td>
+    </tr>`;
+  }).join("");
+}
+
+function paintProfileTeammates(entity) {
+  const host = document.getElementById("profile-teammates");
+  if (!host) return;
+  const mates = profileTeammates(entity);
+  if (mates.length === 0) {
+    host.innerHTML = `<div class="muted" style="padding:10px;font-size:12px;">No teammates this season (single-car team).</div>`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="profile-tm-header">
+      <span></span><span>Teammate</span><span style="text-align:right;">Avg ΔFin</span><span style="text-align:right;">Beat</span>
+    </div>
+    ${mates.map(m => {
+      const c = colorFor(STATE.series, m.car);
+      const t = contrastTextFor(c);
+      const cls = m.avgDelta > 0.5 ? "beat" : m.avgDelta < -0.5 ? "lost" : "tied";
+      const sign = m.avgDelta > 0 ? "+" : "";
+      return `<div class="profile-tm-row">
+        <span class="tm-car" style="background:${c};color:${t}">${m.car}</span>
+        <span class="tm-name"><a class="profile-link" href="#/profile/${slugify(m.driver)}">${escapeHTML(m.driver)}</a></span>
+        <span class="profile-tm-delta ${cls}">${sign}${m.avgDelta.toFixed(1)}</span>
+        <span class="profile-tm-record">${m.beat}-${m.lost}${m.tied > 0 ? "-" + m.tied : ""}</span>
+      </div>`;
+    }).join("")}
+  `;
 }
 
 // ============================================================
@@ -1865,8 +2370,9 @@ function renderHeatmap() {
   drivers.forEach(d => {
     const carHex = colorFor(STATE.series, d.car_number);
     const txt = contrastTextFor(carHex);
-    const label = document.createElement("div");
-    label.className = "hm-label";
+    const label = document.createElement("a");
+    label.className = "hm-label profile-link";
+    label.href = profileHref(d);
     label.innerHTML = `<span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span><span>${escapeHTML(displayName(d))}</span>`;
     grid.appendChild(label);
     const byRound = {};
@@ -1973,12 +2479,14 @@ function renderStandings() {
     } else {
       pcPill = `<span class="pos-change down">▼${Math.abs(pc)}</span>`;
     }
+    const profileSlug = (STATE.entity === "owner") ? r.car_number : slugify(r.primaryDriver);
+    const profileKind = (STATE.entity === "owner") ? "car" : "profile";
     return `<tr>
       <td class="rank-cell">${r.currRank}${pcPill}</td>
-      <td><span class="driver-cell">
+      <td><a class="driver-cell profile-link" href="#/${profileKind}/${profileSlug}">
         <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span>${escapeHTML(r.displayLabel)}</span>
-      </span></td>
+      </a></td>
       <td>${teamPill}</td>
       <td class="num">${r.starts}</td>
       <td class="num">${r.wins}</td>
@@ -2086,12 +2594,13 @@ function rankingRowsFrom(map) {
       ? e.finishes.reduce((s, x) => s + x, 0) / e.finishes.length
       : null;
     const driversArr = Array.from(e.driversSet);
+    const primaryDriver = e.driver;  // keep the original driver name for slugging
     const displayLabel = (STATE.entity === "owner")
       ? (driversArr.length > 1
           ? `#${e.car_number} · ${e.driver} +${driversArr.length - 1}`
           : `#${e.car_number} · ${e.driver}`)
       : e.driver;
-    return { ...e, avgFinish, displayLabel, driver: displayLabel };
+    return { ...e, avgFinish, displayLabel, primaryDriver, driver: displayLabel };
   });
   rows.sort((a, b) => b.total - a.total);
   return rows;
