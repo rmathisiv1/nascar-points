@@ -3346,16 +3346,21 @@ function renderStandings() {
 }
 
 function pointsMapThroughRound(maxRound) {
+  const seriesKey = SERIES_TO_KEY[STATE.series];
   const map = new Map();
   (STATE.data?.races || []).forEach(r => {
     if (r.round > maxRound) return;
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
       const key = (STATE.entity === "owner") ? `#${d.car_number}` : d.driver;
+      // Same team-code resolution used in allEntities: scraper field → owner parse
+      const teamCode = d.team_code
+        || teamCodeFromName(d.team, seriesKey, d.car_number)
+        || null;
       if (!map.has(key)) {
         map.set(key, {
           key, driver: d.driver, driversSet: new Set(),
-          car_number: d.car_number, team: d.team,
+          car_number: d.car_number, team: d.team, team_code: teamCode,
           total: 0, starts: 0, wins: 0, top5: 0, top10: 0,
           finishes: [],
           sumS1: 0, sumS2: 0, sumFin: 0, sumFL: 0,
@@ -3365,6 +3370,7 @@ function pointsMapThroughRound(maxRound) {
       e.driversSet.add(d.driver);
       e.driver = d.driver;
       e.team = d.team;
+      if (teamCode) e.team_code = teamCode;
       e.car_number = d.car_number;
       e.total += d.race_pts || 0;
       e.sumS1 += d.stage_1_pts || 0;
