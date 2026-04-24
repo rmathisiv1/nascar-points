@@ -2666,34 +2666,71 @@ function tmDeltaClass(metric, avg) {
 // ============================================================
 // PROFILE (driver or car)
 // ============================================================
-// Resolves a slug to an entity from the current season's data.
-// Returns null if not found. This is the current-season view — career-wide
-// aggregation will come in a later pass with lazy-loaded other seasons.
+// Resolves a slug to a CAR entity from the current season's data.
+// Returns null if not found.
+//
+// The app is car-centric — every profile route ultimately resolves to a car.
+// Route kinds:
+//   - kind "car":     slug is a car number (e.g. "#/car/45")
+//   - kind "profile": slug is a driver-name slug (e.g. "#/profile/tyler-reddick").
+//                     Backward-compat for old bookmarks — resolves to the car
+//                     that driver drove most in the current season.
+//
+// After a successful "profile" resolution, we rewrite the URL hash to the
+// canonical "#/car/<N>" form so subsequent copies of the URL are canonical.
 function findEntityFromSlug() {
   if (!STATE.data || !STATE.profile.slug) return null;
-  const races = racesSorted();
+
   if (STATE.profile.kind === "car") {
-    // Find any race where this car_number appears
-    for (const r of races) {
-      for (const d of (r.results || [])) {
-        if (d.ineligible) continue;
-        if (d.car_number === STATE.profile.slug) {
-          // Return an entity wrapped like allEntities() would
-          return allEntities().find(e => e.car_number === d.car_number) || null;
-        }
+    // Direct car lookup
+    return allEntities().find(e => e.car_number === STATE.profile.slug) || null;
+  }
+
+  // Legacy driver-slug route — find the car where this driver drove the most.
+  // Matches against the primary driver first, then falls back to any co-driver.
+  const slug = STATE.profile.slug;
+  const entities = allEntities();
+
+  // Pass 1: primary driver match (most common case)
+  const primaryHit = entities.find(e => slugify(e.primaryDriver || e.driver) === slug);
+  if (primaryHit) {
+    canonicalizeProfileURL(primaryHit);
+    return primaryHit;
+  }
+
+  // Pass 2: any co-driver match. Pick the car where the matched driver has the
+  // most starts (a driver-name slug could match two cars if they subbed in both).
+  let bestHit = null;
+  let bestStarts = -1;
+  entities.forEach(e => {
+    (e.driversByStarts || []).forEach(dc => {
+      if (slugify(dc.name) === slug && dc.starts > bestStarts) {
+        bestHit = e;
+        bestStarts = dc.starts;
       }
-    }
-    return null;
+    });
+  });
+  if (bestHit) {
+    canonicalizeProfileURL(bestHit);
+    return bestHit;
   }
-  // driver profile (default)
-  for (const e of allEntities()) {
-    if (slugify(e.driver) === STATE.profile.slug) return e;
-    // Also check every driver who ever drove this car (shared-car case)
-    if (e.drivers && e.drivers.some(dn => slugify(dn) === STATE.profile.slug)) {
-      return allEntities().find(x => x.driver === e.drivers.find(dn => slugify(dn) === STATE.profile.slug)) || e;
-    }
-  }
+
   return null;
+}
+
+// Rewrites the URL to the canonical car-profile form without triggering a
+// navigation event. Only called after a legacy slug route has been resolved.
+function canonicalizeProfileURL(entity) {
+  if (!entity || !entity.car_number) return;
+  const canonical = `#/car/${entity.car_number}`;
+  if (location.hash === canonical) return;
+  // Update STATE so subsequent route reads reflect the canonical form
+  STATE.profile.kind = "car";
+  STATE.profile.slug = entity.car_number;
+  // Rewrite history entry without firing hashchange
+  try {
+    history.replaceState(null, "", canonical);
+  } catch (_) { /* no-op if replaceState unavailable */ }
 }
 
 // Determine which season a car ran (needed for the career table once lazy-loaded).
@@ -3382,7 +3419,7 @@ function paintProfileTeammates(entity) {
       const sign = m.avgDelta > 0 ? "+" : "";
       return `<div class="profile-tm-row">
         <span class="tm-car" style="background:${c};color:${t}">${m.car}</span>
-        <span class="tm-name"><a class="profile-link" href="#/profile/${slugify(m.driver)}">${escapeHTML(m.driver)}</a></span>
+        <span class="tm-name"><a class="profile-link" href="#/car/${m.car}">${escapeHTML(m.driver)}</a></span>
         <span class="profile-tm-delta ${cls}">${sign}${m.avgDelta.toFixed(1)}</span>
         <span class="profile-tm-record">${m.beat}-${m.lost}${m.tied > 0 ? "-" + m.tied : ""}</span>
       </div>`;
