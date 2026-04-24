@@ -2650,9 +2650,14 @@ a.driver-cell.profile-link:hover .car-tag {
     text-overflow: ellipsis;
   }
 
-  /* ---- Metric bar: auto-scrolling ticker on mobile ---- */
-  /* Wrap the content twice inside the bar with JS (see app.js renderMetricBar)
-     so the animation loops seamlessly. Use translateX on the inner wrapper. */
+  /* ---- Metric bar: auto-scrolling ticker on mobile ----
+     Strategy: JS emits two identical copies of the metrics side-by-side as
+     children of .metricbar-track. The track is flex; each copy is a wrapper
+     .metricbar-copy that takes its natural width. We animate translateX from
+     0 to -50% of the track's own width — since the track contains exactly two
+     identical copies, -50% lands the second copy exactly where the first was,
+     making the loop seamless.
+  */
   .metricbar {
     padding: 5px 0;
     font-size: 10px;
@@ -2663,19 +2668,23 @@ a.driver-cell.profile-link:hover .car-tag {
   }
   .metricbar-track {
     display: flex;
-    gap: 32px;
-    padding-left: 100%;
-    animation: ticker 32s linear infinite;
-    flex-shrink: 0;
+    width: max-content;  /* let the two copies sum to their natural width */
+    animation: ticker 28s linear infinite;
   }
   .metricbar-track:hover { animation-play-state: paused; }
+  .metricbar-copy {
+    display: flex;
+    gap: 24px;
+    padding-right: 24px;  /* gap between the end of copy 1 and start of copy 2 */
+    flex-shrink: 0;
+  }
   .metric { flex-shrink: 0; }
   .metric .k { font-size: 8px; }
   .metric .v { font-size: 11px; }
 
   @keyframes ticker {
     from { transform: translateX(0); }
-    to   { transform: translateX(-100%); }
+    to   { transform: translateX(-50%); }
   }
 
   /* Hamburger button */

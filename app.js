@@ -145,6 +145,97 @@ function wireMobileNav() {
   });
 }
 
+// ============================================================
+// MOBILE DROPDOWN MIRRORING
+// ============================================================
+// On mobile, pill-style toggle groups become <select> dropdowns to save space
+// and feel native. Rather than rebuild every toolbar render path, we MIRROR
+// the existing pill buttons: for each .toggle-group, inject a matching <select>
+// that proxies "change" events to a click on the corresponding button. The
+// button remains the source of truth; the pills are still present in the DOM,
+// just visually hidden on mobile via CSS.
+//
+// Called at the end of render() so newly-visible toolbars get the treatment.
+// Uses a WeakSet-like marker attribute so we don't re-bind repeatedly.
+function syncMobileDropdowns() {
+  document.querySelectorAll(".toggle-group").forEach(g => {
+    const buttons = Array.from(g.querySelectorAll("button"));
+    if (buttons.length === 0) return;
+
+    // Find or create the mirror select
+    let sel = g.querySelector(":scope > select.mobile-dd");
+    const currentSig = buttons.map(b => `${b.dataset.val || ""}:${b.textContent.trim()}:${b.disabled ? "d" : ""}`).join("|");
+
+    // If the button set has changed (different pills), rebuild the select
+    if (sel && sel.dataset.sig !== currentSig) {
+      sel.remove();
+      sel = null;
+    }
+
+    if (!sel) {
+      sel = document.createElement("select");
+      sel.className = "mobile-dd";
+      sel.dataset.sig = currentSig;
+      buttons.forEach(b => {
+        const opt = document.createElement("option");
+        opt.value = b.dataset.val || "";
+        opt.textContent = b.textContent.trim();
+        if (b.disabled) opt.disabled = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", () => {
+        const btn = buttons.find(b => (b.dataset.val || "") === sel.value);
+        if (btn && !btn.disabled) btn.click();
+      });
+      g.appendChild(sel);
+    }
+
+    // Sync selected state from which button is "on"
+    const onBtn = buttons.find(b => b.classList.contains("on"));
+    if (onBtn) sel.value = onBtn.dataset.val || "";
+  });
+
+  // Team-filter pill strips: same pattern, but the pills are .tf-pill spans
+  // rebuilt on every render of renderTeamFilter. We append a single <select>
+  // after the pill row and wire it to call the same handler.
+  document.querySelectorAll(".team-filter").forEach(host => {
+    const pills = Array.from(host.querySelectorAll(".tf-pill"));
+    if (pills.length === 0) {
+      // No pills (no data yet) — remove any stale select
+      host.querySelector(":scope > select.mobile-dd")?.remove();
+      return;
+    }
+    let sel = host.querySelector(":scope > select.mobile-dd");
+    const currentSig = pills.map(p => p.dataset.team || "").join("|");
+
+    if (sel && sel.dataset.sig !== currentSig) {
+      sel.remove();
+      sel = null;
+    }
+
+    if (!sel) {
+      sel = document.createElement("select");
+      sel.className = "mobile-dd";
+      sel.dataset.sig = currentSig;
+      pills.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.dataset.team || "";
+        opt.textContent = p.textContent.trim();
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", () => {
+        const pill = pills.find(p => (p.dataset.team || "") === sel.value);
+        if (pill) pill.click();
+      });
+      host.appendChild(sel);
+    }
+
+    // Sync: "All" pill is active when no team filter is set
+    const activePill = pills.find(p => p.classList.contains("active"));
+    sel.value = activePill ? (activePill.dataset.team || "") : "";
+  });
+}
+
 function parseHash() {
   const h = location.hash.replace("#/", "").split("/");
   const view = h[0];
@@ -560,6 +651,10 @@ function render() {
     renderMetricBar();
     if (STATE.view === "playoffs") renderPlayoffs();
   }
+
+  // Mirror toggle-groups + team-filter pills into native <select>s for mobile.
+  // Safe to call on every render — idempotent via data-sig deduplication.
+  syncMobileDropdowns();
 }
 
 // ============================================================
@@ -917,7 +1012,10 @@ function renderMetricBar() {
   const leaderTip = "Points leader through the last completed race.";
   const raceTip = "Most recent race in the dataset.";
 
-  bar.innerHTML = `
+  // Build the four metric tiles once, then render them. On mobile we duplicate
+  // the track inline to produce a seamless marquee loop; the CSS animates the
+  // track with translateX.
+  const metricsHTML = `
     <div class="metric" data-tip="${escapeHTML(leaderTip)}"><span class="k">Leader</span>
       <span class="v">${leader ? `${escapeHTML(displayName(leader))} \u00b7 ${leader.total}` : "\u2014"}</span></div>
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Hottest</span>
@@ -927,6 +1025,17 @@ function renderMetricBar() {
     <div class="metric" data-tip="${escapeHTML(raceTip)}"><span class="k">${STATE.throughRound != null ? "As Of" : "Last Race"}</span>
       <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}` : "\u2014"}</span></div>
   `;
+
+  if (isMobile()) {
+    // Two identical copies side-by-side; the CSS animates the track by -50%
+    // so the second copy lands exactly where the first began — seamless loop.
+    bar.innerHTML = `<div class="metricbar-track">
+      <div class="metricbar-copy">${metricsHTML}</div>
+      <div class="metricbar-copy">${metricsHTML}</div>
+    </div>`;
+  } else {
+    bar.innerHTML = metricsHTML;
+  }
 
   // Wire hover handlers for the floating metric tooltip
   const tip = document.getElementById("metric-tooltip");
