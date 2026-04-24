@@ -369,7 +369,7 @@ function populateRacePicker() {
   // see they're on the latest race rather than showing a separate option.
   const effectiveRound = STATE.throughRound != null ? STATE.throughRound : races[races.length - 1].round;
   sel.innerHTML = races.map(r => {
-    const trackName = prettyTrack(r.track_code, r.track);
+    const trackName = prettyTrack(r.track_code, r.track) || "—";
     const s = (r.round === effectiveRound) ? "selected" : "";
     return `<option value="${r.round}" ${s}>R${r.round} · ${escapeHTML(trackName)}</option>`;
   }).join("");
