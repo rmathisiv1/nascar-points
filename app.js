@@ -939,11 +939,6 @@ function renderFormTable() {
   const rows = decorated.map((d, i) => {
     const carHex = colorFor(STATE.series, d.car_number);
     const txtCol = contrastTextFor(carHex);
-    const raceCells = shownRaces.map(r => {
-      const mine = d.races.find(x => x.round === r.round);
-      if (!mine || mine.finish == null) return `<td class="num"><span class="heat heat-none">·</span></td>`;
-      return `<td class="num">${heatCell(mine.finish)}</td>`;
-    }).join("");
     const spark = sparkSVG(d.lastFinishes, carHex, 58, 18);
     const trend = trendArrow(d.deltaR);
     const ratingCls = d.deltaR == null ? "" : d.deltaR > 6 ? "hot" : d.deltaR < -6 ? "cold" : "";
@@ -956,7 +951,6 @@ function renderFormTable() {
         ${renderCoDriverBadge(d)}
       </a></td>
       <td>${teamPill}</td>
-      ${raceCells}
       <td><span class="form-wrap">${spark}<span class="trend ${trend.cls}">${trend.a}</span></span></td>
       <td class="num">
         <span class="rating-stack">
@@ -988,7 +982,6 @@ function renderFormTable() {
           <th class="num">#</th>
           ${th("driver", "Driver", false)}
           ${th("team", "Team", false)}
-          ${headerCols}
           <th>${formColLabel}</th>
           ${th("formRating", "Rating", true)}
           ${th("deltaR", "vs Season", true)}
@@ -3036,12 +3029,6 @@ function renderProfile() {
            </div>`);
 
   host.innerHTML = `
-    <div class="profile-breadcrumb">
-      <a href="#/standings" class="profile-backlink">← Standings</a>
-      <span class="sep">/</span>
-      <span>${escapeHTML(displayTitle)}</span>
-    </div>
-
     <div class="profile-hero" style="--driver-color:${carHex}">
       <div class="profile-hero-car" style="background:${carHex};color:${carTxt}">${entity.car_number}</div>
       <div class="profile-hero-info">
@@ -4248,21 +4235,6 @@ function renderFormMini() {
 
   // Build a tiny SVG sparkline of the last 5 finish positions (inverted: low
   // finish = high line) so hot recent form shows as an upward-trending line.
-  const sparkline = (finishes) => {
-    if (!finishes.length) return "";
-    const W = 80, H = 14, pad = 1;
-    const capped = finishes.map(f => Math.max(1, Math.min(40, f)));
-    const min = Math.min(...capped), max = Math.max(...capped);
-    const range = Math.max(1, max - min);
-    const xAt = (i) => pad + (i / Math.max(1, capped.length - 1)) * (W - 2 * pad);
-    // Invert Y so P1 is at the top and P40 at the bottom
-    const yAt = (p) => pad + ((p - min) / range) * (H - 2 * pad);
-    const pts = capped.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p).toFixed(1)}`).join(" ");
-    return `<svg class="form-mini-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      <polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
-    </svg>`;
-  };
-
   host.innerHTML = rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
@@ -4270,8 +4242,8 @@ function renderFormMini() {
     const cls = r.delta > 1 ? "hot" : r.delta < -1 ? "cold" : "flat";
     const sign = r.delta > 0 ? "+" : "";
     const lastFinishes = r.races.slice(-5).map(rc => rc.finish).filter(x => x != null);
-    // Sparkline uses the same hot/cold color coding as the delta
-    const sparkColor = cls === "hot" ? "#5fd97a" : cls === "cold" ? "#ff8a8a" : "var(--muted)";
+    // Same sparkline helper as Trending table, same dimensions (58x18)
+    const spark = sparkSVG(lastFinishes, carHex, 58, 18);
     return `<a class="form-mini-row profile-link" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)} — form ${r.f.toFixed(1)} vs. season ${r.s.toFixed(1)}">
       <div class="form-mini-top">
         <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
@@ -4280,7 +4252,7 @@ function renderFormMini() {
       </div>
       <div class="form-mini-bottom">
         <span class="form-mini-rating">${r.f.toFixed(1)}</span>
-        <span style="color:${sparkColor}; display:block;">${sparkline(lastFinishes)}</span>
+        ${spark}
       </div>
     </a>`;
   }).join("");

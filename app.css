@@ -361,8 +361,9 @@ html, body {
   text-align: right;
 }
 .form-mini-spark {
+  width: 58px;
   height: 16px;
-  width: 100%;
+  display: block;
 }
 
 /* ---------- CENTER: tab strip + panel ---------- */
@@ -2045,10 +2046,10 @@ td.neg { color: #ff8a8a; }
 .profile-hero {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 20px;
+  gap: 16px;
   align-items: center;
-  padding: 18px 20px;
-  margin-bottom: 16px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
   background: linear-gradient(135deg, rgba(59,130,246,0.04) 0%, var(--card) 50%);
   border: 1px solid var(--border);
   border-left: 3px solid var(--driver-color, var(--accent));
