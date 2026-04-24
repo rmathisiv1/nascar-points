@@ -21,11 +21,17 @@
   </div>
   <div class="topbar-right">
     <select id="season-picker" class="season-select"></select>
+    <select id="race-picker" class="season-select race-select" title="View season through a specific race"></select>
     <button id="nav-toggle" class="nav-toggle" aria-label="Menu">☰</button>
   </div>
 </header>
 
 <div class="metricbar" id="metricbar"></div>
+<div class="time-cursor-banner" id="time-cursor-banner" hidden>
+  <span class="tcb-icon">◷</span>
+  <span class="tcb-text" id="time-cursor-banner-text">—</span>
+  <button class="tcb-reset" id="time-cursor-reset">Reset to latest →</button>
+</div>
 <div id="metric-tooltip"></div>
 
 <div class="app">

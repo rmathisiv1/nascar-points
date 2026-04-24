@@ -14,6 +14,9 @@ const STATE = {
   // `entity` is kept as a constant for backward compatibility with code paths
   // that still read it; do not mutate.
   entity: "owner",
+  // Time cursor: when set, all data views behave as if the season ended at this
+  // round number. null = "latest", the default. Reset to null on season change.
+  throughRound: null,
   data: null,
   colors: null,
   driverBios: null,
@@ -46,6 +49,14 @@ async function boot() {
   }
   populateSeasonPicker();
   await loadCurrentData();
+  populateRacePicker();
+  renderTimeCursorBanner();
+  document.getElementById("time-cursor-reset")?.addEventListener("click", () => {
+    STATE.throughRound = null;
+    populateRacePicker();   // refresh selected state
+    renderTimeCursorBanner();
+    render();
+  });
   render();
   window.addEventListener("hashchange", () => {
     parseHash();
@@ -210,11 +221,14 @@ function wireUIControls() {
       document.querySelectorAll("#series-sw button")
         .forEach(x => x.classList.toggle("on", x === b));
       STATE.series = b.dataset.series;
+      STATE.throughRound = null;  // cursor is series-specific, reset on series change
       STATE.arc.selected.clear();
       STATE.breakdown.drivers = [];
       STATE.trajectory.selected.clear();
       STATE.trajectory.seasons.clear();
       await loadCurrentData();
+      populateRacePicker();
+      renderTimeCursorBanner();
       render();
     });
   });
@@ -328,11 +342,60 @@ function populateSeasonPicker() {
     .join("");
   sel.addEventListener("change", async () => {
     STATE.season = parseInt(sel.value);
+    STATE.throughRound = null;  // reset cursor on season change
     STATE.trajectory.selected.clear();
     STATE.trajectory.seasons.clear();
     await loadCurrentData();
+    populateRacePicker();
+    renderTimeCursorBanner();
     render();
   });
+}
+
+// ============================================================
+// TIME CURSOR (race-picker + banner)
+// ------------------------------------------------------------
+// Populates the race-picker dropdown with every race in the loaded season,
+// plus a "Latest" option that unsets the cursor. Also paints the banner
+// that appears when a non-latest round is selected.
+// ============================================================
+function populateRacePicker() {
+  const sel = document.getElementById("race-picker");
+  if (!sel) return;
+  const races = allRacesSorted();
+  const opts = [`<option value="">Latest${races.length ? ` (R${races[races.length-1].round} · ${escapeHTML(prettyTrack(races[races.length-1].track_code, races[races.length-1].track))})` : ""}</option>`];
+  races.forEach(r => {
+    const trackName = prettyTrack(r.track_code, r.track);
+    const sel2 = (STATE.throughRound === r.round) ? "selected" : "";
+    opts.push(`<option value="${r.round}" ${sel2}>R${r.round} · ${escapeHTML(trackName)}</option>`);
+  });
+  sel.innerHTML = opts.join("");
+  // Bind once — re-binding on every populate is fine because the listener is idempotent.
+  if (!sel._wired) {
+    sel.addEventListener("change", () => {
+      const val = sel.value;
+      STATE.throughRound = val === "" ? null : parseInt(val, 10);
+      renderTimeCursorBanner();
+      render();
+    });
+    sel._wired = true;
+  }
+}
+
+function renderTimeCursorBanner() {
+  const banner = document.getElementById("time-cursor-banner");
+  const text = document.getElementById("time-cursor-banner-text");
+  if (!banner || !text) return;
+  if (STATE.throughRound == null) {
+    banner.hidden = true;
+    return;
+  }
+  const races = allRacesSorted();
+  const race = races.find(r => r.round === STATE.throughRound);
+  const total = races.length;
+  const trackLabel = race ? prettyTrack(race.track_code, race.track) : "";
+  text.innerHTML = `Viewing <strong>${STATE.season} ${STATE.series}</strong> through <strong>R${STATE.throughRound}${trackLabel ? " · " + escapeHTML(trackLabel) : ""}</strong> of ${total} — historical snapshot`;
+  banner.hidden = false;
 }
 
 // ============================================================
@@ -365,7 +428,24 @@ function render() {
 // ============================================================
 // DERIVED METRICS
 // ============================================================
+// Returns races sorted by round, OPTIONALLY filtered by the time cursor.
+// When STATE.throughRound is null (default), returns all scraped races.
+// When set, clips to races at or before that round — every downstream view
+// (standings, arc, breakdown, trajectory, playoffs, heatmap, trending)
+// automatically becomes a point-in-time snapshot because they all read from here.
 function racesSorted() {
+  const all = (STATE.data?.races || [])
+    .slice()
+    .sort((a, b) => (a.round || 0) - (b.round || 0));
+  if (STATE.throughRound != null) {
+    return all.filter(r => (r.round || 0) <= STATE.throughRound);
+  }
+  return all;
+}
+
+// Unfiltered access — used by the race picker, which needs to show every race
+// scheduled (including ones beyond the cursor, so users can navigate forward).
+function allRacesSorted() {
   return (STATE.data?.races || [])
     .slice()
     .sort((a, b) => (a.round || 0) - (b.round || 0));
@@ -707,7 +787,7 @@ function renderMetricBar() {
       <span class="v hot">${hottest ? `${escapeHTML(displayName(hottest.entity))} ${signed(hottest.delta.toFixed(1))}` : "\u2014"}</span></div>
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Coldest</span>
       <span class="v cold">${coldest ? `${escapeHTML(displayName(coldest.entity))} ${signed(coldest.delta.toFixed(1))}` : "\u2014"}</span></div>
-    <div class="metric" data-tip="${escapeHTML(raceTip)}"><span class="k">Last Race</span>
+    <div class="metric" data-tip="${escapeHTML(raceTip)}"><span class="k">${STATE.throughRound != null ? "As Of" : "Last Race"}</span>
       <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}` : "\u2014"}</span></div>
   `;
 
