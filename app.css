@@ -312,7 +312,7 @@ html, body {
 /* ---------- RIGHT: form panel (two-line row with sparkline) ---------- */
 .form-mini-row {
   display: block;
-  padding: 5px 8px;
+  padding: 4px 8px;
   font-family: var(--mono);
   font-size: 11px;
   text-decoration: none;
@@ -323,14 +323,14 @@ html, body {
 .form-mini-row:hover { background: rgba(255,255,255,0.03); }
 .form-mini-top {
   display: grid;
-  grid-template-columns: 24px 1fr auto;
+  grid-template-columns: 22px 1fr auto;
   gap: 5px;
   align-items: center;
-  margin-bottom: 3px;
+  margin-bottom: 1px;
 }
 .form-mini-car {
   display: inline-flex; align-items: center; justify-content: center;
-  height: 15px; padding: 0 4px;
+  height: 14px; padding: 0 3px;
   border-radius: 2px;
   font-size: 9px;
   font-weight: 700;
@@ -349,20 +349,23 @@ html, body {
 .form-mini-delta.flat { color: var(--dim); }
 .form-mini-bottom {
   display: grid;
-  grid-template-columns: 30px 1fr;
-  gap: 6px;
+  grid-template-columns: 22px auto 1fr;
+  gap: 5px;
   align-items: center;
+  margin-top: 0;
+}
+.form-mini-bottom::before {
+  content: '';
 }
 .form-mini-rating {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 .form-mini-spark {
   width: 58px;
-  height: 16px;
+  height: 14px;
   display: block;
 }
 
@@ -402,6 +405,7 @@ html, body {
   padding: 8px 10px;
   overflow: hidden;
 }
+.tab-body[hidden] { display: none !important; }
 .tab-panel {
   flex: 1;
   min-height: 0;
@@ -1050,16 +1054,16 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12px;
 }
 .data-table th {
   text-align: left;
   font-weight: 500;
   color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 11px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
   position: sticky; top: 0; z-index: 5;
@@ -1070,15 +1074,15 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .data-table th.sortable:hover { color: var(--text); }
 .data-table th .sort-arrow {
   display: inline-block; margin-left: 4px;
-  font-size: 9px; color: var(--dim);
+  font-size: 8px; color: var(--dim);
 }
 .data-table th.sort-desc .sort-arrow,
 .data-table th.sort-asc .sort-arrow { color: var(--accent-2); }
 
 .data-table td {
-  padding: 9px 12px;
+  padding: 4px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  font-size: 13px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .data-table tbody tr:hover td {
@@ -1088,7 +1092,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 #standings-table td.num {
@@ -1134,19 +1138,19 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .car-tag {
   display: inline-flex;
   align-items: center; justify-content: center;
-  min-width: 32px; padding: 3px 7px;
+  min-width: 28px; padding: 2px 5px;
   font-family: var(--mono);
-  font-size: 12px; font-weight: 700;
+  font-size: 10px; font-weight: 700;
   border-radius: 3px;
   color: #000;
   text-align: center;
 }
 .driver-cell {
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; gap: 6px;
 }
 .team-code {
   font-family: var(--mono);
-  font-size: 11px; color: var(--muted);
+  font-size: 10px; color: var(--muted);
   font-weight: 600;
 }
 /* Team-code pill — always readable. Uses palette org color if present,
@@ -1155,9 +1159,9 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
    don't disappear against the dark background. */
 .team-pill {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 44px; padding: 3px 10px;
+  min-width: 38px; padding: 2px 7px;
   font-family: var(--mono);
-  font-size: 12px; font-weight: 800;
+  font-size: 10px; font-weight: 800;
   border-radius: 3px;
   letter-spacing: 0.05em;
   text-align: center;
@@ -1185,10 +1189,10 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .heat-none  { color: var(--dim); }
 
 /* sparkline + form column */
-.form-wrap { display: inline-flex; align-items: center; gap: 8px; }
-.spark { height: 18px; }
+.form-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.spark { height: 16px; }
 .trend {
-  font-size: 10px; font-family: var(--mono);
+  font-size: 9px; font-family: var(--mono);
   color: var(--dim);
 }
 .trend.up { color: var(--pos); }
@@ -1196,18 +1200,18 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 
 .rating-stack {
   display: inline-flex; flex-direction: column; align-items: flex-end;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .rating-big {
   font-family: var(--mono);
-  font-size: 13px; font-weight: 600;
+  font-size: 12px; font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .rating-big.hot { color: var(--pos); }
 .rating-big.cold { color: var(--neg); }
 .rating-small {
   font-family: var(--mono);
-  font-size: 10px; color: var(--muted);
+  font-size: 9px; color: var(--muted);
 }
 
 .delta-pill {
@@ -1954,10 +1958,10 @@ td.neg { color: #ff8a8a; }
 .tm-spark svg { display: block; width: 100%; height: auto; max-width: 100%; cursor: default; }
 
 .tm-avg {
-  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: right;
-  padding: 2px 4px;
+  padding: 1px 3px;
   border-radius: 3px;
   min-width: 0;
 }
@@ -1966,11 +1970,11 @@ td.neg { color: #ff8a8a; }
 .tm-avg.bad  { color: var(--neg); background: rgba(255,107,107,0.10); }
 
 .tm-tl {
-  text-align: right; font-family: var(--mono); font-size: 11px;
+  text-align: right; font-family: var(--mono); font-size: 9px;
   color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .tm-tl .big {
-  color: var(--accent-2); font-size: 13px; font-weight: 700; margin-right: 2px;
+  color: var(--accent-2); font-size: 11px; font-weight: 700; margin-right: 2px;
 }
 
 /* Sparkline styling */

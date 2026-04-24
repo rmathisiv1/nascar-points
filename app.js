@@ -2591,7 +2591,6 @@ function renderTeammates() {
             ${isShared ? `<span class="tm-shared" data-car="${d.car_number}" title="Shared car — hover for details">i</span>` : ""}
             ${showWbrTag ? `<span class="tm-true-team">${escapeHTML(d.team)}</span>` : ""}
           </div>
-          <div class="tm-name-sub">${d.n_races} race${d.n_races === 1 ? "" : "s"}</div>
         </div>
         <div class="tm-spark">${svg}</div>
         <div class="tm-avg ${avgCls}">${avg >= 0 ? "+" : ""}${avg.toFixed(1)}</div>
@@ -4242,8 +4241,8 @@ function renderFormMini() {
     const cls = r.delta > 1 ? "hot" : r.delta < -1 ? "cold" : "flat";
     const sign = r.delta > 0 ? "+" : "";
     const lastFinishes = r.races.slice(-5).map(rc => rc.finish).filter(x => x != null);
-    // Same sparkline helper as Trending table, same dimensions (58x18)
-    const spark = sparkSVG(lastFinishes, carHex, 58, 18);
+    // Same sparkline helper as Trending table
+    const spark = sparkSVG(lastFinishes, carHex, 58, 14);
     return `<a class="form-mini-row profile-link" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)} — form ${r.f.toFixed(1)} vs. season ${r.s.toFixed(1)}">
       <div class="form-mini-top">
         <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
