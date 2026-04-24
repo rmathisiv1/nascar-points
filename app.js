@@ -76,6 +76,11 @@ function parseHash() {
     };
     return;
   }
+  // Legacy routes that are now always-on dashboard sections — redirect home.
+  if (view === "arc" || view === "standings") {
+    STATE.view = "form";  // dashboard default
+    return;
+  }
   STATE.view = VIEWS.includes(view) ? view : "form";
 }
 
@@ -306,13 +311,10 @@ function wireUIControls() {
     });
   });
 
-  document.querySelectorAll(".navlink").forEach(a => {
-    a.addEventListener("click", () => {
-      document.getElementById("sidebar")?.classList.remove("open");
-    });
-  });
-  document.getElementById("nav-toggle")?.addEventListener("click", () => {
-    document.getElementById("sidebar")?.classList.toggle("open");
+  // Takeover back button returns to dashboard home (default = Trending tab)
+  document.getElementById("takeover-back")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    location.hash = "#/";
   });
 
   document.getElementById("arc-clear")?.addEventListener("click", () => {
@@ -406,27 +408,62 @@ function renderTimeCursorBanner() {
 // ============================================================
 // RENDER
 // ============================================================
+// Views that live as tabs inside the dashboard's tabbed panel.
+const TAB_VIEWS = ["form", "breakdown", "trajectory", "teammates", "heatmap"];
+// Views that take over the whole page (hide dashboard).
+const TAKEOVER_VIEWS = ["profile", "playoffs"];
+
 function render() {
-  VIEWS.forEach(v => {
+  const dashboard = document.getElementById("dashboard");
+  const takeover = document.getElementById("takeover");
+  const inTakeover = TAKEOVER_VIEWS.includes(STATE.view);
+
+  if (dashboard) dashboard.hidden = inTakeover;
+  if (takeover) takeover.hidden = !inTakeover;
+
+  // Takeover section visibility (only one shows at a time)
+  const takeoverTargets = ["profile", "playoffs", "error"];
+  takeoverTargets.forEach(v => {
     const el = document.getElementById(`view-${v}`);
-    if (el) el.hidden = (v !== STATE.view);
-  });
-  document.querySelectorAll(".navlink").forEach(a => {
-    a.classList.toggle("active", a.dataset.view === STATE.view);
+    if (!el) return;
+    // Show profile when STATE.view==profile, playoffs when ==playoffs, error unchanged
+    if (v === "error") return;
+    el.hidden = (v !== STATE.view);
   });
 
-  renderMetricBar();
+  // Tab-panel visibility inside the dashboard. Default to "form" when the URL
+  // doesn't point to a specific tab view.
+  const activeTab = TAB_VIEWS.includes(STATE.view) ? STATE.view : "form";
+  TAB_VIEWS.forEach(v => {
+    const el = document.getElementById(`view-${v}`);
+    if (el) el.hidden = (v !== activeTab);
+  });
 
-  switch (STATE.view) {
-    case "form":       renderFormTable(); break;
-    case "arc":        renderArc(); break;
-    case "breakdown":  renderBreakdown(); break;
-    case "trajectory": renderTrajectory(); break;
-    case "teammates":  renderTeammates(); break;
-    case "profile":    renderProfile(); break;
-    case "heatmap":    renderHeatmap(); break;
-    case "standings":  renderStandings(); break;
-    case "playoffs":   renderPlayoffs(); break;
+  // Tab button active-state
+  document.querySelectorAll(".dash-tab").forEach(a => {
+    a.classList.toggle("active", a.dataset.view === activeTab);
+  });
+
+  // ---- Always-on dashboard renders (when not in takeover) ----
+  if (!inTakeover) {
+    renderMetricBar();
+    renderArc();
+    renderStandings();
+    renderPlayoffsMini();
+
+    // Render the active tab's content
+    switch (activeTab) {
+      case "form":       renderFormTable(); break;
+      case "breakdown":  renderBreakdown(); break;
+      case "trajectory": renderTrajectory(); break;
+      case "teammates":  renderTeammates(); break;
+      case "heatmap":    renderHeatmap(); break;
+    }
+  } else {
+    // Takeover renders — metric bar still shown above the back-link
+    renderMetricBar();
+    if (STATE.view === "profile")  renderProfile();
+    if (STATE.view === "playoffs") renderPlayoffs();
   }
 }
 
@@ -4113,6 +4150,138 @@ function renderBracket(rule) {
     <div class="bk-scroll"><div class="bk-grid">${columnsHTML}</div></div>
   </div>`;
 }
+// Mini playoff panel for the dashboard aside — just the key numbers + top 3
+// first-out drivers. Full bracket/field lives in the takeover view.
+function renderPlayoffsMini() {
+  const host = document.getElementById("playoffs-mini-host");
+  const sub = document.getElementById("playoffs-sub");
+  if (!host) return;
+  if (!STATE.data) { host.innerHTML = ""; return; }
+
+  const rule = resolvePlayoffRules(STATE.series, STATE.season);
+  if (!rule) {
+    host.innerHTML = `<div class="po-mini-empty">No playoff format for ${STATE.series} ${STATE.season}.</div>`;
+    if (sub) sub.textContent = "—";
+    return;
+  }
+
+  if (rule.format === "championship") {
+    if (sub) sub.textContent = "season-long points";
+    host.innerHTML = `<div class="po-mini-empty">Season-long championship · no playoff format this year.</div>`;
+    return;
+  }
+
+  if (rule.format === "chase" || rule.format === "chase-wildcard") {
+    if (sub) sub.textContent = `Chase · ${rule.field}-driver · ${rule.playoffRaces}-race`;
+    host.innerHTML = `<div class="po-mini-empty">Chase-era format (${rule.playoffRaces} races, ${rule.field} drivers). Full view coming soon.</div>`;
+    return;
+  }
+
+  // -------- chase-reseeded (2026+) --------
+  if (rule.format === "chase-reseeded") {
+    const standingsRound = STATE.throughRound != null
+      ? Math.min(STATE.throughRound, rule.regSeasonEndRound)
+      : Math.min(racesSorted().length, rule.regSeasonEndRound);
+    const ftThreshold = standingsRound < 5 ? 1 : Math.ceil(standingsRound * 0.9);
+    const standings = rankingRowsFrom(pointsMapThroughRound(standingsRound));
+    const eligible = standings.filter(r => r.starts >= ftThreshold);
+    const field = eligible.slice(0, rule.field);
+    const fieldKeys = new Set(field.map(r => r.key));
+    const firstOut = eligible.filter(r => !fieldKeys.has(r.key)).slice(0, 3);
+    const cutoffPts = field.length ? field[field.length - 1].total : 0;
+
+    const phase = currentPlayoffPhase(rule);
+    const phaseLabel = phase === "regular" ? `R${standingsRound} of ${rule.regSeasonEndRound}`
+                       : phase === "playoffs" ? "Chase in progress"
+                       : "Season complete";
+    if (sub) sub.textContent = `${rule.field}-driver Chase · ${phaseLabel}`;
+
+    host.innerHTML = `
+      <div class="po-mini-card">
+        <div class="po-mini-stat"><span class="lbl">Field size</span><span class="val">${rule.field}</span></div>
+        <div class="po-mini-stat"><span class="lbl">Cutoff</span><span class="val">${cutoffPts}<span class="unit">pts</span></span></div>
+        <div class="po-mini-stat"><span class="lbl">Chase races</span><span class="val">${rule.playoffRaces}</span></div>
+        <div class="po-mini-hint">No win-and-in · points only · no eliminations</div>
+        ${firstOut.length ? `
+          <div class="po-mini-sep">First out</div>
+          <div class="po-mini-list">
+            ${firstOut.map(r => {
+              const carHex = colorFor(STATE.series, r.car_number);
+              const txt = contrastTextFor(carHex);
+              const back = cutoffPts - r.total;
+              const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
+              return `<a class="po-mini-row profile-link" href="#/car/${r.car_number}">
+                <span class="po-mini-num" style="background:${carHex};color:${txt}">${r.car_number}</span>
+                <span class="po-mini-name">${escapeHTML(lastName)}</span>
+                <span class="po-mini-back">−${back}</span>
+              </a>`;
+            }).join("")}
+          </div>
+        ` : ""}
+      </div>
+    `;
+    wireCoDriverBadges(host);
+    return;
+  }
+
+  // -------- elimination (2014–2025) --------
+  if (rule.format === "elimination") {
+    const pp = computePlayoffPoints(rule);
+    const standingsCutoff = rule.regSeasonEndRound;
+    const standings = rankingRowsFrom(pointsMapThroughRound(standingsCutoff));
+    const enriched = standings.map(r => {
+      const p = pp.get(r.key) || { raceWins: 0, stageWins: 0, regBonus: 0, total: 0 };
+      return { ...r, playoffPts: p.total, raceWins: p.raceWins };
+    });
+    const ftThreshold = standingsCutoff < 5 ? 1 : Math.ceil(standingsCutoff * 0.9);
+    const eligible = enriched.filter(r => r.starts >= ftThreshold);
+    const winners = eligible.filter(r => r.raceWins > 0).sort((a, b) => b.raceWins - a.raceWins || b.total - a.total);
+    const nonWinners = eligible.filter(r => r.raceWins === 0).sort((a, b) => b.total - a.total);
+    const winnersIn = winners.slice(0, rule.field);
+    const field = [...winnersIn];
+    if (field.length < rule.field) field.push(...nonWinners.slice(0, rule.field - field.length));
+    const fieldKeys = new Set(field.map(r => r.key));
+    const sorted = [...eligible].sort((a, b) => b.total - a.total);
+    const firstOut = sorted.filter(r => !fieldKeys.has(r.key)).slice(0, 3);
+    const cutoffPts = field.filter(r => r.raceWins === 0).slice(-1)[0]?.total || 0;
+
+    const phase = currentPlayoffPhase(rule);
+    const racesRun = racesSorted().length;
+    const phaseLabel = phase === "regular" ? `R${racesRun} of ${rule.regSeasonEndRound}`
+                       : phase === "playoffs" ? "Playoffs in progress"
+                       : "Season complete";
+    if (sub) sub.textContent = `${rule.field}-driver elimination · ${phaseLabel}`;
+
+    host.innerHTML = `
+      <div class="po-mini-card">
+        <div class="po-mini-stat"><span class="lbl">Locked on wins</span><span class="val hot">${winnersIn.length}</span></div>
+        <div class="po-mini-stat"><span class="lbl">In on points</span><span class="val accent">${field.length - winnersIn.length}</span></div>
+        <div class="po-mini-stat"><span class="lbl">Cutoff</span><span class="val">${cutoffPts}<span class="unit">pts</span></span></div>
+        ${firstOut.length ? `
+          <div class="po-mini-sep">First out</div>
+          <div class="po-mini-list">
+            ${firstOut.map(r => {
+              const carHex = colorFor(STATE.series, r.car_number);
+              const txt = contrastTextFor(carHex);
+              const back = cutoffPts - r.total;
+              const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
+              return `<a class="po-mini-row profile-link" href="#/car/${r.car_number}">
+                <span class="po-mini-num" style="background:${carHex};color:${txt}">${r.car_number}</span>
+                <span class="po-mini-name">${escapeHTML(lastName)}</span>
+                <span class="po-mini-back">−${back}</span>
+              </a>`;
+            }).join("")}
+          </div>
+        ` : ""}
+      </div>
+    `;
+    wireCoDriverBadges(host);
+    return;
+  }
+
+  host.innerHTML = `<div class="po-mini-empty">No mini view for format: ${rule.format}</div>`;
+}
+
 function renderPlayoffs() {
   const host = document.getElementById("playoffs-host");
   const sub = document.getElementById("playoffs-sub");
