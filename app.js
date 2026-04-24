@@ -3744,18 +3744,30 @@ const PLAYOFF_RULES = {
     { start: 2014, end: 2016, format: "elimination", field: 16, regSeasonEndRound: 26,
       rounds: [ { name: "Round of 16", races: 3, cutTo: 12 }, { name: "Round of 12", races: 3, cutTo: 8 }, { name: "Round of 8", races: 3, cutTo: 4 }, { name: "Championship 4", races: 1, cutTo: 1 } ],
       stages: false, regBonus: false, raceWinPP: 3, stageWinPP: 0 },
-    { start: 2017, end: null, format: "elimination", field: 16, regSeasonEndRound: 26,
+    { start: 2017, end: 2025, format: "elimination", field: 16, regSeasonEndRound: 26,
       rounds: [ { name: "Round of 16", races: 3, cutTo: 12 }, { name: "Round of 12", races: 3, cutTo: 8 }, { name: "Round of 8", races: 3, cutTo: 4 }, { name: "Championship 4", races: 1, cutTo: 1 } ],
       stages: true, regBonus: true, raceWinPP: 5, stageWinPP: 1 },
+    // 2026: NASCAR returned to a non-elimination Chase format. 16 drivers qualify
+    // by points only (no "win and in"), all 16 race all 10 Chase races with a
+    // single reseed after the regular season. Most points at season's end wins.
+    // Source: NASCAR announcement, Oct 2025.
+    { start: 2026, end: null, format: "chase-reseeded", field: 16, playoffRaces: 10, regSeasonEndRound: 26,
+      reseedTable: [2100, 2075, 2065, 2060, 2055, 2050, 2045, 2040, 2035, 2030, 2025, 2020, 2015, 2010, 2005, 2000],
+      raceWinPts: 55, raceWinPtsIncrease: 15 /* was 40 in 2017-2025 */ },
   ],
   NOS: [
     { start: 1982, end: 2015, format: "championship" },
     { start: 2016, end: 2016, format: "elimination", field: 12, regSeasonEndRound: 26,
       rounds: [ { name: "Round of 12", races: 3, cutTo: 8 }, { name: "Round of 8", races: 3, cutTo: 4 }, { name: "Championship 4", races: 1, cutTo: 1 } ],
       stages: false, regBonus: false, raceWinPP: 3, stageWinPP: 0 },
-    { start: 2017, end: null, format: "elimination", field: 12, regSeasonEndRound: 26,
+    { start: 2017, end: 2025, format: "elimination", field: 12, regSeasonEndRound: 26,
       rounds: [ { name: "Round of 12", races: 3, cutTo: 8 }, { name: "Round of 8", races: 3, cutTo: 4 }, { name: "Championship 4", races: 1, cutTo: 1 } ],
       stages: true, regBonus: true, raceWinPP: 5, stageWinPP: 1 },
+    // 2026+: Chase format return. Top 12 by points only. All 12 race the 9 Chase
+    // races. Single reseed — same descending table as Cup, truncated at 12.
+    { start: 2026, end: null, format: "chase-reseeded", field: 12, playoffRaces: 9, regSeasonEndRound: 26,
+      reseedTable: [2100, 2075, 2065, 2060, 2055, 2050, 2045, 2040, 2035, 2030, 2025, 2020],
+      raceWinPts: 55 },
   ],
   NTS: [
     { start: 1995, end: 2015, format: "championship" },
@@ -3765,9 +3777,14 @@ const PLAYOFF_RULES = {
     { start: 2017, end: 2021, format: "elimination", field: 8, regSeasonEndRound: 16,
       rounds: [ { name: "Round of 8", races: 3, cutTo: 6 }, { name: "Round of 6", races: 3, cutTo: 4 }, { name: "Championship 4", races: 1, cutTo: 1 } ],
       stages: true, regBonus: true, raceWinPP: 5, stageWinPP: 1 },
-    { start: 2022, end: null, format: "elimination", field: 10, regSeasonEndRound: 16,
+    { start: 2022, end: 2025, format: "elimination", field: 10, regSeasonEndRound: 16,
       rounds: [ { name: "Round of 10", races: 3, cutTo: 8 }, { name: "Round of 8", races: 3, cutTo: 6 }, { name: "Round of 6", races: 1, cutTo: 4 }, { name: "Championship 4", races: 1, cutTo: 1 } ],
       stages: true, regBonus: true, raceWinPP: 5, stageWinPP: 1 },
+    // 2026+: Chase format return. Top 10 by points only. All 10 race the 7 Chase
+    // races. Single reseed — same table as Cup, truncated at 10.
+    { start: 2026, end: null, format: "chase-reseeded", field: 10, playoffRaces: 7, regSeasonEndRound: 16,
+      reseedTable: [2100, 2075, 2065, 2060, 2055, 2050, 2045, 2040, 2035, 2030],
+      raceWinPts: 55 },
   ],
 };
 
@@ -3878,6 +3895,15 @@ function renderPlayoffs() {
     return;
   }
 
+  if (rule.format === "chase-reseeded") {
+    const phase = currentPlayoffPhase(rule);
+    const phaseLabel = { "regular": "regular season in progress", "playoffs": "Chase in progress", "complete": "season complete" }[phase] || phase;
+    sub.textContent = `${STATE.season} ${STATE.series} · ${rule.field}-driver Chase · ${rule.playoffRaces} Chase races · ${phaseLabel}`;
+    host.innerHTML = renderChaseReseededView(rule, phase);
+    wireCoDriverBadges(host);
+    return;
+  }
+
   if (rule.format === "elimination") {
     const phase = currentPlayoffPhase(rule);
     const phaseLabel = { "regular": "regular season in progress", "playoffs": "playoffs in progress", "complete": "season complete" }[phase] || phase;
@@ -3909,6 +3935,156 @@ function renderChaseView(rule) {
     Chase-era playoff points are not yet computed — currently just a placeholder.
     See <a href="#/standings">Standings</a> for final points.
   </div></div>`;
+}
+
+// Chase with reseeded points, no eliminations. 2026+ format.
+// Qualification: top N by points at end of regular season (no "win and in").
+// Seeding: fixed table (e.g. 2100/2075/2065/.../2000 for Cup, truncated for other series).
+// Championship: most points after all Chase races wins it. Everyone stays in the field.
+function renderChaseReseededView(rule, phase) {
+  const racesRun = racesSorted().length;
+  const ftThreshold = racesRun < 5 ? 1 : Math.ceil(racesRun * 0.9);
+
+  // Standings through "now" (or through cutoff if playoffs have started)
+  const standingsRound = phase === "regular" ? racesRun : rule.regSeasonEndRound;
+  const standings = rankingRowsFrom(pointsMapThroughRound(standingsRound));
+  const eligible = standings.filter(r => r.starts >= ftThreshold);
+
+  // Projected or actual field: top N eligible by regular-season points
+  const field = eligible.slice(0, rule.field);
+  const fieldKeys = new Set(field.map(r => r.key));
+  const firstOut = eligible.filter(r => !fieldKeys.has(r.key)).slice(0, 4);
+  const cutoffPts = field.length ? field[field.length - 1].total : 0;
+
+  // Build reseed projection — if we're in or past playoffs, show actual reseed.
+  // Mid-regular-season, show "projected reseed" (what the table would look like
+  // if the season ended today).
+  const reseedProjection = field.map((r, i) => ({
+    ...r,
+    seed: i + 1,
+    reseedPts: rule.reseedTable[i] || 2000,
+  }));
+
+  const bannerText = phase === "regular"
+    ? `Regular season · R${racesRun} of ${rule.regSeasonEndRound} complete · field + reseed projected from current standings`
+    : phase === "playoffs"
+      ? `Chase in progress · field locked after R${rule.regSeasonEndRound}`
+      : `Season complete · final results below`;
+  const banner = `<div class="po-banner ${phase !== 'complete' ? 'po-banner-live' : ''}">${bannerText}</div>`;
+
+  const formatExplainer = `
+    <div class="card po-card po-format-note">
+      <div class="po-note">
+        <strong>2026 Chase Format</strong> · Top ${rule.field} by points qualify
+        (no "win and in") · all ${rule.field} race the ${rule.playoffRaces} Chase races
+        with a single reseed · <strong>no eliminations</strong> · most points at season's end wins.
+        Wins are worth ${rule.raceWinPts} points (up from 40 in the previous format).
+      </div>
+    </div>
+  `;
+
+  const fieldTable = `
+    <div class="card po-card">
+      <div class="po-card-head">
+        <span class="po-card-title">Chase Field (${rule.field})</span>
+        <span class="po-card-sub">${phase === 'regular' ? 'projected' : 'qualified'} by regular-season points · ${rule.playoffRaces} Chase races to decide the title</span>
+      </div>
+      <table class="data-table po-table">
+        <thead><tr>
+          <th class="num">Seed</th>
+          <th>Driver</th>
+          <th>Team</th>
+          <th class="num">Reg. Wins</th>
+          <th class="num">Reg. Pts</th>
+          <th class="num">Reseed Pts</th>
+          <th class="num">Gap to 1st</th>
+        </tr></thead>
+        <tbody>
+          ${reseedProjection.map(r => {
+            const carHex = colorFor(STATE.series, r.car_number);
+            const txt = contrastTextFor(carHex);
+            const teamPill = renderTeamPill(r.team_code);
+            const gap = r.seed === 1 ? "—" : `-${rule.reseedTable[0] - r.reseedPts}`;
+            const seedCell = r.seed === 1
+              ? `<td class="num"><span class="po-seed-top">1</span></td>`
+              : `<td class="num">${r.seed}</td>`;
+            return `<tr>
+              ${seedCell}
+              <td><a class="driver-cell profile-link" href="#/car/${r.car_number}">
+                <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
+                <span>${escapeHTML(r.displayLabel)}</span>
+                ${renderCoDriverBadge(r)}
+              </a></td>
+              <td>${teamPill}</td>
+              <td class="num">${r.wins}</td>
+              <td class="num">${r.total}</td>
+              <td class="num total-col">${r.reseedPts}</td>
+              <td class="num">${gap}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  const bubbleTable = firstOut.length ? `
+    <div class="card po-card">
+      <div class="po-card-head">
+        <span class="po-card-title">${phase === 'regular' ? 'On the Bubble' : 'Missed the Chase'}</span>
+        <span class="po-card-sub">Cutoff: ${cutoffPts} pts · ${phase === 'regular' ? 'would miss the Chase if season ended today' : 'first 4 drivers outside the field'}</span>
+      </div>
+      <table class="data-table po-table">
+        <thead><tr>
+          <th class="num">Rank</th>
+          <th>Driver</th>
+          <th>Team</th>
+          <th class="num">Wins</th>
+          <th class="num">Pts</th>
+          <th class="num">Back</th>
+        </tr></thead>
+        <tbody>
+          ${firstOut.map(r => {
+            const carHex = colorFor(STATE.series, r.car_number);
+            const txt = contrastTextFor(carHex);
+            const teamPill = renderTeamPill(r.team_code);
+            const rank = standings.findIndex(x => x.key === r.key) + 1;
+            const back = cutoffPts - r.total;
+            return `<tr>
+              <td class="num">${rank}</td>
+              <td><a class="driver-cell profile-link" href="#/car/${r.car_number}">
+                <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
+                <span>${escapeHTML(r.displayLabel)}</span>
+                ${renderCoDriverBadge(r)}
+              </a></td>
+              <td>${teamPill}</td>
+              <td class="num">${r.wins}</td>
+              <td class="num">${r.total}</td>
+              <td class="num neg">-${back}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  ` : "";
+
+  const reseedExplainer = `
+    <div class="card po-card">
+      <div class="po-card-head">
+        <span class="po-card-title">Reseed Table</span>
+        <span class="po-card-sub">Points assigned to each seed after the regular season · regular-season champ gets a 25-pt cushion</span>
+      </div>
+      <div class="po-reseed-grid">
+        ${rule.reseedTable.map((pts, i) => `
+          <div class="po-reseed-row">
+            <span class="po-reseed-seed">${i + 1}</span>
+            <span class="po-reseed-pts">${pts}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+
+  return banner + formatExplainer + fieldTable + bubbleTable + reseedExplainer;
 }
 
 function renderEliminationView(rule, phase) {
