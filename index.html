@@ -35,128 +35,87 @@
 
 <main class="dashboard" id="dashboard">
 
-  <!-- ============================================================
-       ALWAYS-ON DASHBOARD SECTIONS
-       ============================================================ -->
-
-  <!-- Arc chart (full-width hero) -->
-  <section class="dash-section" id="view-arc">
-    <div class="view-head">
-      <h1>Season Cumulative</h1>
-      <div class="view-sub">Cumulative points by race · tap cars below to add/remove</div>
+  <aside class="col-left" id="col-left">
+    <div class="panel-head">
+      <span class="panel-title">Standings</span>
+      <span class="panel-sub" id="standings-mini-sub">— in</span>
     </div>
-    <div class="toolbar">
-      <button class="btn-ghost" id="arc-top10">Top 10</button>
-      <button class="btn-ghost" id="arc-clear">Clear</button>
-      <div class="toggle-group" data-group="arc-ft">
-        <button class="on" data-val="ft">Full-time only</button>
-        <button data-val="all">All entrants</button>
-      </div>
-      <div class="toggle-group" data-group="arc-metric">
-        <button class="on" data-val="points">Points</button>
-        <button data-val="position">Standings pos</button>
-      </div>
-    </div>
-    <div class="card card-chart">
-      <svg id="arc-svg"></svg>
-    </div>
-    <div class="picker-label">Select cars</div>
-    <div class="driver-picker" id="arc-driver-grid"></div>
-  </section>
+    <div class="panel-body scrollable" id="standings-mini-host"></div>
+  </aside>
 
-  <!-- Standings + Playoff mini side-by-side -->
-  <section class="dash-row dash-row-split">
-
-    <div class="dash-col dash-col-main" id="view-standings">
-      <div class="view-head">
-        <h1>Standings</h1>
-        <div class="view-sub">Full points breakdown · click any column to sort</div>
-      </div>
-      <div class="card table-scroll">
-        <table id="standings-table" class="data-table"></table>
-      </div>
-    </div>
-
-    <div class="dash-col dash-col-aside">
-      <div class="view-head">
-        <h1>Playoff Picture</h1>
-        <div class="view-sub" id="playoffs-sub">—</div>
-      </div>
-      <div id="playoffs-mini-host"></div>
-      <div class="dash-aside-link">
-        <a href="#/playoffs" class="btn-ghost dash-expand-link">Full bracket + field →</a>
-      </div>
-    </div>
-
-  </section>
-
-  <!-- ============================================================
-       TABBED DEEP-DIVE SECTIONS
-       ============================================================ -->
-
-  <section class="dash-tabs-wrap">
+  <section class="col-center" id="col-center">
     <nav class="dash-tabs" id="dash-tabs">
+      <a href="#/arc"        class="dash-tab" data-view="arc">Season Arc</a>
       <a href="#/form"       class="dash-tab" data-view="form">Trending</a>
-      <a href="#/breakdown"  class="dash-tab" data-view="breakdown">Per-Race Breakdown</a>
-      <a href="#/trajectory" class="dash-tab" data-view="trajectory">Stage Analysis</a>
-      <a href="#/teammates"  class="dash-tab" data-view="teammates">Teammate Delta</a>
+      <a href="#/breakdown"  class="dash-tab" data-view="breakdown">Breakdown</a>
+      <a href="#/trajectory" class="dash-tab" data-view="trajectory">Stage</a>
+      <a href="#/teammates"  class="dash-tab" data-view="teammates">Teammate</a>
       <a href="#/heatmap"    class="dash-tab" data-view="heatmap">Heatmap</a>
+      <a href="#/standings"  class="dash-tab" data-view="standings">Standings</a>
     </nav>
 
-    <div class="dash-tab-body">
+    <div class="tab-body" id="tab-body">
 
-      <section class="view dash-tab-panel" id="view-form">
-        <div class="view-head">
-          <h1>Trending</h1>
-          <div class="view-sub" id="form-sub">Rolling 5-race form · sorted by form rating</div>
+      <section class="view tab-panel" id="view-arc">
+        <div class="toolbar-slim">
+          <button class="btn-ghost" id="arc-top10">Top 10</button>
+          <button class="btn-ghost" id="arc-clear">Clear</button>
+          <div class="toggle-group" data-group="arc-ft">
+            <button class="on" data-val="ft">Full-time</button>
+            <button data-val="all">All</button>
+          </div>
+          <div class="toggle-group" data-group="arc-metric">
+            <button class="on" data-val="points">Points</button>
+            <button data-val="position">Std. pos</button>
+          </div>
         </div>
-        <div class="toolbar">
+        <div class="card card-chart tab-chart-fill">
+          <svg id="arc-svg"></svg>
+        </div>
+        <div class="picker-label compact">Cars</div>
+        <div class="driver-picker driver-picker-compact" id="arc-driver-grid"></div>
+      </section>
+
+      <section class="view tab-panel" id="view-form" hidden>
+        <div class="toolbar-slim">
           <div class="toggle-group" data-group="window">
-            <button class="on" data-val="5">Form L5</button>
-            <button data-val="10">Form L10</button>
+            <button class="on" data-val="5">L5</button>
+            <button data-val="10">L10</button>
             <button data-val="season">Season</button>
           </div>
           <div class="toggle-group" data-group="ftfilter">
-            <button class="on" data-val="ft">Full-time only</button>
-            <button data-val="all">All entrants</button>
+            <button class="on" data-val="ft">Full-time</button>
+            <button data-val="all">All</button>
           </div>
           <input type="search" id="form-search" placeholder="Search car or driver…" class="search-input">
         </div>
-        <div class="card" id="form-card">
+        <div class="card tab-table-fill" id="form-card">
           <div class="loading">Loading…</div>
         </div>
       </section>
 
-      <section class="view dash-tab-panel" id="view-breakdown" hidden>
-        <div class="view-head">
-          <h1>Per-Race Breakdown</h1>
-          <div class="view-sub">Stage 1 · Stage 2 · Finish · Fastest Lap · pick up to 4 cars to compare</div>
-        </div>
-        <div class="toolbar">
+      <section class="view tab-panel" id="view-breakdown" hidden>
+        <div class="toolbar-slim">
           <div class="toggle-group" data-group="breakdown-ft">
-            <button class="on" data-val="ft">Full-time only</button>
-            <button data-val="all">All entrants</button>
+            <button class="on" data-val="ft">Full-time</button>
+            <button data-val="all">All</button>
           </div>
         </div>
-        <div class="card card-chart">
+        <div class="card card-chart tab-chart-fill">
           <svg id="breakdown-svg"></svg>
           <div id="breakdown-tooltip" class="chart-tooltip" hidden></div>
         </div>
-        <div class="legend" id="breakdown-legend"></div>
-        <div class="picker-label">Select up to 4 cars</div>
-        <div class="driver-picker" id="breakdown-driver-grid"></div>
+        <div class="legend legend-compact" id="breakdown-legend"></div>
+        <div class="picker-label compact">Pick up to 4 cars</div>
+        <div class="driver-picker driver-picker-compact" id="breakdown-driver-grid"></div>
       </section>
 
-      <section class="view dash-tab-panel" id="view-trajectory" hidden>
-        <div class="view-head">
-          <h1>Stage Analysis</h1>
-          <div class="view-sub" id="trajectory-sub">Pace vs. results — season average per car · dashed line = league trend</div>
-        </div>
-        <div class="toolbar">
+      <section class="view tab-panel" id="view-trajectory" hidden>
+        <div class="toolbar-slim">
           <span class="toolbar-label">Mode</span>
           <div class="toggle-group" data-group="traj-mode">
             <button class="on" data-val="season">Season avg</button>
-            <button data-val="trajectory">Form trajectory</button>
+            <button data-val="trajectory">Form traj</button>
           </div>
           <span class="toolbar-label">Show</span>
           <div class="toggle-group" data-group="traj-show">
@@ -164,27 +123,25 @@
             <button data-val="outperform">Outperformers</button>
             <button data-val="underperform">Stage hunters</button>
           </div>
-          <span class="toolbar-label">Labels</span>
-          <div class="toggle-group" data-group="traj-labels">
-            <button class="on" data-val="top12">Top 12</button>
-            <button data-val="all">All</button>
-            <button data-val="none">None</button>
-          </div>
           <span class="toolbar-label">Tracks</span>
           <div class="toggle-group" data-group="traj-tracks">
             <button class="on" data-val="all">All</button>
             <button data-val="super">Super</button>
             <button data-val="short">Short</button>
-            <button data-val="inter">Intermediate</button>
+            <button data-val="inter">Inter</button>
             <button data-val="road">Road</button>
           </div>
+          <div class="toggle-group" data-group="traj-labels">
+            <button class="on" data-val="top12">Top 12</button>
+            <button data-val="all">All</button>
+            <button data-val="none">None</button>
+          </div>
         </div>
-        <div class="toolbar" id="traj-seasons-toolbar">
+        <div class="toolbar-slim" id="traj-seasons-toolbar">
           <span class="toolbar-label">Seasons</span>
           <div class="toggle-group traj-seasons" id="traj-seasons" data-group="traj-seasons"></div>
-          <span class="toolbar-hint" id="traj-seasons-hint">Multi-select to combine years</span>
         </div>
-        <div class="card card-chart">
+        <div class="card card-chart tab-chart-fill">
           <svg id="trajectory-svg">
             <defs>
               <marker id="traj-arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
@@ -194,70 +151,54 @@
           </svg>
           <div id="trajectory-tooltip" class="chart-tooltip" hidden></div>
         </div>
-        <div class="legend" id="trajectory-legend"></div>
-        <div class="callout-rail">
-          <div class="callout">
-            <div class="h">Top outperformers · finish vs. expected</div>
-            <div id="trajectory-over"></div>
-          </div>
-          <div class="callout">
-            <div class="h">Top underperformers · finish vs. expected</div>
-            <div id="trajectory-under"></div>
-          </div>
+        <div class="picker-label compact">
+          Cars
+          <button class="btn-ghost btn-inline" id="traj-clear">Clear</button>
         </div>
-        <div class="picker-label">
-          Select cars
-          <button class="btn-ghost btn-inline" id="traj-clear">Clear selection</button>
-        </div>
-        <div class="driver-picker" id="trajectory-driver-grid"></div>
+        <div class="driver-picker driver-picker-compact" id="trajectory-driver-grid"></div>
       </section>
 
-      <section class="view dash-tab-panel" id="view-teammates" hidden>
-        <div class="view-head">
-          <h1>Teammate Delta</h1>
-          <div class="view-sub" id="teammates-sub">Each car vs. the best full-time teammate per race · teams ranked by best car's season points</div>
-        </div>
-        <div class="toolbar">
+      <section class="view tab-panel" id="view-teammates" hidden>
+        <div class="toolbar-slim">
           <span class="toolbar-label">Compare on</span>
           <div class="toggle-group" data-group="teammates-metric">
-            <button class="on" data-val="fin">Finish position</button>
-            <button data-val="tot">Race points</button>
+            <button class="on" data-val="fin">Finish</button>
+            <button data-val="tot">Race pts</button>
           </div>
           <span class="toolbar-label">Part-timers</span>
           <div class="toggle-group" data-group="teammates-ft">
-            <button class="on" data-val="ft">Full-time cars only</button>
+            <button class="on" data-val="ft">Full-time only</button>
             <button data-val="all">Include all</button>
           </div>
         </div>
-        <div class="legend">
-          <span class="legend-item"><span class="legend-dot" style="background:var(--accent-2)"></span>Per-race delta (hover for details)</span>
-          <span class="legend-item"><span class="legend-dot" style="background:transparent;border:1.5px solid #fff"></span>Team-leader race</span>
-          <span class="legend-item" style="color:var(--dim)">Wood Brothers groups with Penske (shared shop)</span>
-        </div>
-        <div class="tm-grid" id="teammates-grid"></div>
+        <div class="tm-grid scrollable" id="teammates-grid"></div>
         <div id="teammates-empty" class="muted" hidden style="padding:32px;text-align:center;">No multi-car teams in this series / season yet.</div>
       </section>
 
-      <section class="view dash-tab-panel" id="view-heatmap" hidden>
-        <div class="view-head">
-          <h1>Car × Race Heatmap</h1>
-          <div class="view-sub">Finish position by race — brighter green = better</div>
-        </div>
-        <div class="card">
+      <section class="view tab-panel" id="view-heatmap" hidden>
+        <div class="card tab-chart-fill scrollable">
           <div id="heatmap-wrap" class="heatmap-wrap"></div>
+        </div>
+      </section>
+
+      <section class="view tab-panel" id="view-standings" hidden>
+        <div class="card tab-table-fill scrollable">
+          <table id="standings-table" class="data-table"></table>
         </div>
       </section>
 
     </div>
   </section>
 
-</main>
+  <aside class="col-right" id="col-right">
+    <div class="panel-head">
+      <span class="panel-title">Form · L5</span>
+      <span class="panel-sub">vs season</span>
+    </div>
+    <div class="panel-body scrollable" id="form-mini-host"></div>
+  </aside>
 
-<!-- ============================================================
-     FULL-TAKEOVER VIEWS (hide dashboard when active)
-     - Playoffs full view (accessed via "Full bracket + field →" link)
-     - Profile pages (accessed via any car link)
-     ============================================================ -->
+</main>
 
 <main class="takeover" id="takeover" hidden>
   <div class="takeover-head">
@@ -267,7 +208,7 @@
   <section class="view" id="view-playoffs" hidden>
     <div class="view-head">
       <h1>Playoff Picture</h1>
-      <div class="view-sub" id="playoffs-full-sub">—</div>
+      <div class="view-sub" id="playoffs-sub">—</div>
     </div>
     <div id="playoffs-host"></div>
   </section>

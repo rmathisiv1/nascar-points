@@ -184,76 +184,255 @@ html, body {
 
 /* ========== APP / SIDEBAR / MAIN ========== */
 /* ========================================================
-   DASHBOARD SHELL — single-page layout, no sidebar
+   DASHBOARD SHELL — no-scroll three-column layout
+   Left (standings, compact) · Center (tabs, 70%) · Right (form, compact)
    ======================================================== */
 
-.dashboard, .takeover {
+.dashboard {
+  display: grid;
+  grid-template-columns: 15% minmax(0, 70%) 15%;
+  gap: 10px;
+  padding: 10px 14px;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: calc(100vh - 120px);   /* viewport minus header + metricbar */
+  min-height: 520px;
+}
+.dashboard[hidden], .takeover[hidden] { display: none; }
+
+.takeover {
   padding: 24px 28px;
   max-width: 1600px;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
 }
-.dashboard[hidden], .takeover[hidden] { display: none; }
 
-.dash-section {
-  margin-bottom: 32px;
-}
-
-/* Two-column split: standings (wider) + playoff aside */
-.dash-row-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  gap: 18px;
-  margin-bottom: 32px;
-}
-.dash-col { min-width: 0; }
-.dash-col-main > .view-head,
-.dash-col-aside > .view-head { margin-bottom: 10px; }
-
-.dash-aside-link {
-  margin-top: 10px;
+/* A column that should size to its grid cell and not push its content past it.
+   min-height: 0 is the canonical flex/grid "please respect my parent's height"
+   incantation — without it, children with intrinsic content push the row taller. */
+.col-left, .col-right, .col-center {
   display: flex;
-  justify-content: flex-end;
-}
-.dash-expand-link {
-  font-size: 11px;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-/* Tabbed deep-dive section */
-.dash-tabs-wrap {
-  border-top: 1px solid var(--border);
-  padding-top: 24px;
-  margin-top: 16px;
-}
-.dash-tabs {
+.panel-head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
-  overflow-x: auto;
+  flex-shrink: 0;
+}
+.panel-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.panel-sub {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+}
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0;
+}
+.scrollable {
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+.scrollable::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollable::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+.scrollable::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- LEFT: compact standings ---------- */
+.std-mini-row {
+  display: grid;
+  grid-template-columns: 20px 26px 1fr auto;
+  gap: 6px;
+  padding: 3px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  align-items: center;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.std-mini-row:hover { background: rgba(255,255,255,0.03); }
+.std-mini-rank { color: var(--muted); text-align: right; }
+.std-mini-car {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 16px; padding: 0 4px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.std-mini-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.std-mini-val {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.std-mini-val.back { color: #ff8a8a; font-weight: 500; }
+.std-mini-row.below { opacity: 0.7; }
+
+.std-mini-cutoff {
+  position: relative;
+  margin: 4px 10px 2px;
+  border-top: 1.5px dashed #ff5050;
+}
+.std-mini-cutoff-label {
+  position: absolute;
+  right: 0;
+  top: -7px;
+  background: var(--card);
+  padding: 0 4px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: #ff5050;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* ---------- RIGHT: form panel ---------- */
+.form-mini-row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 6px;
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  align-items: center;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.form-mini-row:hover { background: rgba(255,255,255,0.03); }
+.form-mini-car {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 16px; padding: 0 4px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+}
+.form-mini-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.form-mini-delta {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.form-mini-delta.hot  { color: #5fd97a; }
+.form-mini-delta.cold { color: #ff8a8a; }
+.form-mini-delta.flat { color: var(--dim); }
+
+/* ---------- CENTER: tab strip + panel ---------- */
+.dash-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
+}
+.dash-tabs::-webkit-scrollbar { height: 0; }
 .dash-tab {
-  padding: 10px 16px;
+  padding: 4px 10px;
   color: var(--muted);
   text-decoration: none;
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
   font-weight: 500;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  border-radius: 3px;
   white-space: nowrap;
-  transition: color 0.1s, border-color 0.1s;
+  letter-spacing: 0.02em;
+  transition: background 0.1s, color 0.1s;
 }
 .dash-tab:hover { color: var(--text); }
 .dash-tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+  background: var(--accent-bg-hi);
+  color: var(--accent-2);
 }
-.dash-tab-panel[hidden] { display: none; }
+.tab-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  overflow: hidden;
+}
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tab-panel[hidden] { display: none !important; }
 
-/* Takeover view (profile / playoffs) */
+/* Charts in the tab should fill the available vertical space below their toolbar */
+.tab-chart-fill {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.tab-chart-fill svg { flex: 1; min-height: 0; width: 100%; height: 100%; }
+.tab-chart-fill.scrollable { overflow: auto; }
+
+.tab-table-fill {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Slim toolbar variant for tabbed panels — no margin-bottom, tighter */
+.toolbar-slim {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0;
+  flex-shrink: 0;
+}
+.toolbar-slim .toggle-group button { padding: 4px 8px; font-size: 9px; }
+.toolbar-slim .toolbar-label { font-size: 9px; }
+.toolbar-slim .search-input { height: 26px; font-size: 11px; }
+.toolbar-slim .btn-ghost { padding: 4px 8px; font-size: 9px; }
+
+/* Compact driver picker for tabs — one row max, horizontal scroll */
+.driver-picker-compact {
+  max-height: 68px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.driver-picker-compact .driver-pill { padding: 3px 6px; font-size: 10px; }
+.picker-label.compact {
+  margin: 4px 0 2px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.legend-compact { padding: 4px 0; font-size: 9px; flex-shrink: 0; }
+
+/* ---------- TAKEOVER (profile / playoffs) ---------- */
 .takeover-head {
   margin-bottom: 16px;
 }
@@ -273,15 +452,101 @@ html, body {
   background: var(--card);
 }
 
-/* Page footer (replaces the old sidebar footer) */
+/* Page footer */
 .footer {
-  margin-top: 40px;
-  padding: 16px 28px;
+  margin: 0;
+  padding: 8px 14px;
   border-top: 1px solid var(--border);
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 9px;
   text-align: center;
+}
+
+/* ========== PLAYOFF MINI CARD (legacy Layer A — kept for takeover view) ========== */
+.po-mini-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px;
+}
+.po-mini-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.po-mini-stat:last-of-type { border-bottom: none; }
+.po-mini-stat .lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.po-mini-stat .val {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.po-mini-stat .val.hot { color: #5fd97a; }
+.po-mini-stat .val.accent { color: var(--accent-2); }
+.po-mini-stat .val .unit {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--dim);
+  margin-left: 2px;
+}
+.po-mini-hint {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  font-style: italic;
+}
+.po-mini-sep {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.po-mini-list { display: flex; flex-direction: column; gap: 3px; }
+.po-mini-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 2px;
+  font-size: 12px;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: 3px;
+  transition: background 0.1s;
+}
+.po-mini-row:hover { background: rgba(255,255,255,0.03); }
+.po-mini-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 18px; min-width: 22px; padding: 0 4px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 10px;
+}
+.po-mini-back { color: #ff8a8a; font-family: var(--mono); font-size: 11px; }
+.po-mini-empty {
+  padding: 20px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
 }
 
 /* ========== PLAYOFF MINI CARD (dashboard aside) ========== */

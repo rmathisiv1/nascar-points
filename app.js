@@ -7,7 +7,7 @@
 const STATE = {
   series: "NCS",
   season: 2026,
-  view: "form",
+  view: "arc",
   // Identity model: the app is car-centric. Every primary row is a car
   // (#car_number). If multiple drivers drove that car in a season, the UI
   // surfaces them via an "i" tooltip next to the car's primary driver name.
@@ -76,12 +76,7 @@ function parseHash() {
     };
     return;
   }
-  // Legacy routes that are now always-on dashboard sections — redirect home.
-  if (view === "arc" || view === "standings") {
-    STATE.view = "form";  // dashboard default
-    return;
-  }
-  STATE.view = VIEWS.includes(view) ? view : "form";
+  STATE.view = VIEWS.includes(view) ? view : "arc";  // arc is the landing tab
 }
 
 // Slug helper: "A.J. Allmendinger" → "a-j-allmendinger"
@@ -408,8 +403,9 @@ function renderTimeCursorBanner() {
 // ============================================================
 // RENDER
 // ============================================================
-// Views that live as tabs inside the dashboard's tabbed panel.
-const TAB_VIEWS = ["form", "breakdown", "trajectory", "teammates", "heatmap"];
+// Views that live as tabs inside the center panel. arc/standings included —
+// they aren't "always-on" in the new layout; they're full-width tab content.
+const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
 // Views that take over the whole page (hide dashboard).
 const TAKEOVER_VIEWS = ["profile", "playoffs"];
 
@@ -426,14 +422,13 @@ function render() {
   takeoverTargets.forEach(v => {
     const el = document.getElementById(`view-${v}`);
     if (!el) return;
-    // Show profile when STATE.view==profile, playoffs when ==playoffs, error unchanged
     if (v === "error") return;
     el.hidden = (v !== STATE.view);
   });
 
-  // Tab-panel visibility inside the dashboard. Default to "form" when the URL
-  // doesn't point to a specific tab view.
-  const activeTab = TAB_VIEWS.includes(STATE.view) ? STATE.view : "form";
+  // Tab-panel visibility. Default to "arc" when the URL doesn't point to a
+  // specific tab view (Season Arc is the new landing tab).
+  const activeTab = TAB_VIEWS.includes(STATE.view) ? STATE.view : "arc";
   TAB_VIEWS.forEach(v => {
     const el = document.getElementById(`view-${v}`);
     if (el) el.hidden = (v !== activeTab);
@@ -444,23 +439,23 @@ function render() {
     a.classList.toggle("active", a.dataset.view === activeTab);
   });
 
-  // ---- Always-on dashboard renders (when not in takeover) ----
+  // ---- Always-on dashboard side panels (when not in takeover) ----
   if (!inTakeover) {
     renderMetricBar();
-    renderArc();
-    renderStandings();
-    renderPlayoffsMini();
+    renderStandingsMini();
+    renderFormMini();
 
     // Render the active tab's content
     switch (activeTab) {
+      case "arc":        renderArc(); break;
       case "form":       renderFormTable(); break;
       case "breakdown":  renderBreakdown(); break;
       case "trajectory": renderTrajectory(); break;
       case "teammates":  renderTeammates(); break;
       case "heatmap":    renderHeatmap(); break;
+      case "standings":  renderStandings(); break;
     }
   } else {
-    // Takeover renders — metric bar still shown above the back-link
     renderMetricBar();
     if (STATE.view === "profile")  renderProfile();
     if (STATE.view === "playoffs") renderPlayoffs();
@@ -4152,6 +4147,103 @@ function renderBracket(rule) {
 }
 // Mini playoff panel for the dashboard aside — just the key numbers + top 3
 // first-out drivers. Full bracket/field lives in the takeover view.
+// ============================================================
+// LEFT PANEL — compact standings with playoff cutoff line
+// ============================================================
+// Shows all cars in points order. During regular season, the cutoff line
+// appears at position `rule.field` (16/12/10 depending on series). During
+// playoffs, the cutoff shifts to the current round's advancing count. Below
+// the cutoff, each row shows the deficit to the bubble instead of raw points.
+function renderStandingsMini() {
+  const host = document.getElementById("standings-mini-host");
+  const subEl = document.getElementById("standings-mini-sub");
+  if (!host) return;
+  if (!STATE.data) { host.innerHTML = ""; return; }
+
+  const races = racesSorted();
+  const lastRound = races.length ? races[races.length - 1].round : 0;
+  const rows = rankingRowsFrom(pointsMapThroughRound(lastRound));
+
+  const rule = resolvePlayoffRules(STATE.series, STATE.season);
+  // Determine cutoff position based on rule.field (during regular season)
+  // or based on the current round's elimination target (during playoffs).
+  let cutoffPos = null;
+  let cutoffLabel = null;
+  if (rule && (rule.format === "elimination" || rule.format === "chase-reseeded" || rule.format === "chase" || rule.format === "chase-wildcard")) {
+    const phase = currentPlayoffPhase(rule);
+    if (phase === "regular") {
+      cutoffPos = rule.field;
+      cutoffLabel = `Cutoff · ${rule.field} make it`;
+    } else if (rule.format === "elimination" && phase === "playoffs") {
+      // Find the current round (the one in progress). The cutoff is that
+      // round's `cutTo` value. Earlier rounds are done; later haven't started.
+      let cursor = rule.regSeasonEndRound + 1;
+      for (const rdDef of rule.rounds) {
+        const inThisRound = lastRound >= cursor && lastRound < cursor + rdDef.races;
+        if (inThisRound) { cutoffPos = rdDef.cutTo; cutoffLabel = `${rdDef.name} · cuts to ${rdDef.cutTo}`; break; }
+        cursor += rdDef.races;
+      }
+    }
+  }
+
+  if (subEl) subEl.textContent = cutoffPos ? `${cutoffPos} in` : `${rows.length} cars`;
+
+  const cutoffPts = (cutoffPos && rows.length >= cutoffPos) ? rows[cutoffPos - 1].total : null;
+
+  const html = rows.map((r, i) => {
+    const pos = i + 1;
+    const below = cutoffPos != null && pos > cutoffPos;
+    const carHex = colorFor(STATE.series, r.car_number);
+    const txt = contrastTextFor(carHex);
+    const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
+    const valCell = below && cutoffPts != null
+      ? `<span class="std-mini-val back">−${cutoffPts - r.total}</span>`
+      : `<span class="std-mini-val">${r.total}</span>`;
+    const cutoffDivider = (cutoffPos != null && pos === cutoffPos) ? `<div class="std-mini-cutoff"><span class="std-mini-cutoff-label">${escapeHTML(cutoffLabel || "Cutoff")}</span></div>` : "";
+    return `<a class="std-mini-row profile-link${below ? " below" : ""}" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)}">
+      <span class="std-mini-rank">${pos}</span>
+      <span class="std-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
+      <span class="std-mini-name">${escapeHTML(lastName)}</span>
+      ${valCell}
+    </a>${cutoffDivider}`;
+  }).join("");
+
+  host.innerHTML = html;
+}
+
+// ============================================================
+// RIGHT PANEL — form vs. season
+// ============================================================
+// Sorted by (last-5 form rating) − (season rating), hottest to coldest.
+// Only shows cars that have valid ratings (full-timers with enough starts).
+function renderFormMini() {
+  const host = document.getElementById("form-mini-host");
+  if (!host) return;
+  if (!STATE.data) { host.innerHTML = ""; return; }
+
+  const entities = allEntities().filter(isFullTime);
+  const rows = entities.map(d => {
+    const f = formRatingFor(d.races, "5");
+    const s = formRatingFor(d.races, "season");
+    const delta = (f != null && s != null) ? f - s : null;
+    return { ...d, f, s, delta };
+  }).filter(d => d.delta != null)
+    .sort((a, b) => b.delta - a.delta);
+
+  host.innerHTML = rows.map(r => {
+    const carHex = colorFor(STATE.series, r.car_number);
+    const txt = contrastTextFor(carHex);
+    const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
+    const cls = r.delta > 1 ? "hot" : r.delta < -1 ? "cold" : "flat";
+    const sign = r.delta > 0 ? "+" : "";
+    return `<a class="form-mini-row profile-link" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)} — form ${r.f.toFixed(1)} vs. season ${r.s.toFixed(1)}">
+      <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
+      <span class="form-mini-name">${escapeHTML(lastName)}</span>
+      <span class="form-mini-delta ${cls}">${sign}${r.delta.toFixed(1)}</span>
+    </a>`;
+  }).join("");
+}
+
 function renderPlayoffsMini() {
   const host = document.getElementById("playoffs-mini-host");
   const sub = document.getElementById("playoffs-sub");
