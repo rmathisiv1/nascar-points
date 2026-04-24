@@ -3818,7 +3818,9 @@ function computePlayoffPoints(rule) {
 
   // Regular-season finish bonus (2017+): compute rank by regular-season points
   // through cutoff round, give 15/10/8/7/6/5/4/3/2/1 to top 10.
-  if (rule.regBonus) {
+  // Only applies AFTER the cutoff race is complete — mid-season it's TBD.
+  const racesDoneForBonus = racesSorted().length;
+  if (rule.regBonus && racesDoneForBonus >= rule.regSeasonEndRound) {
     const regSeasonStandings = rankingRowsFrom(pointsMapThroughRound(rule.regSeasonEndRound));
     const BONUS = [15, 10, 8, 7, 6, 5, 4, 3, 2, 1];
     regSeasonStandings.slice(0, 10).forEach((r, i) => {
@@ -3923,10 +3925,11 @@ function renderEliminationView(rule, phase) {
 
   // Determine playoff field. Rule: drivers with wins enter first (by points tiebreak),
   // then fill remaining spots by points. Drivers must be eligible (running for
-  // championship in this series); we approximate with full-time filter.
-  const allRaces = racesSorted().length;
-  const totalSched = STATE.data?.schedule_length || { NCS: 36, NOS: 33, NTS: 23 }[STATE.series] || allRaces;
-  const ftThreshold = Math.ceil(totalSched * 0.9);
+  // championship in this series); we approximate with a "has run most races so
+  // far" filter, based on races COMPLETED (not scheduled) so the view works
+  // mid-season. At R9 of 26, a full-timer has ~8-9 starts.
+  const racesRun = racesSorted().length;
+  const ftThreshold = racesRun < 5 ? 1 : Math.ceil(racesRun * 0.9);
   const eligible = enriched.filter(r => r.starts >= ftThreshold);
 
   const winners = eligible.filter(r => r.raceWins > 0).sort((a, b) => b.raceWins - a.raceWins || b.total - a.total);
