@@ -1140,6 +1140,110 @@ code {
 }
 #metric-tooltip.co-tip .co-tip-row.primary { color: var(--text); font-weight: 600; }
 #metric-tooltip.co-tip .co-tip-row .n { color: var(--dim); }
+
+/* ============================================================
+   PLAYOFFS VIEW
+   ============================================================ */
+.po-banner {
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.po-banner-live {
+  background: rgba(59,130,246,0.08);
+  border-color: rgba(59,130,246,0.35);
+  color: var(--accent-2);
+}
+.po-card { margin-bottom: 16px; padding: 14px; }
+.po-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.po-card-title {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.po-card-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.po-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.po-table th, .po-table td {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.po-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.po-status.locked {
+  background: rgba(46,204,64,0.15);
+  border: 1px solid rgba(46,204,64,0.4);
+  color: #5fd97a;
+}
+.po-status.in-pts {
+  background: rgba(59,130,246,0.12);
+  border: 1px solid rgba(59,130,246,0.35);
+  color: var(--accent-2);
+}
+.po-note {
+  padding: 20px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.po-note a { color: var(--accent-2); }
+.po-rounds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+.po-round {
+  padding: 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.po-round-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.po-round-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+}
+td.neg { color: #ff8a8a; }
 .tm-true-team {
   font-family: var(--mono); font-size: 9px; font-weight: 700;
   color: var(--dim); background: rgba(255,255,255,0.04);
