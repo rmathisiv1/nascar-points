@@ -73,11 +73,11 @@
             <button data-val="position">Std. pos</button>
           </div>
         </div>
+        <div class="team-filter" id="arc-team-filter"></div>
+        <div class="driver-picker driver-picker-compact" id="arc-driver-grid"></div>
         <div class="card card-chart tab-chart-fill">
           <svg id="arc-svg"></svg>
         </div>
-        <div class="picker-label compact">Cars</div>
-        <div class="driver-picker driver-picker-compact" id="arc-driver-grid"></div>
       </section>
 
       <section class="view tab-panel" id="view-form" hidden>
@@ -105,13 +105,13 @@
             <button data-val="all">All</button>
           </div>
         </div>
+        <div class="team-filter" id="breakdown-team-filter"></div>
+        <div class="driver-picker driver-picker-compact" id="breakdown-driver-grid"></div>
         <div class="card card-chart tab-chart-fill">
           <svg id="breakdown-svg"></svg>
           <div id="breakdown-tooltip" class="chart-tooltip" hidden></div>
         </div>
         <div class="legend legend-compact" id="breakdown-legend"></div>
-        <div class="picker-label compact">Pick up to 4 cars</div>
-        <div class="driver-picker driver-picker-compact" id="breakdown-driver-grid"></div>
       </section>
 
       <section class="view tab-panel" id="view-trajectory" hidden>
@@ -145,6 +145,8 @@
           <span class="toolbar-label">Seasons</span>
           <div class="toggle-group traj-seasons" id="traj-seasons" data-group="traj-seasons"></div>
         </div>
+        <div class="team-filter" id="trajectory-team-filter"></div>
+        <div class="driver-picker driver-picker-compact" id="trajectory-driver-grid"></div>
         <div class="card card-chart tab-chart-fill">
           <svg id="trajectory-svg">
             <defs>
@@ -155,11 +157,6 @@
           </svg>
           <div id="trajectory-tooltip" class="chart-tooltip" hidden></div>
         </div>
-        <div class="picker-label compact">
-          Cars
-          <button class="btn-ghost btn-inline" id="traj-clear">Clear</button>
-        </div>
-        <div class="driver-picker driver-picker-compact" id="trajectory-driver-grid"></div>
       </section>
 
       <section class="view tab-panel" id="view-teammates" hidden>

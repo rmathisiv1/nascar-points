@@ -312,7 +312,7 @@ html, body {
 /* ---------- RIGHT: form panel (two-line row with sparkline) ---------- */
 .form-mini-row {
   display: block;
-  padding: 4px 8px;
+  padding: 5px 8px 6px;
   font-family: var(--mono);
   font-size: 11px;
   text-decoration: none;
@@ -322,49 +322,50 @@ html, body {
 }
 .form-mini-row:hover { background: rgba(255,255,255,0.03); }
 .form-mini-top {
-  display: grid;
-  grid-template-columns: 22px 1fr auto;
-  gap: 5px;
+  display: flex;
   align-items: center;
-  margin-bottom: 1px;
+  gap: 6px;
+  margin-bottom: 2px;
 }
 .form-mini-car {
   display: inline-flex; align-items: center; justify-content: center;
-  height: 14px; padding: 0 3px;
+  height: 14px; min-width: 22px; padding: 0 4px;
   border-radius: 2px;
   font-size: 9px;
   font-weight: 700;
+  flex-shrink: 0;
 }
 .form-mini-name {
+  flex: 1;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 10px;
+  font-size: 11px;
+  color: var(--text);
 }
 .form-mini-delta {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  font-size: 10px;
+  font-size: 11px;
+  flex-shrink: 0;
 }
 .form-mini-delta.hot  { color: #5fd97a; }
 .form-mini-delta.cold { color: #ff8a8a; }
 .form-mini-delta.flat { color: var(--dim); }
 .form-mini-bottom {
-  display: grid;
-  grid-template-columns: 22px auto 1fr;
-  gap: 5px;
+  display: flex;
   align-items: center;
-  margin-top: 0;
-}
-.form-mini-bottom::before {
-  content: '';
+  gap: 8px;
+  padding-left: 28px;  /* indent past the car pill + gap to align under name */
 }
 .form-mini-rating {
   font-size: 10px;
   font-weight: 500;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 .form-mini-spark {
-  width: 58px;
+  flex: 1;
+  max-width: 80px;
   height: 14px;
   display: block;
 }
@@ -524,6 +525,35 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 }
 
 .legend-compact { padding: 4px 0; font-size: 9px; flex-shrink: 0; }
+
+/* Team filter strip — sits above chart pickers; click a team to filter.
+   Clicking "All" (or the currently active team again) clears the filter. */
+.team-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+.team-filter .tf-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.1s, transform 0.05s;
+}
+.team-filter .tf-pill.inactive { opacity: 0.35; }
+.team-filter .tf-pill:hover { opacity: 0.9; }
+.team-filter .tf-pill.active { opacity: 1; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); }
+.team-filter .tf-all {
+  background: var(--card-hi);
+  color: var(--text-2);
+  border: 1px solid var(--border-hi);
+}
 
 /* ---------- TAKEOVER (profile / playoffs) ---------- */
 .takeover-head {
@@ -1570,10 +1600,10 @@ code {
 .tm-col-headers,
 .tm-row {
   display: grid;
-  grid-template-columns: 30px minmax(80px, 1fr) minmax(70px, 2fr) 42px 36px;
+  grid-template-columns: 28px minmax(70px, 1fr) minmax(90px, 2.2fr) 38px 32px;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 5px;
+  padding: 4px 8px;
   min-width: 0;
 }
 .tm-col-headers {
@@ -1583,7 +1613,7 @@ code {
   color: var(--muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 4px 10px;
+  padding: 4px 8px;
 }
 .tm-right { text-align: right; }
 .tm-help { cursor: help; }
@@ -1985,14 +2015,17 @@ td.neg { color: #ff8a8a; }
 #metric-tooltip.tm-tip {
   font-family: var(--mono);
   min-width: 180px;
+  padding: 10px 12px;
+  line-height: 1.45;
 }
 #metric-tooltip.tm-tip .tm-tt-hdr {
   font-weight: 700; color: var(--accent-2);
-  padding-bottom: 4px; margin-bottom: 4px;
+  padding-bottom: 6px; margin-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
 #metric-tooltip.tm-tip .tm-tt-row {
   display: flex; justify-content: space-between; gap: 14px;
+  padding: 3px 0;
 }
 #metric-tooltip.tm-tip .tm-tt-row .lbl { color: var(--muted); }
 #metric-tooltip.tm-tip .tm-tt-row .val { color: var(--text); font-weight: 600; }
@@ -2443,7 +2476,7 @@ td.neg { color: #ff8a8a; }
 /* Teammate panel inside profile */
 .profile-tm-header {
   display: grid;
-  grid-template-columns: 36px 1fr 80px 60px;
+  grid-template-columns: 36px minmax(100px, 1fr) minmax(120px, 2fr) 80px 60px;
   gap: 10px;
   padding: 7px 0;
   font-family: var(--mono); font-size: 9px;
@@ -2453,14 +2486,23 @@ td.neg { color: #ff8a8a; }
 }
 .profile-tm-row {
   display: grid;
-  grid-template-columns: 36px 1fr 80px 60px;
+  grid-template-columns: 36px minmax(100px, 1fr) minmax(120px, 2fr) 80px 60px;
   align-items: center;
   gap: 10px;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px solid rgba(255,255,255,0.03);
 }
 .profile-tm-row:last-child { border-bottom: none; }
 .profile-tm-row:hover { background: rgba(255,255,255,0.015); }
+.profile-tm-spark {
+  display: block;
+  min-width: 0;
+}
+.profile-tm-spark svg {
+  display: block;
+  width: 100%;
+  height: 26px;
+}
 .profile-tm-delta {
   text-align: right; font-family: var(--mono); font-size: 12px;
   font-weight: 600; padding: 2px 6px; border-radius: 3px;

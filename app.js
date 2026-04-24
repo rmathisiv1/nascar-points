@@ -22,10 +22,10 @@ const STATE = {
   driverBios: null,
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
-  arc: { selected: new Set(), ftOnly: true, metric: "points" },
-  breakdown: { drivers: [], ftOnly: true },  // array of driver keys, max 4
+  arc: { selected: new Set(), ftOnly: true, metric: "points", teamFilter: null },
+  breakdown: { drivers: [], ftOnly: true, teamFilter: null },
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
-                selected: new Set(), seasons: new Set() },
+                selected: new Set(), seasons: new Set(), teamFilter: null },
   teammates: { metric: "fin", ftOnly: true },
   profile: { kind: null, slug: null },
   standings: { sortKey: "total", sortDir: "desc" },
@@ -1201,11 +1201,12 @@ function renderTeamPill(teamCode, _seriesUnused, _carUnused) {
 // isSelected(entity) — returns true if entity is currently selected
 // onTeamSelect(teamDrivers) — optional: if present, clicking team pill will call this
 //   with an array of sorted entities for that team. If omitted, no team row is shown.
-function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSelect) {
+function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSelect, teamFilter) {
   const host = document.getElementById(hostId);
   if (!host) return;
   let entities = allEntities();
   if (ftOnly) entities = entities.filter(isFullTime);
+  if (teamFilter) entities = entities.filter(e => e.team_code === teamFilter);
   // sort by current season points desc so the big names float to top
   entities = entities.map(e => ({
     ...e, total: e.races.reduce((s, r) => s + r.total, 0),
@@ -1273,6 +1274,8 @@ function renderArc() {
   const svg = document.getElementById("arc-svg");
   if (!STATE.data) return;
 
+  renderTeamFilter("arc-team-filter", "arc", () => renderArc());
+
   const races = racesSorted();
   if (races.length === 0) {
     svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">No races loaded.</text>`;
@@ -1280,7 +1283,7 @@ function renderArc() {
     return;
   }
 
-  const entities = allEntities();
+  const entities = applyTeamFilter(allEntities(), "arc");
   const roundsPresent = races.map(r => r.round);
 
   // Compute per-round cumulative points for every entity
@@ -1463,10 +1466,10 @@ function renderArcGrid() {
     },
     (e) => STATE.arc.selected.has(entityKey(e)),
     (teamDrivers) => {
-      // Additive: add all team drivers to the selection set
       teamDrivers.forEach(e => STATE.arc.selected.add(entityKey(e)));
       renderArc();
-    }
+    },
+    STATE.arc.teamFilter
   );
 }
 
@@ -1477,6 +1480,8 @@ function renderBreakdown() {
   const svg = document.getElementById("breakdown-svg");
   const tip = document.getElementById("breakdown-tooltip");
   if (!STATE.data) return;
+
+  renderTeamFilter("breakdown-team-filter", "breakdown", () => renderBreakdown());
 
   const entities = allEntities();
   // Default: if nothing selected, pick current leader
@@ -1792,16 +1797,14 @@ function renderBreakdownGrid() {
     },
     (e) => STATE.breakdown.drivers.includes(e.driver),
     (teamDrivers) => {
-      // Replace selection with this team's top drivers (up to 4).
-      // Clearer mental model than "fill to cap": clicking a team gives you
-      // exactly that team's drivers on the chart, nothing else.
       const CAP = 4;
       const picks = teamDrivers.slice(0, CAP).map(e => e.driver);
       if (picks.length > 0) {
         STATE.breakdown.drivers = picks;
         renderBreakdown();
       }
-    }
+    },
+    STATE.breakdown.teamFilter
   );
 }
 
@@ -1812,6 +1815,8 @@ function renderTrajectory() {
   const svg = document.getElementById("trajectory-svg");
   if (!STATE.data) return;
 
+  renderTeamFilter("trajectory-team-filter", "trajectory", () => renderTrajectory());
+
   const trackFilter = STATE.trajectory.tracks;
   const includeRace = (race) => {
     if (trackFilter === "all") return true;
@@ -1820,7 +1825,13 @@ function renderTrajectory() {
 
   // Pull entities + metadata. In single-season mode this is allEntities();
   // in multi-season mode it's the combined cross-year roll-up.
-  const { entities, totalRaces, seasonsUsed } = trajectoryEntities();
+  let { entities, totalRaces, seasonsUsed } = trajectoryEntities();
+
+  // Apply team filter if set (single-season only — team mapping across years
+  // may not be coherent anyway). For multi-year, skip filtering entirely.
+  if (STATE.trajectory.teamFilter && seasonsUsed.length <= 1) {
+    entities = entities.filter(e => e.team_code === STATE.trajectory.teamFilter);
+  }
 
   // Full-time: ≥90% of races in the combined pool (or all of them if few).
   // This generalizes isFullTime() across multi-year aggregations.
@@ -2733,7 +2744,7 @@ function tmSparkline(seriesPts, color, metric, carLabel) {
   // using viewBox = pixel dimensions (so circles stay truly round).
   if (seriesPts.length === 0) return "";
   const data = encodeURIComponent(JSON.stringify(seriesPts));
-  return `<svg class="tm-spk" data-series="${data}" data-color="${color}" data-metric="${metric}" data-car="${carLabel}" style="width:100%;height:38px;display:block;"></svg>`;
+  return `<svg class="tm-spk" data-series="${data}" data-color="${color}" data-metric="${metric}" data-car="${carLabel}" style="width:100%;height:26px;display:block;"></svg>`;
 }
 
 // Measure every .tm-spk SVG and draw it at its real pixel dimensions so circles stay round.
@@ -2742,8 +2753,8 @@ function tmPaintSparklines(root) {
   svgs.forEach(svg => {
     const rect = svg.getBoundingClientRect();
     const W = Math.max(80, Math.floor(rect.width));
-    const H = 38;
-    const pad = { t: 5, b: 5, l: 3, r: 3 };
+    const H = 26;
+    const pad = { t: 4, b: 4, l: 3, r: 3 };
     const innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
 
     const seriesPts = JSON.parse(decodeURIComponent(svg.getAttribute("data-series") || "[]"));
@@ -2942,11 +2953,18 @@ function profileTeammates(entity) {
     teamEntries.forEach(te => {
       if (te.finish_pos == null) return;
       const key = te.driver;
-      if (!mates[key]) mates[key] = { driver: te.driver, car: te.car_number, beat: 0, lost: 0, tied: 0, deltaSum: 0, races: 0 };
+      if (!mates[key]) mates[key] = { driver: te.driver, car: te.car_number, beat: 0, lost: 0, tied: 0, deltaSum: 0, races: 0, series: [] };
       if (myEntry.finish_pos < te.finish_pos) mates[key].beat++;
       else if (myEntry.finish_pos > te.finish_pos) mates[key].lost++;
       else mates[key].tied++;
-      mates[key].deltaSum += (te.finish_pos - myEntry.finish_pos);  // positive = I beat them
+      // Note: tmSparkline expects v = my_delta (negative if I beat them), matching
+      // the Teammate Delta tab convention where better-than-teammate sits ABOVE zero.
+      // There, v = te.finish_pos - leader.finish_pos; leader always wins (v<=0).
+      // For profile view the "leader" is the teammate, so we flip: v = my finish - theirs.
+      // Negative v = I beat my teammate that race.
+      const v = myEntry.finish_pos - te.finish_pos;
+      mates[key].deltaSum += -v;  // positive avg = I beat them
+      mates[key].series.push({ v, round: r.round, tl: false });
       mates[key].races++;
     });
   });
@@ -3529,21 +3547,30 @@ function paintProfileTeammates(entity) {
   }
   host.innerHTML = `
     <div class="profile-tm-header">
-      <span></span><span>Teammate</span><span style="text-align:right;">Avg ΔFin</span><span style="text-align:right;">Beat</span>
+      <span></span><span>Teammate</span><span>Per-race Δ</span><span style="text-align:right;">Avg ΔFin</span><span style="text-align:right;">Beat</span>
     </div>
     ${mates.map(m => {
       const c = colorFor(STATE.series, m.car);
       const t = contrastTextFor(c);
       const cls = m.avgDelta > 0.5 ? "beat" : m.avgDelta < -0.5 ? "lost" : "tied";
       const sign = m.avgDelta > 0 ? "+" : "";
+      // tmSparkline expects series formatted for the Teammate Delta tab. The
+      // convention there is: negative v drawn below zero (worse than teammate).
+      // profileTeammates stores v = myFinish - theirFinish (negative = I beat them).
+      // Flip sign so the sparkline reads "above zero = I beat them" visually.
+      const sparkSeries = m.series.map(s => ({ v: -s.v, round: s.round, tl: s.tl }));
+      const spark = tmSparkline(sparkSeries, c, "fin", m.car);
       return `<div class="profile-tm-row">
         <span class="tm-car" style="background:${c};color:${t}">${m.car}</span>
         <span class="tm-name"><a class="profile-link" href="#/car/${m.car}">${escapeHTML(m.driver)}</a></span>
+        <span class="profile-tm-spark">${spark}</span>
         <span class="profile-tm-delta ${cls}">${sign}${m.avgDelta.toFixed(1)}</span>
         <span class="profile-tm-record">${m.beat}-${m.lost}${m.tied > 0 ? "-" + m.tied : ""}</span>
       </div>`;
     }).join("")}
   `;
+  // Paint the sparkline SVGs after they're inserted into the DOM
+  tmPaintSparklines(host);
 }
 
 // ============================================================
@@ -4156,6 +4183,52 @@ function renderBracket(rule) {
 // appears at position `rule.field` (16/12/10 depending on series). During
 // playoffs, the cutoff shifts to the current round's advancing count. Below
 // the cutoff, each row shows the deficit to the bubble instead of raw points.
+// ============================================================
+// TEAM FILTER — shared across Arc / Breakdown / Stage Analysis tabs
+// ============================================================
+// Renders a row of clickable team pills above the chart picker. Clicking a
+// team filters which cars are selectable/shown. `stateKey` is one of
+// "arc" | "breakdown" | "trajectory" — it must correspond to a STATE slot
+// with a `teamFilter` field. `onChange` fires after the state mutates so the
+// calling view can re-render itself.
+function renderTeamFilter(hostId, stateKey, onChange) {
+  const host = document.getElementById(hostId);
+  if (!host || !STATE.data) { if (host) host.innerHTML = ""; return; }
+
+  // Collect unique team codes present in the current dataset
+  const teamCodes = new Set();
+  allEntities().forEach(e => { if (e.team_code) teamCodes.add(e.team_code); });
+  const codes = Array.from(teamCodes).sort();
+  if (codes.length === 0) { host.innerHTML = ""; return; }
+
+  const active = STATE[stateKey]?.teamFilter || null;
+
+  const allPill = `<span class="tf-pill tf-all ${active == null ? "active" : "inactive"}" data-team="">All</span>`;
+  const pills = codes.map(code => {
+    const hex = orgColorForTeam(code) || "#9ca3af";
+    const txt = contrastTextFor(hex);
+    const cls = active == null ? "" : (active === code ? "active" : "inactive");
+    return `<span class="tf-pill ${cls}" data-team="${escapeHTML(code)}" style="background:${hex};color:${txt}">${escapeHTML(code)}</span>`;
+  }).join("");
+  host.innerHTML = allPill + pills;
+
+  host.querySelectorAll(".tf-pill").forEach(pill => {
+    pill.addEventListener("click", () => {
+      const team = pill.dataset.team || null;
+      const current = STATE[stateKey].teamFilter || null;
+      STATE[stateKey].teamFilter = (team === current || team === null || team === "") ? null : team;
+      if (onChange) onChange();
+    });
+  });
+}
+
+// Apply a team filter to a list of entities. If filter is null, return as-is.
+function applyTeamFilter(entities, stateKey) {
+  const f = STATE[stateKey]?.teamFilter;
+  if (!f) return entities;
+  return entities.filter(e => e.team_code === f);
+}
+
 function renderStandingsMini() {
   const host = document.getElementById("standings-mini-host");
   const subEl = document.getElementById("standings-mini-sub");
