@@ -72,6 +72,12 @@ function parseHash() {
   const view = h[0];
   // Profile routes: #/profile/tyler-reddick or #/car/45
   if (view === "profile" || view === "car") {
+    // Remember where we came from so the profile's Back link returns there.
+    // Only update the memory if the PREVIOUS view wasn't also a profile — otherwise
+    // profile→profile navigation would overwrite the real back target.
+    if (STATE.view && STATE.view !== "profile") {
+      STATE.prevView = STATE.view;
+    }
     STATE.view = "profile";
     STATE.profile = {
       kind: view,              // "profile" (driver) or "car"
@@ -310,10 +316,12 @@ function wireUIControls() {
   });
 
   // Takeover back button returns to dashboard home (default = Trending tab)
-  // Profile back: return to Trending tab (since profile is opened from the table)
+  // Profile back: return to the tab we were on before entering the profile.
+  // Falls back to Season Arc (the default landing tab) if nothing remembered.
   document.getElementById("takeover-back")?.addEventListener("click", (e) => {
     e.preventDefault();
-    location.hash = "#/form";
+    const prev = STATE.prevView && STATE.prevView !== "profile" ? STATE.prevView : "arc";
+    location.hash = `#/${prev}`;
   });
   // Playoffs back: return to the dashboard default
   document.getElementById("playoffs-back")?.addEventListener("click", (e) => {

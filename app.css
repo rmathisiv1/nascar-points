@@ -250,7 +250,7 @@ html, body {
   padding: 4px 0;
 }
 .scrollable {
-  overflow-y: auto;
+  overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
 }
 .scrollable::-webkit-scrollbar { width: 6px; height: 6px; }
