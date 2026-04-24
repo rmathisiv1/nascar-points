@@ -2705,19 +2705,18 @@ a.driver-cell.profile-link:hover .car-tag {
   .tab-body { padding: 6px 8px; }
 
   /* ---- Mobile side-sheet nav ---- */
-  .mobile-nav-overlay[hidden] { display: none; }
   .mobile-nav-overlay {
-    display: block !important;
+    display: block;
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.55);
     z-index: 199;
     animation: fadeIn 0.15s ease-out;
   }
+  .mobile-nav-overlay[hidden] { display: none !important; }
 
-  .mobile-nav[hidden] { display: none; }
   .mobile-nav {
-    display: flex !important;
+    display: flex;
     flex-direction: column;
     position: fixed;
     top: 0;
@@ -2732,6 +2731,7 @@ a.driver-cell.profile-link:hover .car-tag {
     animation: slideIn 0.2s ease-out;
     overflow-y: auto;
   }
+  .mobile-nav[hidden] { display: none !important; }
   .mobile-nav-head {
     display: flex;
     align-items: center;
