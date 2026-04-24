@@ -2903,3 +2903,86 @@ a.driver-cell.profile-link:hover .car-tag {
     padding: 10px 12px;
   }
 }
+
+/* ============================================================
+   MOBILE TABLE COLLAPSE (tap-to-expand)
+   ============================================================ */
+
+/* Desktop: the chevron column and mobile-only cells are hidden */
+.mob-only { display: none; }
+.mob-chev, .mob-chev-head { display: none; }
+
+@media (max-width: 767.98px) {
+  /* Hide columns flagged for mobile */
+  .data-table .mob-hide,
+  .profile-race-table .mob-hide { display: none; }
+
+  /* Show chevron column on mobile */
+  .mob-only { display: table-cell; }
+  .mob-chev, .mob-chev-head {
+    display: table-cell;
+    width: 20px;
+    text-align: right;
+    padding-right: 8px !important;
+  }
+  .mob-chev-icon {
+    display: inline-block;
+    color: var(--muted);
+    font-size: 10px;
+    transition: transform 0.15s;
+  }
+  tr.mob-expanded .mob-chev-icon { transform: rotate(90deg); color: var(--accent-2); }
+
+  /* Collapsible rows feel tappable */
+  tr.mob-collapsible { cursor: pointer; }
+  tr.mob-collapsible:active td { background: rgba(59,130,246,0.1); }
+
+  /* Expand row styling */
+  tr.mob-expand-row > td {
+    padding: 0 !important;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border);
+  }
+  .mob-expand-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+    padding: 8px 12px;
+  }
+  .mob-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    padding: 3px 0;
+    border-bottom: 1px dashed rgba(255,255,255,0.04);
+    min-width: 0;
+  }
+  .mob-kv:last-child { border-bottom: none; }
+  .mob-kv-lbl {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .mob-kv-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text);
+    font-weight: 500;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  /* Nested elements in mob-kv-val inherit sensible defaults */
+  .mob-kv-val .rating-stack {
+    align-items: flex-end;
+  }
+  .mob-kv-val .team-pill,
+  .mob-kv-val .delta-pill {
+    font-size: 9px;
+  }
+}

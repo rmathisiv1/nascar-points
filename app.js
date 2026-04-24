@@ -146,6 +146,111 @@ function wireMobileNav() {
 }
 
 // ============================================================
+// MOBILE TABLE COLLAPSE (tap-to-expand)
+// ============================================================
+// Post-processes a data-table to:
+//   1. Hide columns not listed in `keepIndices` (by column position, 0-based)
+//   2. Append a chevron cell to each row in thead + tbody
+//   3. Wire tap handlers that insert a detail row below the tapped row,
+//      populated with labels + values cloned from the hidden cells.
+//
+// Only runs on mobile viewports. Safe to call on every render — it tears
+// down any previous wiring via a marker class before re-applying.
+//
+// `table` — the <table> element
+// `keepIndices` — array of column indices to keep visible (counting from 0, including the # column)
+// `labelOverrides` — optional map of column index -> display label (falls back to th text)
+function applyMobileTableCollapse(table, keepIndices, labelOverrides = {}) {
+  if (!table || !isMobile()) return;
+
+  const headRow = table.querySelector("thead tr");
+  if (!headRow) return;
+  const ths = Array.from(headRow.children);
+  if (ths.length === 0) return;
+
+  const keep = new Set(keepIndices);
+
+  // Gather labels for hidden columns from their <th> text
+  const hiddenCols = [];
+  ths.forEach((th, i) => {
+    if (keep.has(i)) return;
+    const override = labelOverrides[i];
+    const label = override || th.textContent.replace(/[▲▼↕]/g, "").trim();
+    hiddenCols.push({ i, label });
+    th.classList.add("mob-hide");
+  });
+
+  // Add chevron cell to thead (empty — it's the expand indicator column)
+  if (!headRow.querySelector(".mob-chev-head")) {
+    const chevTh = document.createElement("th");
+    chevTh.className = "mob-chev-head mob-only";
+    chevTh.textContent = "";
+    headRow.appendChild(chevTh);
+  }
+
+  // Process each body row
+  const tbody = table.querySelector("tbody");
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll("tr")).filter(r => !r.classList.contains("mob-expand-row"));
+  rows.forEach(tr => {
+    const tds = Array.from(tr.children);
+    tds.forEach((td, i) => {
+      if (!keep.has(i)) td.classList.add("mob-hide");
+    });
+    // Append chevron cell if not already there
+    if (!tr.querySelector(".mob-chev")) {
+      const chevTd = document.createElement("td");
+      chevTd.className = "mob-chev mob-only";
+      chevTd.innerHTML = "<span class=\"mob-chev-icon\">▸</span>";
+      tr.appendChild(chevTd);
+    }
+    // Make the row tappable
+    tr.classList.add("mob-collapsible");
+    // Remove any previous handler to keep idempotent
+    if (tr._mobToggle) tr.removeEventListener("click", tr._mobToggle);
+    tr._mobToggle = (e) => {
+      // Don't hijack clicks on actual links (profile links)
+      if (e.target.closest("a")) return;
+      toggleMobExpand(tbody, tr, hiddenCols);
+    };
+    tr.addEventListener("click", tr._mobToggle);
+  });
+}
+
+function toggleMobExpand(tbody, tr, hiddenCols) {
+  // Close any currently-open expand row in this tbody (single-open policy)
+  const existing = tbody.querySelector("tr.mob-expand-row");
+  const wasOpen = existing && existing.previousElementSibling === tr;
+  if (existing) {
+    existing.remove();
+    // Reset chevron on the row that owned it
+    const prevOwner = tbody.querySelector("tr.mob-expanded");
+    if (prevOwner) prevOwner.classList.remove("mob-expanded");
+  }
+  if (wasOpen) return;  // user tapped the same row to close
+
+  // Collect values from the hidden cells
+  const tds = Array.from(tr.children);
+  const pairs = hiddenCols.map(({ i, label }) => {
+    const cell = tds[i];
+    const html = cell ? cell.innerHTML : "—";
+    return `<div class="mob-kv">
+      <span class="mob-kv-lbl">${escapeHTML(label)}</span>
+      <span class="mob-kv-val">${html}</span>
+    </div>`;
+  }).join("");
+
+  const colspan = tds.length + 1;  // +1 for chevron column
+  const expandRow = document.createElement("tr");
+  expandRow.className = "mob-expand-row";
+  expandRow.innerHTML = `<td colspan="${colspan}">
+    <div class="mob-expand-body">${pairs}</div>
+  </td>`;
+  tr.after(expandRow);
+  tr.classList.add("mob-expanded");
+}
+
+// ============================================================
 // MOBILE DROPDOWN MIRRORING
 // ============================================================
 // On mobile, pill-style toggle groups become <select> dropdowns to save space
@@ -1202,7 +1307,13 @@ function renderFormTable() {
   });
 
   wireCoDriverBadges(card);
-  wireTableSplitSelection(card, "selected-car-svg", "selected-car-head");
+
+  // Mobile collapse: keep # (0), Driver (1), Pts (6). Hide Team, Form, Rating, vs Season.
+  // Column indices: 0=#, 1=Driver, 2=Team, 3=Form, 4=Rating, 5=vs Season, 6=Pts
+  const mobTable = card.querySelector("table.data-table");
+  if (mobTable) {
+    applyMobileTableCollapse(mobTable, [0, 1, 6]);
+  }
 
   const sub = document.getElementById("form-sub");
   const ftNote = STATE.form.ftOnly ? "full-time only" : "all entrants";
@@ -3660,6 +3771,13 @@ function paintProfileRaceTable(rows, kind) {
       <td class="num" style="font-weight:700">${r.total}</td>
     </tr>`;
   }).join("");
+
+  // Mobile collapse — keep R (0), Track (1), Finish (4), Total (9).
+  // Hide Name, Start, S1, S2, FL, Fin pts.
+  const table = tbody.closest("table.profile-race-table");
+  if (table) applyMobileTableCollapse(table, [0, 1, 4, 9], {
+    2: "Race", 3: "Start", 5: "S1", 6: "S2", 7: "FL", 8: "Fin pts"
+  });
 }
 
 // Compute per-track-type stats for a single entity's races.
@@ -3989,7 +4107,10 @@ function renderStandings() {
   });
 
   wireCoDriverBadges(table);
-  wireTableSplitSelection(table, "selected-car-svg-std", "selected-car-head-std");
+
+  // Mobile collapse — keep #, Driver, Total. Hide Team, Starts, Wins, T5, T10, Avg, S1, S2, FL.
+  // Column indices: 0=#, 1=Driver, 2=Team, 3=Starts, 4=Wins, 5=T5, 6=T10, 7=AvgFin, 8=S1, 9=S2, 10=FL, 11=Total
+  applyMobileTableCollapse(table, [0, 1, 11]);
 }
 
 function pointsMapThroughRound(maxRound) {
