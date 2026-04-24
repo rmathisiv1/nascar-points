@@ -9,10 +9,6 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">
-    <span class="brand-mark">MMT</span>
-    <span class="brand-name">Points Analysis</span>
-  </div>
   <div class="season-pill" id="season-pill">— / —</div>
   <div class="series-sw" id="series-sw">
     <button data-series="NCS" class="on">NCS</button>
@@ -54,6 +50,14 @@
       <a href="#/standings"  class="dash-tab" data-view="standings">Standings</a>
     </nav>
 
+    <!-- Profile takeover (shown only when a car is selected; hides tab-body) -->
+    <div class="profile-takeover" id="profile-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="takeover-back">← Back</a>
+      </div>
+      <section class="view" id="view-profile"></section>
+    </div>
+
     <div class="tab-body" id="tab-body">
 
       <section class="view tab-panel" id="view-arc">
@@ -89,8 +93,14 @@
           </div>
           <input type="search" id="form-search" placeholder="Search car or driver…" class="search-input">
         </div>
-        <div class="card tab-table-fill" id="form-card">
-          <div class="loading">Loading…</div>
+        <div class="table-split">
+          <div class="table-split-table scrollable" id="form-card">
+            <div class="loading">Loading…</div>
+          </div>
+          <div class="table-split-chart card card-chart">
+            <div class="table-split-chart-head" id="selected-car-head">Tap a row to plot a car</div>
+            <svg id="selected-car-svg"></svg>
+          </div>
         </div>
       </section>
 
@@ -182,8 +192,14 @@
       </section>
 
       <section class="view tab-panel" id="view-standings" hidden>
-        <div class="card tab-table-fill scrollable">
-          <table id="standings-table" class="data-table"></table>
+        <div class="table-split">
+          <div class="table-split-table scrollable">
+            <table id="standings-table" class="data-table"></table>
+          </div>
+          <div class="table-split-chart card card-chart">
+            <div class="table-split-chart-head" id="selected-car-head-std">Tap a row to plot a car</div>
+            <svg id="selected-car-svg-std"></svg>
+          </div>
         </div>
       </section>
 
@@ -202,7 +218,7 @@
 
 <main class="takeover" id="takeover" hidden>
   <div class="takeover-head">
-    <a href="#" class="takeover-back" id="takeover-back">← Back to dashboard</a>
+    <a href="#" class="takeover-back" id="playoffs-back">← Back to dashboard</a>
   </div>
 
   <section class="view" id="view-playoffs" hidden>
@@ -212,8 +228,6 @@
     </div>
     <div id="playoffs-host"></div>
   </section>
-
-  <section class="view" id="view-profile" hidden></section>
 
   <section class="view" id="view-error" hidden>
     <div class="view-head"><h1>Can't load data</h1></div>

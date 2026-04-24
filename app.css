@@ -48,10 +48,10 @@ html, body {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 24px;
+  gap: 14px;
+  padding: 6px 18px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg);            /* solid, not transparent */
+  background: var(--bg);
   position: sticky; top: 0; z-index: 50;
 }
 .brand {
@@ -116,11 +116,11 @@ html, body {
 
 /* ========== METRIC BAR ========== */
 .metricbar {
-  display: flex; gap: 28px;
-  padding: 12px 24px;
+  display: flex; gap: 24px;
+  padding: 6px 18px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
-  font-family: var(--mono); font-size: 11px;
+  font-family: var(--mono); font-size: 10px;
   overflow-x: auto;
   white-space: nowrap;
   -webkit-overflow-scrolling: touch;
@@ -195,7 +195,7 @@ html, body {
   padding: 10px 14px;
   max-width: 100%;
   box-sizing: border-box;
-  height: calc(100vh - 120px);   /* viewport minus header + metricbar */
+  height: calc(100vh - 90px);    /* viewport minus slim header + metricbar */
   min-height: 520px;
 }
 .dashboard[hidden], .takeover[hidden] { display: none; }
@@ -309,37 +309,61 @@ html, body {
   text-transform: uppercase;
 }
 
-/* ---------- RIGHT: form panel ---------- */
+/* ---------- RIGHT: form panel (two-line row with sparkline) ---------- */
 .form-mini-row {
-  display: grid;
-  grid-template-columns: 26px 1fr auto;
-  gap: 6px;
-  padding: 4px 10px;
+  display: block;
+  padding: 5px 8px;
   font-family: var(--mono);
   font-size: 11px;
-  align-items: center;
   text-decoration: none;
   color: var(--text);
+  border-bottom: 1px solid var(--border);
   transition: background 0.1s;
 }
 .form-mini-row:hover { background: rgba(255,255,255,0.03); }
+.form-mini-top {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 5px;
+  align-items: center;
+  margin-bottom: 3px;
+}
 .form-mini-car {
   display: inline-flex; align-items: center; justify-content: center;
-  height: 16px; padding: 0 4px;
+  height: 15px; padding: 0 4px;
   border-radius: 2px;
   font-size: 9px;
   font-weight: 700;
 }
 .form-mini-name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 10px;
 }
 .form-mini-delta {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  font-size: 10px;
 }
 .form-mini-delta.hot  { color: #5fd97a; }
 .form-mini-delta.cold { color: #ff8a8a; }
 .form-mini-delta.flat { color: var(--dim); }
+.form-mini-bottom {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 6px;
+  align-items: center;
+}
+.form-mini-rating {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.form-mini-spark {
+  height: 16px;
+  width: 100%;
+}
 
 /* ---------- CENTER: tab strip + panel ---------- */
 .dash-tabs {
@@ -401,6 +425,70 @@ html, body {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+/* Table + chart split for Trending/Standings tabs */
+.table-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 10px;
+  overflow: hidden;
+}
+.table-split-table {
+  min-height: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+}
+.table-split-chart {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+}
+.table-split-chart-head {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.table-split-chart svg { flex: 1; min-height: 0; width: 100%; height: 100%; }
+/* Highlight the currently-selected table row (for table+chart split) */
+tr.row-selected td { background: rgba(59,130,246,0.08); }
+tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
+
+/* Profile takeover inside the center column */
+.profile-takeover {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  overflow: hidden;
+}
+.profile-takeover[hidden] { display: none !important; }
+.profile-takeover-head {
+  flex-shrink: 0;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.profile-takeover #view-profile {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Slim toolbar variant for tabbed panels — no margin-bottom, tighter */

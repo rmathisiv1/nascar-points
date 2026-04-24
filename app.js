@@ -29,6 +29,9 @@ const STATE = {
   teammates: { metric: "fin", ftOnly: true },
   profile: { kind: null, slug: null },
   standings: { sortKey: "total", sortDir: "desc" },
+  // Table-split chart: the car whose arc is shown next to Trending/Standings.
+  // Null = first row by default. Set when user clicks any row in the table.
+  selectedCar: null,
 };
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
@@ -307,7 +310,13 @@ function wireUIControls() {
   });
 
   // Takeover back button returns to dashboard home (default = Trending tab)
+  // Profile back: return to Trending tab (since profile is opened from the table)
   document.getElementById("takeover-back")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    location.hash = "#/form";
+  });
+  // Playoffs back: return to the dashboard default
+  document.getElementById("playoffs-back")?.addEventListener("click", (e) => {
     e.preventDefault();
     location.hash = "#/";
   });
@@ -403,28 +412,30 @@ function renderTimeCursorBanner() {
 // ============================================================
 // RENDER
 // ============================================================
-// Views that live as tabs inside the center panel. arc/standings included —
-// they aren't "always-on" in the new layout; they're full-width tab content.
+// Views that live as tabs inside the center panel.
 const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
-// Views that take over the whole page (hide dashboard).
-const TAKEOVER_VIEWS = ["profile", "playoffs"];
+// Views that take over the whole page (hide dashboard). Only playoffs now —
+// profile is a center-column takeover that keeps the side panels visible.
+const TAKEOVER_VIEWS = ["playoffs"];
 
 function render() {
   const dashboard = document.getElementById("dashboard");
   const takeover = document.getElementById("takeover");
   const inTakeover = TAKEOVER_VIEWS.includes(STATE.view);
+  const inProfile  = STATE.view === "profile";
 
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
 
-  // Takeover section visibility (only one shows at a time)
-  const takeoverTargets = ["profile", "playoffs", "error"];
-  takeoverTargets.forEach(v => {
-    const el = document.getElementById(`view-${v}`);
-    if (!el) return;
-    if (v === "error") return;
-    el.hidden = (v !== STATE.view);
-  });
+  // Takeover section visibility (only playoffs lives here now)
+  const pElem = document.getElementById("view-playoffs");
+  if (pElem) pElem.hidden = (STATE.view !== "playoffs");
+
+  // Profile takeover — sits inside the center column, hides tab-body when active
+  const profileTakeover = document.getElementById("profile-takeover");
+  const tabBody = document.getElementById("tab-body");
+  if (profileTakeover) profileTakeover.hidden = !inProfile;
+  if (tabBody) tabBody.hidden = inProfile;
 
   // Tab-panel visibility. Default to "arc" when the URL doesn't point to a
   // specific tab view (Season Arc is the new landing tab).
@@ -434,30 +445,33 @@ function render() {
     if (el) el.hidden = (v !== activeTab);
   });
 
-  // Tab button active-state
+  // Tab button active-state — dim when profile is active (no tab is "really" on)
   document.querySelectorAll(".dash-tab").forEach(a => {
-    a.classList.toggle("active", a.dataset.view === activeTab);
+    a.classList.toggle("active", !inProfile && a.dataset.view === activeTab);
   });
 
-  // ---- Always-on dashboard side panels (when not in takeover) ----
+  // ---- Always-on dashboard side panels (when not in full-page takeover) ----
   if (!inTakeover) {
     renderMetricBar();
     renderStandingsMini();
     renderFormMini();
 
-    // Render the active tab's content
-    switch (activeTab) {
-      case "arc":        renderArc(); break;
-      case "form":       renderFormTable(); break;
-      case "breakdown":  renderBreakdown(); break;
-      case "trajectory": renderTrajectory(); break;
-      case "teammates":  renderTeammates(); break;
-      case "heatmap":    renderHeatmap(); break;
-      case "standings":  renderStandings(); break;
+    if (inProfile) {
+      renderProfile();
+    } else {
+      // Render the active tab's content
+      switch (activeTab) {
+        case "arc":        renderArc(); break;
+        case "form":       renderFormTable(); break;
+        case "breakdown":  renderBreakdown(); break;
+        case "trajectory": renderTrajectory(); break;
+        case "teammates":  renderTeammates(); break;
+        case "heatmap":    renderHeatmap(); break;
+        case "standings":  renderStandings(); break;
+      }
     }
   } else {
     renderMetricBar();
-    if (STATE.view === "profile")  renderProfile();
     if (STATE.view === "playoffs") renderPlayoffs();
   }
 }
@@ -934,7 +948,7 @@ function renderFormTable() {
     const trend = trendArrow(d.deltaR);
     const ratingCls = d.deltaR == null ? "" : d.deltaR > 6 ? "hot" : d.deltaR < -6 ? "cold" : "";
     const teamPill = renderTeamPill(d.team_code);
-    return `<tr>
+    return `<tr data-car-key="${escapeHTML(entityKey(d))}">
       <td class="num" style="color: var(--dim)">${i + 1}</td>
       <td><a class="driver-cell profile-link" href="${profileHref(d)}">
         <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
@@ -1000,6 +1014,7 @@ function renderFormTable() {
   });
 
   wireCoDriverBadges(card);
+  wireTableSplitSelection(card, "selected-car-svg", "selected-car-head");
 
   const sub = document.getElementById("form-sub");
   const ftNote = STATE.form.ftOnly ? "full-time only" : "all entrants";
@@ -3696,7 +3711,7 @@ function renderStandings() {
     }
     const profileSlug = r.car_number;
     const profileKind = "car";
-    return `<tr>
+    return `<tr data-car-key="${escapeHTML(r.key)}">
       <td class="rank-cell">${r.currRank}${pcPill}</td>
       <td><a class="driver-cell profile-link" href="#/${profileKind}/${profileSlug}">
         <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
@@ -3766,6 +3781,7 @@ function renderStandings() {
   });
 
   wireCoDriverBadges(table);
+  wireTableSplitSelection(table, "selected-car-svg-std", "selected-car-head-std");
 }
 
 function pointsMapThroughRound(maxRound) {
@@ -4230,18 +4246,129 @@ function renderFormMini() {
   }).filter(d => d.delta != null)
     .sort((a, b) => b.delta - a.delta);
 
+  // Build a tiny SVG sparkline of the last 5 finish positions (inverted: low
+  // finish = high line) so hot recent form shows as an upward-trending line.
+  const sparkline = (finishes) => {
+    if (!finishes.length) return "";
+    const W = 80, H = 14, pad = 1;
+    const capped = finishes.map(f => Math.max(1, Math.min(40, f)));
+    const min = Math.min(...capped), max = Math.max(...capped);
+    const range = Math.max(1, max - min);
+    const xAt = (i) => pad + (i / Math.max(1, capped.length - 1)) * (W - 2 * pad);
+    // Invert Y so P1 is at the top and P40 at the bottom
+    const yAt = (p) => pad + ((p - min) / range) * (H - 2 * pad);
+    const pts = capped.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p).toFixed(1)}`).join(" ");
+    return `<svg class="form-mini-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>`;
+  };
+
   host.innerHTML = rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
     const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
     const cls = r.delta > 1 ? "hot" : r.delta < -1 ? "cold" : "flat";
     const sign = r.delta > 0 ? "+" : "";
+    const lastFinishes = r.races.slice(-5).map(rc => rc.finish).filter(x => x != null);
+    // Sparkline uses the same hot/cold color coding as the delta
+    const sparkColor = cls === "hot" ? "#5fd97a" : cls === "cold" ? "#ff8a8a" : "var(--muted)";
     return `<a class="form-mini-row profile-link" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)} — form ${r.f.toFixed(1)} vs. season ${r.s.toFixed(1)}">
-      <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
-      <span class="form-mini-name">${escapeHTML(lastName)}</span>
-      <span class="form-mini-delta ${cls}">${sign}${r.delta.toFixed(1)}</span>
+      <div class="form-mini-top">
+        <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
+        <span class="form-mini-name">${escapeHTML(lastName)}</span>
+        <span class="form-mini-delta ${cls}">${sign}${r.delta.toFixed(1)}</span>
+      </div>
+      <div class="form-mini-bottom">
+        <span class="form-mini-rating">${r.f.toFixed(1)}</span>
+        <span style="color:${sparkColor}; display:block;">${sparkline(lastFinishes)}</span>
+      </div>
     </a>`;
   }).join("");
+}
+
+// Paint the selected-car cumulative-points arc into any svg + head pair.
+// Used by Trending + Standings tabs. Falls back to the leader if nothing selected.
+function paintSelectedCarArc(svgId, headId) {
+  const svg = document.getElementById(svgId);
+  const head = document.getElementById(headId);
+  if (!svg) return;
+
+  const entities = allEntities();
+  if (!entities.length) { svg.innerHTML = ""; if (head) head.textContent = "No data"; return; }
+
+  // Resolve selected entity; default to points leader
+  const totals = computeSeasonTotals();
+  const fallback = totals[0];
+  const selectedKey = STATE.selectedCar;
+  let entity = selectedKey ? entities.find(e => entityKey(e) === selectedKey) : null;
+  if (!entity) entity = fallback;
+  if (!entity) { svg.innerHTML = ""; if (head) head.textContent = "No data"; return; }
+
+  if (head) head.textContent = `${displayName(entity)} · cumulative points`;
+
+  // Compute cumulative totals across sorted races
+  const allRaces = racesSorted();
+  const byRound = {};
+  entity.races.forEach(r => { byRound[r.round] = r; });
+  let running = 0;
+  const pts = [];
+  allRaces.forEach(r => {
+    const mine = byRound[r.round];
+    if (mine && mine.total != null) running += mine.total;
+    pts.push({ round: r.round, y: running });
+  });
+
+  const w = svg.clientWidth || 400;
+  const h = svg.clientHeight || 220;
+  const padL = 30, padR = 14, padT = 10, padB = 22;
+  const maxY = Math.max(1, ...pts.map(p => p.y));
+  const xAt = (i) => padL + (i / Math.max(1, pts.length - 1)) * (w - padL - padR);
+  const yAt = (y) => padT + (1 - y / maxY) * (h - padT - padB);
+
+  const poly = pts.map((p, i) => `${xAt(i)},${yAt(p.y)}`).join(" ");
+  const color = colorFor(STATE.series, entity.car_number);
+
+  // Axes
+  const yTicks = [0, maxY * 0.25, maxY * 0.5, maxY * 0.75, maxY].map(v => Math.round(v));
+  const yTickLines = yTicks.map(v => {
+    const y = yAt(v);
+    return `<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,3"/>
+            <text x="${padL - 4}" y="${y + 3}" fill="var(--dim)" font-size="9" font-family="var(--mono)" text-anchor="end">${v}</text>`;
+  }).join("");
+
+  // Round labels — only show every 5 or so
+  const step = Math.max(1, Math.floor(pts.length / 6));
+  const xLabels = pts.map((p, i) => {
+    if (i % step !== 0 && i !== pts.length - 1) return "";
+    return `<text x="${xAt(i)}" y="${h - 6}" fill="var(--dim)" font-size="9" font-family="var(--mono)" text-anchor="middle">R${p.round}</text>`;
+  }).join("");
+
+  svg.innerHTML = `
+    ${yTickLines}
+    <polyline points="${poly}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" />
+    ${pts.length ? `<circle cx="${xAt(pts.length - 1)}" cy="${yAt(pts[pts.length - 1].y)}" r="3" fill="${color}" />` : ""}
+    ${xLabels}
+  `;
+}
+
+// Wire click handlers on every row in a given table to update STATE.selectedCar
+// and repaint the adjacent arc. Rows are identified via a `data-car-key` attr.
+function wireTableSplitSelection(tableHost, svgId, headId) {
+  if (!tableHost) return;
+  tableHost.querySelectorAll("[data-car-key]").forEach(row => {
+    row.classList.toggle("row-selected", row.dataset.carKey === STATE.selectedCar);
+    row.addEventListener("click", (e) => {
+      // Don't hijack clicks on actual links within the row (profile links)
+      if (e.target.closest("a")) return;
+      STATE.selectedCar = row.dataset.carKey;
+      // Update highlight
+      tableHost.querySelectorAll("[data-car-key]").forEach(r =>
+        r.classList.toggle("row-selected", r.dataset.carKey === STATE.selectedCar));
+      paintSelectedCarArc(svgId, headId);
+    });
+  });
+  // Always paint on initial wire-up
+  paintSelectedCarArc(svgId, headId);
 }
 
 function renderPlayoffsMini() {
