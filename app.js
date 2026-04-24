@@ -43,6 +43,8 @@ const VIEWS = ["form", "arc", "breakdown", "trajectory", "teammates", "heatmap",
 // ============================================================
 async function boot() {
   wireUIControls();
+  wireMobileNav();
+  applyMobileLanding();
   await loadColors();
   loadDriverBios();  // async, not awaited — profile will use it whenever it arrives
   await discoverSeasons();
@@ -64,6 +66,82 @@ async function boot() {
   window.addEventListener("hashchange", () => {
     parseHash();
     render();
+    markMobileNavActive();
+    closeMobileNav();
+  });
+}
+
+// ============================================================
+// MOBILE NAV
+// ============================================================
+// A simple viewport check. Matches the CSS breakpoint (<768px). We don't
+// respond to resize dynamically — if someone rotates / resizes into the other
+// mode, a refresh reapplies. Keeps the code simpler and avoids fighting CSS.
+function isMobile() {
+  return window.matchMedia("(max-width: 767.98px)").matches;
+}
+
+// On mobile, if the URL hash is empty or points to the desktop landing tab,
+// redirect to the mobile landing tab (Trending). Does nothing on desktop.
+// Called once during boot, before render(). Uses replaceState so the browser
+// back button doesn't stack an extra history entry.
+function applyMobileLanding() {
+  if (!isMobile()) return;
+  const h = (location.hash || "").replace(/^#\//, "").split("/")[0];
+  // If no hash OR the hash is the desktop default (arc), switch to Trending.
+  // Leave any explicit route alone (profile, playoffs, other tabs).
+  if (!h || h === "arc") {
+    history.replaceState(null, "", "#/form");
+  }
+}
+
+function openMobileNav() {
+  const nav = document.getElementById("mobile-nav");
+  const overlay = document.getElementById("mobile-nav-overlay");
+  const btn = document.getElementById("mobile-menu-btn");
+  if (!nav || !overlay || !btn) return;
+  nav.hidden = false;
+  overlay.hidden = false;
+  btn.setAttribute("aria-expanded", "true");
+  markMobileNavActive();
+  // Prevent body scroll while sheet is open
+  document.body.style.overflow = "hidden";
+}
+
+function closeMobileNav() {
+  const nav = document.getElementById("mobile-nav");
+  const overlay = document.getElementById("mobile-nav-overlay");
+  const btn = document.getElementById("mobile-menu-btn");
+  if (!nav || !overlay || !btn) return;
+  nav.hidden = true;
+  overlay.hidden = true;
+  btn.setAttribute("aria-expanded", "false");
+  document.body.style.overflow = "";
+}
+
+function markMobileNavActive() {
+  const activeView = STATE.view === "profile" ? STATE.prevView : STATE.view;
+  document.querySelectorAll(".mobile-nav-link").forEach(a => {
+    a.classList.toggle("active", a.dataset.view === activeView);
+  });
+}
+
+function wireMobileNav() {
+  document.getElementById("mobile-menu-btn")?.addEventListener("click", () => {
+    const btn = document.getElementById("mobile-menu-btn");
+    if (btn.getAttribute("aria-expanded") === "true") closeMobileNav();
+    else openMobileNav();
+  });
+  document.getElementById("mobile-nav-close")?.addEventListener("click", closeMobileNav);
+  document.getElementById("mobile-nav-overlay")?.addEventListener("click", closeMobileNav);
+  // Links close the sheet on click (hashchange also closes, but do this
+  // immediately so the user sees the click register instantly).
+  document.querySelectorAll(".mobile-nav-link").forEach(a => {
+    a.addEventListener("click", () => closeMobileNav());
+  });
+  // Close on Escape key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMobileNav();
   });
 }
 

@@ -9,6 +9,9 @@
 <body>
 
 <header class="topbar">
+  <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Menu" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
   <div class="season-pill" id="season-pill">— / —</div>
   <div class="series-sw" id="series-sw">
     <button data-series="NCS" class="on">NCS</button>
@@ -20,6 +23,24 @@
     <select id="race-picker" class="season-select race-select" title="View season through a specific race"></select>
   </div>
 </header>
+
+<!-- Mobile navigation side-sheet. Hidden on desktop via CSS; opened by the
+     hamburger on mobile. Tapping a link navigates and closes the sheet. -->
+<div class="mobile-nav-overlay" id="mobile-nav-overlay" hidden></div>
+<nav class="mobile-nav" id="mobile-nav" hidden aria-label="Page navigation">
+  <div class="mobile-nav-head">
+    <span class="mobile-nav-title">Pages</span>
+    <button class="mobile-nav-close" id="mobile-nav-close" aria-label="Close menu">×</button>
+  </div>
+  <a href="#/form"       class="mobile-nav-link" data-view="form">Trending</a>
+  <a href="#/arc"        class="mobile-nav-link" data-view="arc">Season Arc</a>
+  <a href="#/breakdown"  class="mobile-nav-link" data-view="breakdown">Per-Race Breakdown</a>
+  <a href="#/trajectory" class="mobile-nav-link" data-view="trajectory">Stage Analysis</a>
+  <a href="#/teammates"  class="mobile-nav-link" data-view="teammates">Teammate Delta</a>
+  <a href="#/heatmap"    class="mobile-nav-link" data-view="heatmap">Heatmap</a>
+  <a href="#/standings"  class="mobile-nav-link" data-view="standings">Standings</a>
+  <a href="#/playoffs"   class="mobile-nav-link" data-view="playoffs">Playoffs</a>
+</nav>
 
 <div class="metricbar" id="metricbar"></div>
 <div class="time-cursor-banner" id="time-cursor-banner" hidden>
