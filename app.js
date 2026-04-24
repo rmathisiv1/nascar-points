@@ -363,18 +363,23 @@ function populateRacePicker() {
   const sel = document.getElementById("race-picker");
   if (!sel) return;
   const races = allRacesSorted();
-  const opts = [`<option value="">Latest${races.length ? ` (R${races[races.length-1].round} · ${escapeHTML(prettyTrack(races[races.length-1].track_code, races[races.length-1].track))})` : ""}</option>`];
-  races.forEach(r => {
+  if (!races.length) { sel.innerHTML = ""; return; }
+  // The cursor null state means "latest" — which is literally the last race.
+  // So we just select the last race when cursor is null, and let the user
+  // see they're on the latest race rather than showing a separate option.
+  const effectiveRound = STATE.throughRound != null ? STATE.throughRound : races[races.length - 1].round;
+  sel.innerHTML = races.map(r => {
     const trackName = prettyTrack(r.track_code, r.track);
-    const sel2 = (STATE.throughRound === r.round) ? "selected" : "";
-    opts.push(`<option value="${r.round}" ${sel2}>R${r.round} · ${escapeHTML(trackName)}</option>`);
-  });
-  sel.innerHTML = opts.join("");
-  // Bind once — re-binding on every populate is fine because the listener is idempotent.
+    const s = (r.round === effectiveRound) ? "selected" : "";
+    return `<option value="${r.round}" ${s}>R${r.round} · ${escapeHTML(trackName)}</option>`;
+  }).join("");
   if (!sel._wired) {
     sel.addEventListener("change", () => {
-      const val = sel.value;
-      STATE.throughRound = val === "" ? null : parseInt(val, 10);
+      const picked = parseInt(sel.value, 10);
+      // Picking the last scheduled race = "back to latest" = null cursor.
+      // Picking any other race = set cursor to that round.
+      const lastRound = allRacesSorted().slice(-1)[0]?.round;
+      STATE.throughRound = (picked === lastRound) ? null : picked;
       renderTimeCursorBanner();
       render();
     });
@@ -3997,8 +4002,16 @@ function computeEliminationBracket(rule) {
     const roundHappened = roundRaces.length === rdDef.races;
 
     // Tally points + wins for each in-contention driver during this round.
+    // Explicitly reset per-round flags (roundPts, raceWinsInRound, stageWinsInRound,
+    // autoAdvanced) so prior-round flags don't bleed through via object spread.
     const roundTally = new Map();
-    inContention.forEach(r => roundTally.set(r.key, { ...r, roundPts: 0, raceWinsInRound: 0, stageWinsInRound: 0 }));
+    inContention.forEach(r => roundTally.set(r.key, {
+      ...r,
+      roundPts: 0,
+      raceWinsInRound: 0,
+      stageWinsInRound: 0,
+      autoAdvanced: false,
+    }));
 
     roundRaces.forEach(rc => {
       (rc.results || []).forEach(d => {
