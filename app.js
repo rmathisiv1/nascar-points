@@ -3869,7 +3869,157 @@ function currentPlayoffPhase(rule) {
   return "playoffs";
 }
 
-// Top-level renderer. Dispatches on rule.format.
+// Compute the elimination bracket round-by-round. Returns an array of rounds,
+// each with { name, racesRange, entering, advancing, eliminated }. Each driver
+// is a { key, car_number, primaryDriver, team_code, displayLabel, roundPts,
+// raceWinsInRound, autoAdvanced }.
+//
+// The algorithm uses scraped race data to reconstruct who advanced:
+//   - Starting field: the 16/12/10 qualifiers (wins + points)
+//   - In each round, tally race wins + stage wins during those races
+//   - Auto-advance anyone who won a race during the round
+//   - Fill remaining advance slots by total points accumulated in that round
+// Points-in-round = finish points + stage points (all scraped).
+//
+// Honest caveat: this doesn't model reset points between rounds. The real rules
+// reset everyone to 3000/4000/5000 + their carried PP. For advancement, what
+// matters is RELATIVE order in the round, so the reset is a constant we can
+// ignore for determining who advanced. For displaying "points going in" we'd
+// need the reset logic — that's not shown in this view.
+function computeEliminationBracket(rule) {
+  if (!rule || rule.format !== "elimination") return [];
+  const allRaces = racesSorted();
+  if (!allRaces.length) return [];
+
+  // Determine the playoff field (same logic as renderEliminationView).
+  const pp = computePlayoffPoints(rule);
+  const standingsAtCutoff = rankingRowsFrom(pointsMapThroughRound(rule.regSeasonEndRound));
+  const ftThreshold = rule.regSeasonEndRound < 5 ? 1 : Math.ceil(rule.regSeasonEndRound * 0.9);
+  const eligibleAtCutoff = standingsAtCutoff.filter(r => r.starts >= ftThreshold);
+
+  const enriched = eligibleAtCutoff.map(r => {
+    const p = pp.get(r.key) || { raceWins: 0, stageWins: 0, regBonus: 0, total: 0 };
+    return { ...r, playoffPts: p.total, raceWins: p.raceWins, stageWins: p.stageWins };
+  });
+  const winners = enriched.filter(r => r.raceWins > 0).sort((a, b) => b.raceWins - a.raceWins || b.total - a.total);
+  const nonWinners = enriched.filter(r => r.raceWins === 0).sort((a, b) => b.total - a.total);
+  const winnersIn = winners.slice(0, rule.field);
+  const field = [...winnersIn];
+  if (field.length < rule.field) field.push(...nonWinners.slice(0, rule.field - field.length));
+
+  // Walk each round. Start of playoffs is rule.regSeasonEndRound + 1.
+  const rounds = [];
+  let inContention = field.map(r => ({ ...r }));
+  let cursor = rule.regSeasonEndRound + 1;
+
+  for (const rdDef of rule.rounds) {
+    const roundRaces = allRaces.filter(r => r.round >= cursor && r.round < cursor + rdDef.races);
+    const roundHappened = roundRaces.length === rdDef.races;
+
+    // Tally points + wins for each in-contention driver during this round.
+    const roundTally = new Map();
+    inContention.forEach(r => roundTally.set(r.key, { ...r, roundPts: 0, raceWinsInRound: 0, stageWinsInRound: 0 }));
+
+    roundRaces.forEach(rc => {
+      (rc.results || []).forEach(d => {
+        if (d.ineligible) return;
+        const key = `#${d.car_number}`;
+        const rec = roundTally.get(key);
+        if (!rec) return;
+        const s1 = d.stage_1_pts || 0, s2 = d.stage_2_pts || 0, fin = d.finish_pts || 0, fl = d.fastest_lap_pt || 0;
+        rec.roundPts += s1 + s2 + fin + fl;
+        if (d.finish_pos === 1) rec.raceWinsInRound += 1;
+        if (rule.stages) {
+          if (s1 === 10) rec.stageWinsInRound += 1;
+          if (s2 === 10) rec.stageWinsInRound += 1;
+        }
+      });
+    });
+
+    const roundResults = Array.from(roundTally.values()).sort((a, b) => b.roundPts - a.roundPts);
+
+    // Advancement: race winners in this round advance automatically, then
+    // fill remaining slots by round points. If the round didn't actually
+    // happen (future/current), skip the advance calc and just note who's in.
+    let advancing, eliminated;
+    if (roundHappened) {
+      const autoAdvance = roundResults.filter(r => r.raceWinsInRound > 0);
+      autoAdvance.forEach(r => r.autoAdvanced = true);
+      const rest = roundResults.filter(r => r.raceWinsInRound === 0);
+      const autoKeys = new Set(autoAdvance.map(r => r.key));
+      const needed = Math.max(0, rdDef.cutTo - autoAdvance.length);
+      const filledByPoints = rest.slice(0, needed);
+      advancing = [...autoAdvance, ...filledByPoints];
+      const advKeys = new Set(advancing.map(r => r.key));
+      eliminated = roundResults.filter(r => !advKeys.has(r.key));
+    } else {
+      advancing = roundResults; // still in contention, round hasn't fully happened
+      eliminated = [];
+    }
+
+    rounds.push({
+      name: rdDef.name,
+      races: rdDef.races,
+      cutTo: rdDef.cutTo,
+      racesRange: [cursor, cursor + rdDef.races - 1],
+      roundHappened,
+      entering: roundResults,
+      advancing,
+      eliminated,
+    });
+
+    inContention = advancing;
+    cursor += rdDef.races;
+  }
+
+  return rounds;
+}
+
+// Render the bracket as a horizontal column-per-round layout with driver
+// cards that show round points + elimination status.
+function renderBracket(rule) {
+  const rounds = computeEliminationBracket(rule);
+  if (!rounds.length) return "";
+
+  // Column width grows with round size; each card is fixed width.
+  const columnsHTML = rounds.map((rd, rIdx) => {
+    const cardsHTML = rd.entering.map(drv => {
+      const advKeys = new Set(rd.advancing.map(x => x.key));
+      const isAdvance = advKeys.has(drv.key);
+      const cls = !rd.roundHappened ? "pending" : (isAdvance ? "advance" : "out");
+      const autoTag = drv.autoAdvanced ? `<span class="bk-auto" title="Won a race in this round — auto-advanced">W</span>` : "";
+      const carHex = colorFor(STATE.series, drv.car_number);
+      const txt = contrastTextFor(carHex);
+      const lastName = (drv.primaryDriver || drv.driver || "").split(/\s+/).slice(-1)[0];
+      return `<a class="bk-card ${cls}" href="#/car/${drv.car_number}" title="${escapeHTML(drv.displayLabel)} — ${drv.roundPts} pts in round">
+        <span class="bk-car" style="background:${carHex};color:${txt}">${drv.car_number}</span>
+        <span class="bk-name">${escapeHTML(lastName)}</span>
+        <span class="bk-pts">${drv.roundPts}</span>
+        ${autoTag}
+      </a>`;
+    }).join("");
+
+    const statusLine = !rd.roundHappened
+      ? `<span class="bk-col-status pending">In progress / upcoming</span>`
+      : `<span class="bk-col-status done">R${rd.racesRange[0]}–${rd.racesRange[1]} · cut to ${rd.cutTo}</span>`;
+
+    return `<div class="bk-col">
+      <div class="bk-col-head">
+        <span class="bk-col-name">${rd.name}</span>
+        ${statusLine}
+      </div>
+      <div class="bk-col-cards">${cardsHTML}</div>
+    </div>`;
+  }).join("");
+
+  return `<div class="card po-card">
+    <div class="po-card-head">
+      <span class="po-card-title">Playoff Bracket</span>
+      <span class="po-card-sub">green = advanced · red = eliminated · <span class="bk-auto-legend">W</span> = won a race in the round (auto-advanced)</span>
+    </div>
+    <div class="bk-scroll"><div class="bk-grid">${columnsHTML}</div></div>
+  </div>`;
+}
 function renderPlayoffs() {
   const host = document.getElementById("playoffs-host");
   const sub = document.getElementById("playoffs-sub");
@@ -3943,11 +4093,12 @@ function renderChaseView(rule) {
 // Championship: most points after all Chase races wins it. Everyone stays in the field.
 function renderChaseReseededView(rule, phase) {
   const racesRun = racesSorted().length;
-  const ftThreshold = racesRun < 5 ? 1 : Math.ceil(racesRun * 0.9);
 
   // Standings through "now" (or through cutoff if playoffs have started)
   const standingsRound = phase === "regular" ? racesRun : rule.regSeasonEndRound;
   const standings = rankingRowsFrom(pointsMapThroughRound(standingsRound));
+  // Threshold scales with the standings cutoff (starts can't exceed it)
+  const ftThreshold = standingsRound < 5 ? 1 : Math.ceil(standingsRound * 0.9);
   const eligible = standings.filter(r => r.starts >= ftThreshold);
 
   // Projected or actual field: top N eligible by regular-season points
@@ -4101,11 +4252,12 @@ function renderEliminationView(rule, phase) {
 
   // Determine playoff field. Rule: drivers with wins enter first (by points tiebreak),
   // then fill remaining spots by points. Drivers must be eligible (running for
-  // championship in this series); we approximate with a "has run most races so
-  // far" filter, based on races COMPLETED (not scheduled) so the view works
-  // mid-season. At R9 of 26, a full-timer has ~8-9 starts.
-  const racesRun = racesSorted().length;
-  const ftThreshold = racesRun < 5 ? 1 : Math.ceil(racesRun * 0.9);
+  // championship in this series); we approximate with a "has run most races
+  // through the cutoff" filter. Key detail: `standings` was built through the
+  // regular-season cutoff round (R26 for Cup), so `r.starts` on each row is
+  // counting starts through R26 — so the threshold must also be ≤ R26.
+  const standingsCutoff = phase === "regular" ? racesSorted().slice(-1)[0].round : rule.regSeasonEndRound;
+  const ftThreshold = standingsCutoff < 5 ? 1 : Math.ceil(standingsCutoff * 0.9);
   const eligible = enriched.filter(r => r.starts >= ftThreshold);
 
   const winners = eligible.filter(r => r.raceWins > 0).sort((a, b) => b.raceWins - a.raceWins || b.total - a.total);
@@ -4237,7 +4389,11 @@ function renderEliminationView(rule, phase) {
     </div>
   `;
 
-  return phaseBanner + fieldTable + bubbleTable + roundsInfo;
+  // Bracket only makes sense after playoffs have started (R27+ for Cup).
+  // Mid-regular-season we just show the field table + bubble.
+  const bracketHTML = (phase === "playoffs" || phase === "complete") ? renderBracket(rule) : "";
+
+  return phaseBanner + bracketHTML + fieldTable + bubbleTable + roundsInfo;
 }
 function escapeHTML(s) {
   if (s == null) return "";

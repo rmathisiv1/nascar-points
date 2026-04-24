@@ -1283,6 +1283,120 @@ td.neg { color: #ff8a8a; }
   color: var(--text);
   font-weight: 600;
 }
+
+/* ============================================================
+   BRACKET (elimination playoffs)
+   ============================================================ */
+.bk-scroll { overflow-x: auto; }
+.bk-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(180px, 1fr);
+  gap: 14px;
+  min-width: min-content;
+}
+.bk-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.bk-col-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
+  border-bottom: none;
+}
+.bk-col-name {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.bk-col-status {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+.bk-col-status.done { color: var(--dim); }
+.bk-col-status.pending { color: var(--accent-2); }
+.bk-col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: rgba(255,255,255,0.015);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  flex: 1;
+}
+.bk-card {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  transition: border-color 0.1s;
+}
+.bk-card:hover { border-color: var(--border-hi); }
+.bk-card.advance {
+  border-left: 3px solid #2ECC40;
+  background: linear-gradient(90deg, rgba(46,204,64,0.06), var(--card) 30%);
+}
+.bk-card.out {
+  border-left: 3px solid #ff5050;
+  background: linear-gradient(90deg, rgba(255,80,80,0.06), var(--card) 30%);
+  opacity: 0.65;
+}
+.bk-card.pending {
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(90deg, rgba(59,130,246,0.06), var(--card) 30%);
+}
+.bk-car {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 20px; min-width: 26px; padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 700; font-size: 10px;
+}
+.bk-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.bk-pts {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 10px;
+}
+.bk-auto {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px;
+  background: #FFD700;
+  color: #1a1a1a;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 800;
+}
+.bk-auto-legend {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px;
+  background: #FFD700;
+  color: #1a1a1a;
+  border-radius: 50%;
+  font-size: 8px;
+  font-weight: 800;
+  margin: 0 2px;
+}
 .tm-true-team {
   font-family: var(--mono); font-size: 9px; font-weight: 700;
   color: var(--dim); background: rgba(255,255,255,0.04);
