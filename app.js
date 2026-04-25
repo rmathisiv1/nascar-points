@@ -162,6 +162,21 @@ function wirePickerDrawers() {
       if (chev) chev.textContent = drawer.classList.contains("is-open") ? "▴" : "▾";
     });
   });
+
+  // Touch dismissal: on mobile, tapping anywhere not on a chart hit point
+  // dismisses any visible tooltip. Without this, the tooltip stays up forever
+  // because touchend doesn't fire mouseleave reliably.
+  document.addEventListener("touchstart", (e) => {
+    if (!isMobile()) return;
+    const onHit = e.target.closest(
+      ".profile-chart-hit, .chart-tooltip, [data-tip], .tm-spk, " +
+      "[id$=-tooltip], #metric-tooltip"
+    );
+    if (onHit) return;
+    document.querySelectorAll("#metric-tooltip, .chart-tooltip").forEach(t => {
+      t.hidden = true;
+    });
+  }, { passive: true });
 }
 
 // ============================================================
@@ -3918,7 +3933,10 @@ function renderHeatmap() {
 
   const grid = document.createElement("div");
   grid.className = "heatmap-grid";
-  grid.style.gridTemplateColumns = `200px repeat(${races.length}, 30px) 44px`;
+  // Mobile uses a narrower car column so the cells are reachable on a phone.
+  const firstCol = isMobile() ? "120px" : "200px";
+  const cellCol = isMobile() ? "26px" : "30px";
+  grid.style.gridTemplateColumns = `${firstCol} repeat(${races.length}, ${cellCol}) 44px`;
 
   const corner = document.createElement("div");
   corner.className = "hm-header hm-header-corner";

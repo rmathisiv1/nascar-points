@@ -3041,3 +3041,125 @@ a.driver-cell.profile-link:hover .car-tag {
     gap: 4px;
   }
 }
+
+/* ============================================================
+   LAYER 4 POLISH — mobile-only refinements
+   ============================================================ */
+@media (max-width: 767.98px) {
+  /* ---- Heatmap: allow horizontal scroll, narrower car column ---- */
+  #view-heatmap .card.scrollable {
+    overflow: auto !important;  /* horizontal + vertical */
+  }
+  .heatmap-grid {
+    /* JS sets grid-template-columns inline; we just shrink the first column */
+    padding: 4px 6px;
+  }
+  .hm-label {
+    font-size: 10px;
+    padding: 3px 6px 3px 2px;
+    min-width: 0;
+    /* Match the inline grid template "200px" first column with a smaller
+       value via override. JS rebuilds grid-template-columns each render so
+       this needs to apply post-render. We do it by transforming the label. */
+  }
+  /* Override the inline grid template via :root variable trick:
+     simpler — let JS set a smaller column on mobile (handled below). */
+
+  /* ---- Profile hero: stack on narrow ---- */
+  .profile-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .profile-hero-left,
+  .profile-hero-right {
+    width: 100%;
+  }
+  .profile-hero-right {
+    text-align: left;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding: 8px 0 0;
+    margin: 4px 0 0;
+  }
+  .profile-hero-num {
+    font-size: 28px;
+  }
+  .profile-name {
+    font-size: 18px;
+  }
+  .profile-meta {
+    font-size: 11px;
+    flex-wrap: wrap;
+  }
+
+  /* ---- Profile career stats: compact ---- */
+  .career-stats-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .career-stat-card {
+    padding: 8px 10px;
+  }
+
+  /* ---- Profile teammates: tighter ---- */
+  .profile-tm-header,
+  .profile-tm-row {
+    grid-template-columns: 28px minmax(70px,1fr) minmax(80px,1.6fr) 56px 44px;
+    gap: 6px;
+    font-size: 10px;
+  }
+  .profile-tm-header { font-size: 8px; }
+  .profile-tm-spark svg { height: 22px; }
+
+  /* ---- Time cursor banner: stack the reset button below text ---- */
+  .time-cursor-banner {
+    flex-wrap: wrap;
+  }
+  .tcb-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ---- Playoffs takeover: bracket horizontal scroll ---- */
+  .takeover-bracket-wrap,
+  .bracket-wrap,
+  .playoffs-bracket {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .takeover {
+    padding: 8px 10px;
+  }
+  .takeover-head h2 {
+    font-size: 14px;
+  }
+
+  /* ---- Profile takeover head: compact ---- */
+  .profile-takeover-head {
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+  }
+  .profile-takeover-head a {
+    font-size: 11px;
+  }
+
+  /* ---- Tooltip: avoid being huge on phone ---- */
+  .chart-tooltip {
+    font-size: 10px;
+    padding: 6px 9px;
+    min-width: 120px;
+    max-width: 240px;
+  }
+  #metric-tooltip.tm-tip {
+    min-width: 150px;
+    max-width: 280px;
+    font-size: 10px;
+  }
+
+  /* ---- Footer: extra small to avoid stealing tab content space ---- */
+  .footer { font-size: 8px; padding: 4px 8px; }
+}
