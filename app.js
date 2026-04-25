@@ -44,6 +44,7 @@ const VIEWS = ["form", "arc", "breakdown", "trajectory", "teammates", "heatmap",
 async function boot() {
   wireUIControls();
   wireMobileNav();
+  wirePickerDrawers();
   applyMobileLanding();
   await loadColors();
   loadDriverBios();  // async, not awaited — profile will use it whenever it arrives
@@ -146,6 +147,24 @@ function wireMobileNav() {
 }
 
 // ============================================================
+// MOBILE PICKER DRAWERS (Arc / Breakdown / Stage Analysis)
+// ============================================================
+// On mobile, the long row of car-picker pills swallows the chart. We hide it
+// behind a "Pick cars ▾" button and let the user expand on demand. The button
+// itself is hidden on desktop via CSS (the .mob-only-btn class).
+function wirePickerDrawers() {
+  document.querySelectorAll(".picker-drawer-toggle").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const drawer = btn.closest(".picker-drawer");
+      if (!drawer) return;
+      drawer.classList.toggle("is-open");
+      const chev = btn.querySelector(".pdt-chev");
+      if (chev) chev.textContent = drawer.classList.contains("is-open") ? "▴" : "▾";
+    });
+  });
+}
+
+// ============================================================
 // MOBILE TABLE COLLAPSE (tap-to-expand)
 // ============================================================
 // Post-processes a data-table to:
@@ -218,16 +237,14 @@ function applyMobileTableCollapse(table, keepIndices, labelOverrides = {}) {
 }
 
 function toggleMobExpand(tbody, tr, hiddenCols) {
-  // Close any currently-open expand row in this tbody (single-open policy)
-  const existing = tbody.querySelector("tr.mob-expand-row");
-  const wasOpen = existing && existing.previousElementSibling === tr;
-  if (existing) {
+  // If this row is already expanded, collapse it.
+  // Multiple rows can be open at once — each one toggles independently.
+  const existing = tr.nextElementSibling;
+  if (existing && existing.classList.contains("mob-expand-row") && tr.classList.contains("mob-expanded")) {
     existing.remove();
-    // Reset chevron on the row that owned it
-    const prevOwner = tbody.querySelector("tr.mob-expanded");
-    if (prevOwner) prevOwner.classList.remove("mob-expanded");
+    tr.classList.remove("mob-expanded");
+    return;
   }
-  if (wasOpen) return;  // user tapped the same row to close
 
   // Collect values from the hidden cells
   const tds = Array.from(tr.children);

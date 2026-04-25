@@ -2986,3 +2986,58 @@ a.driver-cell.profile-link:hover .car-tag {
     font-size: 9px;
   }
 }
+
+/* ============================================================
+   PICKER DRAWERS — mobile only
+   ============================================================ */
+
+/* Desktop: button hidden, picker visible (default) */
+.mob-only-btn { display: none; }
+.picker-drawer .driver-picker { display: flex; }
+
+@media (max-width: 767.98px) {
+  .picker-drawer {
+    margin: 4px 0;
+  }
+  .mob-only-btn,
+  .picker-drawer-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .picker-drawer-toggle:active {
+    background: var(--card-hi);
+  }
+  .pdt-chev {
+    font-family: var(--mono);
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  /* Picker is hidden by default on mobile, shown when drawer is open */
+  .picker-drawer .driver-picker {
+    display: none;
+    margin-top: 6px;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .picker-drawer.is-open .driver-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+}
