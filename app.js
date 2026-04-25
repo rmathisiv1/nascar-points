@@ -135,11 +135,33 @@ function wireMobileNav() {
   });
   document.getElementById("mobile-nav-close")?.addEventListener("click", closeMobileNav);
   document.getElementById("mobile-nav-overlay")?.addEventListener("click", closeMobileNav);
-  // Links close the sheet on click (hashchange also closes, but do this
-  // immediately so the user sees the click register instantly).
+
+  // Mobile nav links: handle navigation explicitly rather than relying on
+  // the browser's anchor tap → hashchange chain. iOS Safari occasionally
+  // swallows the tap when the side-sheet is mid-animation, and re-tapping a
+  // link that already matches the current hash never fires hashchange.
+  // We intercept, close the sheet, then push the new URL (or force-render).
   document.querySelectorAll(".mobile-nav-link").forEach(a => {
-    a.addEventListener("click", () => closeMobileNav());
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const href = a.getAttribute("href") || "";
+      closeMobileNav();
+      // Defer the navigation a tick so the close animation kicks in first.
+      // (Without this, on slow phones the page can switch before the user
+      // sees the menu close, which feels janky.)
+      setTimeout(() => {
+        if (location.hash === href) {
+          // Same page — hashchange won't fire. Re-render manually so any
+          // stuck UI state resets.
+          parseHash();
+          render();
+        } else {
+          location.hash = href;
+        }
+      }, 50);
+    });
   });
+
   // Close on Escape key
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMobileNav();
