@@ -32,6 +32,23 @@
     <span class="mobile-nav-title">Pages</span>
     <button class="mobile-nav-close" id="mobile-nav-close" aria-label="Close menu">×</button>
   </div>
+
+  <!-- Mobile-only settings block: season + race-cursor pickers. The desktop
+       has these in the topbar, but on a phone the topbar can't fit them.
+       JS (syncMobileNavSettings) keeps these in sync with the real <select>s
+       in the topbar so changes flow either way. -->
+  <div class="mobile-nav-settings">
+    <label class="mns-label">
+      <span>Season</span>
+      <select id="mobile-season-picker"></select>
+    </label>
+    <label class="mns-label">
+      <span>View through</span>
+      <select id="mobile-race-picker"></select>
+    </label>
+  </div>
+
+  <div class="mobile-nav-section">Pages</div>
   <a href="#/form"       class="mobile-nav-link" data-view="form">Trending</a>
   <a href="#/arc"        class="mobile-nav-link" data-view="arc">Season Arc</a>
   <a href="#/breakdown"  class="mobile-nav-link" data-view="breakdown">Per-Race Breakdown</a>

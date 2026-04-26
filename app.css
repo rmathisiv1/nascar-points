@@ -3057,12 +3057,20 @@ a.driver-cell.profile-link:hover .car-tag {
     font-size: 10px;
     padding: 3px 6px 3px 2px;
     min-width: 0;
-    /* Match the inline grid template "200px" first column with a smaller
-       value via override. JS rebuilds grid-template-columns each render so
-       this needs to apply post-render. We do it by transforming the label. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: var(--card);
+    /* Solid backdrop so when scrolled-under cells exist, names don't blend.
+       The stale comment about "transforming the label" was misleading;
+       what matters is overflow + white-space + a non-transparent bg. */
   }
-  /* Override the inline grid template via :root variable trick:
-     simpler — let JS set a smaller column on mobile (handled below). */
+  .hm-label > span:not(.car-tag) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
 
   /* ---- Profile hero: stack on narrow ---- */
   .profile-hero {
@@ -3268,4 +3276,106 @@ a.driver-cell.profile-link:hover .car-tag {
   .dashboard {
     min-height: 0 !important;
   }
+}
+
+/* ============================================================
+   MOBILE NAV SETTINGS BLOCK + STICKY HEADERS + PLAYOFF DETAILS
+   ============================================================ */
+
+/* Format-explainer collapsed-by-default <details> on playoffs page.
+   Always interactive (desktop too) — saves space everywhere. */
+.po-format-details summary { list-style: none; cursor: pointer; }
+.po-format-details summary::-webkit-details-marker { display: none; }
+.po-format-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  user-select: none;
+}
+.po-format-title {
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.po-format-chev {
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+  transition: transform 0.15s;
+}
+.po-format-details[open] .po-format-chev { transform: rotate(180deg); }
+.po-format-details .po-note { padding: 0 14px 12px; }
+
+/* Mobile-nav settings panel (Season + Race pickers) */
+.mobile-nav-settings { display: none; }
+.mobile-nav-section { display: none; }
+
+@media (max-width: 767.98px) {
+  /* ---- Sticky topbar + metricbar so they pin while page scrolls ---- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+  }
+  .metricbar {
+    position: sticky;
+    top: 44px;            /* push below the topbar */
+    z-index: 55;
+    background: var(--bg);
+  }
+  /* Time-cursor banner pins below the metric bar when shown */
+  .time-cursor-banner:not([hidden]) {
+    position: sticky;
+    top: 78px;
+    z-index: 54;
+  }
+
+  /* ---- Side-sheet settings panel ---- */
+  .mobile-nav-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+  }
+  .mns-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .mns-label select {
+    height: 36px;
+    padding: 6px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .mobile-nav-section {
+    display: block;
+    padding: 10px 16px 4px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  /* Hide the desktop topbar season/race pickers on mobile — settings live
+     in the side-sheet now. The hamburger is visible enough. */
+  .topbar .topbar-right { display: none; }
+
+  /* ---- Reseed Table grid: 2-column on mobile (was 4) ---- */
+  .po-reseed-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px !important;
+  }
+  .po-reseed-row { padding: 5px 8px; font-size: 11px; }
 }

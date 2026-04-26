@@ -101,12 +101,49 @@ function openMobileNav() {
   const overlay = document.getElementById("mobile-nav-overlay");
   const btn = document.getElementById("mobile-menu-btn");
   if (!nav || !overlay || !btn) return;
+  syncMobileNavSettings();
   nav.hidden = false;
   overlay.hidden = false;
   btn.setAttribute("aria-expanded", "true");
   markMobileNavActive();
   // Prevent body scroll while sheet is open
   document.body.style.overflow = "hidden";
+}
+
+// Mirror the desktop-topbar season + race selects into the mobile nav sheet.
+// The desktop selects are still the source of truth; we copy their <option>s
+// across and wire a 'change' on the mobile select that re-fires on the desktop
+// one (which already has all the right handlers wired).
+function syncMobileNavSettings() {
+  const desktopSeason = document.getElementById("season-picker");
+  const desktopRace = document.getElementById("race-picker");
+  const mobSeason = document.getElementById("mobile-season-picker");
+  const mobRace = document.getElementById("mobile-race-picker");
+  if (!desktopSeason || !mobSeason || !desktopRace || !mobRace) return;
+
+  // Copy options across (rebuild each time — option lists change with data load).
+  const copyOptions = (src, dst) => {
+    dst.innerHTML = src.innerHTML;
+    dst.value = src.value;
+  };
+  copyOptions(desktopSeason, mobSeason);
+  copyOptions(desktopRace, mobRace);
+
+  // Wire change handlers (idempotent — replace prior listener via marker).
+  if (!mobSeason._wired) {
+    mobSeason.addEventListener("change", () => {
+      desktopSeason.value = mobSeason.value;
+      desktopSeason.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    mobSeason._wired = true;
+  }
+  if (!mobRace._wired) {
+    mobRace.addEventListener("change", () => {
+      desktopRace.value = mobRace.value;
+      desktopRace.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    mobRace._wired = true;
+  }
 }
 
 function closeMobileNav() {
@@ -1362,12 +1399,12 @@ function renderFormTable() {
 
   wireCoDriverBadges(card);
 
-  // Mobile collapse: keep # (0), Driver (1), Form (3), Rating (4).
-  // Hide Team, vs Season, Pts — all visible via tap-expand.
+  // Mobile collapse: keep # (0), Driver (1), Rating (4).
+  // Hide Team, Form sparkline, vs Season, Pts — visible via tap-expand.
   // Column indices: 0=#, 1=Driver, 2=Team, 3=Form, 4=Rating, 5=vs Season, 6=Pts
   const mobTable = card.querySelector("table.data-table");
   if (mobTable) {
-    applyMobileTableCollapse(mobTable, [0, 1, 3, 4]);
+    applyMobileTableCollapse(mobTable, [0, 1, 4]);
   }
 
   const sub = document.getElementById("form-sub");
@@ -5049,14 +5086,18 @@ function renderChaseReseededView(rule, phase) {
   const banner = `<div class="po-banner ${phase !== 'complete' ? 'po-banner-live' : ''}">${bannerText}</div>`;
 
   const formatExplainer = `
-    <div class="card po-card po-format-note">
+    <details class="card po-card po-format-note po-format-details">
+      <summary class="po-format-summary">
+        <span class="po-format-title">About the 2026 Chase Format</span>
+        <span class="po-format-chev">▾</span>
+      </summary>
       <div class="po-note">
         <strong>2026 Chase Format</strong> · Top ${rule.field} by points qualify
         (no "win and in") · all ${rule.field} race the ${rule.playoffRaces} Chase races
         with a single reseed · <strong>no eliminations</strong> · most points at season's end wins.
         Wins are worth ${rule.raceWinPts} points (up from 40 in the previous format).
       </div>
-    </div>
+    </details>
   `;
 
   const fieldTable = `
