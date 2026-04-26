@@ -3969,15 +3969,17 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 .rc-sched-row {
   display: grid;
-  grid-template-columns: 50px 1fr 100px minmax(140px, 1.2fr);
+  grid-template-columns: 40px 280px 100px 1fr;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   padding: 8px 14px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
   cursor: pointer;
   transition: background 0.1s;
   font-size: 12px;
   border-left: 3px solid transparent;
+  max-width: 700px;
+  margin: 0 auto;
 }
 .rc-sched-row:last-child { border-bottom: none; }
 .rc-sched-row:hover { background: rgba(255,255,255,0.03); }
@@ -4011,8 +4013,9 @@ a.driver-cell.profile-link:hover .car-tag {
 .rc-sched-result {
   font-size: 11px;
   color: var(--muted);
-  text-align: right;
+  text-align: left;
   overflow: hidden;
+  white-space: nowrap;
 }
 .rc-sched-winner {
   display: inline-flex;

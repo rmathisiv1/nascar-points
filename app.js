@@ -540,9 +540,10 @@ async function loadCurrentData() {
   }
   STATE.data = seriesBlock;
   const races = seriesBlock.races || [];
+  const runRaces = races.filter(r => (r.results || []).length > 0);
   const totalRaces = scheduleLengthForSeries(sCode);
   document.getElementById("season-pill").textContent =
-    `${year} · R${races.length} / ${totalRaces}`;
+    `${year} · R${runRaces.length} / ${totalRaces}`;
   document.getElementById("footer-updated").textContent =
     `Updated ${(payload.generated_at || "").slice(0,10)}`;
   hideError();
@@ -750,22 +751,28 @@ function populateRacePicker() {
   if (!sel) return;
   const races = allRacesSorted();
   if (!races.length) { sel.innerHTML = ""; return; }
-  // The cursor null state means "latest" — which is literally the last race.
-  // So we just select the last race when cursor is null, and let the user
-  // see they're on the latest race rather than showing a separate option.
-  const effectiveRound = STATE.throughRound != null ? STATE.throughRound : races[races.length - 1].round;
+  // Default selection = last RUN race (not last scheduled). With the data
+  // now containing future races, "latest" should still mean "most recently
+  // completed", not "season finale". Falls back to last race if nothing's
+  // run yet.
+  const runRaces = races.filter(r => (r.results || []).length > 0);
+  const lastRunRound = runRaces.length ? runRaces[runRaces.length - 1].round : races[races.length - 1].round;
+  const effectiveRound = STATE.throughRound != null ? STATE.throughRound : lastRunRound;
   sel.innerHTML = races.map(r => {
     const trackName = prettyTrack(r.track_code, r.track) || "—";
+    const isUpcoming = (r.results || []).length === 0;
+    const label = `R${r.round} · ${trackName}${isUpcoming ? " (upcoming)" : ""}`;
     const s = (r.round === effectiveRound) ? "selected" : "";
-    return `<option value="${r.round}" ${s}>R${r.round} · ${escapeHTML(trackName)}</option>`;
+    return `<option value="${r.round}" ${s}>${escapeHTML(label)}</option>`;
   }).join("");
   if (!sel._wired) {
     sel.addEventListener("change", () => {
       const picked = parseInt(sel.value, 10);
-      // Picking the last scheduled race = "back to latest" = null cursor.
+      // Picking the last RUN race = "back to latest" = null cursor.
       // Picking any other race = set cursor to that round.
-      const lastRound = allRacesSorted().slice(-1)[0]?.round;
-      STATE.throughRound = (picked === lastRound) ? null : picked;
+      const runRacesNow = allRacesSorted().filter(r => (r.results || []).length > 0);
+      const lastRunNow = runRacesNow.length ? runRacesNow[runRacesNow.length - 1].round : null;
+      STATE.throughRound = (picked === lastRunNow) ? null : picked;
       renderTimeCursorBanner();
       render();
     });
@@ -912,7 +919,11 @@ function resetRenderCache() {
 
 function racesSorted() {
   if (RENDER_CACHE.races) return RENDER_CACHE.races;
+  // Only races that have actually been run. Upcoming races (empty results)
+  // are present in the data for the schedule UI but should NOT drive
+  // standings/form/heatmap math, which only operates on completed races.
   const all = (STATE.data?.races || [])
+    .filter(r => (r.results || []).length > 0)
     .slice()
     .sort((a, b) => (a.round || 0) - (b.round || 0));
   RENDER_CACHE.races = (STATE.throughRound != null)
@@ -923,6 +934,7 @@ function racesSorted() {
 
 // Unfiltered access — used by the race picker, which needs to show every race
 // scheduled (including ones beyond the cursor, so users can navigate forward).
+// ALSO includes upcoming (no-results) races so the schedule UI shows them.
 function allRacesSorted() {
   if (RENDER_CACHE.allRaces) return RENDER_CACHE.allRaces;
   RENDER_CACHE.allRaces = (STATE.data?.races || [])
@@ -5250,14 +5262,6 @@ function renderRaceCenter() {
 
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-head">
-        <span class="rc-card-title">${lastRunRace ? `Last Race: R${lastRunRace.round} · ${lastRunRace.track_code ? `<a class="rc-track-link" href="#/track/${escapeHTML(lastRunRace.track_code)}">${escapeHTML(lastRunRace.track || "")}</a>` : escapeHTML(lastRunRace.track || "")}` : "Last Race"}</span>
-        ${lastRunRace && lastRunRace.date ? `<span class="rc-card-sub">${formatRaceDate(lastRunRace.date)}</span>` : ""}
-      </div>
-      <div class="rc-card-body">${lastResultHTML}</div>
-    </div>
-
-    <div class="card rc-card rc-card-wide">
-      <div class="rc-card-head">
         <span class="rc-card-title">${STATE.season} Season Schedule</span>
         <span class="rc-card-sub">${runRaces.length} of ${allRaces.length} races run</span>
       </div>
@@ -5281,8 +5285,16 @@ function renderRaceCenter() {
 // Format an ISO-ish date string into "Sun, Apr 27" form. Falls back to raw.
 function formatRaceDate(iso) {
   if (!iso) return "";
-  // Accept "2026-04-27" or "April 27, 2026" — Date constructor handles both reasonably.
-  const d = new Date(iso);
+  // Parse YYYY-MM-DD as LOCAL date (not UTC) to avoid the classic
+  // "shows previous day for users west of UTC" bug. The Date constructor
+  // treats "2026-02-15" as UTC midnight, which becomes Feb 14 in EST.
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  let d;
+  if (m) {
+    d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  } else {
+    d = new Date(iso);
+  }
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
