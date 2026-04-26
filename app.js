@@ -767,19 +767,16 @@ function populateSeasonPicker() {
 function populateRacePicker() {
   const sel = document.getElementById("race-picker");
   if (!sel) return;
-  const races = allRacesSorted();
+  // Only show races that have actually run — the cursor only meaningfully
+  // operates on races with results. Upcoming races have no data to view
+  // "through" so cluttering the dropdown with them was confusing.
+  const races = allRacesSorted().filter(r => (r.results || []).length > 0);
   if (!races.length) { sel.innerHTML = ""; return; }
-  // Default selection = last RUN race (not last scheduled). With the data
-  // now containing future races, "latest" should still mean "most recently
-  // completed", not "season finale". Falls back to last race if nothing's
-  // run yet.
-  const runRaces = races.filter(r => (r.results || []).length > 0);
-  const lastRunRound = runRaces.length ? runRaces[runRaces.length - 1].round : races[races.length - 1].round;
+  const lastRunRound = races[races.length - 1].round;
   const effectiveRound = STATE.throughRound != null ? STATE.throughRound : lastRunRound;
   sel.innerHTML = races.map(r => {
     const trackName = prettyTrack(r.track_code, r.track) || "—";
-    const isUpcoming = (r.results || []).length === 0;
-    const label = `R${r.round} · ${trackName}${isUpcoming ? " (upcoming)" : ""}`;
+    const label = `R${r.round} · ${trackName}`;
     const s = (r.round === effectiveRound) ? "selected" : "";
     return `<option value="${r.round}" ${s}>${escapeHTML(label)}</option>`;
   }).join("");
@@ -787,7 +784,6 @@ function populateRacePicker() {
     sel.addEventListener("change", () => {
       const picked = parseInt(sel.value, 10);
       // Picking the last RUN race = "back to latest" = null cursor.
-      // Picking any other race = set cursor to that round.
       const runRacesNow = allRacesSorted().filter(r => (r.results || []).length > 0);
       const lastRunNow = runRacesNow.length ? runRacesNow[runRacesNow.length - 1].round : null;
       STATE.throughRound = (picked === lastRunNow) ? null : picked;
@@ -5240,8 +5236,11 @@ function renderRaceCenter() {
 
   // Background-load 4 prior years so track history can be computed across
   // multi-year data. Re-renders when each year arrives.
+  // Background-load multiple prior years so Last 5 winners + Hot at Track
+  // can populate. 8 years gives us up to 16 entries at most tracks (2 races/yr)
+  // — plenty to find 5 most recent winners and compute avg-finish stats.
   const seasonsForHistory = [];
-  for (let y = STATE.season - 1; y >= STATE.season - 4 && y >= 2014; y--) {
+  for (let y = STATE.season - 1; y >= STATE.season - 8 && y >= 2014; y--) {
     seasonsForHistory.push(y);
   }
   const allLoaded = seasonsForHistory.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]);
@@ -5269,12 +5268,18 @@ function renderRaceCenter() {
   const winnersHTML = renderTrackWinners(history);
   const hotHTML = renderHotAtTrack(history);
 
+  // Build the time/TV line from scraper-provided metadata
+  const timeTV = [nextRace.time, nextRace.tv].filter(Boolean).join(" · ");
+  const raceNameLine = nextRace.name ? `<div class="rc-hero-name">"${escapeHTML(nextRace.name)}"</div>` : "";
+  const timeTVLine = timeTV ? `<div class="rc-hero-time">${escapeHTML(timeTV)}</div>` : "";
+
   host.innerHTML = `
     <div class="rc-hero">
       <div class="rc-hero-badge">${heroBadge}</div>
       <div class="rc-hero-track">R${nextRace.round} · ${nextRace.track_code ? `<a class="rc-track-link" href="#/track/${escapeHTML(nextRace.track_code)}">${escapeHTML(trackStr)}</a>` : escapeHTML(trackStr)}</div>
+      ${raceNameLine}
       <div class="rc-hero-meta">
-        ${dateStr} · ${seriesLabel}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
+        ${dateStr}${timeTV ? " · " + escapeHTML(timeTV) : ""} · ${seriesLabel}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
       </div>
     </div>
 
@@ -5284,7 +5289,7 @@ function renderRaceCenter() {
         <div class="rc-card-body">${winnersHTML}</div>
       </div>
       <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Hot at This Track</span><span class="rc-card-sub">avg finish, last 5 visits</span></div>
+        <div class="rc-card-head"><span class="rc-card-title">Hot at This Track</span><span class="rc-card-sub">avg finish · current FT cars</span></div>
         <div class="rc-card-body">${hotHTML}</div>
       </div>
     </div>
@@ -5365,31 +5370,46 @@ function renderTrackWinners(history) {
 // Top-5 cars by avg finish at this track over last 5 visits (cross-year).
 // Restricted to cars that are full-time in the CURRENT season — historical
 // part-timers and one-offs at the track aren't useful when answering "who's
-// going to be hot this weekend?"
+// going to be hot this weekend?" Driver names use the CURRENT-season driver
+// for each car, not the historical one (so we don't show "Truex Jr" for the
+// #19 when Briscoe drives it now).
 function renderHotAtTrack(history) {
   if (!history.length) {
     return `<div class="rc-empty">No prior history at this track.</div>`;
   }
-  // Build the set of full-time car numbers for the current season.
-  const currentFt = new Set(
-    allEntities().filter(isFullTime).map(e => e.car_number)
-  );
+  // Build maps for current season: car_number → entity (with current driver name)
+  const currentEntities = allEntities().filter(isFullTime);
+  const currentDriverByCar = {};
+  currentEntities.forEach(e => {
+    currentDriverByCar[e.car_number] = e.primaryDriver || e.driver || e.displayLabel || "";
+  });
+  const currentFt = new Set(Object.keys(currentDriverByCar));
 
-  const last5 = history.slice(0, 5);
+  // Use ALL history at this track (not just last 5 visits) so we have enough
+  // data when current full-time cars only ran sparingly in prior years.
   const byCarFinishes = {};
-  last5.forEach(h => {
+  history.forEach(h => {
     (h.results || []).forEach(d => {
       if (d.finish_pos == null) return;
       if (!currentFt.has(d.car_number)) return;   // current-season FT only
-      if (!byCarFinishes[d.car_number]) byCarFinishes[d.car_number] = { car: d.car_number, driver: d.driver, finishes: [] };
+      if (!byCarFinishes[d.car_number]) {
+        byCarFinishes[d.car_number] = {
+          car: d.car_number,
+          driver: currentDriverByCar[d.car_number],   // CURRENT driver, not historical
+          finishes: [],
+        };
+      }
       byCarFinishes[d.car_number].finishes.push(d.finish_pos);
-      // Update driver to most recent (in case of car switches)
-      byCarFinishes[d.car_number].driver = d.driver;
     });
   });
   const ranked = Object.values(byCarFinishes)
-    .filter(c => c.finishes.length >= 1)   // at least one visit
-    .map(c => ({ ...c, avg: c.finishes.reduce((s, x) => s + x, 0) / c.finishes.length, n: c.finishes.length }))
+    .filter(c => c.finishes.length >= 1)
+    // Use only the most recent 5 finishes when computing avg, so dated runs
+    // don't drag down a car that has improved.
+    .map(c => {
+      const recent = c.finishes.slice(0, 5);
+      return { ...c, avg: recent.reduce((s, x) => s + x, 0) / recent.length, n: recent.length };
+    })
     .sort((a, b) => a.avg - b.avg)
     .slice(0, 5);
 

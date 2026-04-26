@@ -133,6 +133,8 @@ class Race:
     track: str
     track_code: str
     name: str
+    time: str = ""        # "3:00 PM" — race start time, schedule-only
+    tv: str = ""          # "FOX", "NBC" etc — schedule-only
     stages: int = 2
     fastest_lap_driver: Optional[str] = None
     source_url: str = ""
@@ -502,6 +504,12 @@ def discover_races(series_code: str, season: int) -> list[dict]:
             continue
         seen_rounds.add(round_num)
 
+        # Initialize per-row metadata (filled in below as we parse each cell)
+        race_time = ""
+        race_tv = ""
+        race_name = ""
+        track_name = ""
+
         # Date cell — class="date W" or "date B"/"date C" depending on series
         date_cell = row.find("div", class_=re.compile(r"\bdate\b"))
         date_text = date_cell.get_text(strip=True) if date_cell else ""
@@ -518,8 +526,6 @@ def discover_races(series_code: str, season: int) -> list[dict]:
         # rows have a SECOND track cell with the race name + time/TV — we want
         # to skip that one for the track field.
         track_cells = row.find_all("div", class_=re.compile(r"^\s*track\b"))
-        track_name = ""
-        race_name = ""
         if track_cells:
             # First track cell: the track itself
             first_track = track_cells[0]
@@ -527,14 +533,24 @@ def discover_races(series_code: str, season: int) -> list[dict]:
             track_name = (t_link.get_text(strip=True) if t_link
                           else first_track.get_text(strip=True))
             # Second track cell, if present and has 'upcoming' modifier:
-            # contains the race name in quotes (e.g. "Jack Link's 500")
+            # contains the race name in quotes + time + TV (e.g.
+            #   "Jack Link's 500"   3:00 PM FOX
             for tc in track_cells[1:]:
                 tc_classes = tc.get("class", [])
                 if any("upcoming" in c for c in tc_classes):
                     raw = tc.get_text(" ", strip=True)
+                    # Race name is quoted
                     m = re.search(r'"([^"]+)"', raw)
                     if m:
                         race_name = m.group(1)
+                    # Time is "H:MM AM/PM" or "HH:MM AM/PM"
+                    t_match = re.search(r'\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b', raw, re.I)
+                    if t_match:
+                        race_time = t_match.group(1).upper().replace("  ", " ")
+                    # TV network is whatever follows AM/PM at the end of the cell
+                    tv_match = re.search(r'\b(?:AM|PM)\s+([A-Z][A-Z0-9/+]*)\s*$', raw, re.I)
+                    if tv_match:
+                        race_tv = tv_match.group(1)
                     break
 
         # If completed, the race-number link gives us the race-results URL +
@@ -557,6 +573,8 @@ def discover_races(series_code: str, season: int) -> list[dict]:
             "name": race_name,
             "date": iso_date,
             "track": track_name,
+            "time": race_time,
+            "tv": race_tv,
             "has_run": has_run,
         })
 
@@ -598,6 +616,8 @@ def build_series(series_code: str, season: int) -> dict:
                 track=r.get("track", ""),
                 track_code=track_code_from_name(r.get("track", "")),
                 name=r.get("name", ""),
+                time=r.get("time", ""),
+                tv=r.get("tv", ""),
                 source_url="",
             )
             out_races.append(asdict(stub))
