@@ -790,7 +790,7 @@ function renderTimeCursorBanner() {
 const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
 // Views that take over the whole page (hide dashboard). Only playoffs now —
 // profile is a center-column takeover that keeps the side panels visible.
-const TAKEOVER_VIEWS = ["playoffs"];
+const TAKEOVER_VIEWS = ["playoffs", "race"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -807,6 +807,7 @@ function render() {
   const pageTitleEl = document.getElementById("mobile-page-title-text");
   if (pageTitleEl) {
     const titleMap = {
+      race: "Race Center",
       form: "Trending",
       arc: "Cumulative Season",
       breakdown: "Points Breakdown",
@@ -823,9 +824,11 @@ function render() {
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
 
-  // Takeover section visibility (only playoffs lives here now)
+  // Takeover section visibility — playoffs and race live here
   const pElem = document.getElementById("view-playoffs");
   if (pElem) pElem.hidden = (STATE.view !== "playoffs");
+  const rElem = document.getElementById("view-race");
+  if (rElem) rElem.hidden = (STATE.view !== "race");
 
   // Profile takeover — sits inside the center column, hides tab-body when active
   const profileTakeover = document.getElementById("profile-takeover");
@@ -869,6 +872,7 @@ function render() {
   } else {
     renderMetricBar();
     if (STATE.view === "playoffs") renderPlayoffs();
+    if (STATE.view === "race") renderRaceCenter();
   }
 
   // Mirror toggle-groups + team-filter pills into native <select>s for mobile.
@@ -5114,6 +5118,279 @@ function renderPlayoffsMini() {
   }
 
   host.innerHTML = `<div class="po-mini-empty">No mini view for format: ${rule.format}</div>`;
+}
+
+// ============================================================
+// RACE CENTER — track-focused view for next/current race
+// ------------------------------------------------------------
+// Shows:
+//   - Hero: track + date + series for the upcoming or most-recent race
+//   - Last 5 winners at this track (cross-year)
+//   - Hot at this track — best avg finish over last 5 visits
+//   - Last race result (top 10 finishers, click for full)
+//   - Full season schedule with current race highlighted
+//
+// All data comes from existing per-year JSONs. Multi-year history is fetched
+// on-demand using the same SEASON_CACHE the Stage vs Finish view uses.
+// ============================================================
+
+function renderRaceCenter() {
+  const host = document.getElementById("race-host");
+  const sub = document.getElementById("race-sub");
+  if (!host || !STATE.data) return;
+
+  const allRaces = allRacesSorted();
+  if (allRaces.length === 0) {
+    host.innerHTML = `<div class="card po-mini-empty">No schedule data for ${STATE.season} ${STATE.series}.</div>`;
+    if (sub) sub.textContent = "—";
+    return;
+  }
+
+  // Resolve "next" race: first race that hasn't been run yet (no results),
+  // OR if the season is complete, the last race. Falls back to last race if
+  // there's no clear marker.
+  const runRaces = allRaces.filter(r => (r.results || []).length > 0);
+  const lastRunIdx = runRaces.length - 1;
+  const nextRace = allRaces.find(r => (r.results || []).length === 0)
+                 || (lastRunIdx >= 0 ? runRaces[lastRunIdx] : allRaces[0]);
+  const lastRunRace = lastRunIdx >= 0 ? runRaces[lastRunIdx] : null;
+  const isUpcoming = (nextRace.results || []).length === 0;
+
+  // Background-load 4 prior years so track history can be computed across
+  // multi-year data. Re-renders when each year arrives.
+  const seasonsForHistory = [];
+  for (let y = STATE.season - 1; y >= STATE.season - 4 && y >= 2014; y--) {
+    seasonsForHistory.push(y);
+  }
+  const allLoaded = seasonsForHistory.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]);
+  if (!allLoaded) {
+    Promise.all(seasonsForHistory
+      .filter(y => !(SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]))
+      .map(y => loadSeasonIntoCache(y))
+    ).then(() => {
+      // Only re-render if user is still on Race Center
+      if (STATE.view === "race") renderRaceCenter();
+    }).catch(() => {});
+  }
+
+  // ---- Hero
+  const dateStr = nextRace.date ? formatRaceDate(nextRace.date) : "Date TBD";
+  const trackStr = nextRace.track || "—";
+  const seriesLabel = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" }[STATE.series] || STATE.series;
+  const trackTypeStr = trackTypeLabel(nextRace.track_code);
+  const heroBadge = isUpcoming ? "UPCOMING" : "MOST RECENT";
+
+  if (sub) sub.textContent = `${STATE.season} ${seriesLabel} · ${trackStr} · ${dateStr}`;
+
+  // ---- Track history (last 5 winners + hot at track) — uses cached prior years
+  const history = collectTrackHistory(nextRace.track_code, STATE.series);
+  const winnersHTML = renderTrackWinners(history);
+  const hotHTML = renderHotAtTrack(history);
+
+  // ---- Last race result block
+  const lastResultHTML = lastRunRace ? renderLastResult(lastRunRace) : `<div class="rc-empty">No completed races yet.</div>`;
+
+  // ---- Full schedule list
+  const scheduleHTML = renderSeasonSchedule(allRaces, nextRace.round);
+
+  host.innerHTML = `
+    <div class="rc-hero">
+      <div class="rc-hero-badge">${heroBadge}</div>
+      <div class="rc-hero-track">R${nextRace.round} · ${escapeHTML(trackStr)}</div>
+      <div class="rc-hero-meta">
+        ${dateStr} · ${seriesLabel}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
+      </div>
+    </div>
+
+    <div class="rc-grid">
+      <div class="card rc-card">
+        <div class="rc-card-head"><span class="rc-card-title">Last 5 Winners Here</span></div>
+        <div class="rc-card-body">${winnersHTML}</div>
+      </div>
+      <div class="card rc-card">
+        <div class="rc-card-head"><span class="rc-card-title">Hot at This Track</span><span class="rc-card-sub">avg finish, last 5 visits</span></div>
+        <div class="rc-card-body">${hotHTML}</div>
+      </div>
+    </div>
+
+    <div class="card rc-card rc-card-wide">
+      <div class="rc-card-head">
+        <span class="rc-card-title">${lastRunRace ? `Last Race: R${lastRunRace.round} · ${escapeHTML(lastRunRace.track || "")}` : "Last Race"}</span>
+        ${lastRunRace && lastRunRace.date ? `<span class="rc-card-sub">${formatRaceDate(lastRunRace.date)}</span>` : ""}
+      </div>
+      <div class="rc-card-body">${lastResultHTML}</div>
+    </div>
+
+    <div class="card rc-card rc-card-wide">
+      <div class="rc-card-head">
+        <span class="rc-card-title">${STATE.season} Season Schedule</span>
+        <span class="rc-card-sub">${runRaces.length} of ${allRaces.length} races run</span>
+      </div>
+      <div class="rc-card-body rc-schedule-body">${scheduleHTML}</div>
+    </div>
+  `;
+
+  // Wire schedule row clicks (jump to that race as cursor)
+  host.querySelectorAll(".rc-sched-row[data-round]").forEach(row => {
+    row.addEventListener("click", () => {
+      const round = parseInt(row.dataset.round, 10);
+      if (!Number.isFinite(round)) return;
+      // Set the through-round cursor and bounce to Cumulative Season so the
+      // user can immediately see the standings as of that race.
+      STATE.throughRound = round;
+      window.location.hash = "#/arc";
+    });
+  });
+}
+
+// Format an ISO-ish date string into "Sun, Apr 27" form. Falls back to raw.
+function formatRaceDate(iso) {
+  if (!iso) return "";
+  // Accept "2026-04-27" or "April 27, 2026" — Date constructor handles both reasonably.
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+// Track type label from track code. Reuses same buckets as Stage vs Finish.
+function trackTypeLabel(code) {
+  if (!code) return "";
+  const t = trackType(code);
+  return ({ super: "Superspeedway", short: "Short", inter: "Intermediate", road: "Road" }[t]) || "";
+}
+
+// Walk SEASON_CACHE + current data, return all races at this track in this
+// series, newest-first. Each race entry includes year, round, results.
+function collectTrackHistory(trackCode, series) {
+  if (!trackCode) return [];
+  const out = [];
+  // Current season first
+  const curRaces = (STATE.data?.races || []).filter(r => r.track_code === trackCode);
+  curRaces.forEach(r => out.push({ year: STATE.season, ...r }));
+  // Then prior cached seasons, newest-first
+  const years = Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a);
+  years.forEach(y => {
+    if (y === STATE.season) return;
+    const block = SEASON_CACHE[y] && SEASON_CACHE[y][series];
+    if (!block || !block.races) return;
+    block.races.filter(r => r.track_code === trackCode).forEach(r => {
+      out.push({ year: y, ...r });
+    });
+  });
+  // Sort newest first by (year, round)
+  out.sort((a, b) => (b.year - a.year) || (b.round - a.round));
+  return out;
+}
+
+// Render last 5 winners at this track. Each row links to the winning car's profile.
+function renderTrackWinners(history) {
+  if (!history.length) {
+    return `<div class="rc-empty">No prior history at this track in cached years.</div>`;
+  }
+  const last5 = history.slice(0, 5).map(h => {
+    // Winner = finish_pos === 1 in the results
+    const winner = (h.results || []).find(d => d.finish_pos === 1);
+    if (!winner) return null;
+    const carHex = colorFor(STATE.series, winner.car_number);
+    const txt = contrastTextFor(carHex);
+    return `<a class="rc-winner-row profile-link" href="#/car/${winner.car_number}">
+      <span class="rc-winner-year">${h.year}</span>
+      <span class="car-tag" style="background:${carHex};color:${txt}">${winner.car_number}</span>
+      <span class="rc-winner-name">${escapeHTML(lastNameOf(winner.driver))}</span>
+    </a>`;
+  }).filter(Boolean).join("");
+  return last5 || `<div class="rc-empty">No winner data found.</div>`;
+}
+
+// Top-5 cars by avg finish at this track over last 5 visits (cross-year).
+function renderHotAtTrack(history) {
+  if (!history.length) {
+    return `<div class="rc-empty">No prior history at this track.</div>`;
+  }
+  const last5 = history.slice(0, 5);
+  const byCarFinishes = {};
+  last5.forEach(h => {
+    (h.results || []).forEach(d => {
+      if (d.finish_pos == null) return;
+      if (!byCarFinishes[d.car_number]) byCarFinishes[d.car_number] = { car: d.car_number, driver: d.driver, finishes: [] };
+      byCarFinishes[d.car_number].finishes.push(d.finish_pos);
+      // Update driver to most recent (in case of car switches)
+      byCarFinishes[d.car_number].driver = d.driver;
+    });
+  });
+  const ranked = Object.values(byCarFinishes)
+    .filter(c => c.finishes.length >= 2)   // need at least 2 visits to count
+    .map(c => ({ ...c, avg: c.finishes.reduce((s, x) => s + x, 0) / c.finishes.length, n: c.finishes.length }))
+    .sort((a, b) => a.avg - b.avg)
+    .slice(0, 5);
+
+  if (!ranked.length) {
+    return `<div class="rc-empty">Not enough multi-visit data yet.</div>`;
+  }
+  return ranked.map(c => {
+    const carHex = colorFor(STATE.series, c.car);
+    const txt = contrastTextFor(carHex);
+    return `<a class="rc-hot-row profile-link" href="#/car/${c.car}">
+      <span class="car-tag" style="background:${carHex};color:${txt}">${c.car}</span>
+      <span class="rc-hot-name">${escapeHTML(lastNameOf(c.driver))}</span>
+      <span class="rc-hot-avg">${c.avg.toFixed(1)}<span class="rc-hot-n"> ·${c.n}v</span></span>
+    </a>`;
+  }).join("");
+}
+
+// Render top-10 result of a race as a compact table.
+function renderLastResult(race) {
+  const results = (race.results || [])
+    .slice()
+    .sort((a, b) => (a.finish_pos || 99) - (b.finish_pos || 99))
+    .slice(0, 10);
+  if (!results.length) return `<div class="rc-empty">No results.</div>`;
+  return `<table class="rc-result-table">
+    <thead><tr><th>P</th><th>Driver</th><th class="num">Pts</th></tr></thead>
+    <tbody>${results.map(d => {
+      const carHex = colorFor(STATE.series, d.car_number);
+      const txt = contrastTextFor(carHex);
+      return `<tr>
+        <td class="num">${d.finish_pos}</td>
+        <td><a class="profile-link rc-result-name" href="#/car/${d.car_number}">
+          <span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span>
+          <span>${escapeHTML(lastNameOf(d.driver))}</span>
+        </a></td>
+        <td class="num">${d.race_pts ?? "—"}</td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>`;
+}
+
+// Full season schedule list. Each row shows R# · track · date with a status
+// indicator. The currentRound row is highlighted with a left accent bar.
+function renderSeasonSchedule(allRaces, currentRound) {
+  return allRaces.map(r => {
+    const hasRun = (r.results || []).length > 0;
+    const isCurrent = r.round === currentRound;
+    const cls = `rc-sched-row${hasRun ? " run" : " upcoming"}${isCurrent ? " current" : ""}`;
+    const dateStr = r.date ? formatRaceDate(r.date) : "—";
+    let resultBit = "";
+    if (hasRun) {
+      const winner = (r.results || []).find(d => d.finish_pos === 1);
+      if (winner) {
+        const carHex = colorFor(STATE.series, winner.car_number);
+        const txt = contrastTextFor(carHex);
+        resultBit = `<span class="rc-sched-winner">
+          <span class="car-tag" style="background:${carHex};color:${txt}">${winner.car_number}</span>
+          ${escapeHTML(lastNameOf(winner.driver))}
+        </span>`;
+      }
+    } else if (isCurrent) {
+      resultBit = `<span class="rc-sched-next">NEXT</span>`;
+    }
+    return `<div class="${cls}" data-round="${r.round}">
+      <span class="rc-sched-round">R${r.round}</span>
+      <span class="rc-sched-track">${escapeHTML(r.track || "—")}</span>
+      <span class="rc-sched-date">${dateStr}</span>
+      <span class="rc-sched-result">${resultBit}</span>
+    </div>`;
+  }).join("");
 }
 
 function renderPlayoffs() {

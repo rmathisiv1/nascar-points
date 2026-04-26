@@ -3779,3 +3779,269 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 .tm-zoom-back:hover { border-color: var(--accent); color: var(--accent); }
 
+
+/* ============================================================
+   RACE CENTER (#/race takeover)
+   ============================================================ */
+.rc-hero {
+  position: relative;
+  background: linear-gradient(135deg, var(--card) 0%, var(--bg-2, var(--card)) 100%);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.rc-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top right, rgba(59,130,246,0.08) 0%, transparent 60%);
+  pointer-events: none;
+}
+.rc-hero-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+  background: rgba(59,130,246,0.12);
+  padding: 3px 8px;
+  border-radius: 3px;
+  margin-bottom: 8px;
+}
+.rc-hero-track {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.rc-hero-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+/* Two-column grid for Winners + Hot cards */
+.rc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.rc-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rc-card-wide { margin-bottom: 14px; }
+.rc-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.rc-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.rc-card-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.rc-card-body {
+  padding: 8px 4px;
+}
+.rc-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* Winner rows */
+.rc-winner-row,
+.rc-hot-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  text-decoration: none;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.1s;
+}
+.rc-winner-row:last-child,
+.rc-hot-row:last-child { border-bottom: none; }
+.rc-winner-row:hover,
+.rc-hot-row:hover { background: rgba(255,255,255,0.03); }
+.rc-winner-year {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  width: 38px;
+  flex-shrink: 0;
+}
+.rc-winner-name,
+.rc-hot-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+}
+.rc-hot-avg {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-2, var(--accent));
+}
+.rc-hot-n {
+  font-size: 9px;
+  color: var(--dim);
+  font-weight: 400;
+}
+
+/* Last race result table */
+.rc-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.rc-result-table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.rc-result-table th.num { text-align: right; }
+.rc-result-table td {
+  padding: 6px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.rc-result-table td.num {
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.rc-result-table tr:hover td { background: rgba(255,255,255,0.02); }
+.rc-result-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text);
+}
+.rc-result-name:hover { color: var(--accent); }
+
+/* Schedule list */
+.rc-schedule-body {
+  padding: 0;
+}
+.rc-sched-row {
+  display: grid;
+  grid-template-columns: 50px 1fr 100px minmax(140px, 1.2fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 12px;
+  border-left: 3px solid transparent;
+}
+.rc-sched-row:last-child { border-bottom: none; }
+.rc-sched-row:hover { background: rgba(255,255,255,0.03); }
+.rc-sched-row.upcoming { opacity: 0.65; }
+.rc-sched-row.current {
+  background: rgba(59,130,246,0.08);
+  border-left-color: var(--accent);
+  opacity: 1;
+}
+.rc-sched-row.current:hover { background: rgba(59,130,246,0.12); }
+.rc-sched-round {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.rc-sched-track {
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.rc-sched-date {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.rc-sched-result {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  overflow: hidden;
+}
+.rc-sched-winner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+.rc-sched-next {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+
+/* Race tab gets a subtle accent so it stands out as the "active right now" page */
+.dash-tab-race {
+  position: relative;
+}
+.dash-tab-race::before {
+  content: "●";
+  color: var(--accent);
+  margin-right: 4px;
+  font-size: 8px;
+  vertical-align: middle;
+  opacity: 0.8;
+}
+
+/* Mobile: stack columns, simplify schedule */
+@media (max-width: 767.98px) {
+  .rc-hero { padding: 14px 16px; }
+  .rc-hero-track { font-size: 18px; }
+  .rc-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .rc-sched-row {
+    grid-template-columns: 38px 1fr 70px;
+    font-size: 11px;
+    padding: 7px 10px;
+  }
+  /* Hide the result/winner column on mobile to save space — tap row to see */
+  .rc-sched-result { display: none; }
+  .rc-sched-track { font-size: 12px; }
+}
