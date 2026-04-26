@@ -3537,3 +3537,76 @@ a.driver-cell.profile-link:hover .car-tag {
     box-shadow: 0 1px 0 var(--border);
   }
 }
+
+/* ============================================================
+   FIXES (proper round) — heatmap, pills, sticky headers
+   ============================================================ */
+@media (max-width: 767.98px) {
+  /* ---- HEATMAP: single line names, ellipsis, no wrap ---- */
+  .hm-label {
+    font-size: 11px !important;
+    padding: 4px 6px 4px 4px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.2;
+  }
+  .hm-label > span:not(.car-tag) {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    word-break: normal !important;
+    min-width: 0;
+  }
+
+  /* ---- PILLS: flow as multi-column grid that fills container ---- */
+  /* Don't touch the inner .driver-grid — let its native auto-fill work.
+     Just make sure the OUTER picker-drawer container is full-width. */
+  .picker-drawer {
+    width: 100%;
+  }
+  .picker-drawer .driver-picker {
+    display: block !important;            /* let inner .driver-grid take over */
+    width: 100% !important;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px;
+    max-height: none !important;
+  }
+  .picker-drawer .driver-picker .driver-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)) !important;
+    gap: 4px !important;
+    width: 100%;
+  }
+  .picker-drawer .driver-picker .driver-pill {
+    width: auto !important;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ---- STICKY TABLE HEADERS: wrap in scroll container ----
+     Killing the 112px magic-number approach. Each table now lives in
+     a max-height scroll container; thead sticky to top:0 of that
+     container, which is rock-solid regardless of page chrome height. */
+  .data-table th {
+    top: 0 !important;            /* relative to the table's scroll parent */
+    z-index: 7;
+    background: var(--card) !important;
+    box-shadow: 0 1px 0 var(--border);
+  }
+  /* Wrap every data-table on mobile in a scrollable card via the parent */
+  .col-center .card.tab-table-fill,
+  #view-form .card,
+  #view-standings .card,
+  #view-playoffs .po-card:has(.po-table) {
+    max-height: calc(100vh - 100px);
+    overflow-y: auto !important;
+    overflow-x: hidden;
+  }
+  /* Page title needs to sit ABOVE the scroll container so it doesn't get
+     clipped. Already sticky at top:78. Tables scroll INSIDE their card. */
+}
