@@ -2,10 +2,14 @@ name: Update NASCAR Points Data
 
 on:
   schedule:
-    # Monday 11:00 UTC (~7am ET, after Sunday Cup/Xfinity races)
-    # Thursday 11:00 UTC (~7am ET, catches Wednesday Truck races)
-    - cron: '0 11 * * 1'
-    - cron: '0 11 * * 4'
+    # All times are in UTC. EST is UTC−5 (no DST handling — during EDT the
+    # local clock will run 1 hour later than the labels below).
+    # Saturday midnight EST = Saturday 05:00 UTC
+    # Sunday   midnight EST = Sunday   05:00 UTC
+    # Monday   7:00 AM  EST = Monday   12:00 UTC
+    - cron: '0 5  * * 6'
+    - cron: '0 5  * * 0'
+    - cron: '0 12 * * 1'
   workflow_dispatch:
     inputs:
       season:
