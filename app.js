@@ -25,7 +25,7 @@ const STATE = {
   arc: { selected: new Set(), ftOnly: true, metric: "points" },
   breakdown: { drivers: [], ftOnly: true },
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
-                selected: new Set(), seasons: new Set() },
+                selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
   profile: { kind: null, slug: null },
   standings: { sortKey: "total", sortDir: "desc" },
@@ -662,6 +662,7 @@ function wireUIControls() {
         if (group === "traj-show") STATE.trajectory.show = b.dataset.val;
         if (group === "traj-labels") STATE.trajectory.labels = b.dataset.val;
         if (group === "traj-tracks") STATE.trajectory.tracks = b.dataset.val;
+        if (group === "traj-ft") STATE.trajectory.ftOnly = (b.dataset.val === "ft");
         renderTrajectory();
       });
     });
@@ -1045,6 +1046,22 @@ function displayName(entity) {
 
 function entityKey(entity) {
   return `#${entity.car_number}`;
+}
+
+// Extract the surname from a driver's full name. Handles common suffixes
+// (Jr, Sr, II, III, IV) by stepping back to the previous token, so
+// "Ricky Stenhouse Jr" → "Stenhouse Jr" instead of "Jr".
+const NAME_SUFFIX_RE = /^(jr|sr|ii|iii|iv|v)\.?$/i;
+function lastNameOf(name) {
+  if (!name) return "";
+  const tokens = String(name).trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return "";
+  if (tokens.length === 1) return tokens[0];
+  const last = tokens[tokens.length - 1];
+  if (NAME_SUFFIX_RE.test(last) && tokens.length >= 2) {
+    return `${tokens[tokens.length - 2]} ${last}`;
+  }
+  return last;
 }
 
 // Returns the hash URL for this entity's profile page.
@@ -1672,7 +1689,7 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
     const txt = contrastTextFor(carHex);
     const sel = isSelected(e) ? "selected" : "";
     // car# + primary driver's last name; append "+N" if the car had co-drivers
-    const lastName = (e.primaryDriver || e.driver || "").split(/\s+/).slice(-1)[0];
+    const lastName = lastNameOf(e.primaryDriver || e.driver || "");
     const coCount = (e.coDrivers || []).length;
     const label = coCount > 0 ? `${lastName} +${coCount}` : lastName;
     return `<div class="driver-pill ${sel}" data-key="${escapeHTML(entityKey(e))}" title="${escapeHTML(displayName(e))} — click to toggle, ↗ to open profile">
@@ -2266,7 +2283,7 @@ function renderBreakdown() {
   if (isMulti) {
     // In multi-driver mode: one legend entry per driver (color) + a note about the tint gradient
     const driverItems = driverData.map(dd =>
-      `<span class="legend-item"><span class="legend-dot" style="background:${dd.color}"></span>#${dd.entity.car_number} ${escapeHTML(dd.entity.driver.split(/\s+/).slice(-1)[0])}</span>`
+      `<span class="legend-item"><span class="legend-dot" style="background:${dd.color}"></span>#${dd.entity.car_number} ${escapeHTML(lastNameOf(dd.entity.driver))}</span>`
     ).join("");
     document.getElementById("breakdown-legend").innerHTML = `
       ${driverItems}
@@ -2351,8 +2368,8 @@ function renderTrajectory() {
   // in multi-season mode it's the combined cross-year roll-up.
   let { entities, totalRaces, seasonsUsed } = trajectoryEntities();
 
-  // Full-time: ≥90% of races in the combined pool (or all of them if few).
-  // This generalizes isFullTime() across multi-year aggregations.
+  // Full-time gate (toggleable). Threshold is ≥90% of races in the combined
+  // pool, generalizing isFullTime() across multi-year aggregations.
   const ftThreshold = totalRaces < 10 ? Math.max(1, totalRaces - 1)
                                       : Math.ceil(totalRaces * 0.9);
   const isFtHere = (d) => d.races.length >= ftThreshold;
@@ -2360,7 +2377,7 @@ function renderTrajectory() {
   // Filter each driver's races by track type + require >= 1 race after filtering
   // to avoid divide-by-zero on the average calculations.
   let eligible = entities
-    .filter(isFtHere)
+    .filter(d => STATE.trajectory.ftOnly ? isFtHere(d) : true)
     .map(d => ({ ...d, races: d.races.filter(includeRace) }))
     .filter(d => d.races.length >= 1);
 
@@ -2692,7 +2709,7 @@ function renderTrajectoryDriverGrid(entities) {
     const carHex = colorFor(STATE.series, e.car_number);
     const txt = contrastTextFor(carHex);
     const primaryDrv = e.primaryDriver || e.driver || "";
-    const lastName = primaryDrv.split(/\s+/).slice(-1)[0];
+    const lastName = lastNameOf(primaryDrv);
     const coCount = (e.coDrivers || []).length;
     const label = coCount > 0 ? `${lastName} +${coCount}` : lastName;
     return `<div class="driver-pill ${sel}" data-key="${escapeHTML(key)}" title="${escapeHTML(displayName(e))}">
@@ -4154,7 +4171,7 @@ function renderHeatmap() {
     let nameToShow;
     if (isMob) {
       const main = d.primaryDriver || d.driver || "";
-      nameToShow = main.split(/\s+/).slice(-1)[0] || main;
+      nameToShow = lastNameOf(main) || main;
     } else {
       nameToShow = displayName(d);
     }
@@ -4694,7 +4711,7 @@ function renderBracket(rule) {
       const autoTag = drv.autoAdvanced ? `<span class="bk-auto" title="Won a race in this round — auto-advanced">W</span>` : "";
       const carHex = colorFor(STATE.series, drv.car_number);
       const txt = contrastTextFor(carHex);
-      const lastName = (drv.primaryDriver || drv.driver || "").split(/\s+/).slice(-1)[0];
+      const lastName = lastNameOf(drv.primaryDriver || drv.driver || "");
       return `<a class="bk-card ${cls}" href="#/car/${drv.car_number}" title="${escapeHTML(drv.displayLabel)} — ${drv.roundPts} pts in round">
         <span class="bk-car" style="background:${carHex};color:${txt}">${drv.car_number}</span>
         <span class="bk-name">${escapeHTML(lastName)}</span>
@@ -4831,7 +4848,7 @@ function renderStandingsMini() {
     const below = cutoffPos != null && pos > cutoffPos;
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
-    const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
+    const lastName = lastNameOf(r.primaryDriver || r.driver || "");
     const valCell = below && cutoffPts != null
       ? `<span class="std-mini-val back">−${cutoffPts - r.total}</span>`
       : `<span class="std-mini-val">${r.total}</span>`;
@@ -4871,7 +4888,7 @@ function renderFormMini() {
   host.innerHTML = rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
-    const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
+    const lastName = lastNameOf(r.primaryDriver || r.driver || "");
     const cls = r.delta > 1 ? "hot" : r.delta < -1 ? "cold" : "flat";
     const sign = r.delta > 0 ? "+" : "";
     const lastFinishes = r.races.slice(-5).map(rc => rc.finish).filter(x => x != null);
@@ -4885,7 +4902,7 @@ function renderFormMini() {
       </div>
       <div class="form-mini-bottom">
         <span class="form-mini-rating">${r.f.toFixed(1)}</span>
-        ${spark}
+        <span class="form-mini-spark">${spark}</span>
       </div>
     </a>`;
   }).join("");
@@ -4948,7 +4965,7 @@ function renderPlayoffsMini() {
               const carHex = colorFor(STATE.series, r.car_number);
               const txt = contrastTextFor(carHex);
               const back = cutoffPts - r.total;
-              const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
+              const lastName = lastNameOf(r.primaryDriver || r.driver || "");
               return `<a class="po-mini-row profile-link" href="#/car/${r.car_number}">
                 <span class="po-mini-num" style="background:${carHex};color:${txt}">${r.car_number}</span>
                 <span class="po-mini-name">${escapeHTML(lastName)}</span>
@@ -5003,7 +5020,7 @@ function renderPlayoffsMini() {
               const carHex = colorFor(STATE.series, r.car_number);
               const txt = contrastTextFor(carHex);
               const back = cutoffPts - r.total;
-              const lastName = (r.primaryDriver || r.driver || "").split(/\s+/).slice(-1)[0];
+              const lastName = lastNameOf(r.primaryDriver || r.driver || "");
               return `<a class="po-mini-row profile-link" href="#/car/${r.car_number}">
                 <span class="po-mini-num" style="background:${carHex};color:${txt}">${r.car_number}</span>
                 <span class="po-mini-name">${escapeHTML(lastName)}</span>

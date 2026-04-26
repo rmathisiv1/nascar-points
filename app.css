@@ -364,11 +364,14 @@ html, body {
   flex-shrink: 0;
 }
 .form-mini-spark {
-  flex: 0 0 auto;
-  width: 80px;
-  height: 14px;
   display: block;
   margin-left: auto;     /* push to right edge — dead space sits between rating and spark */
+  flex-shrink: 0;
+}
+.form-mini-spark svg {
+  display: block;
+  height: 14px;
+  width: auto;
 }
 
 /* ---------- CENTER: tab strip + panel ---------- */
