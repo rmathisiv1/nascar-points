@@ -3233,3 +3233,40 @@ a.driver-cell.profile-link:hover .car-tag {
   /* The chart card itself shouldn't have giant padding around the squashed chart */
   .tab-chart-fill.card-chart { padding: 6px; }
 }
+
+/* ============================================================
+   MOBILE OVERFLOW HARD-FIX
+   Force every layout-relevant container to respect viewport width.
+   This is defensive — somewhere a container is wider than 100vw on
+   mobile and clipping the chart. Cap everything.
+   ============================================================ */
+@media (max-width: 767.98px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .dashboard,
+  .col-center,
+  .tab-body,
+  .tab-panel,
+  .card-chart,
+  .tab-chart-fill {
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  .tab-chart-fill svg,
+  .card-chart svg,
+  #arc-svg,
+  #breakdown-svg,
+  #trajectory-svg {
+    max-width: 100%;
+    width: 100%;
+    height: auto !important;
+    display: block;
+  }
+  /* The dashboard's 520px min-height was forcing extra space */
+  .dashboard {
+    min-height: 0 !important;
+  }
+}
