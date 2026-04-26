@@ -1371,8 +1371,10 @@ function renderFormTable() {
   }
 
   const sub = document.getElementById("form-sub");
-  const ftNote = STATE.form.ftOnly ? "full-time only" : "all entrants";
-  sub.textContent = `${decorated.length} cars · ${ftNote} · window: ${STATE.form.window === "season" ? "full season" : `last ${STATE.form.window} races`}`;
+  if (sub) {
+    const ftNote = STATE.form.ftOnly ? "full-time only" : "all entrants";
+    sub.textContent = `${decorated.length} cars · ${ftNote} · window: ${STATE.form.window === "season" ? "full season" : `last ${STATE.form.window} races`}`;
+  }
 }
 
 function heatCell(finish) {
