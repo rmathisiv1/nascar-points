@@ -3730,83 +3730,52 @@ a.driver-cell.profile-link:hover .car-tag {
   color: var(--accent);
 }
 
-/* Overlay backdrop + centered zoomed card */
-.tm-zoom-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 9000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  animation: tmZoomFadeIn 0.14s ease-out;
+/* ---- Center-pane "zoom" mode (replaces full-screen modal) ----
+   When a card is clicked, .tm-grid-zoomed is added to the host, the chosen
+   card gets .tm-card-zoomed (= span all grid columns), and siblings get
+   .tm-card-hidden (display: none). A "Back to all teams" button is injected
+   at the top. The center pane stays in its normal layout slot — left and
+   right side panels remain visible. */
+.tm-grid-zoomed {
+  /* Keep the grid container; the zoomed card spans all columns. */
 }
-@keyframes tmZoomFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.tm-zoom-shell {
-  position: relative;
-  width: min(1200px, 96vw);
-  max-height: 92vh;
-  background: var(--bg);
-  border: 1px solid var(--border-hi);
-  border-radius: 8px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.tm-zoom-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
-  font-size: 18px;
-  line-height: 1;
-  border-radius: 5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.tm-zoom-close:hover {
-  border-color: var(--border-hi);
-  color: var(--accent);
-}
-.tm-zoom-body {
-  padding: 24px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-/* Inside the modal, the cloned card spans the full width and rows have
-   more breathing room — sparklines get more horizontal space, points stay round. */
+.tm-card-hidden { display: none !important; }
 .tm-card-zoomed {
+  grid-column: 1 / -1;            /* span every column of the grid */
   cursor: default !important;
-  border: none;
-  padding: 0;
-  margin: 0;
 }
-.tm-card-zoomed .tm-card-head {
-  padding: 0 0 16px;
-  font-size: 16px;
-}
-.tm-card-zoomed .tm-team-name {
-  font-size: 18px;
-}
+.tm-card-zoomed:hover { transform: none; border-color: var(--border); }
 .tm-card-zoomed .tm-card-expand { display: none; }
+.tm-card-zoomed .tm-card-head {
+  padding: 10px 14px;
+  font-size: 14px;
+}
+.tm-card-zoomed .tm-team-name { font-size: 14px; }
 .tm-card-zoomed .tm-row {
-  padding: 12px 4px;
+  padding: 10px 12px;
 }
 .tm-card-zoomed .tm-spk {
   height: 60px !important;
 }
-.tm-card-zoomed:hover { transform: none; }
+
+/* "Back to all teams" button injected at top of grid when zoomed */
+.tm-zoom-back {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  width: fit-content;
+  margin-bottom: 6px;
+  transition: border-color 0.12s, color 0.12s;
+}
+.tm-zoom-back:hover { border-color: var(--accent); color: var(--accent); }
+
