@@ -155,12 +155,6 @@ TRACK_CODES = {
     "homestead": "HOM", "dover": "DOV", "rockingham": "ROC",
     "st. petersburg": "STP", "st petersburg": "STP",
     "lime rock": "LRP",
-    # International / 2025+ additions
-    "mexico city": "MEX", "autodromo hermanos rodriguez": "MEX",
-    "autódromo hermanos rodríguez": "MEX",
-    "mexico": "MEX",  # loose fallback
-    "bowman gray": "BGY",
-    "chicago street": "CHI",
 }
 
 
@@ -264,7 +258,6 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
         race.name = re.sub(r"^\d{4}\s+", "", race.name)
 
     # Date + track line: "Sunday, April 19, 2026 at Kansas Speedway, Kansas City, KS"
-    # Primary pattern: US format ending in 2-letter state code.
     dm = re.search(
         r"((?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+"
         r"[A-Z][a-z]+\s+\d{1,2},\s+\d{4})\s+at\s+([^,]+,[^,]+,\s*[A-Z]{2})",
@@ -274,28 +267,6 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
         # track name is the first part of the location string before first comma
         race.track = dm.group(2).split(",")[0].strip()
         race.track_code = track_code_from_name(race.track)
-
-    # Fallback 1: international venues (no US state code).
-    # Example: "Sunday, June 15, 2025 at Autódromo Hermanos Rodríguez, Mexico City, Mexico"
-    # Accept anything after "at " up to end-of-line or a period.
-    if not race.track:
-        dm2 = re.search(
-            r"((?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+"
-            r"[A-Z][a-z]+\s+\d{1,2},\s+\d{4})\s+at\s+([^\n\.]+)",
-            text)
-        if dm2:
-            race.date = race.date or normalize_date(dm2.group(1))
-            # Take the first chunk before any comma as the track name.
-            race.track = dm2.group(2).split(",")[0].strip()
-            race.track_code = track_code_from_name(race.track)
-
-    # Fallback 2: if the whole "at ..." phrase wasn't present, try to find just
-    # a "Track: Xxxx" line that RR sometimes includes as a row in the details.
-    if not race.track:
-        tm = re.search(r"\bTrack:\s*([^\n]+)", text)
-        if tm:
-            race.track = tm.group(1).strip().rstrip(",.")
-            race.track_code = track_code_from_name(race.track)
 
     # --- stage lines ---
     stage1_map = parse_stage_line(text, 1)
@@ -316,6 +287,11 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
                 results_table = tbl
                 break
     if results_table is None:
+        # Race hasn't been run yet — return the race with empty results.
+        # The frontend uses (r.results || []).length === 0 to detect upcoming
+        # races and shows the schedule entry with date + track populated.
+        if race.date or race.track:
+            return race
         return None
 
     # map header name (lowercased) → column index
@@ -391,7 +367,11 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
     for d in race.results:
         d.finish_pts = max(0, d.race_pts - d.stage_1_pts - d.stage_2_pts - d.fastest_lap_pt)
 
-    return race if race.results else None
+    # Even if results parsing failed for some reason, keep the race entry
+    # if we have date/track info — schedule data is more useful than nothing.
+    if not race.results and not (race.date or race.track):
+        return None
+    return race
 
 
 def _finish_points_for(finish_pos: int) -> int:
