@@ -36,7 +36,7 @@ const STATE = {
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile"];
+const VIEWS = ["race", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile"];
 
 // ============================================================
 // BOOT
