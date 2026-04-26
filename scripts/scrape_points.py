@@ -446,11 +446,22 @@ def normalize_date(date_str: str) -> str:
 
 def discover_races(series_code: str, season: int) -> list[dict]:
     """
-    Scrape Racing-Reference's season page for a series and return a list
-    of {round, date, track, url} dicts for each race that has been run.
+    Scrape Racing-Reference's season page for a series and return a list of
+    {round, date, track, name, url, has_run} dicts covering every race on
+    the schedule — both completed AND upcoming.
+
+    The schedule appears as an HTML <table> with these columns (in order):
+      # | Date | Site | Cars | Winner(s) | St | Make/Model | Len | Sfc |
+      Miles | Purse | Pole | Cau | Laps | Speed | LC
+
+    For completed races, the # cell links to /race-results/YEAR_NAME/CODE.
+    For upcoming races, the # cell is plain text and the Site cell links
+    to /tracks/TRACKNAME instead. We walk every row regardless and treat
+    rows with a /race-results/ URL as has_run=True.
     """
     cfg = SERIES[series_code]
-    season_url = f"{BASE}/raceyear/{season}/{cfg['rr_code']}"
+    cfg_code = cfg["rr_code"]
+    season_url = f"{BASE}/raceyear/{season}/{cfg_code}"
     try:
         html = fetch(season_url)
     except Exception as e:
@@ -463,63 +474,125 @@ def discover_races(series_code: str, season: int) -> list[dict]:
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # Racing-Reference's schedule is built with CSS-grid divs (role="cell"),
-    # not <table> elements. Each race is linked by its race-number cell as:
-    #   <div class="race-number" role="cell">
-    #     <a href="https://www.racing-reference.info/race-results/2026_Daytona_500/W"
-    #        aria-label="click here to learn more about Daytona 500 results"
-    #        title="Daytona 500">1</a>
-    #   </div>
-    # So we find all anchors whose href contains "/race-results/<season>_".
-    cfg_code = cfg["rr_code"]
-    race_link_pattern = re.compile(
+    # Find the schedule table. There may be multiple tables on the page; we
+    # want the one whose first header cells start with "#" and "Date".
+    schedule_tbl = None
+    for tbl in soup.find_all("table"):
+        # Get the first row's cells (could be in <thead> or just first <tr>)
+        first_row = tbl.find("tr")
+        if not first_row:
+            continue
+        headers = [c.get_text(strip=True).lower()
+                   for c in first_row.find_all(["th", "td"])[:4]]
+        if headers and headers[0] == "#" and "date" in headers and "site" in headers:
+            schedule_tbl = tbl
+            break
+
+    if schedule_tbl is None:
+        print(f"[{series_code}] couldn't find schedule table on season page",
+              file=sys.stderr)
+        return []
+
+    races: list[dict] = []
+    race_results_pattern = re.compile(
         rf"/race-results/{season}_([^/]+)/{cfg_code}(?:/|$)"
     )
-    seen: dict[str, dict] = {}
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        m = race_link_pattern.search(href)
-        if not m:
-            continue
-        if href in seen:
-            continue
-        # Round number is the <a>'s visible text (e.g. "1", "2")
-        num_text = a.get_text(strip=True)
-        try:
-            round_num = int(num_text)
-        except ValueError:
-            continue
-        # Track/name info comes from the title attribute or aria-label
-        race_name = a.get("title") or ""
-        if not race_name:
-            aria = a.get("aria-label", "")
-            m2 = re.search(r"about\s+(.+?)\s+results", aria, re.I)
-            race_name = m2.group(1) if m2 else ""
-        seen[href] = {
-            "round": round_num,
-            "url": href,
-            "name": race_name,
-            # date and track filled in during race parsing
-            "date": "",
-            "track": "",
-        }
 
-    races = sorted(seen.values(), key=lambda r: r["round"])
-    if not races:
-        print(f"[{series_code}] no race-results links found on page",
-              file=sys.stderr)
+    for tr in schedule_tbl.find_all("tr")[1:]:   # skip header row
+        cells = tr.find_all(["td", "th"])
+        if len(cells) < 3:
+            continue   # malformed / spacer row
+
+        # # cell — contains either a link to race results (completed) or
+        # plain round number text (upcoming)
+        round_cell = cells[0]
+        round_text = round_cell.get_text(strip=True)
+        try:
+            round_num = int(round_text)
+        except ValueError:
+            continue   # not a race row
+
+        # Date cell — "MM/DD/YY" e.g. "02/15/26"
+        date_cell = cells[1]
+        date_text = date_cell.get_text(strip=True)
+        iso_date = ""
+        if date_text:
+            try:
+                # 2-digit year: assume 20xx
+                d = datetime.strptime(date_text, "%m/%d/%y").date()
+                iso_date = d.isoformat()
+            except ValueError:
+                iso_date = date_text
+
+        # Site cell — track name as link text (link target is /tracks/...)
+        site_cell = cells[2]
+        track_name = site_cell.get_text(" ", strip=True)
+
+        # Look for a /race-results/ link anywhere in the row → completed race
+        race_url = None
+        race_name = ""
+        for a in tr.find_all("a", href=True):
+            if race_results_pattern.search(a["href"]):
+                race_url = a["href"]
+                race_name = a.get("title") or a.get_text(strip=True) or ""
+                break
+
+        # If no race-results link, this is an upcoming race. Try to extract
+        # race name from any quoted text in the Winner(s)/Make column area.
+        # The schedule shows: "Jack Link's 500"   3:00 PM FOX  for upcoming.
+        if not race_url and len(cells) >= 5:
+            # Cells 4 (winner) for upcoming races holds the race-name text in quotes
+            winner_text = cells[4].get_text(" ", strip=True) if len(cells) > 4 else ""
+            m = re.search(r'"([^"]+)"', winner_text)
+            if m:
+                race_name = m.group(1)
+
+        races.append({
+            "round": round_num,
+            "url": race_url or "",
+            "name": race_name,
+            "date": iso_date,
+            "track": track_name,
+            "has_run": race_url is not None,
+        })
+
+    races.sort(key=lambda r: r["round"])
+    print(f"[{series_code}] schedule: {len(races)} total races, "
+          f"{sum(1 for r in races if r['has_run'])} completed",
+          file=sys.stderr)
     return races
+
 
 
 def build_series(series_code: str, season: int) -> dict:
     print(f"\n=== {series_code} — discovering schedule ===", file=sys.stderr)
     race_list = discover_races(series_code, season)
-    print(f"found {len(race_list)} completed races", file=sys.stderr)
+    completed = sum(1 for r in race_list if r.get("has_run"))
+    print(f"found {len(race_list)} total races ({completed} completed, "
+          f"{len(race_list) - completed} upcoming)", file=sys.stderr)
 
     out_races: list[dict] = []
     for i, r in enumerate(race_list, start=1):
         print(f"[{series_code} {i}/{len(race_list)}] round {r['round']} "
-              f"{r['track']} ({r['date']})", file=sys.stderr)
+              f"{r['track']} ({r['date']}){' [upcoming]' if not r.get('has_run') else ''}",
+              file=sys.stderr)
+
+        if not r.get("has_run"):
+            # Upcoming race — emit a stub Race with schedule metadata only.
+            # The frontend uses (results || []).length === 0 to detect these.
+            stub = Race(
+                series=series_code,
+                round=r["round"],
+                date=r.get("date", ""),
+                track=r.get("track", ""),
+                track_code=track_code_from_name(r.get("track", "")),
+                name=r.get("name", ""),
+                source_url="",
+            )
+            out_races.append(asdict(stub))
+            print("    upcoming · schedule entry only", file=sys.stderr)
+            continue
+
         race = parse_race(r["url"], series_code, r["round"])
         if race is None:
             print("    ! parse failed, skipping", file=sys.stderr)
