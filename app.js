@@ -1121,6 +1121,21 @@ function lastNameOf(name) {
   return last;
 }
 
+// Manufacturer code → display name. Codes come from the scraper's MFR_MAP.
+// We keep the codes compact in JSON (TYT/CHV/FRD) but render full names in UI.
+// CHE/FOR are legacy codes from older snapshots that we still see in cached data.
+const MFR_DISPLAY = {
+  TYT: "Toyota",
+  CHV: "Chevrolet",
+  CHE: "Chevrolet",
+  FRD: "Ford",
+  FOR: "Ford",
+};
+function manufacturerName(code) {
+  if (!code) return "";
+  return MFR_DISPLAY[code] || code;
+}
+
 // Normalize a driver name for cross-year matching. Strips suffixes (Jr/Sr/etc),
 // case, accents, internal punctuation. "Dale Earnhardt Jr." → "dale earnhardt"
 // — used to dedupe drivers between years where punctuation may differ
@@ -3735,7 +3750,7 @@ function renderProfile() {
   const displayTitleHTML = `${escapeHTML(titleText)}${renderCoDriverBadge(entity)}`;
 
   const rows = profileRaceRows(entity);
-  const mfr = { TYT: "Toyota", CHE: "Chevrolet", CHV: "Chevrolet", FRD: "Ford", FOR: "Ford" }[entity.manufacturer] || entity.manufacturer || "—";
+  const mfr = manufacturerName(entity.manufacturer) || "—";
   const teamName = TEAM_FULL_NAMES[teamCode] || teamCode;
 
   // Bio lookup — use the primary driver (car profile shows the primary driver's bio).
@@ -5772,7 +5787,7 @@ function renderTrackPage() {
 
   const manuHTML = manuRanked.length ? manuRanked.map(([m, w]) => `
     <div class="tk-manu-row">
-      <span class="tk-manu-name">${escapeHTML(m)}</span>
+      <span class="tk-manu-name">${escapeHTML(manufacturerName(m))}</span>
       <span class="tk-manu-bar"><span class="tk-manu-fill" style="width:${(w / manuRanked[0][1] * 100).toFixed(0)}%"></span></span>
       <span class="tk-manu-count">${w}</span>
     </div>
