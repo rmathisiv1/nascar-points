@@ -1474,10 +1474,9 @@ code {
   .hm-cell { font-size: 10px; min-width: 24px; padding: 3px 2px; }
   .hm-header { font-size: 9px; }
 
-  /* Charts — fix minimum widths so they don't collapse */
-  #arc-svg, #breakdown-svg, #trajectory-svg {
-    min-width: 580px;
-  }
+  /* Charts — keep them readable; let them shrink to viewport on mobile.
+     (No min-width here. A min-width forces the SVG wider than narrow
+     viewports and the chart gets clipped on the right.) */
   .card-chart { padding: 10px; }
 
   /* Callouts stack */
