@@ -1795,10 +1795,16 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
   let entities = allEntities();
   if (ftOnly) entities = entities.filter(isFullTime);
   if (teamFilter) entities = entities.filter(e => e.team_code === teamFilter);
-  // sort by current season points desc so the big names float to top
+  // Sort by car number ascending. Numeric sort with non-numeric fallback so
+  // alphanumeric numbers (rare, but possible) still order sensibly.
   entities = entities.map(e => ({
     ...e, total: e.races.reduce((s, r) => s + r.total, 0),
-  })).sort((a, b) => b.total - a.total);
+  })).sort((a, b) => {
+    const an = parseInt(a.car_number, 10);
+    const bn = parseInt(b.car_number, 10);
+    if (!isNaN(an) && !isNaN(bn) && an !== bn) return an - bn;
+    return String(a.car_number).localeCompare(String(b.car_number));
+  });
 
   // -------- Team-pill row --------
   // Was driver-mode-only. In car-mode, team grouping is less meaningful at the
@@ -2816,10 +2822,15 @@ function renderTrajectoryDriverGrid(entities) {
   // views we need our aggregated entity list instead, so we paint the pills
   // ourselves using the same pattern but fed by the passed-in `entities`.
 
-  // Filter to entities that actually have race data, sort by total points desc
+  // Filter to entities that actually have race data, sort by car number ascending.
   const decorated = entities
     .map(e => ({ ...e, _total: e.races.reduce((s, r) => s + (r.total || 0), 0) }))
-    .sort((a, b) => b._total - a._total);
+    .sort((a, b) => {
+      const an = parseInt(a.car_number, 10);
+      const bn = parseInt(b.car_number, 10);
+      if (!isNaN(an) && !isNaN(bn) && an !== bn) return an - bn;
+      return String(a.car_number).localeCompare(String(b.car_number));
+    });
 
   // Optional: trim to a manageable max so the grid doesn't sprawl on multi-year
   const MAX_PILLS = 80;

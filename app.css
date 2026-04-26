@@ -4202,10 +4202,14 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 
 /* History table column widths */
-.tk-history-table { table-layout: fixed; }
+.tk-history-table {
+  table-layout: fixed;
+  max-width: 800px;
+  margin: 0 auto;
+}
 .tk-col-yr { width: 70px; }
 .tk-col-rd { width: 70px; }
-.tk-col-pole { width: 30%; }
+.tk-col-pole { width: 200px; }
 .tk-history-table td:first-child {
   font-family: var(--mono);
   font-size: 11px;
