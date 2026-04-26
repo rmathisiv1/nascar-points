@@ -3794,6 +3794,18 @@ a.driver-cell.profile-link:hover .car-tag {
   margin-bottom: 14px;
   overflow: hidden;
 }
+
+/* Cap the Race Center page width so it doesn't sprawl on ultrawide monitors.
+   Apply to the host container so all children inherit the cap. */
+#race-host {
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+#view-race .view-head {
+  max-width: 1100px;
+  margin: 0 auto;
+}
 .rc-hero::before {
   content: "";
   position: absolute;
@@ -3916,7 +3928,10 @@ a.driver-cell.profile-link:hover .car-tag {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  table-layout: fixed;
 }
+.rc-result-table colgroup col.rc-col-p { width: 50px; }
+.rc-result-table colgroup col.rc-col-pts { width: 70px; }
 .rc-result-table th {
   text-align: left;
   font-family: var(--mono);
@@ -3925,12 +3940,12 @@ a.driver-cell.profile-link:hover .car-tag {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 6px 14px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
 }
 .rc-result-table th.num { text-align: right; }
 .rc-result-table td {
-  padding: 6px 14px;
+  padding: 6px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
 }
 .rc-result-table td.num {
@@ -4047,3 +4062,102 @@ a.driver-cell.profile-link:hover .car-tag {
   .rc-sched-result { display: none; }
   .rc-sched-track { font-size: 12px; }
 }
+
+/* ============================================================
+   TRACK LANDING PAGE (#/track/CODE) + clickable track links
+   ============================================================ */
+#track-host {
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+#view-track .view-head {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* Clickable track names — same accent style across pages */
+.rc-track-link,
+.rc-sched-track-link {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px dashed transparent;
+  transition: color 0.1s, border-color 0.1s;
+}
+.rc-track-link:hover,
+.rc-sched-track-link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Three-column stat grid for track page (Most Wins / Best Avg / Manufacturer) */
+.tk-grid-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Manufacturer wins: simple bar chart */
+.tk-manu-body {
+  padding: 8px 14px;
+}
+.tk-manu-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+.tk-manu-name {
+  font-weight: 500;
+  color: var(--text);
+}
+.tk-manu-bar {
+  height: 8px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+.tk-manu-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.tk-manu-count {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* History table column widths */
+.tk-history-table { table-layout: fixed; }
+.tk-col-yr { width: 70px; }
+.tk-col-rd { width: 70px; }
+.tk-col-pole { width: 30%; }
+.tk-history-table td:first-child {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Mobile: stack the 3-column track grid + simplify history table */
+@media (max-width: 767.98px) {
+  #track-host { max-width: 100%; }
+  .tk-grid-3 { grid-template-columns: 1fr; }
+  .tk-history-table th:nth-child(4),
+  .tk-history-table td:nth-child(4) { display: none; }   /* hide Pole column on mobile */
+  .tk-col-yr { width: 60px; }
+  .tk-col-rd { width: 50px; }
+}
+
+/* Heatmap header links (clickable R# to navigate to track page) */
+.hm-header-link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+.hm-header-link:hover { color: var(--accent); }

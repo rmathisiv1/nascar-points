@@ -36,7 +36,7 @@ const STATE = {
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["race", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile"];
+const VIEWS = ["race", "track", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile"];
 
 // ============================================================
 // BOOT
@@ -437,17 +437,23 @@ function parseHash() {
   const view = h[0];
   // Profile routes: #/profile/tyler-reddick or #/car/45
   if (view === "profile" || view === "car") {
-    // Remember where we came from so the profile's Back link returns there.
-    // Only update the memory if the PREVIOUS view wasn't also a profile — otherwise
-    // profile→profile navigation would overwrite the real back target.
     if (STATE.view && STATE.view !== "profile") {
       STATE.prevView = STATE.view;
     }
     STATE.view = "profile";
     STATE.profile = {
-      kind: view,              // "profile" (driver) or "car"
+      kind: view,
       slug: h[1] || null,
     };
+    return;
+  }
+  // Track route: #/track/KAN — single track landing page
+  if (view === "track") {
+    if (STATE.view && STATE.view !== "track") {
+      STATE.prevView = STATE.view;
+    }
+    STATE.view = "track";
+    STATE.track = { code: (h[1] || "").toUpperCase() };
     return;
   }
   STATE.view = VIEWS.includes(view) ? view : "arc";  // arc is the landing tab
@@ -790,7 +796,7 @@ function renderTimeCursorBanner() {
 const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
 // Views that take over the whole page (hide dashboard). Only playoffs now —
 // profile is a center-column takeover that keeps the side panels visible.
-const TAKEOVER_VIEWS = ["playoffs", "race"];
+const TAKEOVER_VIEWS = ["playoffs", "race", "track"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -808,6 +814,7 @@ function render() {
   if (pageTitleEl) {
     const titleMap = {
       race: "Race Center",
+      track: "Track",
       form: "Trending",
       arc: "Cumulative Season",
       breakdown: "Points Breakdown",
@@ -824,11 +831,13 @@ function render() {
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
 
-  // Takeover section visibility — playoffs and race live here
+  // Takeover section visibility — playoffs, race, and track live here
   const pElem = document.getElementById("view-playoffs");
   if (pElem) pElem.hidden = (STATE.view !== "playoffs");
   const rElem = document.getElementById("view-race");
   if (rElem) rElem.hidden = (STATE.view !== "race");
+  const tElem = document.getElementById("view-track");
+  if (tElem) tElem.hidden = (STATE.view !== "track");
 
   // Profile takeover — sits inside the center column, hides tab-body when active
   const profileTakeover = document.getElementById("profile-takeover");
@@ -873,6 +882,7 @@ function render() {
     renderMetricBar();
     if (STATE.view === "playoffs") renderPlayoffs();
     if (STATE.view === "race") renderRaceCenter();
+    if (STATE.view === "track") renderTrackPage();
   }
 
   // Mirror toggle-groups + team-filter pills into native <select>s for mobile.
@@ -4061,10 +4071,13 @@ function paintProfileRaceTable(rows, kind) {
   if (!tbody) return;
   tbody.innerHTML = rows.map(r => {
     const trackDisplay = escapeHTML(prettyTrack(r.track_code, r.track));
+    const trackLink = r.track_code
+      ? `<a class="rc-track-link" href="#/track/${escapeHTML(r.track_code)}"><strong>${escapeHTML(r.track_code)}</strong> · ${trackDisplay}</a>`
+      : `<strong>${escapeHTML(r.track_code || '')}</strong> · ${trackDisplay}`;
     if (r.dns) {
       return `<tr style="opacity:0.4">
         <td class="rnd">R${r.round}</td>
-        <td class="track"><strong>${escapeHTML(r.track_code || '')}</strong> · ${trackDisplay}</td>
+        <td class="track">${trackLink}</td>
         <td colspan="8" style="color:var(--dim);font-style:italic">DNS</td>
       </tr>`;
     }
@@ -4076,7 +4089,7 @@ function paintProfileRaceTable(rows, kind) {
     const driverNote = (kind === "owner" && r.driver) ? `<div class="race-driver-tag">${escapeHTML(r.driver)}</div>` : "";
     return `<tr>
       <td class="rnd">R${r.round}</td>
-      <td class="track"><strong>${escapeHTML(r.track_code || '')}</strong> · ${trackDisplay}${driverNote}</td>
+      <td class="track">${trackLink}${driverNote}</td>
       <td style="color:var(--muted)">${escapeHTML(r.name || '')}</td>
       <td class="num">${r.start ?? '—'}</td>
       <td class="num"><span class="finish-badge ${cls}">${r.finish ?? '—'}</span></td>
@@ -4227,10 +4240,11 @@ function renderHeatmap() {
   corner.textContent = "Car";
   grid.appendChild(corner);
   races.forEach(r => {
-    const h = document.createElement("div");
-    h.className = "hm-header";
+    const h = document.createElement("a");
+    h.className = "hm-header hm-header-link";
     h.textContent = `R${r.round}`;
     h.title = prettyTrack(r.track_code, r.track) + (r.name ? ` — ${r.name}` : "");
+    h.href = r.track_code ? `#/track/${r.track_code}` : "#";
     grid.appendChild(h);
   });
   const totalHdr = document.createElement("div");
@@ -5217,7 +5231,7 @@ function renderRaceCenter() {
   host.innerHTML = `
     <div class="rc-hero">
       <div class="rc-hero-badge">${heroBadge}</div>
-      <div class="rc-hero-track">R${nextRace.round} · ${escapeHTML(trackStr)}</div>
+      <div class="rc-hero-track">R${nextRace.round} · ${nextRace.track_code ? `<a class="rc-track-link" href="#/track/${escapeHTML(nextRace.track_code)}">${escapeHTML(trackStr)}</a>` : escapeHTML(trackStr)}</div>
       <div class="rc-hero-meta">
         ${dateStr} · ${seriesLabel}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
       </div>
@@ -5236,7 +5250,7 @@ function renderRaceCenter() {
 
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-head">
-        <span class="rc-card-title">${lastRunRace ? `Last Race: R${lastRunRace.round} · ${escapeHTML(lastRunRace.track || "")}` : "Last Race"}</span>
+        <span class="rc-card-title">${lastRunRace ? `Last Race: R${lastRunRace.round} · ${lastRunRace.track_code ? `<a class="rc-track-link" href="#/track/${escapeHTML(lastRunRace.track_code)}">${escapeHTML(lastRunRace.track || "")}</a>` : escapeHTML(lastRunRace.track || "")}` : "Last Race"}</span>
         ${lastRunRace && lastRunRace.date ? `<span class="rc-card-sub">${formatRaceDate(lastRunRace.date)}</span>` : ""}
       </div>
       <div class="rc-card-body">${lastResultHTML}</div>
@@ -5376,7 +5390,8 @@ function renderLastResult(race) {
     .slice(0, 10);
   if (!results.length) return `<div class="rc-empty">No results.</div>`;
   return `<table class="rc-result-table">
-    <thead><tr><th>P</th><th>Driver</th><th class="num">Pts</th></tr></thead>
+    <colgroup><col class="rc-col-p"><col><col class="rc-col-pts"></colgroup>
+    <thead><tr><th class="num">P</th><th>Driver</th><th class="num">Pts</th></tr></thead>
     <tbody>${results.map(d => {
       const carHex = colorFor(STATE.series, d.car_number);
       const txt = contrastTextFor(carHex);
@@ -5428,13 +5443,206 @@ function renderSeasonSchedule(allRaces, currentRound) {
     } else if (isCurrent) {
       resultBit = `<span class="rc-sched-next">NEXT</span>`;
     }
+    const trackLink = r.track_code
+      ? `<a class="rc-sched-track-link" href="#/track/${escapeHTML(r.track_code)}" onclick="event.stopPropagation()">${escapeHTML(r.track || "—")}</a>`
+      : `<span>${escapeHTML(r.track || "—")}</span>`;
     return `<div class="${cls}" data-round="${r.round}">
       <span class="rc-sched-round">R${r.round}</span>
-      <span class="rc-sched-track">${escapeHTML(r.track || "—")}</span>
+      <span class="rc-sched-track">${trackLink}</span>
       <span class="rc-sched-date">${dateStr}</span>
       <span class="rc-sched-result">${resultBit}</span>
     </div>`;
   }).join("");
+}
+
+// ============================================================
+// TRACK LANDING PAGE — #/track/CODE
+// ------------------------------------------------------------
+// All-time history at one track, across cached years. Sections:
+//   - Hero (track name, type, this year's race result if run)
+//   - Full results history table (year × round × winner × pole)
+//   - Most wins (top 5)
+//   - Best avg finish among current-FT cars (top 5)
+//   - Manufacturer wins distribution (last 10 yrs at this track)
+//
+// Triggered by clicking a track name from heatmap, schedule rows, or last-5
+// winner rows on Race Center.
+// ============================================================
+
+function renderTrackPage() {
+  const host = document.getElementById("track-host");
+  const titleEl = document.getElementById("track-title");
+  const sub = document.getElementById("track-sub");
+  if (!host || !STATE.data) return;
+
+  const code = (STATE.track && STATE.track.code) || "";
+  if (!code) {
+    host.innerHTML = `<div class="card po-mini-empty">No track specified.</div>`;
+    return;
+  }
+
+  // Background-load up to 10 prior years for this series
+  const seasonsToLoad = [];
+  for (let y = STATE.season - 1; y >= STATE.season - 10 && y >= 2014; y--) {
+    seasonsToLoad.push(y);
+  }
+  const allLoaded = seasonsToLoad.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]);
+  if (!allLoaded) {
+    Promise.all(seasonsToLoad
+      .filter(y => !(SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]))
+      .map(y => loadSeasonIntoCache(y))
+    ).then(() => {
+      if (STATE.view === "track") renderTrackPage();
+    }).catch(() => {});
+  }
+
+  // Gather all races at this track across loaded years
+  const history = collectTrackHistory(code, STATE.series);
+  const trackName = history[0]?.track || code;
+  const trackTypeStr = trackTypeLabel(history[0]?.track_code) || "";
+
+  if (titleEl) titleEl.textContent = trackName;
+  if (sub) {
+    const yrs = history.length ? `${history.length} race${history.length === 1 ? "" : "s"} on file` : "Loading history…";
+    sub.textContent = `${trackTypeStr ? trackTypeStr + " · " : ""}${yrs}`;
+  }
+
+  // ---- Most wins (top 5) — across all cached history ----
+  const winsByCarsec = {};
+  history.forEach(h => {
+    const w = (h.results || []).find(d => d.finish_pos === 1);
+    if (!w) return;
+    const k = w.car_number;
+    if (!winsByCarsec[k]) winsByCarsec[k] = { car: k, driver: w.driver, wins: 0, years: [] };
+    winsByCarsec[k].wins++;
+    winsByCarsec[k].years.push(h.year);
+    winsByCarsec[k].driver = w.driver;
+  });
+  const topWins = Object.values(winsByCarsec).sort((a, b) => b.wins - a.wins).slice(0, 5);
+
+  // ---- Best avg finish among current-FT cars (last 10 yrs) ----
+  const currentFt = new Set(allEntities().filter(isFullTime).map(e => e.car_number));
+  const finsByCar = {};
+  history.forEach(h => {
+    (h.results || []).forEach(d => {
+      if (d.finish_pos == null) return;
+      if (!currentFt.has(d.car_number)) return;
+      if (!finsByCar[d.car_number]) finsByCar[d.car_number] = { car: d.car_number, driver: d.driver, fins: [] };
+      finsByCar[d.car_number].fins.push(d.finish_pos);
+      finsByCar[d.car_number].driver = d.driver;
+    });
+  });
+  const topAvg = Object.values(finsByCar)
+    .filter(c => c.fins.length >= 1)
+    .map(c => ({ ...c, avg: c.fins.reduce((s, x) => s + x, 0) / c.fins.length, n: c.fins.length }))
+    .sort((a, b) => a.avg - b.avg)
+    .slice(0, 5);
+
+  // ---- Manufacturer wins (across all loaded history) ----
+  const manuWins = {};
+  history.forEach(h => {
+    const w = (h.results || []).find(d => d.finish_pos === 1);
+    if (!w || !w.manufacturer) return;
+    manuWins[w.manufacturer] = (manuWins[w.manufacturer] || 0) + 1;
+  });
+  const manuRanked = Object.entries(manuWins).sort((a, b) => b[1] - a[1]);
+
+  // ---- HTML ----
+  const winsHTML = topWins.length ? topWins.map(c => {
+    const carHex = colorFor(STATE.series, c.car);
+    const txt = contrastTextFor(carHex);
+    return `<a class="rc-winner-row profile-link" href="#/car/${c.car}">
+      <span class="car-tag" style="background:${carHex};color:${txt}">${c.car}</span>
+      <span class="rc-winner-name">${escapeHTML(lastNameOf(c.driver))}</span>
+      <span class="rc-hot-avg">${c.wins}</span>
+    </a>`;
+  }).join("") : `<div class="rc-empty">No wins recorded.</div>`;
+
+  const avgHTML = topAvg.length ? topAvg.map(c => {
+    const carHex = colorFor(STATE.series, c.car);
+    const txt = contrastTextFor(carHex);
+    return `<a class="rc-hot-row profile-link" href="#/car/${c.car}">
+      <span class="car-tag" style="background:${carHex};color:${txt}">${c.car}</span>
+      <span class="rc-hot-name">${escapeHTML(lastNameOf(c.driver))}</span>
+      <span class="rc-hot-avg">${c.avg.toFixed(1)}<span class="rc-hot-n"> ·${c.n}v</span></span>
+    </a>`;
+  }).join("") : `<div class="rc-empty">No data for current-FT cars.</div>`;
+
+  const manuHTML = manuRanked.length ? manuRanked.map(([m, w]) => `
+    <div class="tk-manu-row">
+      <span class="tk-manu-name">${escapeHTML(m)}</span>
+      <span class="tk-manu-bar"><span class="tk-manu-fill" style="width:${(w / manuRanked[0][1] * 100).toFixed(0)}%"></span></span>
+      <span class="tk-manu-count">${w}</span>
+    </div>
+  `).join("") : `<div class="rc-empty">No manufacturer data available.</div>`;
+
+  // Full results history table — every race at this track in cached years
+  const histTableHTML = history.length ? `
+    <table class="rc-result-table tk-history-table">
+      <colgroup><col class="tk-col-yr"><col class="tk-col-rd"><col><col class="tk-col-pole"></colgroup>
+      <thead><tr>
+        <th>Year</th>
+        <th class="num">Round</th>
+        <th>Winner</th>
+        <th>Pole</th>
+      </tr></thead>
+      <tbody>
+        ${history.map(h => {
+          const winner = (h.results || []).find(d => d.finish_pos === 1);
+          const pole   = (h.results || []).find(d => d.start_pos === 1);
+          const wHTML = winner ? `
+            <a class="profile-link rc-result-name" href="#/car/${winner.car_number}">
+              <span class="car-tag" style="background:${colorFor(STATE.series, winner.car_number)};color:${contrastTextFor(colorFor(STATE.series, winner.car_number))}">${winner.car_number}</span>
+              <span>${escapeHTML(lastNameOf(winner.driver))}</span>
+            </a>` : `<span class="muted">—</span>`;
+          const pHTML = pole ? `
+            <a class="profile-link rc-result-name" href="#/car/${pole.car_number}">
+              <span class="car-tag" style="background:${colorFor(STATE.series, pole.car_number)};color:${contrastTextFor(colorFor(STATE.series, pole.car_number))}">${pole.car_number}</span>
+              <span>${escapeHTML(lastNameOf(pole.driver))}</span>
+            </a>` : `<span class="muted">—</span>`;
+          return `<tr>
+            <td>${h.year}</td>
+            <td class="num">R${h.round}</td>
+            <td>${wHTML}</td>
+            <td>${pHTML}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  ` : `<div class="rc-empty">No history at this track in loaded years.</div>`;
+
+  host.innerHTML = `
+    <div class="rc-hero tk-hero">
+      <div class="rc-hero-badge">TRACK</div>
+      <div class="rc-hero-track">${escapeHTML(trackName)}</div>
+      <div class="rc-hero-meta">
+        ${trackTypeStr ? trackTypeStr + " · " : ""}${history.length} race${history.length === 1 ? "" : "s"} on file
+      </div>
+    </div>
+
+    <div class="rc-grid tk-grid-3">
+      <div class="card rc-card">
+        <div class="rc-card-head"><span class="rc-card-title">Most Wins Here</span></div>
+        <div class="rc-card-body">${winsHTML}</div>
+      </div>
+      <div class="card rc-card">
+        <div class="rc-card-head"><span class="rc-card-title">Best Avg Finish</span><span class="rc-card-sub">current FT only</span></div>
+        <div class="rc-card-body">${avgHTML}</div>
+      </div>
+      <div class="card rc-card">
+        <div class="rc-card-head"><span class="rc-card-title">Manufacturer Wins</span></div>
+        <div class="rc-card-body tk-manu-body">${manuHTML}</div>
+      </div>
+    </div>
+
+    <div class="card rc-card rc-card-wide">
+      <div class="rc-card-head">
+        <span class="rc-card-title">All Races at ${escapeHTML(trackName)}</span>
+        <span class="rc-card-sub">newest first</span>
+      </div>
+      <div class="rc-card-body" style="padding:0;">${histTableHTML}</div>
+    </div>
+  `;
 }
 
 function renderPlayoffs() {
