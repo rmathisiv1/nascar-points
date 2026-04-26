@@ -3210,3 +3210,26 @@ a.driver-cell.profile-link:hover .car-tag {
   /* Format note: smaller */
   .po-note { font-size: 11px; line-height: 1.45; }
 }
+
+/* ============================================================
+   CHART SIZING ON MOBILE — let SVGs respect their natural aspect ratio
+   ============================================================ */
+@media (max-width: 767.98px) {
+  /* Don't stretch the SVG to fill container height. The chart's viewBox has a
+     fixed aspect ratio; with preserveAspectRatio="xMidYMid meet" forcing
+     height: 100% leaves dead space above/below the chart. Letting height be
+     auto-derived from width keeps the chart compact and tight against its
+     container. */
+  .tab-chart-fill {
+    flex: 0 0 auto;       /* shrink to chart's natural height */
+    min-height: 0;
+    overflow: visible;
+  }
+  .tab-chart-fill svg {
+    flex: 0 0 auto;
+    width: 100%;
+    height: auto !important;
+  }
+  /* The chart card itself shouldn't have giant padding around the squashed chart */
+  .tab-chart-fill.card-chart { padding: 6px; }
+}
