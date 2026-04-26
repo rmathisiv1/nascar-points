@@ -4029,8 +4029,8 @@ function renderHeatmap() {
 
   const grid = document.createElement("div");
   grid.className = "heatmap-grid";
-  // Mobile uses a narrower car column so the cells are reachable on a phone.
-  const firstCol = isMobile() ? "120px" : "200px";
+  // Mobile uses a wider car column so full names fit (with wrapping if needed).
+  const firstCol = isMobile() ? "150px" : "200px";
   const cellCol = isMobile() ? "26px" : "30px";
   grid.style.gridTemplateColumns = `${firstCol} repeat(${races.length}, ${cellCol}) 44px`;
 

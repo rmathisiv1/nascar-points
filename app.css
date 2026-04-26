@@ -3471,3 +3471,69 @@ a.driver-cell.profile-link:hover .car-tag {
   /* Banner: smaller and closer to top */
   .po-banner { font-size: 10px; padding: 6px 8px; margin-bottom: 8px; }
 }
+
+/* ============================================================
+   HARD FIXES — Round 2
+   ============================================================ */
+@media (max-width: 767.98px) {
+  /* ---- Hide duplicate page heading inside takeover (page-title bar shows it) ---- */
+  #view-playoffs .view-head { display: none; }
+
+  /* ---- Heatmap: wider name column, allow wrapping if needed ---- */
+  /* JS sets grid-template-columns inline. We can't override the FIRST column
+     with CSS alone, so we use a more reliable approach: target the grid via
+     attribute and force min-width on the .hm-label cell. The grid will
+     still respect the inline grid-template, but the labels themselves will
+     show full names. */
+  .hm-label {
+    font-size: 11px !important;
+    padding: 6px 8px 6px 4px !important;
+    white-space: normal !important;     /* allow 2-line names */
+    line-height: 1.15;
+    overflow: visible !important;
+    min-width: 0;
+  }
+  .hm-label > span:not(.car-tag) {
+    white-space: normal !important;
+    overflow: visible !important;
+    word-break: break-word;
+  }
+
+  /* ---- Picker pills wrap to fill row width ---- */
+  /* The driver-picker container is forced display: flex (inherit from parent),
+     and driver-pill default styles set width to fill. Override so pills
+     are inline-block-ish flex items that wrap into multiple per row. */
+  .picker-drawer .driver-picker {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    align-items: stretch;
+  }
+  .picker-drawer .driver-picker .driver-pill,
+  .picker-drawer .driver-picker > * {
+    flex: 0 1 auto;
+    width: auto !important;
+    min-width: 0;
+    max-width: none;
+  }
+
+  /* ---- STICKY TABLE HEADERS (proper) ---- */
+  /* Drop the global page-title bar's sticky behavior — instead make EACH
+     table's thead bar sit right below the metricbar with no extra layer.
+     This is far more reliable: the th sticky parent is the table body's
+     scroll context (the page), so top is always the chrome above it. */
+  .mobile-page-title {
+    position: sticky;
+    top: 78px;            /* below topbar+metricbar */
+    z-index: 50;
+  }
+  /* Tables' thead sticky position — directly below the page title */
+  .data-table th {
+    top: 112px !important;   /* topbar 44 + metricbar 34 + page-title 34 = 112 */
+    z-index: 7;
+    background: var(--card) !important;
+    /* Ensure background is FULLY OPAQUE so rows don't show through */
+    box-shadow: 0 1px 0 var(--border);
+  }
+}
