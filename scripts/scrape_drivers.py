@@ -101,13 +101,27 @@ def parse_dob_hometown(page_text: str) -> tuple[str | None, str | None]:
     if born_match:
         dob_iso = try_parse_date(born_match.group(1).strip())
 
-    # "Home: <place>"
+    # "Home: <place>" — bounded with a hard length cap and sanity check.
+    # The {1,80} stops the regex from runaway-grabbing the entire page footer
+    # if no terminator is found. Also reject anything that contains obvious
+    # non-hometown markers (statistics, click on, copyright, etc.) as a
+    # belt-and-braces guard against pages that lack a hometown but still match.
     home_match = re.search(
-        r"Home(?:town)?:\s*(.+?)(?=\s*(?:Born:|Died:|Height:|Glossary|$))",
+        r"Home(?:town)?:\s*(.{1,80}?)(?=\s*(?:Born:|Died:|Height:|Glossary|Statistics|Click|$))",
         text, re.I,
     )
     if home_match:
-        hometown = home_match.group(1).strip()
+        candidate = home_match.group(1).strip()
+        # Sanity: hometown is "City, ST" or "City, Country" — reject if it
+        # contains tokens that are clearly footer/glossary/stats content,
+        # or if it has more than ~6 commas (real hometowns have 1, maybe 2).
+        looks_bad = (
+            len(candidate) > 80
+            or candidate.count(",") > 4
+            or re.search(r"\b(NASCAR|Statistics|Click|Year|Races|Glossary|Copyright|Series)\b", candidate, re.I)
+        )
+        if not looks_bad:
+            hometown = candidate
 
     return dob_iso, hometown
 

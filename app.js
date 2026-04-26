@@ -3775,7 +3775,12 @@ function renderProfile() {
       const age = calcAge(bio.dob);
       if (age != null) bioParts.push(`<span class="v">${age}</span> years old`);
     }
-    if (bio.hometown) bioParts.push(`<span class="v">${escapeHTML(bio.hometown)}</span>`);
+    // Hometown sanity check — reject obvious garbage (page footer text leaked
+    // into the bio scrape). Real hometowns are short and don't contain
+    // glossary/statistics keywords.
+    if (bio.hometown && isPlausibleHometown(bio.hometown)) {
+      bioParts.push(`<span class="v">${escapeHTML(bio.hometown)}</span>`);
+    }
   }
   const bioLine = bioParts.length
     ? `<span class="profile-hero-bio">${bioParts.join(" · ")}</span>`
@@ -3930,6 +3935,21 @@ function calcAge(dobIso) {
   const hadBirthday = (now.getMonth() + 1) > m || ((now.getMonth() + 1) === m && now.getDate() >= d);
   if (!hadBirthday) age -= 1;
   return (age >= 0 && age < 120) ? age : null;
+}
+
+// Reject hometown strings that look like scraped page footer / glossary text
+// rather than an actual "City, ST" / "City, Country" value. The bio scraper
+// has occasionally captured the entire racing-reference page footer when a
+// driver's page lacks a Home: line and the regex's bounded lookahead failed.
+function isPlausibleHometown(s) {
+  if (!s) return false;
+  const str = String(s).trim();
+  if (str.length === 0 || str.length > 80) return false;
+  if (str.split(",").length > 5) return false;
+  // Tokens that should never appear in a real hometown — if any show up,
+  // we're looking at scraped footer/glossary text, not a place name.
+  if (/\b(NASCAR|Statistics|Glossary|Click|Year|Races|Copyright|Series|Trademarks)\b/i.test(str)) return false;
+  return true;
 }
 
 // Render the career-totals panel using scraped per-series totals.
