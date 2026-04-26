@@ -1393,8 +1393,10 @@ function renderMetricBar() {
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Coldest</span>
       <span class="v cold">${coldest ? `${escapeHTML(displayName(coldest.entity))} ${signed(coldest.delta.toFixed(1))}` : "\u2014"}</span></div>
     <div class="metric metric-lastrace" data-tip="${escapeHTML(raceTip)}"><span class="k">${STATE.throughRound != null ? "As Of" : "Last Race"}</span>
-      <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}` : "\u2014"}</span>
-      ${top3HTML ? `<div class="metric-finishers">${top3HTML}</div>` : ""}
+      <div class="metric-lastrace-row">
+        <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}` : "\u2014"}</span>
+        ${top3HTML ? `<div class="metric-finishers">${top3HTML}</div>` : ""}
+      </div>
     </div>
     <div class="metric" data-tip="${escapeHTML(upcomingTip)}"><span class="k">Upcoming</span>
       <span class="v">${upcomingHTML}</span></div>
