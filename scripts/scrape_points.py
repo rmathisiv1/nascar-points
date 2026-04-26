@@ -28,6 +28,7 @@ import re
 import sys
 import time
 from dataclasses import dataclass, field, asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -450,14 +451,15 @@ def discover_races(series_code: str, season: int) -> list[dict]:
     {round, date, track, name, url, has_run} dicts covering every race on
     the schedule — both completed AND upcoming.
 
-    The schedule appears as an HTML <table> with these columns (in order):
-      # | Date | Site | Cars | Winner(s) | St | Make/Model | Len | Sfc |
-      Miles | Purse | Pole | Cau | Laps | Speed | LC
-
-    For completed races, the # cell links to /race-results/YEAR_NAME/CODE.
-    For upcoming races, the # cell is plain text and the Site cell links
-    to /tracks/TRACKNAME instead. We walk every row regardless and treat
-    rows with a /race-results/ URL as has_run=True.
+    Racing-Reference uses div-based pseudo-tables, NOT real <table> elements.
+    Each race is a `<div role="row">` containing cells like:
+        <div class="race-number" role="cell">  ← contains <a> link if completed,
+                                                   plain round number if upcoming
+        <div class="date W" role="cell">       ← MM/DD/YY
+        <div class="track W" role="cell">      ← <a href="/tracks/...">Track Name</a>
+        <div class="winners W" role="cell">    ← <a> winner name (completed)
+        OR
+        <div class="track upcoming landscape...">"Race Name" 3:00 PM FOX (upcoming)
     """
     cfg = SERIES[series_code]
     cfg_code = cfg["rr_code"]
@@ -473,93 +475,102 @@ def discover_races(series_code: str, season: int) -> list[dict]:
           file=sys.stderr)
 
     soup = BeautifulSoup(html, "html.parser")
-
-    # Find the schedule table. There may be multiple tables on the page; we
-    # want the one whose first header cells start with "#" and "Date".
-    schedule_tbl = None
-    for tbl in soup.find_all("table"):
-        # Get the first row's cells (could be in <thead> or just first <tr>)
-        first_row = tbl.find("tr")
-        if not first_row:
-            continue
-        headers = [c.get_text(strip=True).lower()
-                   for c in first_row.find_all(["th", "td"])[:4]]
-        if headers and headers[0] == "#" and "date" in headers and "site" in headers:
-            schedule_tbl = tbl
-            break
-
-    if schedule_tbl is None:
-        print(f"[{series_code}] couldn't find schedule table on season page",
-              file=sys.stderr)
-        return []
-
-    races: list[dict] = []
     race_results_pattern = re.compile(
         rf"/race-results/{season}_([^/]+)/{cfg_code}(?:/|$)"
     )
 
-    for tr in schedule_tbl.find_all("tr")[1:]:   # skip header row
-        cells = tr.find_all(["td", "th"])
-        if len(cells) < 3:
-            continue   # malformed / spacer row
+    races: list[dict] = []
+    seen_rounds: set[int] = set()
 
-        # # cell — contains either a link to race results (completed) or
-        # plain round number text (upcoming)
-        round_cell = cells[0]
-        round_text = round_cell.get_text(strip=True)
+    # Find every row: a div with role="row" that contains a .race-number cell
+    for row in soup.find_all("div", attrs={"role": "row"}):
+        rn_cell = row.find("div", class_="race-number")
+        if not rn_cell:
+            continue
+
+        # Round number — either link text (completed) or div text (upcoming)
+        rn_link = rn_cell.find("a")
+        if rn_link:
+            round_text = rn_link.get_text(strip=True)
+        else:
+            round_text = rn_cell.get_text(strip=True)
         try:
             round_num = int(round_text)
         except ValueError:
-            continue   # not a race row
+            continue
+        if round_num in seen_rounds:
+            continue
+        seen_rounds.add(round_num)
 
-        # Date cell — "MM/DD/YY" e.g. "02/15/26"
-        date_cell = cells[1]
-        date_text = date_cell.get_text(strip=True)
+        # Date cell — class="date W" or "date B"/"date C" depending on series
+        date_cell = row.find("div", class_=re.compile(r"\bdate\b"))
+        date_text = date_cell.get_text(strip=True) if date_cell else ""
         iso_date = ""
         if date_text:
             try:
-                # 2-digit year: assume 20xx
                 d = datetime.strptime(date_text, "%m/%d/%y").date()
                 iso_date = d.isoformat()
             except ValueError:
                 iso_date = date_text
 
-        # Site cell — track name as link text (link target is /tracks/...)
-        site_cell = cells[2]
-        track_name = site_cell.get_text(" ", strip=True)
-
-        # Look for a /race-results/ link anywhere in the row → completed race
-        race_url = None
+        # Track cell — class="track W" with optional 'upcoming' modifier
+        # The FIRST track cell holds the actual track link/name. Some upcoming
+        # rows have a SECOND track cell with the race name + time/TV — we want
+        # to skip that one for the track field.
+        track_cells = row.find_all("div", class_=re.compile(r"^\s*track\b"))
+        track_name = ""
         race_name = ""
-        for a in tr.find_all("a", href=True):
-            if race_results_pattern.search(a["href"]):
-                race_url = a["href"]
-                race_name = a.get("title") or a.get_text(strip=True) or ""
-                break
+        if track_cells:
+            # First track cell: the track itself
+            first_track = track_cells[0]
+            t_link = first_track.find("a")
+            track_name = (t_link.get_text(strip=True) if t_link
+                          else first_track.get_text(strip=True))
+            # Second track cell, if present and has 'upcoming' modifier:
+            # contains the race name in quotes (e.g. "Jack Link's 500")
+            for tc in track_cells[1:]:
+                tc_classes = tc.get("class", [])
+                if any("upcoming" in c for c in tc_classes):
+                    raw = tc.get_text(" ", strip=True)
+                    m = re.search(r'"([^"]+)"', raw)
+                    if m:
+                        race_name = m.group(1)
+                    break
 
-        # If no race-results link, this is an upcoming race. Try to extract
-        # race name from any quoted text in the Winner(s)/Make column area.
-        # The schedule shows: "Jack Link's 500"   3:00 PM FOX  for upcoming.
-        if not race_url and len(cells) >= 5:
-            # Cells 4 (winner) for upcoming races holds the race-name text in quotes
-            winner_text = cells[4].get_text(" ", strip=True) if len(cells) > 4 else ""
-            m = re.search(r'"([^"]+)"', winner_text)
-            if m:
-                race_name = m.group(1)
+        # If completed, the race-number link gives us the race-results URL +
+        # an authoritative race name from its title attribute.
+        race_url = ""
+        has_run = False
+        if rn_link and rn_link.get("href"):
+            href = rn_link["href"]
+            if race_results_pattern.search(href):
+                race_url = href
+                has_run = True
+                # Title attr is the race's official name (e.g. "Daytona 500")
+                title = rn_link.get("title")
+                if title:
+                    race_name = title
 
         races.append({
             "round": round_num,
-            "url": race_url or "",
+            "url": race_url,
             "name": race_name,
             "date": iso_date,
             "track": track_name,
-            "has_run": race_url is not None,
+            "has_run": has_run,
         })
 
     races.sort(key=lambda r: r["round"])
+    completed = sum(1 for r in races if r["has_run"])
     print(f"[{series_code}] schedule: {len(races)} total races, "
-          f"{sum(1 for r in races if r['has_run'])} completed",
+          f"{completed} completed, {len(races) - completed} upcoming",
           file=sys.stderr)
+    if not races:
+        # Fallback debug dump if nothing matched
+        debug_path = Path(f"debug_season_{series_code}_{season}.html")
+        debug_path.write_text(html, encoding="utf-8")
+        print(f"[{series_code}] dumped HTML to {debug_path} for inspection",
+              file=sys.stderr)
     return races
 
 
