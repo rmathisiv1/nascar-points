@@ -5146,15 +5146,36 @@ function renderRaceCenter() {
     return;
   }
 
-  // Resolve "next" race: first race that hasn't been run yet (no results),
-  // OR if the season is complete, the last race. Falls back to last race if
-  // there's no clear marker.
+  // Resolve "next" race. Three cases:
+  //  1. Future scheduled race exists in data (results empty) → that's it.
+  //  2. All races in data are run → the next race is round (lastRound + 1)
+  //     within the season schedule length. We synthesize a placeholder so the
+  //     hero + schedule still highlight the upcoming round.
+  //  3. No data at all → fall back to first race.
   const runRaces = allRaces.filter(r => (r.results || []).length > 0);
   const lastRunIdx = runRaces.length - 1;
-  const nextRace = allRaces.find(r => (r.results || []).length === 0)
-                 || (lastRunIdx >= 0 ? runRaces[lastRunIdx] : allRaces[0]);
   const lastRunRace = lastRunIdx >= 0 ? runRaces[lastRunIdx] : null;
-  const isUpcoming = (nextRace.results || []).length === 0;
+  const seasonLen = scheduleLengthForSeries(STATE.series);
+
+  let nextRace = allRaces.find(r => (r.results || []).length === 0);
+  let isUpcoming = !!nextRace;
+  if (!nextRace && lastRunRace && typeof seasonLen === "number" && lastRunRace.round < seasonLen) {
+    // Synthesize an upcoming-race placeholder for the next scheduled round.
+    nextRace = {
+      round: lastRunRace.round + 1,
+      track: "TBD",
+      track_code: "",
+      date: "",
+      results: [],
+      _synthetic: true,
+    };
+    isUpcoming = true;
+  }
+  if (!nextRace) {
+    // Fall back: season complete or empty
+    nextRace = lastRunRace || allRaces[0];
+    isUpcoming = false;
+  }
 
   // Background-load 4 prior years so track history can be computed across
   // multi-year data. Re-renders when each year arrives.
@@ -5303,15 +5324,24 @@ function renderTrackWinners(history) {
 }
 
 // Top-5 cars by avg finish at this track over last 5 visits (cross-year).
+// Restricted to cars that are full-time in the CURRENT season — historical
+// part-timers and one-offs at the track aren't useful when answering "who's
+// going to be hot this weekend?"
 function renderHotAtTrack(history) {
   if (!history.length) {
     return `<div class="rc-empty">No prior history at this track.</div>`;
   }
+  // Build the set of full-time car numbers for the current season.
+  const currentFt = new Set(
+    allEntities().filter(isFullTime).map(e => e.car_number)
+  );
+
   const last5 = history.slice(0, 5);
   const byCarFinishes = {};
   last5.forEach(h => {
     (h.results || []).forEach(d => {
       if (d.finish_pos == null) return;
+      if (!currentFt.has(d.car_number)) return;   // current-season FT only
       if (!byCarFinishes[d.car_number]) byCarFinishes[d.car_number] = { car: d.car_number, driver: d.driver, finishes: [] };
       byCarFinishes[d.car_number].finishes.push(d.finish_pos);
       // Update driver to most recent (in case of car switches)
@@ -5319,7 +5349,7 @@ function renderHotAtTrack(history) {
     });
   });
   const ranked = Object.values(byCarFinishes)
-    .filter(c => c.finishes.length >= 2)   // need at least 2 visits to count
+    .filter(c => c.finishes.length >= 1)   // at least one visit
     .map(c => ({ ...c, avg: c.finishes.reduce((s, x) => s + x, 0) / c.finishes.length, n: c.finishes.length }))
     .sort((a, b) => a.avg - b.avg)
     .slice(0, 5);
@@ -5364,11 +5394,25 @@ function renderLastResult(race) {
 
 // Full season schedule list. Each row shows R# · track · date with a status
 // indicator. The currentRound row is highlighted with a left accent bar.
+// When the data only contains run races (no future schedule yet), we
+// synthesize placeholder rows for unrun rounds up to the season's expected
+// length so the upcoming race still gets highlighted.
 function renderSeasonSchedule(allRaces, currentRound) {
-  return allRaces.map(r => {
+  const seasonLen = scheduleLengthForSeries(STATE.series);
+  const knownRounds = new Set(allRaces.map(r => r.round));
+  const expanded = allRaces.slice();
+  if (typeof seasonLen === "number" && seasonLen > 0) {
+    for (let rd = 1; rd <= seasonLen; rd++) {
+      if (!knownRounds.has(rd)) {
+        expanded.push({ round: rd, track: "TBD", date: "", results: [], _synthetic: true });
+      }
+    }
+    expanded.sort((a, b) => a.round - b.round);
+  }
+  return expanded.map(r => {
     const hasRun = (r.results || []).length > 0;
     const isCurrent = r.round === currentRound;
-    const cls = `rc-sched-row${hasRun ? " run" : " upcoming"}${isCurrent ? " current" : ""}`;
+    const cls = `rc-sched-row${hasRun ? " run" : " upcoming"}${isCurrent ? " current" : ""}${r._synthetic ? " synthetic" : ""}`;
     const dateStr = r.date ? formatRaceDate(r.date) : "—";
     let resultBit = "";
     if (hasRun) {
