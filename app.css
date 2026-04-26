@@ -341,10 +341,17 @@ html, body {
   font-size: 11px;
   color: var(--text);
 }
-.form-mini-delta {
-  font-weight: 600;
+.form-mini-rating {
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: 13px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.form-mini-delta {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
   flex-shrink: 0;
 }
 .form-mini-delta.hot  { color: #5fd97a; }
@@ -356,16 +363,9 @@ html, body {
   gap: 8px;
   padding-left: 28px;  /* indent past the car pill + gap to align under name */
 }
-.form-mini-rating {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
 .form-mini-spark {
   display: block;
-  margin-left: auto;     /* push to right edge — dead space sits between rating and spark */
+  margin-left: auto;     /* push to right edge — dead space sits between delta and spark */
   flex-shrink: 0;
 }
 .form-mini-spark svg {

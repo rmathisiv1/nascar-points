@@ -5041,10 +5041,10 @@ function renderFormMini() {
       <div class="form-mini-top">
         <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span class="form-mini-name">${escapeHTML(lastName)}</span>
-        <span class="form-mini-delta ${cls}">${sign}${r.delta.toFixed(1)}</span>
+        <span class="form-mini-rating">${r.f.toFixed(1)}</span>
       </div>
       <div class="form-mini-bottom">
-        <span class="form-mini-rating">${r.f.toFixed(1)}</span>
+        <span class="form-mini-delta ${cls}">${sign}${r.delta.toFixed(1)}</span>
         <span class="form-mini-spark">${spark}</span>
       </div>
     </a>`;
