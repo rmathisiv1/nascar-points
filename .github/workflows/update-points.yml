@@ -2,7 +2,8 @@ name: Update NASCAR Points Data
 
 on:
   schedule:
-    # Monday 11:00 UTC (after Sunday Cup/Xfinity) and Thursday 11:00 UTC (catches Truck races)
+    # Monday 11:00 UTC (~7am ET, after Sunday Cup/Xfinity races)
+    # Thursday 11:00 UTC (~7am ET, catches Wednesday Truck races)
     - cron: '0 11 * * 1'
     - cron: '0 11 * * 4'
   workflow_dispatch:
@@ -34,20 +35,25 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run scraper
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+          ONLY:   ${{ github.event.inputs.only   || 'NCS,NOS,NTS' }}
         run: |
           python scripts/scrape_points.py \
-            --season "${{ github.event.inputs.season || '2026' }}" \
-            --only "${{ github.event.inputs.only || 'NCS,NOS,NTS' }}" \
-            --out data/points.json
+            --season "$SEASON" \
+            --only "$ONLY" \
+            --out "data/points_${SEASON}.json"
 
       - name: Commit & push if changed
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet data/points.json; then
+          if git diff --quiet "data/points_${SEASON}.json"; then
             echo "No changes."
             exit 0
           fi
-          git add data/points.json
-          git commit -m "chore(data): refresh points.json [skip ci]"
+          git add "data/points_${SEASON}.json"
+          git commit -m "chore(data): refresh points_${SEASON}.json [skip ci]"
           git push
