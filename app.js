@@ -1362,11 +1362,12 @@ function renderFormTable() {
 
   wireCoDriverBadges(card);
 
-  // Mobile collapse: keep # (0), Driver (1), Pts (6). Hide Team, Form, Rating, vs Season.
+  // Mobile collapse: keep # (0), Driver (1), Form (3), Rating (4).
+  // Hide Team, vs Season, Pts — all visible via tap-expand.
   // Column indices: 0=#, 1=Driver, 2=Team, 3=Form, 4=Rating, 5=vs Season, 6=Pts
   const mobTable = card.querySelector("table.data-table");
   if (mobTable) {
-    applyMobileTableCollapse(mobTable, [0, 1, 6]);
+    applyMobileTableCollapse(mobTable, [0, 1, 3, 4]);
   }
 
   const sub = document.getElementById("form-sub");
@@ -1715,7 +1716,13 @@ function renderArc() {
     totals.slice(0, 5).forEach(t => STATE.arc.selected.add(entityKey(t)));
   }
 
-  const W = 980, H = 420, pad = { top: 16, right: 150, bottom: 26, left: 48 };
+  const isMob = isMobile();
+  const W = 980, H = isMob ? 360 : 420;
+  // On mobile, drop the right-side driver labels area — labels overflow the
+  // narrow viewport. The legend in the picker pills already identifies cars.
+  const pad = isMob
+    ? { top: 16, right: 12, bottom: 26, left: 36 }
+    : { top: 16, right: 150, bottom: 26, left: 48 };
   const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
 
   // Scale computation differs by metric
@@ -1801,8 +1808,8 @@ function renderArc() {
       : "";
     return `<g>
       ${polylines}
-      ${connector}
-      <text x="${xEnd + 7}" y="${s.labelY + 3}" fill="${s.color}" font-family="var(--mono)" font-size="10">${escapeHTML(s.label)}</text>
+      ${isMob ? "" : connector}
+      ${isMob ? "" : `<text x="${xEnd + 7}" y="${s.labelY + 3}" fill="${s.color}" font-family="var(--mono)" font-size="10">${escapeHTML(s.label)}</text>`}
     </g>`;
   }).join("");
 
@@ -1888,9 +1895,14 @@ function renderBreakdown() {
   });
 
   // Chart geometry
+  const isMob = isMobile();
   const W = 920;
-  const H = driverData.length > 1 ? 380 : 340;
-  const pad = { top: 20, right: 16, bottom: 34, left: 44 };
+  const H = isMob
+    ? (driverData.length > 1 ? 320 : 280)
+    : (driverData.length > 1 ? 380 : 340);
+  const pad = isMob
+    ? { top: 16, right: 12, bottom: 30, left: 36 }
+    : { top: 20, right: 16, bottom: 34, left: 44 };
   const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
 
   // Max total across ALL selected drivers (shared y-scale so comparison is honest)
@@ -2274,8 +2286,11 @@ function renderTrajectory() {
     top12.forEach(p => labelKeys.add(entityKey(p.entity)));
   }
 
-  const W = 980, H = 540;
-  const pad = { top: 26, right: 110, bottom: 48, left: 62 };
+  const isMob = isMobile();
+  const W = 980, H = isMob ? 380 : 540;
+  const pad = isMob
+    ? { top: 18, right: 16, bottom: 34, left: 44 }
+    : { top: 26, right: 110, bottom: 48, left: 62 };
   const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
 
   const xMax = Math.ceil(Math.max(8, ...pts.map(p => Math.max(p.xSeason, p.xForm))) / 2) * 2;
@@ -4949,6 +4964,11 @@ function renderPlayoffs() {
     sub.textContent = `${STATE.season} ${STATE.series} · ${rule.field}-driver Chase · ${rule.playoffRaces} Chase races · ${phaseLabel}`;
     host.innerHTML = renderChaseReseededView(rule, phase);
     wireCoDriverBadges(host);
+    // Mobile collapse: keep Seed (0), Driver (1), Reseed Pts (5).
+    // Hide Team, Reg. Wins, Reg. Pts, Gap.
+    host.querySelectorAll("table.po-table").forEach(t => {
+      applyMobileTableCollapse(t, [0, 1, 5]);
+    });
     return;
   }
 
@@ -4958,6 +4978,9 @@ function renderPlayoffs() {
     sub.textContent = `${STATE.season} ${STATE.series} · ${rule.field}-driver elimination · ${phaseLabel}`;
     host.innerHTML = renderEliminationView(rule, phase);
     wireCoDriverBadges(host);
+    host.querySelectorAll("table.po-table").forEach(t => {
+      applyMobileTableCollapse(t, [0, 1, 2]);  // Seed, Driver, third col
+    });
     return;
   }
 

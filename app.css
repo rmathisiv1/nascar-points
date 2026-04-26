@@ -3163,3 +3163,50 @@ a.driver-cell.profile-link:hover .car-tag {
   /* ---- Footer: extra small to avoid stealing tab content space ---- */
   .footer { font-size: 8px; padding: 4px 8px; }
 }
+
+/* ============================================================
+   PLAYOFFS MOBILE FIX
+   ============================================================ */
+@media (max-width: 767.98px) {
+  .takeover {
+    padding: 8px 10px !important;
+    max-width: 100%;
+  }
+  .takeover-head h2 { font-size: 13px; }
+  .takeover-head .view-sub,
+  #playoffs-sub { font-size: 10px; }
+
+  /* Bracket: keep bk-scroll horizontal-scrollable, narrower columns */
+  .bk-scroll {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -6px;     /* let scroll touch the card edges */
+    padding: 0 6px;
+  }
+  .bk-grid {
+    grid-auto-columns: minmax(140px, auto);
+    gap: 8px;
+  }
+  .bk-card {
+    padding: 6px 8px;
+  }
+  .bk-name { font-size: 11px; }
+  .bk-pts { font-size: 10px; }
+
+  /* Playoff card chrome: tighter */
+  .po-card { padding: 8px; margin-bottom: 10px; }
+  .po-card-head { padding-bottom: 6px; margin-bottom: 6px; }
+  .po-card-title { font-size: 12px; }
+  .po-card-sub { font-size: 9px; }
+
+  /* po-mini stats stacked */
+  .po-mini-stat { padding: 4px 0; }
+  .po-mini-stat .lbl { font-size: 9px; }
+  .po-mini-stat .val { font-size: 12px; }
+
+  /* po-banner */
+  .po-banner { font-size: 10px; padding: 6px 8px; }
+
+  /* Format note: smaller */
+  .po-note { font-size: 11px; line-height: 1.45; }
+}
