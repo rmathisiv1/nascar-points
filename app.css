@@ -3978,20 +3978,23 @@ a.driver-cell.profile-link:hover .car-tag {
 
 /* Schedule list */
 .rc-schedule-body {
-  padding: 0;
+  padding: 8px 0;
 }
 .rc-sched-row {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 100px minmax(120px, 200px);
+  /* round | track+name (flex grows) | date+time | result (winner or prior) */
+  grid-template-columns: 50px minmax(0, 1.4fr) 130px minmax(160px, 1fr);
   align-items: center;
-  gap: 14px;
-  padding: 8px 14px;
+  gap: 18px;
+  padding: 10px 24px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
   cursor: pointer;
   transition: background 0.1s;
   font-size: 12px;
   border-left: 3px solid transparent;
   width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
   box-sizing: border-box;
 }
 .rc-sched-row:last-child { border-bottom: none; }
@@ -4010,18 +4013,40 @@ a.driver-cell.profile-link:hover .car-tag {
   font-weight: 600;
 }
 .rc-sched-track {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rc-sched-track > a,
+.rc-sched-track > span:first-child {
   font-weight: 500;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
+}
+.rc-sched-name {
+  font-size: 10px;
+  color: var(--dim);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .rc-sched-date {
   font-family: var(--mono);
   font-size: 10px;
   color: var(--muted);
   letter-spacing: 0.02em;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+.rc-sched-time {
+  color: var(--dim);
+  font-size: 10px;
 }
 .rc-sched-result {
   font-size: 11px;
@@ -4029,6 +4054,23 @@ a.driver-cell.profile-link:hover .car-tag {
   text-align: left;
   overflow: hidden;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rc-sched-prior {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--dim);
+  opacity: 0.85;
+}
+.rc-sched-prior-yr {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--dim);
+  letter-spacing: 0.04em;
 }
 .rc-sched-winner {
   display: inline-flex;
@@ -4073,9 +4115,13 @@ a.driver-cell.profile-link:hover .car-tag {
     grid-template-columns: 38px 1fr 70px;
     font-size: 11px;
     padding: 7px 10px;
+    max-width: 100%;
+    gap: 10px;
   }
   /* Hide the result/winner column on mobile to save space — tap row to see */
   .rc-sched-result { display: none; }
+  /* Hide the italic race name on mobile to keep the row compact */
+  .rc-sched-name { display: none; }
   .rc-sched-track { font-size: 12px; }
 }
 
@@ -4201,7 +4247,10 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 #view-schedule .view-head {
   width: 100%;
-  max-width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
 }
 
 /* Race Center "View full schedule" jump link */

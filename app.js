@@ -5524,7 +5524,7 @@ function renderLastResult(race) {
 // When the data only contains run races (no future schedule yet), we
 // synthesize placeholder rows for unrun rounds up to the season's expected
 // length so the upcoming race still gets highlighted.
-function renderSeasonSchedule(allRaces, currentRound) {
+function renderSeasonSchedule(allRaces, currentRound, lastWinnerAt) {
   const seasonLen = scheduleLengthForSeries(STATE.series);
   const knownRounds = new Set(allRaces.map(r => r.round));
   const expanded = allRaces.slice();
@@ -5541,6 +5541,15 @@ function renderSeasonSchedule(allRaces, currentRound) {
     const isCurrent = r.round === currentRound;
     const cls = `rc-sched-row${hasRun ? " run" : " upcoming"}${isCurrent ? " current" : ""}${r._synthetic ? " synthetic" : ""}`;
     const dateStr = r.date ? formatRaceDate(r.date) : "—";
+    const timeStr = r.time ? escapeHTML(r.time) : "";
+    const dateTimeHTML = timeStr
+      ? `${dateStr}<span class="rc-sched-time">${timeStr}</span>`
+      : dateStr;
+
+    // Result column: 2026 winner if completed, "NEXT" badge if it's the next
+    // upcoming race, OR most-recent prior winner at this track (for upcoming
+    // races where we have history) — small + dimmed to distinguish from the
+    // current-season winner.
     let resultBit = "";
     if (hasRun) {
       const winner = (r.results || []).find(d => d.finish_pos === 1);
@@ -5552,16 +5561,38 @@ function renderSeasonSchedule(allRaces, currentRound) {
           ${escapeHTML(lastNameOf(winner.driver))}
         </span>`;
       }
-    } else if (isCurrent) {
-      resultBit = `<span class="rc-sched-next">NEXT</span>`;
+    } else {
+      // Upcoming row. Show prior winner if we have one (and a lookup fn).
+      let priorWinner = null;
+      if (lastWinnerAt && r.track_code) priorWinner = lastWinnerAt(r.track_code);
+      const nextBadge = isCurrent ? `<span class="rc-sched-next">NEXT</span>` : "";
+      let priorHTML = "";
+      if (priorWinner) {
+        const carHex = colorFor(STATE.series, priorWinner.car_number);
+        const txt = contrastTextFor(carHex);
+        priorHTML = `<span class="rc-sched-prior">
+          <span class="rc-sched-prior-yr">${priorWinner.year}</span>
+          <span class="car-tag" style="background:${carHex};color:${txt}">${priorWinner.car_number}</span>
+          ${escapeHTML(lastNameOf(priorWinner.driver))}
+        </span>`;
+      }
+      resultBit = `${nextBadge}${priorHTML}`;
     }
+
     const trackLink = r.track_code
       ? `<a class="rc-sched-track-link" href="#/track/${escapeHTML(r.track_code)}" onclick="event.stopPropagation()">${escapeHTML(r.track || "—")}</a>`
       : `<span>${escapeHTML(r.track || "—")}</span>`;
+    const raceNameHTML = r.name
+      ? `<span class="rc-sched-name">${escapeHTML(r.name)}</span>`
+      : "";
+
     return `<div class="${cls}" data-round="${r.round}">
       <span class="rc-sched-round">R${r.round}</span>
-      <span class="rc-sched-track">${trackLink}</span>
-      <span class="rc-sched-date">${dateStr}</span>
+      <span class="rc-sched-track">
+        ${trackLink}
+        ${raceNameHTML}
+      </span>
+      <span class="rc-sched-date">${dateTimeHTML}</span>
       <span class="rc-sched-result">${resultBit}</span>
     </div>`;
   }).join("");
@@ -5597,8 +5628,55 @@ function renderSchedulePage() {
   const allRaces = allRacesSorted();
   const runRaces = allRaces.filter(r => (r.results || []).length > 0);
 
-  // Determine the "current" race for the highlight bar — first unrun race,
-  // OR fall back to lastRound + 1 synthesized when data ends short of season.
+  // Background-load prior years so we can show the most recent winner at each
+  // track for upcoming rounds. 5 years gives us a dense lookup without
+  // hammering the network.
+  const seasonsToLoad = [];
+  for (let y = STATE.season - 1; y >= STATE.season - 5 && y >= 2014; y--) {
+    seasonsToLoad.push(y);
+  }
+  const allLoaded = seasonsToLoad.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]);
+  if (!allLoaded) {
+    Promise.all(seasonsToLoad
+      .filter(y => !(SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]))
+      .map(y => loadSeasonIntoCache(y))
+    ).then(() => {
+      if (STATE.view === "schedule") renderSchedulePage();
+    }).catch(() => {});
+  }
+
+  // Build a lookup of "most recent winner at this track" — search current
+  // year first, then prior years newest-first. Returns the winner row from
+  // the latest race we have at the given track_code.
+  function lastWinnerAt(trackCode) {
+    if (!trackCode) return null;
+    // Current season — only completed races
+    const curRun = (STATE.data?.races || [])
+      .filter(r => r.track_code === trackCode && (r.results || []).length > 0)
+      .sort((a, b) => (b.round || 0) - (a.round || 0));
+    if (curRun.length) {
+      const w = (curRun[0].results || []).find(d => d.finish_pos === 1);
+      if (w) return { ...w, year: STATE.season };
+    }
+    // Prior cached seasons, newest first
+    const years = Object.keys(SEASON_CACHE).map(Number)
+      .filter(y => y < STATE.season)
+      .sort((a, b) => b - a);
+    for (const y of years) {
+      const block = SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series];
+      if (!block || !block.races) continue;
+      const races = block.races
+        .filter(r => r.track_code === trackCode && (r.results || []).length > 0)
+        .sort((a, b) => (b.round || 0) - (a.round || 0));
+      if (races.length) {
+        const w = (races[0].results || []).find(d => d.finish_pos === 1);
+        if (w) return { ...w, year: y };
+      }
+    }
+    return null;
+  }
+
+  // Determine the "current" race for the highlight bar — first unrun race.
   let nextRound = null;
   const firstUnrun = allRaces.find(r => (r.results || []).length === 0);
   if (firstUnrun) {
@@ -5612,7 +5690,7 @@ function renderSchedulePage() {
   const seriesName = ({ NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" })[STATE.series] || STATE.series;
   if (sub) sub.textContent = `${STATE.season} ${seriesName} · ${runRaces.length} of ${allRaces.length} races run`;
 
-  const scheduleHTML = renderSeasonSchedule(allRaces, nextRound);
+  const scheduleHTML = renderSeasonSchedule(allRaces, nextRound, lastWinnerAt);
 
   host.innerHTML = `
     <div class="card rc-card rc-card-wide">
@@ -5620,9 +5698,7 @@ function renderSchedulePage() {
     </div>
   `;
 
-  // Schedule row click — set throughRound cursor + jump to Cumulative Season,
-  // same behavior as the old in-Race-Center schedule had. Skip when the click
-  // landed on the inner track-name link (its own navigation handles itself).
+  // Schedule row click — set throughRound cursor + jump to Cumulative Season.
   host.querySelectorAll(".rc-sched-row[data-round]").forEach(row => {
     row.addEventListener("click", (e) => {
       if (e.target.closest("a")) return;   // let track links propagate
