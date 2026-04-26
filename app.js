@@ -1321,11 +1321,39 @@ function renderMetricBar() {
 
   const hotColdTip = "Rating delta: last-5-race form rating minus full-season rating. +17.4 means this driver's recent finishes are about 8\u20139 positions better than their season average. \u221213.0 means the opposite \u2014 about 6\u20137 positions worse recently.";
   const leaderTip = "Points leader through the last completed race.";
-  const raceTip = "Most recent race in the dataset.";
+  const raceTip = "Most recent race in the dataset, with the top 3 finishers.";
+  const upcomingTip = "Next scheduled race.";
 
-  // Build the four metric tiles once, then render them. On mobile we duplicate
-  // the track inline to produce a seamless marquee loop; the CSS animates the
-  // track with translateX.
+  // Build top-3 finisher pills for the last race
+  let top3HTML = "";
+  if (lastRace && (lastRace.results || []).length) {
+    const top3 = (lastRace.results || [])
+      .filter(d => d.finish_pos != null && d.finish_pos >= 1 && d.finish_pos <= 3)
+      .sort((a, b) => a.finish_pos - b.finish_pos);
+    top3HTML = top3.map(d => {
+      const carHex = colorFor(STATE.series, d.car_number);
+      const txtCol = contrastTextFor(carHex);
+      return `<a class="metric-finisher profile-link" href="#/car/${d.car_number}" title="P${d.finish_pos} \u00b7 ${escapeHTML(d.driver)}">
+        <span class="metric-pos">${d.finish_pos}</span>
+        <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
+        <span class="metric-finisher-name">${escapeHTML(lastNameOf(d.driver))}</span>
+      </a>`;
+    }).join("");
+  }
+
+  // Find the next upcoming race (results.length === 0)
+  const allRaces = allRacesSorted();
+  const upcoming = allRaces.find(r => (r.results || []).length === 0);
+  let upcomingHTML = "";
+  if (upcoming) {
+    const trackName = prettyTrack(upcoming.track_code, upcoming.track) || upcoming.track || "TBD";
+    const dateStr = upcoming.date ? formatRaceDate(upcoming.date) : "TBD";
+    const timeStr = upcoming.time ? ` \u00b7 ${escapeHTML(upcoming.time)}` : "";
+    upcomingHTML = `R${upcoming.round} \u00b7 ${escapeHTML(trackName)}<span class="metric-sub"> \u00b7 ${escapeHTML(dateStr)}${timeStr}</span>`;
+  } else {
+    upcomingHTML = "Season complete";
+  }
+
   const metricsHTML = `
     <div class="metric" data-tip="${escapeHTML(leaderTip)}"><span class="k">Leader</span>
       <span class="v">${leader ? `${escapeHTML(displayName(leader))} \u00b7 ${leader.total}` : "\u2014"}</span></div>
@@ -1333,8 +1361,12 @@ function renderMetricBar() {
       <span class="v hot">${hottest ? `${escapeHTML(displayName(hottest.entity))} ${signed(hottest.delta.toFixed(1))}` : "\u2014"}</span></div>
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Coldest</span>
       <span class="v cold">${coldest ? `${escapeHTML(displayName(coldest.entity))} ${signed(coldest.delta.toFixed(1))}` : "\u2014"}</span></div>
-    <div class="metric" data-tip="${escapeHTML(raceTip)}"><span class="k">${STATE.throughRound != null ? "As Of" : "Last Race"}</span>
-      <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}` : "\u2014"}</span></div>
+    <div class="metric metric-lastrace" data-tip="${escapeHTML(raceTip)}"><span class="k">${STATE.throughRound != null ? "As Of" : "Last Race"}</span>
+      <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}` : "\u2014"}</span>
+      ${top3HTML ? `<div class="metric-finishers">${top3HTML}</div>` : ""}
+    </div>
+    <div class="metric" data-tip="${escapeHTML(upcomingTip)}"><span class="k">Upcoming</span>
+      <span class="v">${upcomingHTML}</span></div>
   `;
 
   if (isMobile()) {
@@ -5030,17 +5062,19 @@ function renderFormMini() {
     const lastName = lastNameOf(r.primaryDriver || r.driver || "");
     const cls = r.delta > 1 ? "hot" : r.delta < -1 ? "cold" : "flat";
     const sign = r.delta > 0 ? "+" : "";
+    const trendWord = r.delta > 1 ? "trending up" : r.delta < -1 ? "trending down" : "steady";
+    const deltaTip = `Last 5 vs season: ${sign}${r.delta.toFixed(1)} — ${trendWord} (L5 rating ${r.f.toFixed(1)} vs season ${r.s.toFixed(1)})`;
     const lastFinishes = r.races.slice(-5).map(rc => rc.finish).filter(x => x != null);
     // Same sparkline helper as Trending table
     const spark = sparkSVG(lastFinishes, carHex, 58, 14);
-    return `<a class="form-mini-row profile-link" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)} — form ${r.f.toFixed(1)} vs. season ${r.s.toFixed(1)}">
+    return `<a class="form-mini-row profile-link" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)} — open profile">
       <div class="form-mini-top">
         <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span class="form-mini-name">${escapeHTML(lastName)}</span>
-        <span class="form-mini-rating">${r.f.toFixed(1)}</span>
+        <span class="form-mini-rating" title="Form rating across last 5 races (higher is better)">${r.f.toFixed(1)}</span>
       </div>
       <div class="form-mini-bottom">
-        <span class="form-mini-delta ${cls}">${sign}${r.delta.toFixed(1)}</span>
+        <span class="form-mini-delta ${cls}" title="${escapeHTML(deltaTip)}">${sign}${r.delta.toFixed(1)}</span>
         <span class="form-mini-spark">${spark}</span>
       </div>
     </a>`;

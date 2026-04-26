@@ -4285,3 +4285,48 @@ a.driver-cell.profile-link:hover .car-tag {
   width: 100%;
   table-layout: fixed;
 }
+
+/* ============================================================
+   Metric bar — top 3 finishers next to Last Race + Upcoming tile
+   ============================================================ */
+.metric-lastrace {
+  /* Allow the tile to grow taller when the finishers row is rendered */
+  align-items: flex-start;
+}
+.metric-finishers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.metric-finisher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--mono);
+  text-decoration: none;
+  color: var(--text);
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.03);
+  transition: background 0.1s;
+}
+.metric-finisher:hover {
+  background: rgba(255,255,255,0.06);
+}
+.metric-pos {
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 10px;
+  text-align: right;
+}
+.metric-finisher-name {
+  font-size: 10px;
+  color: var(--text);
+}
+.metric-sub {
+  color: var(--dim);
+  font-weight: 400;
+}
