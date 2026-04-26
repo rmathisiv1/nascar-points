@@ -364,10 +364,11 @@ html, body {
   flex-shrink: 0;
 }
 .form-mini-spark {
-  flex: 1;
-  max-width: 80px;
+  flex: 0 0 auto;
+  width: 80px;
   height: 14px;
   display: block;
+  margin-left: auto;     /* push to right edge — dead space sits between rating and spark */
 }
 
 /* ---------- CENTER: tab strip + panel ---------- */
@@ -495,7 +496,12 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Hide the scrollbar visually — content still scrolls. The visible bar
+     was sitting mid-layout and looked broken. */
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/old Edge */
 }
+.profile-takeover #view-profile::-webkit-scrollbar { display: none; }
 
 /* Slim toolbar variant for tabbed panels — no margin-bottom, tighter */
 .toolbar-slim {
@@ -511,10 +517,10 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .toolbar-slim .search-input { height: 26px; font-size: 11px; }
 .toolbar-slim .btn-ghost { padding: 4px 8px; font-size: 9px; }
 
-/* Compact driver picker for tabs — one row max, horizontal scroll */
+/* Compact driver picker for tabs — expands to fit all pills (no scroll). */
 .driver-picker-compact {
-  max-height: 68px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   flex-shrink: 0;
 }
 .driver-picker-compact .driver-pill { padding: 3px 6px; font-size: 10px; }

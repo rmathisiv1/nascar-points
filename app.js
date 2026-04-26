@@ -1700,7 +1700,25 @@ function renderArc() {
   const svg = document.getElementById("arc-svg");
   if (!STATE.data) return;
 
-  renderTeamFilter("arc-team-filter", "arc", () => renderArc());
+  // Team pills toggle team-wide selection in STATE.arc.selected
+  renderTeamFilter(
+    "arc-team-filter",
+    "arc",
+    (teamCode) => {
+      // Toggle: if all cars on this team are already selected, deselect them;
+      // otherwise add them all to the selection.
+      const teamCars = allEntities().filter(e => e.team_code === teamCode);
+      const allOn = teamCars.length > 0 && teamCars.every(e => STATE.arc.selected.has(entityKey(e)));
+      teamCars.forEach(e => {
+        const k = entityKey(e);
+        if (allOn) STATE.arc.selected.delete(k);
+        else STATE.arc.selected.add(k);
+      });
+      renderArc();
+    },
+    () => STATE.arc.selected,
+    () => { STATE.arc.selected.clear(); renderArc(); }
+  );
 
   const races = racesSorted();
   if (races.length === 0) {
@@ -1913,7 +1931,29 @@ function renderBreakdown() {
   const tip = document.getElementById("breakdown-tooltip");
   if (!STATE.data) return;
 
-  renderTeamFilter("breakdown-team-filter", "breakdown", () => renderBreakdown());
+  // Team pills toggle team's cars in STATE.breakdown.drivers. Capped at 4 —
+  // toggling a team replaces selection with that team's cars (truncated).
+  // Tapping the same team again clears selection.
+  renderTeamFilter(
+    "breakdown-team-filter",
+    "breakdown",
+    (teamCode) => {
+      const teamCars = allEntities().filter(e => e.team_code === teamCode);
+      const teamDrivers = teamCars.map(e => e.driver);
+      const allOn = teamDrivers.length > 0 && teamDrivers.every(d => STATE.breakdown.drivers.includes(d));
+      if (allOn) {
+        STATE.breakdown.drivers = STATE.breakdown.drivers.filter(d => !teamDrivers.includes(d));
+      } else {
+        STATE.breakdown.drivers = teamDrivers.slice(0, 4);
+      }
+      renderBreakdown();
+    },
+    () => new Set(STATE.breakdown.drivers.map(d => {
+      const e = allEntities().find(x => x.driver === d);
+      return e ? entityKey(e) : "";
+    })),
+    () => { STATE.breakdown.drivers = []; renderBreakdown(); }
+  );
 
   const entities = allEntities();
   // Default: if nothing selected, pick current leader
@@ -1936,11 +1976,16 @@ function renderBreakdown() {
   }
 
   const races = racesSorted();
-  const rounds = races.map(r => r.round);
+  // For the chart x-axis, use the FULL season schedule — bar widths stay
+  // constant as the season progresses. Unrun rounds have empty bars.
+  const seasonLength = scheduleLengthForSeries(STATE.series);
+  const totalRounds = (typeof seasonLength === "number" && seasonLength > 0) ? seasonLength : races.length;
+  const rounds = Array.from({ length: totalRounds }, (_, i) => i + 1);
   const raceByRound = {};
   races.forEach(r => { raceByRound[r.round] = r; });
 
-  // Per-driver race-indexed data
+  // Per-driver race-indexed data — slot is empty (s1=s2=fin=fl=0) for any
+  // round that hasn't run yet OR that the driver missed.
   const driverData = selected.map(d => {
     const byRound = {};
     d.races.forEach(r => { byRound[r.round] = r; });
@@ -2177,14 +2222,18 @@ function renderBreakdown() {
       });
     });
 
-    // Round label
-    const lbl = document.createElementNS(svgNS, "text");
-    lbl.setAttribute("x", groupCx); lbl.setAttribute("y", H - 14);
-    lbl.setAttribute("text-anchor", "middle");
-    lbl.setAttribute("fill", "var(--muted)");
-    lbl.setAttribute("font-family", "var(--mono)"); lbl.setAttribute("font-size", "10");
-    lbl.textContent = `R${rd}`;
-    svg.appendChild(lbl);
+    // Round label — skip every Nth when crowded so they don't overlap.
+    // Threshold: aim for at most ~12 labels visible across the chart.
+    const labelStep = rounds.length > 14 ? Math.ceil(rounds.length / 12) : 1;
+    if (i % labelStep === 0 || i === rounds.length - 1) {
+      const lbl = document.createElementNS(svgNS, "text");
+      lbl.setAttribute("x", groupCx); lbl.setAttribute("y", H - 14);
+      lbl.setAttribute("text-anchor", "middle");
+      lbl.setAttribute("fill", "var(--muted)");
+      lbl.setAttribute("font-family", "var(--mono)"); lbl.setAttribute("font-size", "10");
+      lbl.textContent = `R${rd}`;
+      svg.appendChild(lbl);
+    }
   });
 
   svg.addEventListener("mouseleave", hideTip);
@@ -2252,7 +2301,22 @@ function renderTrajectory() {
   const svg = document.getElementById("trajectory-svg");
   if (!STATE.data) return;
 
-  renderTeamFilter("trajectory-team-filter", "trajectory", () => renderTrajectory());
+  renderTeamFilter(
+    "trajectory-team-filter",
+    "trajectory",
+    (teamCode) => {
+      const teamCars = allEntities().filter(e => e.team_code === teamCode);
+      const allOn = teamCars.length > 0 && teamCars.every(e => STATE.trajectory.selected.has(entityKey(e)));
+      teamCars.forEach(e => {
+        const k = entityKey(e);
+        if (allOn) STATE.trajectory.selected.delete(k);
+        else STATE.trajectory.selected.add(k);
+      });
+      renderTrajectory();
+    },
+    () => STATE.trajectory.selected,
+    () => { STATE.trajectory.selected.clear(); renderTrajectory(); }
+  );
 
   const trackFilter = STATE.trajectory.tracks;
   const includeRace = (race) => {
@@ -2263,12 +2327,6 @@ function renderTrajectory() {
   // Pull entities + metadata. In single-season mode this is allEntities();
   // in multi-season mode it's the combined cross-year roll-up.
   let { entities, totalRaces, seasonsUsed } = trajectoryEntities();
-
-  // Apply team filter if set (single-season only — team mapping across years
-  // may not be coherent anyway). For multi-year, skip filtering entirely.
-  if (STATE.trajectory.teamFilter && seasonsUsed.length <= 1) {
-    entities = entities.filter(e => e.team_code === STATE.trajectory.teamFilter);
-  }
 
   // Full-time: ≥90% of races in the combined pool (or all of them if few).
   // This generalizes isFullTime() across multi-year aggregations.
@@ -4653,49 +4711,60 @@ function renderBracket(rule) {
 // playoffs, the cutoff shifts to the current round's advancing count. Below
 // the cutoff, each row shows the deficit to the bubble instead of raw points.
 // ============================================================
-// TEAM FILTER — shared across Arc / Breakdown / Stage Analysis tabs
+// TEAM PILL ROW — shared across Cumulative / Breakdown / Stage tabs
 // ============================================================
-// Renders a row of clickable team pills above the chart picker. Clicking a
-// team filters which cars are selectable/shown. `stateKey` is one of
-// "arc" | "breakdown" | "trajectory" — it must correspond to a STATE slot
-// with a `teamFilter` field. `onChange` fires after the state mutates so the
-// calling view can re-render itself.
-function renderTeamFilter(hostId, stateKey, onChange) {
+// Renders a row of clickable team pills above the chart picker. Click behavior
+// is TOGGLE-SELECT: tap a pill once to add all that team's cars to the current
+// selection; tap again to remove them all. The "Clear" pill empties selection.
+// `onToggle(teamCode)` is called by each view to handle the actual selection
+// state for that view (Arc / Breakdown / Stage have different selection
+// containers — Set vs array). `getSelectedKeys()` returns the current
+// selection so we can mark the "all selected" state on each pill.
+function renderTeamFilter(hostId, _stateKey, onToggle, getSelectedKeys, onClear) {
   const host = document.getElementById(hostId);
   if (!host || !STATE.data) { if (host) host.innerHTML = ""; return; }
 
-  // Collect unique team codes present in the current dataset
   const teamCodes = new Set();
   allEntities().forEach(e => { if (e.team_code) teamCodes.add(e.team_code); });
   const codes = Array.from(teamCodes).sort();
   if (codes.length === 0) { host.innerHTML = ""; return; }
 
-  const active = STATE[stateKey]?.teamFilter || null;
+  // For each team code, find its cars and check if they're all currently
+  // selected — that drives the active-state styling of the pill.
+  const selectedKeys = (typeof getSelectedKeys === "function") ? getSelectedKeys() : new Set();
+  const teamCarsByCode = {};
+  allEntities().forEach(e => {
+    if (!e.team_code) return;
+    (teamCarsByCode[e.team_code] = teamCarsByCode[e.team_code] || []).push(e);
+  });
 
-  const allPill = `<span class="tf-pill tf-all ${active == null ? "active" : "inactive"}" data-team="">All</span>`;
+  const clearPill = `<span class="tf-pill tf-all" data-team="">Clear</span>`;
   const pills = codes.map(code => {
     const hex = orgColorForTeam(code) || "#9ca3af";
     const txt = contrastTextFor(hex);
-    const cls = active == null ? "" : (active === code ? "active" : "inactive");
+    const cars = teamCarsByCode[code] || [];
+    const allSelected = cars.length > 0 && cars.every(e => selectedKeys.has(entityKey(e)));
+    const cls = allSelected ? "active" : "";
     return `<span class="tf-pill ${cls}" data-team="${escapeHTML(code)}" style="background:${hex};color:${txt}">${escapeHTML(code)}</span>`;
   }).join("");
-  host.innerHTML = allPill + pills;
+  host.innerHTML = clearPill + pills;
 
   host.querySelectorAll(".tf-pill").forEach(pill => {
     pill.addEventListener("click", () => {
-      const team = pill.dataset.team || null;
-      const current = STATE[stateKey].teamFilter || null;
-      STATE[stateKey].teamFilter = (team === current || team === null || team === "") ? null : team;
-      if (onChange) onChange();
+      const team = pill.dataset.team || "";
+      if (team === "") {
+        if (onClear) onClear();
+      } else {
+        if (onToggle) onToggle(team);
+      }
     });
   });
 }
 
-// Apply a team filter to a list of entities. If filter is null, return as-is.
-function applyTeamFilter(entities, stateKey) {
-  const f = STATE[stateKey]?.teamFilter;
-  if (!f) return entities;
-  return entities.filter(e => e.team_code === f);
+// Legacy passthrough — team filter is now selection-based, not filter-based.
+// Kept so callers can stop applying it without immediate breakage.
+function applyTeamFilter(entities, _stateKey) {
+  return entities;
 }
 
 function renderStandingsMini() {
