@@ -565,9 +565,22 @@ def main() -> None:
         "source": "racing-reference.info",
         "series": series_out,
     }
+    total = sum(len(s.get("races", [])) for s in series_out.values())
+
+    # Safety: if every series came back empty (e.g., racing-reference's
+    # anti-bot returned 403 to all of them), DON'T overwrite the existing
+    # file with garbage. Exit non-zero so the workflow's commit step is
+    # skipped via the standard `set -e` behavior — except our workflow
+    # doesn't use set -e, so we leave the existing file untouched and fail
+    # the job explicitly.
+    if total == 0:
+        print(f"\nABORT: scraped 0 races across all series — refusing to overwrite "
+              f"{args.out}. Likely racing-reference 403'd us. "
+              f"Existing file preserved.", file=sys.stderr)
+        sys.exit(2)
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, indent=2))
-    total = sum(len(s.get("races", [])) for s in series_out.values())
     print(f"\nwrote {args.out} — {total} races", file=sys.stderr)
 
 
