@@ -3379,3 +3379,95 @@ a.driver-cell.profile-link:hover .car-tag {
   }
   .po-reseed-row { padding: 5px 8px; font-size: 11px; }
 }
+
+/* ============================================================
+   ROUND OF MOBILE FIXES — page title, sticky th, no drawer pills,
+   tighter playoffs head
+   ============================================================ */
+
+/* Sticky page-title bar — shows on mobile only, immediately under the
+   metric bar. Replaces the desktop tab strip on mobile so users always
+   know which page they're on. */
+.mobile-page-title { display: none; }
+
+@media (max-width: 767.98px) {
+  /* ---- Page title bar ---- */
+  .mobile-page-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 78px;             /* below topbar (~44px) + metricbar (~34px) */
+    z-index: 50;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  /* If time-cursor banner is up, push title further down */
+  .time-cursor-banner:not([hidden]) ~ .mobile-page-title {
+    top: 110px;
+  }
+
+  /* ---- Sticky table headers BELOW the page-title bar ---- */
+  /* Desktop already has them sticky at top:0; on mobile the global
+     sticky chrome stack (topbar 0–44 + metricbar 44–78 + title 78–112)
+     means the table th must stick BELOW the title bar, otherwise it
+     slides under those bars. */
+  .data-table th {
+    top: 112px !important;
+    z-index: 8;            /* below the page chrome */
+  }
+  .time-cursor-banner:not([hidden]) ~ * .data-table th,
+  .time-cursor-banner:not([hidden]) ~ .col-center .data-table th {
+    top: 144px !important;
+  }
+
+  /* ---- Restore picker pills below charts; kill drawer button ---- */
+  .picker-drawer-toggle,
+  .mob-only-btn {
+    display: none !important;
+  }
+  /* Reorder: drawer wrapper has [toggle, picker]. Put picker AFTER chart card.
+     Easiest way: flip flex order on the drawer. We use a CSS-only solution:
+     the picker-drawer becomes order: 99 to push it after siblings. */
+  .picker-drawer {
+    order: 99;
+    margin: 6px 0 0;
+  }
+  .picker-drawer .driver-picker {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    max-height: none;       /* let it grow naturally */
+    overflow-y: visible;
+  }
+  /* The team-filter dropdown also belongs in the picker zone — push to bottom */
+  .team-filter {
+    order: 98;
+    margin: 6px 0 0;
+  }
+  /* The view section needs to be flex-column for order to work */
+  .tab-panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- Playoffs takeover head: hide back link on mobile (hamburger nav) */
+  .takeover-head {
+    display: none;
+  }
+  /* Reduce playoffs heading size considerably */
+  #view-playoffs .view-head { padding: 4px 0 8px; }
+  #view-playoffs .view-head h1 { font-size: 16px; margin: 0; }
+  #view-playoffs .view-sub { font-size: 10px; margin-top: 2px; }
+  /* Banner: smaller and closer to top */
+  .po-banner { font-size: 10px; padding: 6px 8px; margin-bottom: 8px; }
+}

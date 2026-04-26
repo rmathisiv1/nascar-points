@@ -797,6 +797,24 @@ function render() {
   const inTakeover = TAKEOVER_VIEWS.includes(STATE.view);
   const inProfile  = STATE.view === "profile";
 
+  // Mobile page title — visible only on mobile (CSS-controlled). Reflects the
+  // current tab/page so users know which view they're on without a tab strip.
+  const pageTitleEl = document.getElementById("mobile-page-title-text");
+  if (pageTitleEl) {
+    const titleMap = {
+      form: "Trending",
+      arc: "Season Arc",
+      breakdown: "Per-Race Breakdown",
+      trajectory: "Stage Analysis",
+      teammates: "Teammate Delta",
+      heatmap: "Heatmap",
+      standings: "Standings",
+      playoffs: "Playoff Picture",
+      profile: "Driver Profile",
+    };
+    pageTitleEl.textContent = titleMap[STATE.view] || "NASCAR Points";
+  }
+
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
 
