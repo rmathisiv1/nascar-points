@@ -803,9 +803,9 @@ function render() {
   if (pageTitleEl) {
     const titleMap = {
       form: "Trending",
-      arc: "Season Arc",
-      breakdown: "Per-Race Breakdown",
-      trajectory: "Stage Analysis",
+      arc: "Cumulative Season",
+      breakdown: "Points Breakdown",
+      trajectory: "Stage vs Finish",
       teammates: "Teammate Delta",
       heatmap: "Heatmap",
       standings: "Standings",
@@ -4065,12 +4065,18 @@ function renderHeatmap() {
     const label = document.createElement("a");
     label.className = "hm-label profile-link";
     label.href = profileHref(d);
-    // On mobile, show just the last name (no "#X · Firstname Lastname")
-    // so the narrow first column doesn't truncate. Car # is in the pill.
-    const fullName = displayName(d);
-    const nameToShow = isMob
-      ? fullName.replace(/^#\d+\s*·\s*/, "").split(/\s+/).slice(-1)[0]
-      : fullName;
+    // On mobile, show only the PRIMARY driver's last name. For multi-driver
+    // cars, displayName() returns "#48 · Alex Bowman +2" — naive last-token
+    // extraction would give "+2". Use primaryDriver (or fallback driver)
+    // directly. The (i) co-driver badge (renderCoDriverBadge) still surfaces
+    // that the car is shared.
+    let nameToShow;
+    if (isMob) {
+      const main = d.primaryDriver || d.driver || "";
+      nameToShow = main.split(/\s+/).slice(-1)[0] || main;
+    } else {
+      nameToShow = displayName(d);
+    }
     label.innerHTML = `<span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span><span>${escapeHTML(nameToShow)}</span>${renderCoDriverBadge(d)}`;
     grid.appendChild(label);
     const byRound = {};

@@ -3610,3 +3610,43 @@ a.driver-cell.profile-link:hover .car-tag {
   /* Page title needs to sit ABOVE the scroll container so it doesn't get
      clipped. Already sticky at top:78. Tables scroll INSIDE their card. */
 }
+
+/* ============================================================
+   FINAL ROUND — sticky thead, no chevron, profile fixes
+   ============================================================ */
+@media (max-width: 767.98px) {
+  /* Sticky thead requires a single scroll context. The inner .table-scroll
+     wrapper (overflow-x: auto for desktop) breaks sticky on mobile because
+     it becomes the th's sticky parent but doesn't actually scroll. Strip it
+     so the outer .card is the only scroll container. */
+  .table-scroll {
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+  }
+
+  /* Remove chevron column entirely on mobile — saves ~25px width.
+     Rows still tap-to-expand (handler on the <tr>). */
+  .mob-chev,
+  .mob-chev-head { display: none !important; }
+
+  /* Profile "Finish Per Race" cells uniform size — fixed width, no grow */
+  .profile-heat-cell {
+    flex: 0 0 56px !important;
+    min-width: 56px;
+    max-width: 56px;
+  }
+}
+
+/* Profile right-column (Form panel) cutoff on desktop:
+   the +17/-13 delta numbers were getting clipped at the viewport edge.
+   Add a touch of right-padding inside the col-right scroll area, and
+   ensure the delta cell doesn't get squeezed. */
+@media (min-width: 768px) {
+  .col-right .form-mini-delta {
+    padding-right: 4px;
+    flex-shrink: 0;
+  }
+  .col-right .form-mini-row {
+    padding-right: 12px;
+  }
+}
