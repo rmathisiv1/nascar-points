@@ -1121,6 +1121,22 @@ function lastNameOf(name) {
   return last;
 }
 
+// Normalize a driver name for cross-year matching. Strips suffixes (Jr/Sr/etc),
+// case, accents, internal punctuation. "Dale Earnhardt Jr." → "dale earnhardt"
+// — used to dedupe drivers between years where punctuation may differ
+// ("D Hamlin" vs "Denny Hamlin" still won't match — name has to be the full
+// form in both records, which is true for racing-reference data).
+function normalizeDriverName(name) {
+  if (!name) return "";
+  return String(name)
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // strip accents
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/gi, "")        // strip suffixes
+    .replace(/[^\w\s]/g, "")                             // strip punctuation
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Returns the hash URL for this entity's profile page.
 // Car-centric app: every profile is a car profile.
 function profileHref(entity) {
@@ -5639,32 +5655,81 @@ function renderTrackPage() {
     sub.textContent = `${trackTypeStr ? trackTypeStr + " · " : ""}${yrs}`;
   }
 
-  // ---- Most wins (top 5) — across all cached history ----
-  const winsByCarsec = {};
+  // Build maps for current-season full-time entities. We need both:
+  //   - currentFtDrivers: a Set of normalized current driver names (for filtering
+  //     "Best Avg Finish" — we only want to count finishes BY a current FT driver,
+  //     not by some other driver who happened to drive that car number years ago)
+  //   - currentDriverByCar: car# → current driver name (for displaying the
+  //     CURRENT driver of a car when showing Most Wins, in case the historical
+  //     winner of #19 was Truex but Briscoe drives it now)
+  const currentFtEntities = allEntities().filter(isFullTime);
+  const currentFtDrivers = new Set(
+    currentFtEntities.map(e => normalizeDriverName(e.primaryDriver || e.driver || ""))
+      .filter(Boolean)
+  );
+  const currentDriverByCar = {};
+  currentFtEntities.forEach(e => {
+    currentDriverByCar[e.car_number] = e.primaryDriver || e.driver || "";
+  });
+
+  // ---- Most wins (top 5) — filtered to current-FT drivers only.
+  // Historical legends (Earnhardt, Petty, etc.) won't appear because the
+  // user wants to see the win counts for drivers who could win this weekend.
+  const winsByDriver = {};
   history.forEach(h => {
     const w = (h.results || []).find(d => d.finish_pos === 1);
     if (!w) return;
-    const k = w.car_number;
-    if (!winsByCarsec[k]) winsByCarsec[k] = { car: k, driver: w.driver, wins: 0, years: [] };
-    winsByCarsec[k].wins++;
-    winsByCarsec[k].years.push(h.year);
-    winsByCarsec[k].driver = w.driver;
+    const norm = normalizeDriverName(w.driver || "");
+    if (!currentFtDrivers.has(norm)) return;
+    if (!winsByDriver[norm]) {
+      winsByDriver[norm] = { car: w.car_number, driver: w.driver, wins: 0, years: [] };
+    }
+    winsByDriver[norm].wins++;
+    winsByDriver[norm].years.push(h.year);
   });
-  const topWins = Object.values(winsByCarsec).sort((a, b) => b.wins - a.wins).slice(0, 5);
+  // Override car# + driver name with their current ride / canonical name
+  Object.keys(winsByDriver).forEach(key => {
+    const entity = currentFtEntities.find(
+      e => normalizeDriverName(e.primaryDriver || e.driver || "") === key
+    );
+    if (entity) {
+      winsByDriver[key].car = entity.car_number;
+      winsByDriver[key].driver = entity.primaryDriver || entity.driver || winsByDriver[key].driver;
+    }
+  });
+  const topWins = Object.values(winsByDriver).sort((a, b) => b.wins - a.wins).slice(0, 5);
 
-  // ---- Best avg finish among current-FT cars (last 10 yrs) ----
-  const currentFt = new Set(allEntities().filter(isFullTime).map(e => e.car_number));
-  const finsByCar = {};
+  // ---- Best avg finish among current-FT DRIVERS (not just car numbers) ----
+  // Filter by driver name so we don't accidentally count finishes by historical
+  // drivers of a current FT car number (e.g. Aric Almirola finishing well in
+  // the #43 doesn't mean Erik Jones — current #43 driver — is hot at this track).
+  const finsByDriver = {};
   history.forEach(h => {
     (h.results || []).forEach(d => {
       if (d.finish_pos == null) return;
-      if (!currentFt.has(d.car_number)) return;
-      if (!finsByCar[d.car_number]) finsByCar[d.car_number] = { car: d.car_number, driver: d.driver, fins: [] };
-      finsByCar[d.car_number].fins.push(d.finish_pos);
-      finsByCar[d.car_number].driver = d.driver;
+      const norm = normalizeDriverName(d.driver || "");
+      if (!currentFtDrivers.has(norm)) return;
+      const key = norm;
+      if (!finsByDriver[key]) {
+        finsByDriver[key] = { car: d.car_number, driver: d.driver, fins: [] };
+      }
+      finsByDriver[key].fins.push(d.finish_pos);
+      // Update car# to the most recent year so the pill matches their current ride
+      finsByDriver[key].car = d.car_number;
     });
   });
-  const topAvg = Object.values(finsByCar)
+  // Override car# with the CURRENT car# from the entity table so the pill is
+  // exactly correct, even if their last race in cached data had a different car.
+  Object.keys(finsByDriver).forEach(key => {
+    const entity = currentFtEntities.find(
+      e => normalizeDriverName(e.primaryDriver || e.driver || "") === key
+    );
+    if (entity) {
+      finsByDriver[key].car = entity.car_number;
+      finsByDriver[key].driver = entity.primaryDriver || entity.driver || finsByDriver[key].driver;
+    }
+  });
+  const topAvg = Object.values(finsByDriver)
     .filter(c => c.fins.length >= 1)
     .map(c => ({ ...c, avg: c.fins.reduce((s, x) => s + x, 0) / c.fins.length, n: c.fins.length }))
     .sort((a, b) => a.avg - b.avg)
@@ -5688,7 +5753,7 @@ function renderTrackPage() {
       <span class="rc-winner-name">${escapeHTML(lastNameOf(c.driver))}</span>
       <span class="rc-hot-avg">${c.wins}</span>
     </a>`;
-  }).join("") : `<div class="rc-empty">No wins recorded.</div>`;
+  }).join("") : `<div class="rc-empty">No wins by current ${STATE.season} full-time drivers.</div>`;
 
   const avgHTML = topAvg.length ? topAvg.map(c => {
     const carHex = colorFor(STATE.series, c.car);
@@ -5698,7 +5763,7 @@ function renderTrackPage() {
       <span class="rc-hot-name">${escapeHTML(lastNameOf(c.driver))}</span>
       <span class="rc-hot-avg">${c.avg.toFixed(1)}<span class="rc-hot-n"> ·${c.n}v</span></span>
     </a>`;
-  }).join("") : `<div class="rc-empty">No data for current-FT cars.</div>`;
+  }).join("") : `<div class="rc-empty">No prior visits for current ${STATE.season} full-time drivers.</div>`;
 
   const manuHTML = manuRanked.length ? manuRanked.map(([m, w]) => `
     <div class="tk-manu-row">
@@ -5754,11 +5819,17 @@ function renderTrackPage() {
 
     <div class="rc-grid tk-grid-3">
       <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Most Wins Here</span></div>
+        <div class="rc-card-head">
+          <span class="rc-card-title">Most Wins Here</span>
+          <span class="rc-card-sub">${STATE.season} drivers only</span>
+        </div>
         <div class="rc-card-body">${winsHTML}</div>
       </div>
       <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Best Avg Finish</span><span class="rc-card-sub">current FT only</span></div>
+        <div class="rc-card-head">
+          <span class="rc-card-title">Best Avg Finish</span>
+          <span class="rc-card-sub">${STATE.season} drivers · all-time</span>
+        </div>
         <div class="rc-card-body">${avgHTML}</div>
       </div>
       <div class="card rc-card">
