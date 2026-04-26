@@ -1867,17 +1867,17 @@
         },
         "NOS": {
           "years": 17,
-          "starts": 514,
+          "starts": 515,
           "wins": 31,
           "top5": 176,
           "top10": 311,
           "poles": 12,
-          "laps": 86050,
-          "laps_led": 7348,
+          "laps": 86163,
+          "laps_led": 7352,
           "avg_start": 9.9,
-          "avg_finish": 11.6,
-          "running_at_finish": 456,
-          "lead_lap_finishes": 397
+          "avg_finish": 11.7,
+          "running_at_finish": 457,
+          "lead_lap_finishes": 398
         },
         "NTS": {
           "years": 3,
@@ -1897,7 +1897,7 @@
       "source_url": "https://www.racing-reference.info/driver/Justin_Allgaier"
     }
   },
-  "generated_at": "2026-04-23T13:56:44+00:00",
+  "generated_at": "2026-04-26T15:51:51+00:00",
   "source": "racing-reference.info",
   "count": 37
 }
