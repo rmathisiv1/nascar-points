@@ -2881,10 +2881,10 @@ a.driver-cell.profile-link:hover .car-tag {
     color: var(--muted);
   }
 
-  /* ---- Charts: let them shrink comfortably ---- */
-  .tab-chart-fill {
-    min-height: 260px;
-  }
+  /* ---- Charts: let them shrink comfortably ----
+     No min-height — let the chart take its natural aspect-ratio height.
+     A min-height here would force the card taller than the SVG, leaving
+     a giant block of empty space below the chart on mobile. */
   .card-chart { padding: 8px; }
 
   /* ---- Profile takeover: full-screen on mobile ---- */

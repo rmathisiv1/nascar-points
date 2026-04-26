@@ -2246,9 +2246,9 @@ function renderTrajectory() {
 
   if (eligible.length === 0) {
     svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">No races match this filter yet.</text>`;
-    document.getElementById("trajectory-legend").innerHTML = "";
-    document.getElementById("trajectory-over").innerHTML = "";
-    document.getElementById("trajectory-under").innerHTML = "";
+    const tl = document.getElementById("trajectory-legend"); if (tl) tl.innerHTML = "";
+    const to = document.getElementById("trajectory-over"); if (to) to.innerHTML = "";
+    const tu = document.getElementById("trajectory-under"); if (tu) tu.innerHTML = "";
     return;
   }
 
@@ -2473,7 +2473,8 @@ function renderTrajectory() {
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   svg.appendChild(g);
 
-  document.getElementById("trajectory-legend").innerHTML = `
+  const trajLegend = document.getElementById("trajectory-legend");
+  if (trajLegend) trajLegend.innerHTML = `
     <span class="legend-item"><span class="legend-dot" style="background:${STATE.trajectory.mode === "trajectory" ? "var(--accent-2)" : "var(--accent)"}"></span>Car · ${STATE.trajectory.mode === "trajectory" ? "season → last-5" : "season avg"}</span>
     <span class="legend-item"><span class="legend-line"></span>League trend</span>
     <span class="legend-item" style="color:var(--pos)">▲ above = converting pace to results</span>
@@ -2587,6 +2588,7 @@ function regression(pts) {
 
 function fillTrajCallout(hostId, rows) {
   const host = document.getElementById(hostId);
+  if (!host) return;
   host.innerHTML = rows.map(r => {
     const col = colorFor(STATE.series, r.entity.car_number);
     const txt = contrastTextFor(col);
