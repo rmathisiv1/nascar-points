@@ -3795,16 +3795,23 @@ a.driver-cell.profile-link:hover .car-tag {
   overflow: hidden;
 }
 
-/* Cap the Race Center page width so it doesn't sprawl on ultrawide monitors.
-   Apply to the host container so all children inherit the cap. */
+/* Race Center now lives in the center column (.col-center). It should fill
+   the column without overflowing — no horizontal scroll, no fixed max-width
+   that fights the surrounding layout. */
 #race-host {
-  max-width: 1100px;
-  margin: 0 auto;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#view-race {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 #view-race .view-head {
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
 }
 .rc-hero::before {
   content: "";
@@ -3969,7 +3976,7 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 .rc-sched-row {
   display: grid;
-  grid-template-columns: 40px 280px 100px 1fr;
+  grid-template-columns: 40px minmax(0, 1fr) 100px minmax(120px, 200px);
   align-items: center;
   gap: 14px;
   padding: 8px 14px;
@@ -3978,8 +3985,8 @@ a.driver-cell.profile-link:hover .car-tag {
   transition: background 0.1s;
   font-size: 12px;
   border-left: 3px solid transparent;
-  max-width: 700px;
-  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 .rc-sched-row:last-child { border-bottom: none; }
 .rc-sched-row:hover { background: rgba(255,255,255,0.03); }
@@ -4070,12 +4077,19 @@ a.driver-cell.profile-link:hover .car-tag {
    TRACK LANDING PAGE (#/track/CODE) + clickable track links
    ============================================================ */
 #track-host {
-  max-width: 1100px;
-  margin: 0 auto;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#view-track {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 #view-track .view-head {
-  max-width: 1100px;
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -4164,3 +4178,104 @@ a.driver-cell.profile-link:hover .car-tag {
   transition: color 0.1s;
 }
 .hm-header-link:hover { color: var(--accent); }
+
+/* ============================================================
+   SCHEDULE PAGE (#/schedule) — center-pane takeover
+   ============================================================ */
+#schedule-host {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#view-schedule {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+#view-schedule .view-head {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Race Center "View full schedule" jump link */
+.rc-jump-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+}
+.rc-jump-row .btn-ghost {
+  font-size: 12px;
+  padding: 8px 16px;
+}
+
+/* ============================================================
+   Center-pane takeover containers — race/track/schedule sit inside
+   .col-center alongside profile-takeover. They use the same flex
+   layout for proper sizing.
+   ============================================================ */
+#race-takeover,
+#track-takeover,
+#schedule-takeover {
+  /* Inherit profile-takeover sizing — flex:1 inside col-center, scroll-y */
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#race-takeover[hidden],
+#track-takeover[hidden],
+#schedule-takeover[hidden] { display: none !important; }
+
+#race-takeover #view-race,
+#track-takeover #view-track,
+#schedule-takeover #view-schedule {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;     /* never horizontal scroll */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#race-takeover #view-race::-webkit-scrollbar,
+#track-takeover #view-track::-webkit-scrollbar,
+#schedule-takeover #view-schedule::-webkit-scrollbar { display: none; }
+
+/* All cards inside center takeovers must not overflow horizontally */
+#race-host .rc-card,
+#track-host .rc-card,
+#schedule-host .rc-card {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* The 2-col stat grid (Last 5 Winners + Hot at Track) and 3-col Track
+   stat grid both need min-width:0 on their cells to prevent flex/grid
+   blowout on narrower center panes. */
+#race-host .rc-grid,
+#track-host .tk-grid-3 {
+  width: 100%;
+  min-width: 0;
+}
+#race-host .rc-grid > *,
+#track-host .tk-grid-3 > * {
+  min-width: 0;
+}
+
+/* Manufacturer bar chart — already small, but ensure it doesn't expand */
+#track-host .tk-manu-row {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* History table on track page — table-layout fixed prevents column blowout */
+#track-host .tk-history-table {
+  width: 100%;
+  table-layout: fixed;
+}

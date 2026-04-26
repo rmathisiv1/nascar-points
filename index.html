@@ -50,6 +50,7 @@
 
   <div class="mobile-nav-section">Pages</div>
   <a href="#/race"       class="mobile-nav-link" data-view="race">Race</a>
+  <a href="#/schedule"   class="mobile-nav-link" data-view="schedule">Schedule</a>
   <a href="#/form"       class="mobile-nav-link" data-view="form">Trending</a>
   <a href="#/arc"        class="mobile-nav-link" data-view="arc">Cumulative Season</a>
   <a href="#/breakdown"  class="mobile-nav-link" data-view="breakdown">Points Breakdown</a>
@@ -84,6 +85,7 @@
   <section class="col-center" id="col-center">
     <nav class="dash-tabs" id="dash-tabs">
       <a href="#/race"       class="dash-tab dash-tab-race" data-view="race">Race</a>
+      <a href="#/schedule"   class="dash-tab dash-tab-race" data-view="schedule">Schedule</a>
       <a href="#/arc"        class="dash-tab" data-view="arc">Cumulative Season</a>
       <a href="#/form"       class="dash-tab" data-view="form">Trending</a>
       <a href="#/breakdown"  class="dash-tab" data-view="breakdown">Points Breakdown</a>
@@ -93,12 +95,53 @@
       <a href="#/standings"  class="dash-tab" data-view="standings">Standings</a>
     </nav>
 
-    <!-- Profile takeover (shown only when a car is selected; hides tab-body) -->
+    <!-- Center-pane takeovers (profile, race, track, schedule).
+         Each hides tab-body when active. Race/Track/Schedule replace the
+         old full-width takeover so they live alongside left/right panels. -->
     <div class="profile-takeover" id="profile-takeover" hidden>
       <div class="profile-takeover-head">
         <a href="#" class="takeover-back" id="takeover-back">← Back</a>
       </div>
       <section class="view" id="view-profile"></section>
+    </div>
+
+    <div class="profile-takeover" id="race-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="race-back">← Back</a>
+      </div>
+      <section class="view" id="view-race">
+        <div class="view-head">
+          <h1>Race Center</h1>
+          <div class="view-sub" id="race-sub">—</div>
+        </div>
+        <div id="race-host"></div>
+      </section>
+    </div>
+
+    <div class="profile-takeover" id="track-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="track-back">← Back</a>
+      </div>
+      <section class="view" id="view-track">
+        <div class="view-head">
+          <h1 id="track-title">Track</h1>
+          <div class="view-sub" id="track-sub">—</div>
+        </div>
+        <div id="track-host"></div>
+      </section>
+    </div>
+
+    <div class="profile-takeover" id="schedule-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="schedule-back">← Back</a>
+      </div>
+      <section class="view" id="view-schedule">
+        <div class="view-head">
+          <h1>Schedule</h1>
+          <div class="view-sub" id="schedule-sub">—</div>
+        </div>
+        <div id="schedule-host"></div>
+      </section>
     </div>
 
     <div class="tab-body" id="tab-body">
@@ -274,22 +317,6 @@
       <div class="view-sub" id="playoffs-sub">—</div>
     </div>
     <div id="playoffs-host"></div>
-  </section>
-
-  <section class="view" id="view-race" hidden>
-    <div class="view-head">
-      <h1>Race Center</h1>
-      <div class="view-sub" id="race-sub">—</div>
-    </div>
-    <div id="race-host"></div>
-  </section>
-
-  <section class="view" id="view-track" hidden>
-    <div class="view-head">
-      <h1 id="track-title">Track</h1>
-      <div class="view-sub" id="track-sub">—</div>
-    </div>
-    <div id="track-host"></div>
   </section>
 
   <section class="view" id="view-error" hidden>

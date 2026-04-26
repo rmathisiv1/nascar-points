@@ -36,7 +36,7 @@ const STATE = {
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["race", "track", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile"];
+const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile"];
 
 // ============================================================
 // BOOT
@@ -456,6 +456,14 @@ function parseHash() {
     STATE.track = { code: (h[1] || "").toUpperCase() };
     return;
   }
+  // Race / schedule routes — remember where we came from for back nav
+  if (view === "race" || view === "schedule") {
+    if (STATE.view && STATE.view !== view) {
+      STATE.prevView = STATE.view;
+    }
+    STATE.view = view;
+    return;
+  }
   STATE.view = VIEWS.includes(view) ? view : "arc";  // arc is the landing tab
 }
 
@@ -696,6 +704,16 @@ function wireUIControls() {
     const prev = STATE.prevView && STATE.prevView !== "profile" ? STATE.prevView : "arc";
     location.hash = `#/${prev}`;
   });
+  // Race / Track / Schedule back: same idea — return to remembered prev view
+  // or Season Arc default.
+  ["race-back", "track-back", "schedule-back"].forEach(id => {
+    document.getElementById(id)?.addEventListener("click", (e) => {
+      e.preventDefault();
+      const cur = STATE.view;
+      const prev = STATE.prevView && STATE.prevView !== cur ? STATE.prevView : "arc";
+      location.hash = `#/${prev}`;
+    });
+  });
   // Playoffs back: return to the dashboard default
   document.getElementById("playoffs-back")?.addEventListener("click", (e) => {
     e.preventDefault();
@@ -802,8 +820,11 @@ function renderTimeCursorBanner() {
 // Views that live as tabs inside the center panel.
 const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
 // Views that take over the whole page (hide dashboard). Only playoffs now —
-// profile is a center-column takeover that keeps the side panels visible.
-const TAKEOVER_VIEWS = ["playoffs", "race", "track"];
+// Full-width takeovers — these hide the entire dashboard layout.
+const TAKEOVER_VIEWS = ["playoffs"];
+// Center-column takeovers — these hide tab-body and live in the center pane,
+// alongside left (standings) and right (form) panels.
+const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -813,7 +834,7 @@ function render() {
   const dashboard = document.getElementById("dashboard");
   const takeover = document.getElementById("takeover");
   const inTakeover = TAKEOVER_VIEWS.includes(STATE.view);
-  const inProfile  = STATE.view === "profile";
+  const inCenterTakeover = CENTER_TAKEOVER_VIEWS.includes(STATE.view);
 
   // Mobile page title — visible only on mobile (CSS-controlled). Reflects the
   // current tab/page so users know which view they're on without a tab strip.
@@ -822,6 +843,7 @@ function render() {
     const titleMap = {
       race: "Race Center",
       track: "Track",
+      schedule: "Schedule",
       form: "Trending",
       arc: "Cumulative Season",
       breakdown: "Points Breakdown",
@@ -838,19 +860,21 @@ function render() {
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
 
-  // Takeover section visibility — playoffs, race, and track live here
+  // Full-width takeover (playoffs only)
   const pElem = document.getElementById("view-playoffs");
   if (pElem) pElem.hidden = (STATE.view !== "playoffs");
-  const rElem = document.getElementById("view-race");
-  if (rElem) rElem.hidden = (STATE.view !== "race");
-  const tElem = document.getElementById("view-track");
-  if (tElem) tElem.hidden = (STATE.view !== "track");
 
-  // Profile takeover — sits inside the center column, hides tab-body when active
+  // Center-column takeovers — sit inside col-center, hide tab-body when active
   const profileTakeover = document.getElementById("profile-takeover");
-  const tabBody = document.getElementById("tab-body");
-  if (profileTakeover) profileTakeover.hidden = !inProfile;
-  if (tabBody) tabBody.hidden = inProfile;
+  const raceTakeover    = document.getElementById("race-takeover");
+  const trackTakeover   = document.getElementById("track-takeover");
+  const schedTakeover   = document.getElementById("schedule-takeover");
+  const tabBody         = document.getElementById("tab-body");
+  if (profileTakeover) profileTakeover.hidden = (STATE.view !== "profile");
+  if (raceTakeover)    raceTakeover.hidden    = (STATE.view !== "race");
+  if (trackTakeover)   trackTakeover.hidden   = (STATE.view !== "track");
+  if (schedTakeover)   schedTakeover.hidden   = (STATE.view !== "schedule");
+  if (tabBody)         tabBody.hidden         = inCenterTakeover;
 
   // Tab-panel visibility. Default to "arc" when the URL doesn't point to a
   // specific tab view (Season Arc is the new landing tab).
@@ -860,9 +884,16 @@ function render() {
     if (el) el.hidden = (v !== activeTab);
   });
 
-  // Tab button active-state — dim when profile is active (no tab is "really" on)
+  // Tab button active-state — match the current view directly. The "Race"
+  // and "Schedule" tabs are special: they're center-pane takeovers, not
+  // tab-body panels, but they still highlight when their route is active.
   document.querySelectorAll(".dash-tab").forEach(a => {
-    a.classList.toggle("active", !inProfile && a.dataset.view === activeTab);
+    const v = a.dataset.view;
+    let active = false;
+    if (v === "race")          active = (STATE.view === "race");
+    else if (v === "schedule") active = (STATE.view === "schedule");
+    else                       active = (!inCenterTakeover && v === activeTab);
+    a.classList.toggle("active", active);
   });
 
   // ---- Always-on dashboard side panels (when not in full-page takeover) ----
@@ -871,8 +902,14 @@ function render() {
     renderStandingsMini();
     renderFormMini();
 
-    if (inProfile) {
+    if (STATE.view === "profile") {
       renderProfile();
+    } else if (STATE.view === "race") {
+      renderRaceCenter();
+    } else if (STATE.view === "track") {
+      renderTrackPage();
+    } else if (STATE.view === "schedule") {
+      renderSchedulePage();
     } else {
       // Render the active tab's content
       switch (activeTab) {
@@ -888,8 +925,6 @@ function render() {
   } else {
     renderMetricBar();
     if (STATE.view === "playoffs") renderPlayoffs();
-    if (STATE.view === "race") renderRaceCenter();
-    if (STATE.view === "track") renderTrackPage();
   }
 
   // Mirror toggle-groups + team-filter pills into native <select>s for mobile.
@@ -5234,12 +5269,6 @@ function renderRaceCenter() {
   const winnersHTML = renderTrackWinners(history);
   const hotHTML = renderHotAtTrack(history);
 
-  // ---- Last race result block
-  const lastResultHTML = lastRunRace ? renderLastResult(lastRunRace) : `<div class="rc-empty">No completed races yet.</div>`;
-
-  // ---- Full schedule list
-  const scheduleHTML = renderSeasonSchedule(allRaces, nextRace.round);
-
   host.innerHTML = `
     <div class="rc-hero">
       <div class="rc-hero-badge">${heroBadge}</div>
@@ -5260,26 +5289,10 @@ function renderRaceCenter() {
       </div>
     </div>
 
-    <div class="card rc-card rc-card-wide">
-      <div class="rc-card-head">
-        <span class="rc-card-title">${STATE.season} Season Schedule</span>
-        <span class="rc-card-sub">${runRaces.length} of ${allRaces.length} races run</span>
-      </div>
-      <div class="rc-card-body rc-schedule-body">${scheduleHTML}</div>
+    <div class="rc-jump-row">
+      <a class="btn-ghost" href="#/schedule">View full ${STATE.season} schedule →</a>
     </div>
   `;
-
-  // Wire schedule row clicks (jump to that race as cursor)
-  host.querySelectorAll(".rc-sched-row[data-round]").forEach(row => {
-    row.addEventListener("click", () => {
-      const round = parseInt(row.dataset.round, 10);
-      if (!Number.isFinite(round)) return;
-      // Set the through-round cursor and bounce to Cumulative Season so the
-      // user can immediately see the standings as of that race.
-      STATE.throughRound = round;
-      window.location.hash = "#/arc";
-    });
-  });
 }
 
 // Format an ISO-ish date string into "Sun, Apr 27" form. Falls back to raw.
@@ -5480,6 +5493,59 @@ function renderSeasonSchedule(allRaces, currentRound) {
 // Triggered by clicking a track name from heatmap, schedule rows, or last-5
 // winner rows on Race Center.
 // ============================================================
+
+// ============================================================
+// SCHEDULE PAGE — #/schedule
+// ------------------------------------------------------------
+// Standalone full-season schedule view. Shows every race in the active
+// series — completed (with winner) and upcoming (placeholder).
+// Lives in the center column alongside standings + form panels.
+// ============================================================
+
+function renderSchedulePage() {
+  const host = document.getElementById("schedule-host");
+  const sub  = document.getElementById("schedule-sub");
+  if (!host || !STATE.data) return;
+
+  const allRaces = allRacesSorted();
+  const runRaces = allRaces.filter(r => (r.results || []).length > 0);
+
+  // Determine the "current" race for the highlight bar — first unrun race,
+  // OR fall back to lastRound + 1 synthesized when data ends short of season.
+  let nextRound = null;
+  const firstUnrun = allRaces.find(r => (r.results || []).length === 0);
+  if (firstUnrun) {
+    nextRound = firstUnrun.round;
+  } else if (runRaces.length) {
+    const seasonLen = scheduleLengthForSeries(STATE.series);
+    const last = runRaces[runRaces.length - 1].round;
+    if (typeof seasonLen === "number" && last < seasonLen) nextRound = last + 1;
+  }
+
+  const seriesName = ({ NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" })[STATE.series] || STATE.series;
+  if (sub) sub.textContent = `${STATE.season} ${seriesName} · ${runRaces.length} of ${allRaces.length} races run`;
+
+  const scheduleHTML = renderSeasonSchedule(allRaces, nextRound);
+
+  host.innerHTML = `
+    <div class="card rc-card rc-card-wide">
+      <div class="rc-card-body rc-schedule-body">${scheduleHTML}</div>
+    </div>
+  `;
+
+  // Schedule row click — set throughRound cursor + jump to Cumulative Season,
+  // same behavior as the old in-Race-Center schedule had. Skip when the click
+  // landed on the inner track-name link (its own navigation handles itself).
+  host.querySelectorAll(".rc-sched-row[data-round]").forEach(row => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return;   // let track links propagate
+      const round = parseInt(row.dataset.round, 10);
+      if (!Number.isFinite(round)) return;
+      STATE.throughRound = round;
+      window.location.hash = "#/arc";
+    });
+  });
+}
 
 function renderTrackPage() {
   const host = document.getElementById("track-host");
