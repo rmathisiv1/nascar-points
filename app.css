@@ -2990,9 +2990,9 @@ a.driver-cell.profile-link:hover .car-tag {
    PICKER DRAWERS — mobile only
    ============================================================ */
 
-/* Desktop: button hidden, picker visible (default) */
+/* Desktop: button hidden, picker visible (default). The picker is a normal
+   block container — JS renders an inner .driver-grid that handles layout. */
 .mob-only-btn { display: none; }
-.picker-drawer .driver-picker { display: flex; }
 
 @media (max-width: 767.98px) {
   .picker-drawer {

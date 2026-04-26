@@ -1328,6 +1328,14 @@ function renderFormTable() {
 
   if (STATE.form.ftOnly) decorated = decorated.filter(d => d.fullTime);
 
+  // Assign rank by season totalPts (descending) — used by the Pos column.
+  // Done before user filters so the rank reflects the actual standings, not
+  // the filtered position. Tap "Pos" header to sort by it.
+  const ranked = decorated.slice().sort((a, b) => b.totalPts - a.totalPts);
+  const rankByKey = new Map();
+  ranked.forEach((d, i) => rankByKey.set(entityKey(d), i + 1));
+  decorated.forEach(d => { d.rank = rankByKey.get(entityKey(d)) || 999; });
+
   const q = STATE.form.search.trim().toLowerCase();
   if (q) {
     decorated = decorated.filter(d =>
@@ -1353,7 +1361,7 @@ function renderFormTable() {
     const ratingCls = d.deltaR == null ? "" : d.deltaR > 6 ? "hot" : d.deltaR < -6 ? "cold" : "";
     const teamPill = renderTeamPill(d.team_code);
     return `<tr data-car-key="${escapeHTML(entityKey(d))}">
-      <td class="num" style="color: var(--dim)">${i + 1}</td>
+      <td class="num" style="color: var(--dim)">${d.rank}</td>
       <td><a class="driver-cell profile-link" href="${profileHref(d)}">
         <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
         <span>${escapeHTML(displayName(d))}</span>
@@ -1388,7 +1396,7 @@ function renderFormTable() {
     <table class="data-table">
       <thead>
         <tr>
-          <th class="num">#</th>
+          ${th("rank", "Pos", true)}
           ${th("driver", "Driver", false)}
           ${th("team", "Team", false)}
           <th>${formColLabel}</th>
@@ -1409,7 +1417,7 @@ function renderFormTable() {
         STATE.form.sortDir = STATE.form.sortDir === "asc" ? "desc" : "asc";
       } else {
         STATE.form.sortKey = key;
-        STATE.form.sortDir = (key === "driver" || key === "team") ? "asc" : "desc";
+        STATE.form.sortDir = (key === "driver" || key === "team" || key === "rank") ? "asc" : "desc";
       }
       renderFormTable();
     });
@@ -4050,13 +4058,20 @@ function renderHeatmap() {
   totalHdr.textContent = "Total";
   grid.appendChild(totalHdr);
 
+  const isMob = isMobile();
   drivers.forEach(d => {
     const carHex = colorFor(STATE.series, d.car_number);
     const txt = contrastTextFor(carHex);
     const label = document.createElement("a");
     label.className = "hm-label profile-link";
     label.href = profileHref(d);
-    label.innerHTML = `<span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span><span>${escapeHTML(displayName(d))}</span>${renderCoDriverBadge(d)}`;
+    // On mobile, show just the last name (no "#X · Firstname Lastname")
+    // so the narrow first column doesn't truncate. Car # is in the pill.
+    const fullName = displayName(d);
+    const nameToShow = isMob
+      ? fullName.replace(/^#\d+\s*·\s*/, "").split(/\s+/).slice(-1)[0]
+      : fullName;
+    label.innerHTML = `<span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span><span>${escapeHTML(nameToShow)}</span>${renderCoDriverBadge(d)}`;
     grid.appendChild(label);
     const byRound = {};
     d.races.forEach(r => { byRound[r.round] = r; });
@@ -4140,7 +4155,7 @@ function renderStandings() {
     const currRank = i + 1;
     const prevRank = previousRank.has(r.key) ? previousRank.get(r.key) : null;
     const posChange = prevRank != null ? (prevRank - currRank) : null;
-    return { ...r, currRank, prevRank, posChange };
+    return { ...r, currRank, rank: currRank, prevRank, posChange };
   });
 
   const sk = STATE.standings.sortKey;
@@ -4207,7 +4222,7 @@ function renderStandings() {
   table.innerHTML = `
     <thead>
       <tr>
-        <th class="num">#</th>
+        ${th("rank", "Pos", true)}
         ${th("driver", "Driver", false)}
         ${th("team", "Team", false)}
         ${th("starts", "Starts", true)}
@@ -4231,7 +4246,8 @@ function renderStandings() {
         STATE.standings.sortDir = STATE.standings.sortDir === "asc" ? "desc" : "asc";
       } else {
         STATE.standings.sortKey = key;
-        STATE.standings.sortDir = (key === "driver" || key === "team") ? "asc" : "desc";
+        // Pos and Driver/Team naturally read low-to-high; numerical stats read big-first.
+        STATE.standings.sortDir = (key === "driver" || key === "team" || key === "rank") ? "asc" : "desc";
       }
       renderStandings();
     });
@@ -5278,7 +5294,7 @@ function renderEliminationView(rule, phase) {
       </div>
       <table class="data-table po-table">
         <thead><tr>
-          <th class="num">#</th>
+          <th class="num">Pos</th>
           <th>Driver</th>
           <th>Team</th>
           <th class="num">Wins</th>
