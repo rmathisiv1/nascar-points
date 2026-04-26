@@ -3702,3 +3702,111 @@ a.driver-cell.profile-link:hover .car-tag {
   }
 
 }
+
+/* ============================================================
+   TEAMMATE CARD ZOOM
+   ============================================================ */
+.tm-card {
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.tm-card:hover {
+  border-color: var(--border-hi);
+}
+.tm-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tm-card-expand {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  opacity: 0.5;
+  transition: opacity 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+.tm-card:hover .tm-card-expand {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* Overlay backdrop + centered zoomed card */
+.tm-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: tmZoomFadeIn 0.14s ease-out;
+}
+@keyframes tmZoomFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.tm-zoom-shell {
+  position: relative;
+  width: min(1200px, 96vw);
+  max-height: 92vh;
+  background: var(--bg);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.tm-zoom-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tm-zoom-close:hover {
+  border-color: var(--border-hi);
+  color: var(--accent);
+}
+.tm-zoom-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+/* Inside the modal, the cloned card spans the full width and rows have
+   more breathing room — sparklines get more horizontal space, points stay round. */
+.tm-card-zoomed {
+  cursor: default !important;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.tm-card-zoomed .tm-card-head {
+  padding: 0 0 16px;
+  font-size: 16px;
+}
+.tm-card-zoomed .tm-team-name {
+  font-size: 18px;
+}
+.tm-card-zoomed .tm-card-expand { display: none; }
+.tm-card-zoomed .tm-row {
+  padding: 12px 4px;
+}
+.tm-card-zoomed .tm-spk {
+  height: 60px !important;
+}
+.tm-card-zoomed:hover { transform: none; }

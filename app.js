@@ -3149,11 +3149,12 @@ function renderTeammates() {
       </div>`;
     }).join("");
 
-    return `<div class="tm-card">
+    return `<div class="tm-card" data-team-key="${escapeHTML(grp)}" tabindex="0" role="button" aria-label="Expand ${escapeHTML(displayName)}">
       <div class="tm-card-head">
         <span class="team-pill" style="background:${orgHex};color:${orgTxt}">${escapeHTML(grp)}</span>
         <span class="tm-team-name">${escapeHTML(displayName)}</span>
         <span class="tm-team-meta">${ftCount} FT${ptCount > 0 ? ` + ${ptCount} PT` : ""} · ${bestCar.season_points}pts</span>
+        <span class="tm-card-expand" aria-hidden="true">⤢</span>
       </div>
       <div class="tm-col-headers">
         <span></span>
@@ -3167,6 +3168,24 @@ function renderTeammates() {
   }).join("");
 
   host.innerHTML = html;
+
+  // Click any team card to open a maximized modal view of just that team —
+  // the sparklines re-paint at the full container width inside the modal.
+  host.querySelectorAll(".tm-card").forEach(card => {
+    card.addEventListener("click", (e) => {
+      // Don't hijack clicks on inner interactive elements (driver profile links,
+      // hover-tip help icons, etc).
+      if (e.target.closest("a") || e.target.closest(".tm-help") || e.target.closest(".co-badge")) return;
+      const teamKey = card.dataset.teamKey;
+      openTeammateZoom(teamKey, card);
+    });
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openTeammateZoom(card.dataset.teamKey, card);
+      }
+    });
+  });
 
   // Paint sparklines at their actual rendered widths so circles stay truly round.
   // Waiting one frame lets the browser complete layout before we measure.
@@ -3277,6 +3296,52 @@ function renderTeammates() {
   });
 }
 
+// Open a maximized modal showing one team's card at full chat width.
+// Clones the card's innerHTML, drops it inside an overlay, repaints sparklines.
+function openTeammateZoom(teamKey, srcCard) {
+  if (!srcCard) return;
+  // Avoid duplicate modal stacking
+  document.querySelectorAll(".tm-zoom-overlay").forEach(o => o.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "tm-zoom-overlay";
+  overlay.tabIndex = -1;
+  overlay.innerHTML = `
+    <div class="tm-zoom-shell" role="dialog" aria-modal="true" aria-label="Team detail">
+      <button class="tm-zoom-close" aria-label="Close">×</button>
+      <div class="tm-zoom-body"></div>
+    </div>`;
+  // Clone the card with its current innerHTML so the user sees the same data
+  const body = overlay.querySelector(".tm-zoom-body");
+  const clone = srcCard.cloneNode(true);
+  // The clone shouldn't itself be clickable as a tile; remove the role/tabindex
+  clone.removeAttribute("role");
+  clone.removeAttribute("tabindex");
+  clone.removeAttribute("aria-label");
+  clone.classList.add("tm-card-zoomed");
+  body.appendChild(clone);
+
+  document.body.appendChild(overlay);
+  document.body.style.overflow = "hidden";  // lock background scroll
+
+  const close = () => {
+    overlay.remove();
+    document.body.style.overflow = "";
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  document.addEventListener("keydown", onKey);
+  overlay.querySelector(".tm-zoom-close").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => {
+    // Click on the dim background closes; clicks inside the shell don't.
+    if (e.target === overlay) close();
+  });
+
+  // Sparklines in the cloned card need to be repainted at the new width.
+  // The cloned SVGs still have data-series attrs, so tmPaintSparklines works.
+  requestAnimationFrame(() => tmPaintSparklines(overlay));
+}
+
 // Build the sparkline SVG for a teammate row
 function tmSparkline(seriesPts, color, metric, carLabel) {
   // Emit a placeholder SVG with the data encoded. After the DOM is inserted,
@@ -3284,7 +3349,7 @@ function tmSparkline(seriesPts, color, metric, carLabel) {
   // using viewBox = pixel dimensions (so circles stay truly round).
   if (seriesPts.length === 0) return "";
   const data = encodeURIComponent(JSON.stringify(seriesPts));
-  return `<svg class="tm-spk" data-series="${data}" data-color="${color}" data-metric="${metric}" data-car="${carLabel}" style="width:100%;height:26px;display:block;"></svg>`;
+  return `<svg class="tm-spk" data-series="${data}" data-color="${color}" data-metric="${metric}" data-car="${carLabel}" style="width:100%;height:38px;display:block;"></svg>`;
 }
 
 // Measure every .tm-spk SVG and draw it at its real pixel dimensions so circles stay round.
@@ -3293,8 +3358,11 @@ function tmPaintSparklines(root) {
   svgs.forEach(svg => {
     const rect = svg.getBoundingClientRect();
     const W = Math.max(80, Math.floor(rect.width));
-    const H = 26;
-    const pad = { t: 4, b: 4, l: 3, r: 3 };
+    // Height honors the SVG's actual rendered height (CSS may have overridden
+    // the default 38 — e.g. the zoom modal uses 60).
+    const H = Math.max(20, Math.floor(rect.height));
+    const padY = Math.max(4, Math.round(H * 0.16));
+    const pad = { t: padY, b: padY, l: 3, r: 3 };
     const innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
 
     const seriesPts = JSON.parse(decodeURIComponent(svg.getAttribute("data-series") || "[]"));
