@@ -2615,7 +2615,131 @@ a.driver-cell.profile-link:hover .car-tag {
 /* Hide the mobile-dd <select> by default (desktop uses the pill buttons) */
 .mobile-dd { display: none; }
 
+
+
+/* ============================================================
+   MOBILE TABLE COLLAPSE (tap-to-expand)
+   ============================================================ */
+
+/* Desktop: the chevron column and mobile-only cells are hidden */
+.mob-only { display: none; }
+.mob-chev, .mob-chev-head { display: none; }
+
+
+
+/* ============================================================
+   PICKER DRAWERS — mobile only
+   ============================================================ */
+
+/* Desktop: button hidden, picker visible (default). The picker is a normal
+   block container — JS renders an inner .driver-grid that handles layout. */
+.mob-only-btn { display: none; }
+
+
+
+/* ============================================================
+   LAYER 4 POLISH — mobile-only refinements
+   ============================================================ */
+
+
+/* ============================================================
+   PLAYOFFS MOBILE FIX
+   ============================================================ */
+
+
+/* ============================================================
+   CHART SIZING ON MOBILE — let SVGs respect their natural aspect ratio
+   ============================================================ */
+
+
+/* ============================================================
+   MOBILE OVERFLOW HARD-FIX
+   Force every layout-relevant container to respect viewport width.
+   This is defensive — somewhere a container is wider than 100vw on
+   mobile and clipping the chart. Cap everything.
+   ============================================================ */
+
+
+/* ============================================================
+   MOBILE NAV SETTINGS BLOCK + STICKY HEADERS + PLAYOFF DETAILS
+   ============================================================ */
+
+/* Format-explainer collapsed-by-default <details> on playoffs page.
+   Always interactive (desktop too) — saves space everywhere. */
+.po-format-details summary { list-style: none; cursor: pointer; }
+.po-format-details summary::-webkit-details-marker { display: none; }
+.po-format-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  user-select: none;
+}
+.po-format-title {
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.po-format-chev {
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+  transition: transform 0.15s;
+}
+.po-format-details[open] .po-format-chev { transform: rotate(180deg); }
+.po-format-details .po-note { padding: 0 14px 12px; }
+
+/* Mobile-nav settings panel (Season + Race pickers) */
+.mobile-nav-settings { display: none; }
+.mobile-nav-section { display: none; }
+
+
+
+/* ============================================================
+   ROUND OF MOBILE FIXES — page title, sticky th, no drawer pills,
+   tighter playoffs head
+   ============================================================ */
+
+/* Sticky page-title bar — shows on mobile only, immediately under the
+   metric bar. Replaces the desktop tab strip on mobile so users always
+   know which page they're on. */
+.mobile-page-title { display: none; }
+
+
+
+/* ============================================================
+   HARD FIXES — Round 2
+   ============================================================ */
+
+
+/* ============================================================
+   FIXES (proper round) — heatmap, pills, sticky headers
+   ============================================================ */
+
+
+/* ============================================================
+   FINAL ROUND — sticky thead, no chevron, profile fixes
+   ============================================================ */
+
+
+/* Profile right-column (Form panel) cutoff on desktop:
+   the +17/-13 delta numbers were getting clipped at the viewport edge.
+   Add a touch of right-padding inside the col-right scroll area, and
+   ensure the delta cell doesn't get squeezed. */
+@media (min-width: 768px) {
+  .col-right .form-mini-delta {
+    padding-right: 4px;
+    flex-shrink: 0;
+  }
+  .col-right .form-mini-row {
+    padding-right: 12px;
+  }
+}
+
+/* ============================================================
+   MOBILE STYLES (< 768px)
+   Consolidated from 12 incremental fix blocks. Order preserved
+   so later "!important" rules still win — but anyone reading
+   this can now see all mobile rules in one place.
+   ============================================================ */
 @media (max-width: 767.98px) {
+
   /* ---- Header ---- */
   .topbar {
     gap: 6px;
@@ -2907,17 +3031,10 @@ a.driver-cell.profile-link:hover .car-tag {
   .takeover {
     padding: 10px 12px;
   }
-}
 
-/* ============================================================
-   MOBILE TABLE COLLAPSE (tap-to-expand)
-   ============================================================ */
 
-/* Desktop: the chevron column and mobile-only cells are hidden */
-.mob-only { display: none; }
-.mob-chev, .mob-chev-head { display: none; }
+  /* ---- merged from previous block ---- */
 
-@media (max-width: 767.98px) {
   /* Hide columns flagged for mobile */
   .data-table .mob-hide,
   .profile-race-table .mob-hide { display: none; }
@@ -2990,17 +3107,10 @@ a.driver-cell.profile-link:hover .car-tag {
   .mob-kv-val .delta-pill {
     font-size: 9px;
   }
-}
 
-/* ============================================================
-   PICKER DRAWERS — mobile only
-   ============================================================ */
 
-/* Desktop: button hidden, picker visible (default). The picker is a normal
-   block container — JS renders an inner .driver-grid that handles layout. */
-.mob-only-btn { display: none; }
+  /* ---- merged from previous block ---- */
 
-@media (max-width: 767.98px) {
   .picker-drawer {
     margin: 4px 0;
   }
@@ -3045,12 +3155,10 @@ a.driver-cell.profile-link:hover .car-tag {
     flex-wrap: wrap;
     gap: 4px;
   }
-}
 
-/* ============================================================
-   LAYER 4 POLISH — mobile-only refinements
-   ============================================================ */
-@media (max-width: 767.98px) {
+
+  /* ---- merged from previous block ---- */
+
   /* ---- Heatmap: allow horizontal scroll, narrower car column ---- */
   #view-heatmap .card.scrollable {
     overflow: auto !important;  /* horizontal + vertical */
@@ -3175,12 +3283,10 @@ a.driver-cell.profile-link:hover .car-tag {
 
   /* ---- Footer: extra small to avoid stealing tab content space ---- */
   .footer { font-size: 8px; padding: 4px 8px; }
-}
 
-/* ============================================================
-   PLAYOFFS MOBILE FIX
-   ============================================================ */
-@media (max-width: 767.98px) {
+
+  /* ---- merged from previous block ---- */
+
   .takeover {
     padding: 8px 10px !important;
     max-width: 100%;
@@ -3222,12 +3328,10 @@ a.driver-cell.profile-link:hover .car-tag {
 
   /* Format note: smaller */
   .po-note { font-size: 11px; line-height: 1.45; }
-}
 
-/* ============================================================
-   CHART SIZING ON MOBILE — let SVGs respect their natural aspect ratio
-   ============================================================ */
-@media (max-width: 767.98px) {
+
+  /* ---- merged from previous block ---- */
+
   /* Don't stretch the SVG to fill container height. The chart's viewBox has a
      fixed aspect ratio; with preserveAspectRatio="xMidYMid meet" forcing
      height: 100% leaves dead space above/below the chart. Letting height be
@@ -3245,15 +3349,10 @@ a.driver-cell.profile-link:hover .car-tag {
   }
   /* The chart card itself shouldn't have giant padding around the squashed chart */
   .tab-chart-fill.card-chart { padding: 6px; }
-}
 
-/* ============================================================
-   MOBILE OVERFLOW HARD-FIX
-   Force every layout-relevant container to respect viewport width.
-   This is defensive — somewhere a container is wider than 100vw on
-   mobile and clipping the chart. Cap everything.
-   ============================================================ */
-@media (max-width: 767.98px) {
+
+  /* ---- merged from previous block ---- */
+
   html, body {
     overflow-x: hidden;
     max-width: 100vw;
@@ -3282,38 +3381,10 @@ a.driver-cell.profile-link:hover .car-tag {
   .dashboard {
     min-height: 0 !important;
   }
-}
 
-/* ============================================================
-   MOBILE NAV SETTINGS BLOCK + STICKY HEADERS + PLAYOFF DETAILS
-   ============================================================ */
 
-/* Format-explainer collapsed-by-default <details> on playoffs page.
-   Always interactive (desktop too) — saves space everywhere. */
-.po-format-details summary { list-style: none; cursor: pointer; }
-.po-format-details summary::-webkit-details-marker { display: none; }
-.po-format-summary {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px;
-  user-select: none;
-}
-.po-format-title {
-  font-family: var(--mono); font-size: 11px;
-  letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--muted); font-weight: 600;
-}
-.po-format-chev {
-  font-family: var(--mono); font-size: 12px; color: var(--muted);
-  transition: transform 0.15s;
-}
-.po-format-details[open] .po-format-chev { transform: rotate(180deg); }
-.po-format-details .po-note { padding: 0 14px 12px; }
+  /* ---- merged from previous block ---- */
 
-/* Mobile-nav settings panel (Season + Race pickers) */
-.mobile-nav-settings { display: none; }
-.mobile-nav-section { display: none; }
-
-@media (max-width: 767.98px) {
   /* ---- Sticky topbar + metricbar so they pin while page scrolls ---- */
   .topbar {
     position: sticky;
@@ -3384,19 +3455,10 @@ a.driver-cell.profile-link:hover .car-tag {
     gap: 4px !important;
   }
   .po-reseed-row { padding: 5px 8px; font-size: 11px; }
-}
 
-/* ============================================================
-   ROUND OF MOBILE FIXES — page title, sticky th, no drawer pills,
-   tighter playoffs head
-   ============================================================ */
 
-/* Sticky page-title bar — shows on mobile only, immediately under the
-   metric bar. Replaces the desktop tab strip on mobile so users always
-   know which page they're on. */
-.mobile-page-title { display: none; }
+  /* ---- merged from previous block ---- */
 
-@media (max-width: 767.98px) {
   /* ---- Page title bar ---- */
   .mobile-page-title {
     display: flex;
@@ -3476,12 +3538,10 @@ a.driver-cell.profile-link:hover .car-tag {
   #view-playoffs .view-sub { font-size: 10px; margin-top: 2px; }
   /* Banner: smaller and closer to top */
   .po-banner { font-size: 10px; padding: 6px 8px; margin-bottom: 8px; }
-}
 
-/* ============================================================
-   HARD FIXES — Round 2
-   ============================================================ */
-@media (max-width: 767.98px) {
+
+  /* ---- merged from previous block ---- */
+
   /* ---- Hide duplicate page heading inside takeover (page-title bar shows it) ---- */
   #view-playoffs .view-head { display: none; }
 
@@ -3542,12 +3602,10 @@ a.driver-cell.profile-link:hover .car-tag {
     /* Ensure background is FULLY OPAQUE so rows don't show through */
     box-shadow: 0 1px 0 var(--border);
   }
-}
 
-/* ============================================================
-   FIXES (proper round) — heatmap, pills, sticky headers
-   ============================================================ */
-@media (max-width: 767.98px) {
+
+  /* ---- merged from previous block ---- */
+
   /* ---- HEATMAP: single line names, ellipsis, no wrap ---- */
   .hm-label {
     font-size: 11px !important;
@@ -3615,12 +3673,10 @@ a.driver-cell.profile-link:hover .car-tag {
   }
   /* Page title needs to sit ABOVE the scroll container so it doesn't get
      clipped. Already sticky at top:78. Tables scroll INSIDE their card. */
-}
 
-/* ============================================================
-   FINAL ROUND — sticky thead, no chevron, profile fixes
-   ============================================================ */
-@media (max-width: 767.98px) {
+
+  /* ---- merged from previous block ---- */
+
   /* Sticky thead requires a single scroll context. The inner .table-scroll
      wrapper (overflow-x: auto for desktop) breaks sticky on mobile because
      it becomes the th's sticky parent but doesn't actually scroll. Strip it
@@ -3641,18 +3697,5 @@ a.driver-cell.profile-link:hover .car-tag {
     min-width: 56px;
     max-width: 56px;
   }
-}
 
-/* Profile right-column (Form panel) cutoff on desktop:
-   the +17/-13 delta numbers were getting clipped at the viewport edge.
-   Add a touch of right-padding inside the col-right scroll area, and
-   ensure the delta cell doesn't get squeezed. */
-@media (min-width: 768px) {
-  .col-right .form-mini-delta {
-    padding-right: 4px;
-    flex-shrink: 0;
-  }
-  .col-right .form-mini-row {
-    padding-right: 12px;
-  }
 }

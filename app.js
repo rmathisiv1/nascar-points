@@ -22,10 +22,10 @@ const STATE = {
   driverBios: null,
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
-  arc: { selected: new Set(), ftOnly: true, metric: "points", teamFilter: null },
-  breakdown: { drivers: [], ftOnly: true, teamFilter: null },
+  arc: { selected: new Set(), ftOnly: true, metric: "points" },
+  breakdown: { drivers: [], ftOnly: true },
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
-                selected: new Set(), seasons: new Set(), teamFilter: null },
+                selected: new Set(), seasons: new Set() },
   teammates: { metric: "fin", ftOnly: true },
   profile: { kind: null, slug: null },
   standings: { sortKey: "total", sortDir: "desc" },
@@ -792,6 +792,10 @@ const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatm
 const TAKEOVER_VIEWS = ["playoffs"];
 
 function render() {
+  // Memo cache lives for the duration of one render pass — avoids re-running
+  // allEntities() / racesSorted() / computeSeasonTotals() across the dozens
+  // of callers each tab triggers.
+  resetRenderCache();
   const dashboard = document.getElementById("dashboard");
   const takeover = document.getElementById("takeover");
   const inTakeover = TAKEOVER_VIEWS.includes(STATE.view);
@@ -879,26 +883,43 @@ function render() {
 // When set, clips to races at or before that round — every downstream view
 // (standings, arc, breakdown, trajectory, playoffs, heatmap, trending)
 // automatically becomes a point-in-time snapshot because they all read from here.
+// Per-render-pass memo cache. Reset at the top of render() so each render
+// computes the entity list / sorted races at most once, no matter how many
+// helpers consume them. Massive savings on tabs that call allEntities() from
+// 5+ places (Heatmap, Standings, the team-filter pill bar, etc).
+const RENDER_CACHE = { races: null, allRaces: null, entities: null, totals: null };
+function resetRenderCache() {
+  RENDER_CACHE.races = null;
+  RENDER_CACHE.allRaces = null;
+  RENDER_CACHE.entities = null;
+  RENDER_CACHE.totals = null;
+}
+
 function racesSorted() {
+  if (RENDER_CACHE.races) return RENDER_CACHE.races;
   const all = (STATE.data?.races || [])
     .slice()
     .sort((a, b) => (a.round || 0) - (b.round || 0));
-  if (STATE.throughRound != null) {
-    return all.filter(r => (r.round || 0) <= STATE.throughRound);
-  }
-  return all;
+  RENDER_CACHE.races = (STATE.throughRound != null)
+    ? all.filter(r => (r.round || 0) <= STATE.throughRound)
+    : all;
+  return RENDER_CACHE.races;
 }
 
 // Unfiltered access — used by the race picker, which needs to show every race
 // scheduled (including ones beyond the cursor, so users can navigate forward).
 function allRacesSorted() {
-  return (STATE.data?.races || [])
+  if (RENDER_CACHE.allRaces) return RENDER_CACHE.allRaces;
+  RENDER_CACHE.allRaces = (STATE.data?.races || [])
     .slice()
     .sort((a, b) => (a.round || 0) - (b.round || 0));
+  return RENDER_CACHE.allRaces;
 }
 
 function allEntities() {
-  return entitiesFromRaces(racesSorted());
+  if (RENDER_CACHE.entities) return RENDER_CACHE.entities;
+  RENDER_CACHE.entities = entitiesFromRaces(racesSorted());
+  return RENDER_CACHE.entities;
 }
 
 // Pure helper: build the entity map from any races array. Used by allEntities
@@ -1033,12 +1054,14 @@ function profileHref(entity) {
 }
 
 function computeSeasonTotals() {
+  if (RENDER_CACHE.totals) return RENDER_CACHE.totals;
   const entities = allEntities();
-  return entities.map(d => {
+  RENDER_CACHE.totals = entities.map(d => {
     const total = d.races.reduce((s, r) => s + r.total, 0);
     const avgFinish = mean(d.races.map(r => r.finish).filter(x => x != null));
     return { ...d, total, avgFinish };
   }).sort((a, b) => b.total - a.total);
+  return RENDER_CACHE.totals;
 }
 
 // ============================================================
@@ -4866,91 +4889,6 @@ function renderFormMini() {
       </div>
     </a>`;
   }).join("");
-}
-
-// Paint the selected-car cumulative-points arc into any svg + head pair.
-// Used by Trending + Standings tabs. Falls back to the leader if nothing selected.
-function paintSelectedCarArc(svgId, headId) {
-  const svg = document.getElementById(svgId);
-  const head = document.getElementById(headId);
-  if (!svg) return;
-
-  const entities = allEntities();
-  if (!entities.length) { svg.innerHTML = ""; if (head) head.textContent = "No data"; return; }
-
-  // Resolve selected entity; default to points leader
-  const totals = computeSeasonTotals();
-  const fallback = totals[0];
-  const selectedKey = STATE.selectedCar;
-  let entity = selectedKey ? entities.find(e => entityKey(e) === selectedKey) : null;
-  if (!entity) entity = fallback;
-  if (!entity) { svg.innerHTML = ""; if (head) head.textContent = "No data"; return; }
-
-  if (head) head.textContent = `${displayName(entity)} · cumulative points`;
-
-  // Compute cumulative totals across sorted races
-  const allRaces = racesSorted();
-  const byRound = {};
-  entity.races.forEach(r => { byRound[r.round] = r; });
-  let running = 0;
-  const pts = [];
-  allRaces.forEach(r => {
-    const mine = byRound[r.round];
-    if (mine && mine.total != null) running += mine.total;
-    pts.push({ round: r.round, y: running });
-  });
-
-  const w = svg.clientWidth || 400;
-  const h = svg.clientHeight || 220;
-  const padL = 30, padR = 14, padT = 10, padB = 22;
-  const maxY = Math.max(1, ...pts.map(p => p.y));
-  const xAt = (i) => padL + (i / Math.max(1, pts.length - 1)) * (w - padL - padR);
-  const yAt = (y) => padT + (1 - y / maxY) * (h - padT - padB);
-
-  const poly = pts.map((p, i) => `${xAt(i)},${yAt(p.y)}`).join(" ");
-  const color = colorFor(STATE.series, entity.car_number);
-
-  // Axes
-  const yTicks = [0, maxY * 0.25, maxY * 0.5, maxY * 0.75, maxY].map(v => Math.round(v));
-  const yTickLines = yTicks.map(v => {
-    const y = yAt(v);
-    return `<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,3"/>
-            <text x="${padL - 4}" y="${y + 3}" fill="var(--dim)" font-size="9" font-family="var(--mono)" text-anchor="end">${v}</text>`;
-  }).join("");
-
-  // Round labels — only show every 5 or so
-  const step = Math.max(1, Math.floor(pts.length / 6));
-  const xLabels = pts.map((p, i) => {
-    if (i % step !== 0 && i !== pts.length - 1) return "";
-    return `<text x="${xAt(i)}" y="${h - 6}" fill="var(--dim)" font-size="9" font-family="var(--mono)" text-anchor="middle">R${p.round}</text>`;
-  }).join("");
-
-  svg.innerHTML = `
-    ${yTickLines}
-    <polyline points="${poly}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" />
-    ${pts.length ? `<circle cx="${xAt(pts.length - 1)}" cy="${yAt(pts[pts.length - 1].y)}" r="3" fill="${color}" />` : ""}
-    ${xLabels}
-  `;
-}
-
-// Wire click handlers on every row in a given table to update STATE.selectedCar
-// and repaint the adjacent arc. Rows are identified via a `data-car-key` attr.
-function wireTableSplitSelection(tableHost, svgId, headId) {
-  if (!tableHost) return;
-  tableHost.querySelectorAll("[data-car-key]").forEach(row => {
-    row.classList.toggle("row-selected", row.dataset.carKey === STATE.selectedCar);
-    row.addEventListener("click", (e) => {
-      // Don't hijack clicks on actual links within the row (profile links)
-      if (e.target.closest("a")) return;
-      STATE.selectedCar = row.dataset.carKey;
-      // Update highlight
-      tableHost.querySelectorAll("[data-car-key]").forEach(r =>
-        r.classList.toggle("row-selected", r.dataset.carKey === STATE.selectedCar));
-      paintSelectedCarArc(svgId, headId);
-    });
-  });
-  // Always paint on initial wire-up
-  paintSelectedCarArc(svgId, headId);
 }
 
 function renderPlayoffsMini() {
