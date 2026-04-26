@@ -5650,9 +5650,14 @@ function renderTrackPage() {
   const trackTypeStr = trackTypeLabel(history[0]?.track_code) || "";
 
   if (titleEl) titleEl.textContent = trackName;
+  // Show the earliest year we have data for at this track. Reads from history
+  // entries since they're already keyed by year. If no data, show "Loading…".
+  const earliestYear = history.length ? Math.min(...history.map(h => h.year)) : null;
+  const dataRangeText = earliestYear
+    ? `data back to ${earliestYear}`
+    : "Loading history…";
   if (sub) {
-    const yrs = history.length ? `${history.length} race${history.length === 1 ? "" : "s"} on file` : "Loading history…";
-    sub.textContent = `${trackTypeStr ? trackTypeStr + " · " : ""}${yrs}`;
+    sub.textContent = `${trackTypeStr ? trackTypeStr + " · " : ""}${dataRangeText}`;
   }
 
   // Build maps for current-season full-time entities. We need both:
@@ -5813,7 +5818,7 @@ function renderTrackPage() {
       <div class="rc-hero-badge">TRACK</div>
       <div class="rc-hero-track">${escapeHTML(trackName)}</div>
       <div class="rc-hero-meta">
-        ${trackTypeStr ? trackTypeStr + " · " : ""}${history.length} race${history.length === 1 ? "" : "s"} on file
+        ${trackTypeStr ? trackTypeStr + " · " : ""}${escapeHTML(dataRangeText)}
       </div>
     </div>
 
