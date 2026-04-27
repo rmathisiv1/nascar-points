@@ -9,17 +9,17 @@
       "career": {
         "NCS": {
           "years": 8,
-          "starts": 227,
+          "starts": 228,
           "wins": 13,
           "top5": 51,
           "top10": 99,
           "poles": 14,
-          "laps": 58138,
-          "laps_led": 2011,
-          "avg_start": 12.6,
+          "laps": 58326,
+          "laps_led": 2013,
+          "avg_start": 12.5,
           "avg_finish": 15.2,
-          "running_at_finish": 203,
-          "lead_lap_finishes": 160
+          "running_at_finish": 204,
+          "lead_lap_finishes": 161
         },
         "NOS": {
           "years": 7,
@@ -61,17 +61,17 @@
       "career": {
         "NCS": {
           "years": 22,
-          "starts": 730,
+          "starts": 731,
           "wins": 61,
           "top5": 252,
           "top10": 382,
           "poles": 49,
-          "laps": 201377,
-          "laps_led": 16894,
+          "laps": 201565,
+          "laps_led": 16922,
           "avg_start": 11.9,
           "avg_finish": 13.2,
-          "running_at_finish": 669,
-          "lead_lap_finishes": 566
+          "running_at_finish": 670,
+          "lead_lap_finishes": 567
         },
         "NOS": {
           "years": 19,
@@ -113,12 +113,12 @@
       "career": {
         "NCS": {
           "years": 13,
-          "starts": 387,
+          "starts": 388,
           "wins": 18,
           "top5": 99,
           "top10": 174,
           "poles": 13,
-          "laps": 100148,
+          "laps": 100262,
           "laps_led": 5366,
           "avg_start": 11.8,
           "avg_finish": 15.2,
@@ -165,15 +165,15 @@
       "career": {
         "NCS": {
           "years": 5,
-          "starts": 132,
+          "starts": 133,
           "wins": 1,
           "top5": 22,
           "top10": 40,
           "poles": 2,
-          "laps": 32937,
-          "laps_led": 878,
+          "laps": 33059,
+          "laps_led": 895,
           "avg_start": 13.4,
-          "avg_finish": 17.9,
+          "avg_finish": 18.1,
           "running_at_finish": 114,
           "lead_lap_finishes": 89
         },
@@ -203,12 +203,12 @@
       "career": {
         "NCS": {
           "years": 14,
-          "starts": 411,
+          "starts": 412,
           "wins": 32,
           "top5": 137,
           "top10": 210,
           "poles": 22,
-          "laps": 108414,
+          "laps": 108528,
           "laps_led": 10861,
           "avg_start": 11.5,
           "avg_finish": 14.0,
@@ -255,17 +255,17 @@
       "career": {
         "NCS": {
           "years": 12,
-          "starts": 367,
+          "starts": 368,
           "wins": 22,
-          "top5": 118,
-          "top10": 195,
+          "top5": 119,
+          "top10": 196,
           "poles": 12,
-          "laps": 96921,
+          "laps": 97109,
           "laps_led": 6089,
           "avg_start": 11.7,
           "avg_finish": 12.8,
-          "running_at_finish": 332,
-          "lead_lap_finishes": 287
+          "running_at_finish": 333,
+          "lead_lap_finishes": 288
         },
         "NOS": {
           "years": 10,
@@ -307,15 +307,15 @@
       "career": {
         "NCS": {
           "years": 9,
-          "starts": 297,
+          "starts": 298,
           "wins": 16,
           "top5": 67,
           "top10": 125,
           "poles": 16,
-          "laps": 77117,
+          "laps": 77236,
           "laps_led": 4342,
           "avg_start": 12.2,
-          "avg_finish": 15.0,
+          "avg_finish": 15.1,
           "running_at_finish": 258,
           "lead_lap_finishes": 209
         },
@@ -359,13 +359,13 @@
       "career": {
         "NCS": {
           "years": 19,
-          "starts": 624,
+          "starts": 625,
           "wins": 37,
           "top5": 176,
           "top10": 303,
           "poles": 34,
-          "laps": 171367,
-          "laps_led": 9582,
+          "laps": 171481,
+          "laps_led": 9585,
           "avg_start": 11.9,
           "avg_finish": 14.3,
           "running_at_finish": 566,
@@ -411,17 +411,17 @@
       "career": {
         "NCS": {
           "years": 12,
-          "starts": 374,
+          "starts": 375,
           "wins": 6,
-          "top5": 30,
-          "top10": 90,
+          "top5": 31,
+          "top10": 91,
           "poles": 1,
-          "laps": 99058,
-          "laps_led": 907,
+          "laps": 99246,
+          "laps_led": 929,
           "avg_start": 19.4,
           "avg_finish": 18.2,
-          "running_at_finish": 341,
-          "lead_lap_finishes": 225
+          "running_at_finish": 342,
+          "lead_lap_finishes": 226
         },
         "NOS": {
           "years": 4,
@@ -463,16 +463,16 @@
       "career": {
         "NCS": {
           "years": 19,
-          "starts": 602,
+          "starts": 603,
           "wins": 36,
           "top5": 163,
           "top10": 280,
           "poles": 18,
-          "laps": 163934,
+          "laps": 164100,
           "laps_led": 9944,
-          "avg_start": 13.8,
-          "avg_finish": 14.3,
-          "running_at_finish": 550,
+          "avg_start": 13.7,
+          "avg_finish": 14.4,
+          "running_at_finish": 551,
           "lead_lap_finishes": 446
         },
         "NOS": {
@@ -515,17 +515,17 @@
       "career": {
         "NCS": {
           "years": 7,
-          "starts": 225,
+          "starts": 226,
           "wins": 13,
           "top5": 62,
           "top10": 111,
           "poles": 15,
-          "laps": 57209,
-          "laps_led": 2989,
+          "laps": 57397,
+          "laps_led": 3020,
           "avg_start": 13.2,
           "avg_finish": 14.5,
-          "running_at_finish": 197,
-          "lead_lap_finishes": 157
+          "running_at_finish": 198,
+          "lead_lap_finishes": 158
         },
         "NOS": {
           "years": 8,
@@ -567,17 +567,17 @@
       "career": {
         "NCS": {
           "years": 24,
-          "starts": 759,
+          "starts": 760,
           "wins": 63,
           "top5": 254,
-          "top10": 392,
+          "top10": 393,
           "poles": 35,
-          "laps": 205453,
+          "laps": 205641,
           "laps_led": 19486,
           "avg_start": 12.8,
-          "avg_finish": 14.4,
-          "running_at_finish": 673,
-          "lead_lap_finishes": 552
+          "avg_finish": 14.3,
+          "running_at_finish": 674,
+          "lead_lap_finishes": 553
         },
         "NOS": {
           "years": 21,
@@ -619,14 +619,14 @@
       "career": {
         "NCS": {
           "years": 10,
-          "starts": 300,
+          "starts": 301,
           "wins": 3,
           "top5": 29,
           "top10": 65,
           "poles": 3,
-          "laps": 76453,
-          "laps_led": 1134,
-          "avg_start": 19.0,
+          "laps": 76567,
+          "laps_led": 1137,
+          "avg_start": 18.9,
           "avg_finish": 19.5,
           "running_at_finish": 256,
           "lead_lap_finishes": 159
@@ -671,16 +671,16 @@
       "career": {
         "NCS": {
           "years": 6,
-          "starts": 189,
+          "starts": 190,
           "wins": 5,
           "top5": 31,
           "top10": 53,
           "poles": 9,
-          "laps": 47746,
-          "laps_led": 1471,
-          "avg_start": 15.9,
-          "avg_finish": 17.7,
-          "running_at_finish": 168,
+          "laps": 47926,
+          "laps_led": 1474,
+          "avg_start": 15.8,
+          "avg_finish": 17.8,
+          "running_at_finish": 169,
           "lead_lap_finishes": 130
         },
         "NOS": {
@@ -723,17 +723,17 @@
       "career": {
         "NCS": {
           "years": 12,
-          "starts": 366,
+          "starts": 367,
           "wins": 8,
-          "top5": 46,
-          "top10": 112,
+          "top5": 47,
+          "top10": 113,
           "poles": 7,
-          "laps": 94112,
+          "laps": 94300,
           "laps_led": 1533,
           "avg_start": 17.7,
           "avg_finish": 19.3,
-          "running_at_finish": 320,
-          "lead_lap_finishes": 206
+          "running_at_finish": 321,
+          "lead_lap_finishes": 207
         },
         "NOS": {
           "years": 11,
@@ -775,17 +775,17 @@
       "career": {
         "NCS": {
           "years": 10,
-          "starts": 268,
+          "starts": 269,
           "wins": 6,
           "top5": 39,
-          "top10": 71,
+          "top10": 72,
           "poles": 2,
-          "laps": 69223,
-          "laps_led": 1831,
+          "laps": 69411,
+          "laps_led": 1853,
           "avg_start": 21.4,
-          "avg_finish": 19.3,
-          "running_at_finish": 238,
-          "lead_lap_finishes": 148
+          "avg_finish": 19.2,
+          "running_at_finish": 239,
+          "lead_lap_finishes": 149
         },
         "NOS": {
           "years": 13,
@@ -827,17 +827,17 @@
       "career": {
         "NCS": {
           "years": 6,
-          "starts": 160,
+          "starts": 161,
           "wins": 3,
           "top5": 13,
-          "top10": 29,
+          "top10": 30,
           "poles": 1,
-          "laps": 39760,
+          "laps": 39948,
           "laps_led": 734,
           "avg_start": 15.6,
-          "avg_finish": 19.9,
-          "running_at_finish": 141,
-          "lead_lap_finishes": 99
+          "avg_finish": 19.8,
+          "running_at_finish": 142,
+          "lead_lap_finishes": 100
         },
         "NOS": {
           "years": 5,
@@ -879,17 +879,17 @@
       "career": {
         "NCS": {
           "years": 10,
-          "starts": 332,
+          "starts": 333,
           "wins": 2,
           "top5": 25,
           "top10": 77,
           "poles": 3,
-          "laps": 86403,
+          "laps": 86591,
           "laps_led": 908,
           "avg_start": 19.1,
           "avg_finish": 19.0,
-          "running_at_finish": 291,
-          "lead_lap_finishes": 197
+          "running_at_finish": 292,
+          "lead_lap_finishes": 198
         },
         "NOS": {
           "years": 8,
@@ -983,17 +983,17 @@
       "career": {
         "NCS": {
           "years": 4,
-          "starts": 90,
-          "wins": 0,
-          "top5": 5,
-          "top10": 18,
+          "starts": 91,
+          "wins": 1,
+          "top5": 6,
+          "top10": 19,
           "poles": 1,
-          "laps": 23587,
-          "laps_led": 150,
+          "laps": 23775,
+          "laps_led": 169,
           "avg_start": 18.5,
-          "avg_finish": 20.0,
-          "running_at_finish": 77,
-          "lead_lap_finishes": 56
+          "avg_finish": 19.7,
+          "running_at_finish": 78,
+          "lead_lap_finishes": 57
         },
         "NOS": {
           "years": 3,
@@ -1035,17 +1035,17 @@
       "career": {
         "NCS": {
           "years": 9,
-          "starts": 232,
+          "starts": 233,
           "wins": 0,
           "top5": 7,
           "top10": 32,
           "poles": 2,
-          "laps": 59978,
-          "laps_led": 313,
+          "laps": 60166,
+          "laps_led": 334,
           "avg_start": 23.7,
           "avg_finish": 21.4,
-          "running_at_finish": 197,
-          "lead_lap_finishes": 118
+          "running_at_finish": 198,
+          "lead_lap_finishes": 119
         },
         "NOS": {
           "years": 7,
@@ -1087,17 +1087,17 @@
       "career": {
         "NCS": {
           "years": 16,
-          "starts": 453,
+          "starts": 454,
           "wins": 6,
           "top5": 24,
           "top10": 85,
           "poles": 6,
-          "laps": 121101,
-          "laps_led": 531,
+          "laps": 121289,
+          "laps_led": 536,
           "avg_start": 18.0,
           "avg_finish": 18.7,
-          "running_at_finish": 402,
-          "lead_lap_finishes": 274
+          "running_at_finish": 403,
+          "lead_lap_finishes": 275
         },
         "NOS": {
           "years": 16,
@@ -1139,16 +1139,16 @@
       "career": {
         "NCS": {
           "years": 11,
-          "starts": 334,
+          "starts": 335,
           "wins": 3,
           "top5": 42,
           "top10": 97,
           "poles": 2,
-          "laps": 87308,
+          "laps": 87495,
           "laps_led": 838,
-          "avg_start": 19.2,
+          "avg_start": 19.3,
           "avg_finish": 18.2,
-          "running_at_finish": 295,
+          "running_at_finish": 296,
           "lead_lap_finishes": 197
         },
         "NOS": {
@@ -1243,16 +1243,16 @@
       "career": {
         "NCS": {
           "years": 19,
-          "starts": 546,
+          "starts": 547,
           "wins": 2,
           "top5": 15,
           "top10": 52,
           "poles": 8,
-          "laps": 121197,
-          "laps_led": 645,
+          "laps": 121346,
+          "laps_led": 646,
           "avg_start": 23.9,
           "avg_finish": 26.2,
-          "running_at_finish": 392,
+          "running_at_finish": 393,
           "lead_lap_finishes": 193
         },
         "NOS": {
@@ -1295,17 +1295,17 @@
       "career": {
         "NCS": {
           "years": 5,
-          "starts": 153,
+          "starts": 154,
           "wins": 0,
           "top5": 2,
           "top10": 16,
           "poles": 0,
-          "laps": 39616,
+          "laps": 39804,
           "laps_led": 165,
-          "avg_start": 25.4,
+          "avg_start": 25.3,
           "avg_finish": 21.7,
-          "running_at_finish": 137,
-          "lead_lap_finishes": 84
+          "running_at_finish": 138,
+          "lead_lap_finishes": 85
         },
         "NTS": {
           "years": 6,
@@ -1333,17 +1333,17 @@
       "career": {
         "NCS": {
           "years": 5,
-          "starts": 90,
+          "starts": 91,
           "wins": 0,
-          "top5": 3,
-          "top10": 12,
+          "top5": 4,
+          "top10": 13,
           "poles": 1,
-          "laps": 23008,
+          "laps": 23196,
           "laps_led": 41,
           "avg_start": 23.3,
-          "avg_finish": 22.4,
-          "running_at_finish": 78,
-          "lead_lap_finishes": 53
+          "avg_finish": 22.2,
+          "running_at_finish": 79,
+          "lead_lap_finishes": 54
         },
         "NOS": {
           "years": 3,
@@ -1385,17 +1385,17 @@
       "career": {
         "NCS": {
           "years": 6,
-          "starts": 120,
+          "starts": 121,
           "wins": 0,
           "top5": 3,
-          "top10": 11,
+          "top10": 12,
           "poles": 0,
-          "laps": 29313,
-          "laps_led": 22,
+          "laps": 29501,
+          "laps_led": 24,
           "avg_start": 24.6,
-          "avg_finish": 23.7,
-          "running_at_finish": 94,
-          "lead_lap_finishes": 53
+          "avg_finish": 23.5,
+          "running_at_finish": 95,
+          "lead_lap_finishes": 54
         },
         "NOS": {
           "years": 6,
@@ -1437,17 +1437,17 @@
       "career": {
         "NCS": {
           "years": 16,
-          "starts": 481,
+          "starts": 482,
           "wins": 4,
           "top5": 27,
-          "top10": 64,
+          "top10": 65,
           "poles": 3,
-          "laps": 125771,
-          "laps_led": 601,
+          "laps": 125959,
+          "laps_led": 603,
           "avg_start": 20.6,
           "avg_finish": 20.8,
-          "running_at_finish": 414,
-          "lead_lap_finishes": 260
+          "running_at_finish": 415,
+          "lead_lap_finishes": 261
         },
         "NOS": {
           "years": 7,
@@ -1489,17 +1489,17 @@
       "career": {
         "NCS": {
           "years": 13,
-          "starts": 290,
+          "starts": 291,
           "wins": 0,
           "top5": 2,
           "top10": 8,
           "poles": 0,
-          "laps": 75941,
+          "laps": 76129,
           "laps_led": 109,
-          "avg_start": 27.2,
-          "avg_finish": 23.3,
-          "running_at_finish": 259,
-          "lead_lap_finishes": 125
+          "avg_start": 27.3,
+          "avg_finish": 23.2,
+          "running_at_finish": 260,
+          "lead_lap_finishes": 126
         },
         "NOS": {
           "years": 11,
@@ -1541,15 +1541,15 @@
       "career": {
         "NCS": {
           "years": 7,
-          "starts": 162,
+          "starts": 163,
           "wins": 1,
           "top5": 4,
           "top10": 15,
           "poles": 1,
-          "laps": 40199,
+          "laps": 40313,
           "laps_led": 40,
           "avg_start": 21.8,
-          "avg_finish": 21.9,
+          "avg_finish": 22.0,
           "running_at_finish": 140,
           "lead_lap_finishes": 89
         },
@@ -1593,17 +1593,17 @@
       "career": {
         "NCS": {
           "years": 4,
-          "starts": 59,
+          "starts": 60,
           "wins": 6,
           "top5": 8,
           "top10": 13,
           "poles": 4,
-          "laps": 13892,
+          "laps": 14080,
           "laps_led": 377,
-          "avg_start": 20.7,
+          "avg_start": 21.0,
           "avg_finish": 20.7,
-          "running_at_finish": 53,
-          "lead_lap_finishes": 34
+          "running_at_finish": 54,
+          "lead_lap_finishes": 35
         },
         "NOS": {
           "years": 3,
@@ -1645,16 +1645,16 @@
       "career": {
         "NCS": {
           "years": 2,
-          "starts": 12,
+          "starts": 13,
           "wins": 0,
           "top5": 0,
           "top10": 0,
           "poles": 0,
-          "laps": 3205,
+          "laps": 3390,
           "laps_led": 0,
-          "avg_start": 27.8,
-          "avg_finish": 26.3,
-          "running_at_finish": 9,
+          "avg_start": 28.2,
+          "avg_finish": 26.2,
+          "running_at_finish": 10,
           "lead_lap_finishes": 3
         },
         "NOS": {
@@ -1697,15 +1697,15 @@
       "career": {
         "NCS": {
           "years": 5,
-          "starts": 93,
+          "starts": 94,
           "wins": 1,
           "top5": 6,
           "top10": 17,
           "poles": 0,
-          "laps": 22879,
+          "laps": 23003,
           "laps_led": 331,
-          "avg_start": 19.3,
-          "avg_finish": 22.4,
+          "avg_start": 19.4,
+          "avg_finish": 22.5,
           "running_at_finish": 71,
           "lead_lap_finishes": 48
         },
@@ -1749,16 +1749,16 @@
       "career": {
         "NCS": {
           "years": 4,
-          "starts": 53,
+          "starts": 54,
           "wins": 0,
           "top5": 0,
           "top10": 3,
           "poles": 0,
-          "laps": 13001,
+          "laps": 13187,
           "laps_led": 12,
-          "avg_start": 25.8,
+          "avg_start": 25.7,
           "avg_finish": 25.8,
-          "running_at_finish": 45,
+          "running_at_finish": 46,
           "lead_lap_finishes": 24
         },
         "NOS": {
@@ -1897,7 +1897,7 @@
       "source_url": "https://www.racing-reference.info/driver/Justin_Allgaier"
     }
   },
-  "generated_at": "2026-04-26T15:51:51+00:00",
+  "generated_at": "2026-04-27T19:56:39+00:00",
   "source": "racing-reference.info",
   "count": 37
 }
