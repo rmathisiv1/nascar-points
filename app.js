@@ -5951,6 +5951,8 @@ function renderTrackPage() {
       </div>
     </div>
 
+    ${renderTrackThisSeason(history)}
+
     <div class="rc-grid tk-grid-3">
       <div class="card rc-card">
         <div class="rc-card-head">
@@ -5980,6 +5982,43 @@ function renderTrackPage() {
       <div class="rc-card-body" style="padding:0;">${histTableHTML}</div>
     </div>
   `;
+}
+
+// Render the "this season's winner at this track" hero card. If multiple races
+// have already been run at this track this season (Talladega, Pocono in some
+// years run twice), show both side-by-side. If none have run yet, return
+// empty string and the layout flows as before.
+function renderTrackThisSeason(history) {
+  const thisYear = history.filter(h => {
+    if (h.year !== STATE.season) return false;
+    return (h.results || []).some(d => d.finish_pos === 1);
+  });
+  if (!thisYear.length) return "";
+
+  // Sort by round ascending so the earlier race shows first.
+  thisYear.sort((a, b) => a.round - b.round);
+
+  const cards = thisYear.map(h => {
+    const w = (h.results || []).find(d => d.finish_pos === 1);
+    if (!w) return "";
+    const carHex = colorFor(STATE.series, w.car_number);
+    const txt = contrastTextFor(carHex);
+    const dateStr = h.date ? formatRaceDate(h.date) : "";
+    const subBits = [];
+    subBits.push(`R${h.round}`);
+    if (dateStr) subBits.push(dateStr);
+    if (h.name) subBits.push(escapeHTML(h.name));
+    return `<a class="tk-this-card profile-link" href="#/car/${w.car_number}">
+      <div class="tk-this-label">${STATE.season} Winner</div>
+      <div class="tk-this-body">
+        <span class="car-tag tk-this-tag" style="background:${carHex};color:${txt}">${w.car_number}</span>
+        <span class="tk-this-driver">${escapeHTML(w.driver)}</span>
+      </div>
+      <div class="tk-this-sub">${subBits.join(" · ")}</div>
+    </a>`;
+  }).join("");
+
+  return `<div class="tk-this-row${thisYear.length > 1 ? " multi" : ""}">${cards}</div>`;
 }
 
 function renderPlayoffs() {

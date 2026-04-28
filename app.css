@@ -4167,6 +4167,73 @@ a.driver-cell.profile-link:hover .car-tag {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
+/* "This season's winner" hero band — sits between track hero and 3-col grid.
+   When this season's race(s) at this track HAVE been run, surface the winner
+   prominently so it's not buried in the history table. Single race = full
+   width, two races (e.g. spring + fall Talladega) = 2-column. */
+.tk-this-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tk-this-row.multi {
+  grid-template-columns: 1fr 1fr;
+}
+.tk-this-card {
+  position: relative;
+  display: block;
+  background: linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(59,130,246,0.03) 100%);
+  border: 1px solid rgba(59,130,246,0.25);
+  border-radius: 8px;
+  padding: 18px 22px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.tk-this-card:hover {
+  border-color: rgba(59,130,246,0.5);
+  background: linear-gradient(135deg, rgba(59,130,246,0.14) 0%, rgba(59,130,246,0.05) 100%);
+  transform: translateY(-1px);
+}
+.tk-this-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+.tk-this-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+.tk-this-tag {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 5px;
+  min-width: 44px;
+  text-align: center;
+  font-family: var(--mono);
+}
+.tk-this-driver {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.tk-this-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
 /* Manufacturer wins: simple bar chart */
 .tk-manu-body {
   padding: 8px 14px;
@@ -4223,6 +4290,10 @@ a.driver-cell.profile-link:hover .car-tag {
 @media (max-width: 767.98px) {
   #track-host { max-width: 100%; }
   .tk-grid-3 { grid-template-columns: 1fr; }
+  .tk-this-row.multi { grid-template-columns: 1fr; }
+  .tk-this-card { padding: 14px 16px; }
+  .tk-this-driver { font-size: 22px; }
+  .tk-this-tag { font-size: 16px; padding: 5px 10px; }
   .tk-history-table th:nth-child(4),
   .tk-history-table td:nth-child(4) { display: none; }   /* hide Pole column on mobile */
   .tk-col-yr { width: 60px; }
