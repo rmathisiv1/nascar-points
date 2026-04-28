@@ -5594,9 +5594,10 @@ function renderSeasonSchedule(allRaces, currentRound, lastWinnerAt) {
       }
     } else {
       // Upcoming row. Show prior winner if we have one (and a lookup fn).
+      // (The NEXT badge for the current upcoming race is rendered in the
+      // round column instead of here, so the result column stays clean.)
       let priorWinner = null;
       if (lastWinnerAt && r.track_code) priorWinner = lastWinnerAt(r.track_code);
-      const nextBadge = isCurrent ? `<span class="rc-sched-next">NEXT</span>` : "";
       let priorHTML = "";
       if (priorWinner) {
         const carHex = colorFor(STATE.series, priorWinner.car_number);
@@ -5607,7 +5608,7 @@ function renderSeasonSchedule(allRaces, currentRound, lastWinnerAt) {
           ${escapeHTML(lastNameOf(priorWinner.driver))}
         </span>`;
       }
-      resultBit = `${nextBadge}${priorHTML}`;
+      resultBit = priorHTML;
     }
 
     const trackLink = r.track_code
@@ -5617,8 +5618,12 @@ function renderSeasonSchedule(allRaces, currentRound, lastWinnerAt) {
       ? `<span class="rc-sched-name">${escapeHTML(r.name)}</span>`
       : "";
 
+    const roundCell = isCurrent
+      ? `<span class="rc-sched-round">R${r.round}<span class="rc-sched-next">NEXT</span></span>`
+      : `<span class="rc-sched-round">R${r.round}</span>`;
+
     return `<div class="${cls}" data-round="${r.round}">
-      <span class="rc-sched-round">R${r.round}</span>
+      ${roundCell}
       <span class="rc-sched-track">
         ${trackLink}
         ${raceNameHTML}

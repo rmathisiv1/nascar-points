@@ -3982,8 +3982,8 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 .rc-sched-row {
   display: grid;
-  /* round | track+name (flex grows) | date+time | result (winner or prior) */
-  grid-template-columns: 50px minmax(0, 1.4fr) 130px minmax(160px, 1fr);
+  /* round (+ optional NEXT) | track+name (flex grows) | date+time | result (winner or prior) */
+  grid-template-columns: 90px minmax(0, 1.4fr) 130px minmax(160px, 1fr);
   align-items: center;
   gap: 18px;
   padding: 10px 24px;
@@ -4011,6 +4011,9 @@ a.driver-cell.profile-link:hover .car-tag {
   font-size: 11px;
   color: var(--muted);
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .rc-sched-track {
   display: flex;
