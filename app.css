@@ -4061,16 +4061,16 @@ a.driver-cell.profile-link:hover .car-tag {
 .rc-sched-prior {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 10px;
-  color: var(--dim);
-  opacity: 0.85;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
 }
 .rc-sched-prior-yr {
   font-family: var(--mono);
-  font-size: 9px;
-  color: var(--dim);
+  font-size: 10px;
+  color: var(--muted);
   letter-spacing: 0.04em;
+  opacity: 0.85;
 }
 .rc-sched-winner {
   display: inline-flex;
