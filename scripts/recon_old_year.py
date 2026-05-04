@@ -175,7 +175,7 @@ def main() -> int:
     for i, r in enumerate(sample_races, start=1):
         info(f"[{i}/{len(sample_races)}] R{r['round']} — {r['track']} ({r['date']})")
         try:
-            race = sp.parse_race(r["url"], series, r["round"])
+            race = sp.parse_race(r["url"], series, r["round"], season=season)
         except Exception as e:
             problems.append(f"R{r['round']} parse_race crashed: {e}")
             fail(problems[-1])
@@ -210,15 +210,19 @@ def main() -> int:
                 checks.append("first row missing driver name")
             if not top.car_number:
                 checks.append("first row missing car number")
-            if top.race_pts == 0:
+            # An ineligible (crossover) winner legitimately has race_pts=0 —
+            # full-time Cup drivers running in NTS/NOS earn zero championship
+            # points. Don't flag that as a problem.
+            if top.race_pts == 0 and not top.ineligible:
                 checks.append(f"first row race_pts=0 (winner should have 40+)")
             if checks:
                 for c in checks:
                     problems.append(f"R{r['round']}: {c}")
                     fail(c)
             else:
+                tag = " (ineligible/crossover)" if top.ineligible else ""
                 ok(f"R{r['round']} winner: #{top.car_number} {top.driver} "
-                   f"({top.race_pts} pts)")
+                   f"({top.race_pts} pts){tag}")
 
         # FL detection on a pre-2025 year SHOULD return nothing (no +1 bonus existed)
         if season < 2025 and race.fastest_lap_driver:

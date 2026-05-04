@@ -94,12 +94,30 @@ def _new_scraper():
         delay=10,
     )
 
-# Manufacturer name/keyword → our internal 3-letter code
+# Manufacturer name/keyword → our internal 3-letter code.
+# Includes historical brands that participated in 2001-2013 era so the scraper
+# correctly tags drivers from older seasons. The frontend uses these codes to
+# colour pills, render manufacturer-win charts, etc.
+#   TYT/CHV/FRD     — current era (2014+)
+#   DOD             — Dodge (NCS/NOS through 2012, NTS through 2012)
+#   PON             — Pontiac (NCS/NOS through 2003)
+#   PLY             — Plymouth (NCS rare, ~2001 only)
+#   MER             — Mercury (NCS rare, mostly pre-2001 but a few 2001 entries)
+#   BUI             — Buick (rare, mostly pre-2001)
+#   OLD             — Oldsmobile (rare, pre-2001)
+#   MAZ             — Mazda (NTS rare, early 2000s)
 MFR_MAP = [
-    ("toyota",    "TYT"),
-    ("chevrolet", "CHV"),
-    ("chevy",     "CHV"),
-    ("ford",      "FRD"),
+    ("toyota",     "TYT"),
+    ("chevrolet",  "CHV"),
+    ("chevy",      "CHV"),
+    ("ford",       "FRD"),
+    ("dodge",      "DOD"),
+    ("pontiac",    "PON"),
+    ("plymouth",   "PLY"),
+    ("mercury",    "MER"),
+    ("buick",      "BUI"),
+    ("oldsmobile", "OLD"),
+    ("mazda",      "MAZ"),
 ]
 
 
@@ -142,13 +160,19 @@ class Race:
 
 
 TRACK_CODES = {
+    # Modern tracks (current schedule)
     "daytona": "DAY", "atlanta": "ATL", "austin": "AUS",
     "circuit of the americas": "AUS", "cota": "AUS",
     "phoenix": "PHO", "las vegas": "LAS", "darlington": "DAR",
     "martinsville": "MAR", "bristol": "BRI", "kansas": "KAN",
     "talladega": "TAL", "texas": "TEX", "fort worth": "TEX",
     "watkins glen": "WGI", "glen": "WGI",
-    "charlotte": "CLT", "nashville": "NSH", "michigan": "MCH",
+    "charlotte": "CLT",
+    # Specific 'nashville superspeedway' MUST appear before bare 'nashville'
+    # since matching is substring-based (first hit wins).
+    "nashville superspeedway": "NSV",
+    "nashville": "NSH",
+    "michigan": "MCH",
     "pocono": "POC", "san diego": "SDG", "sonoma": "SON",
     "chicago": "CHI", "chicagoland": "CHI",
     "north wilkesboro": "NWB", "indianapolis": "IND",
@@ -156,8 +180,27 @@ TRACK_CODES = {
     "loudon": "LOU", "new hampshire": "LOU",
     "gateway": "GTW", "world wide technology": "GTW",
     "homestead": "HOM", "dover": "DOV", "rockingham": "ROC",
+    "north carolina speedway": "ROC",     # rr.com's name for Rockingham
     "st. petersburg": "STP", "st petersburg": "STP",
     "lime rock": "LRP",
+    # Auto Club / Fontana — same physical track, two names over its lifetime
+    "auto club": "AUS",                   # rr.com calls it Auto Club Speedway
+    "fontana": "AUS",                     # season page sometimes shows Fontana
+    "california speedway": "AUS",         # name used 1997-2007
+    # Historical tracks no longer on the schedule (2001-2013 era)
+    "nazareth": "NAZ",                    # NOS through 2004
+    "pikes peak": "PPI",                  # NTS through 2005
+    "mesa marin": "MMR",                  # NTS through 2003
+    "memphis": "MEM",                     # NOS, NTS
+    "milwaukee": "MIL",                   # NOS, NTS
+    "kentucky speedway": "KEN",
+    "kentucky": "KEN",
+    "texas world": "TWS",                 # NTS '01
+    "lucas oil raceway": "IRP",           # NOS — formerly Indianapolis Raceway Park
+    "indianapolis raceway park": "IRP",
+    "o'reilly raceway park": "IRP",       # NOS 2002-2010
+    "irp": "IRP",
+    "evergreen": "EVG",                   # NTS '01
 }
 
 
@@ -240,7 +283,8 @@ def parse_stage_line(text: str, stage_num: int) -> dict[str, int]:
     return {car.strip(): pos + 1 for pos, car in enumerate(nums[:10])}
 
 
-def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race]:
+def parse_race(race_url: str, series_code: str, round_num: int,
+               season: Optional[int] = None) -> Optional[Race]:
     try:
         html = fetch(race_url)
     except Exception as e:
@@ -324,7 +368,11 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
         car = cell(tds, "#")
         driver = cell(tds, "Driver")
         team = cell(tds, "Sponsor / Owner", "Owner", "Sponsor")
-        mfr_raw = cell(tds, "Car", "Make")
+        # Manufacturer column header varies across series and eras:
+        #   NCS / NOS modern:    'Car'  or  'Make'
+        #   NTS pre-modern:      'Truck'  (rr.com used this for old truck pages)
+        # All three contain the same kind of value (Chevrolet/Ford/Dodge/etc.)
+        mfr_raw = cell(tds, "Car", "Make", "Truck")
         laps = to_int(cell(tds, "Laps"))
         led = to_int(cell(tds, "Led")) or 0
         pts = to_int(cell(tds, "Pts"))
@@ -338,6 +386,17 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
         if re.search(r"\(i\)\s*$", driver):
             ineligible = True
             driver = re.sub(r"\s*\(i\)\s*$", "", driver).strip()
+
+        # Inferred ineligibility: a driver who actually competed (laps > 0,
+        # has a finish position) but earned ZERO championship points is, by
+        # definition, an ineligible crossover. Pre-2014 rr.com pages don't
+        # always include the (i) / asterisk markers, but the data signal
+        # is identical: 0 pts despite finishing the race. We treat that as
+        # ineligible so downstream frontend code (full-time filters,
+        # standings, etc.) handles the row consistently across eras.
+        if (not ineligible and (pts or 0) == 0 and pos is not None
+                and pos >= 1 and (laps or 0) > 0):
+            ineligible = True
 
         s1_pos = stage1_map.get(car)
         s2_pos = stage2_map.get(car)
@@ -358,13 +417,14 @@ def parse_race(race_url: str, series_code: str, round_num: int) -> Optional[Race
         )
         race.results.append(dr)
 
-    # --- fastest-lap +1 bonus (2025+) ---
-    # Racing-Reference doesn't always label this explicitly in the results
-    # table. We detect it by looking at whichever driver has race_pts that
-    # exceeds their expected stage + finish total by exactly 1.
-    # Expected finish pts schedule (NASCAR rule, 2016+): 1st=40, 2nd=35, 3rd=34, ... 36th=1.
-    # plus 5 for the win.
-    _assign_fastest_lap_bonus(race)
+    # --- fastest-lap +1 bonus (2025+ ONLY) ---
+    # The +1 fastest-lap bonus was introduced in 2025. Before that, the bonus
+    # didn't exist, so we MUST NOT try to infer it — the inference heuristic
+    # produces false positives when stage point arithmetic produces a +1
+    # delta for innocent reasons (rain-shortened races, partial stage credit,
+    # etc.). Skipping inference entirely for pre-2025 keeps the data honest.
+    if season is None or season >= 2025:
+        _assign_fastest_lap_bonus(race)
 
     # Compute finish_pts = race_pts - stage - FL
     for d in race.results:
@@ -624,7 +684,7 @@ def build_series(series_code: str, season: int) -> dict:
             print("    upcoming · schedule entry only", file=sys.stderr)
             continue
 
-        race = parse_race(r["url"], series_code, r["round"])
+        race = parse_race(r["url"], series_code, r["round"], season=season)
         if race is None:
             print("    ! parse failed, skipping", file=sys.stderr)
             continue
