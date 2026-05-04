@@ -1858,7 +1858,7 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
         const teamDrivers = entities.filter(e => {
           const rawCode = e.team_code;
           if (!rawCode) return false;
-          return (TEAM_ALLIANCE[rawCode] || rawCode) === teamKey;
+          return teamGroup(rawCode) === teamKey;
         });
         teamDrivers.sort((a, b) => b.total - a.total);
         onTeamSelect(teamDrivers);
@@ -2954,9 +2954,20 @@ function fillTrajCallout(hostId, rows) {
 // TEAMMATE DELTA
 // ============================================================
 // Alliance map (view-level only; does NOT change the underlying team tag in colors.json).
-// WBR rides in the Penske shop so we compare #21 against the PEN cars.
-const TEAM_ALLIANCE = { "WBR": "PEN" };
-function teamGroup(team) { return TEAM_ALLIANCE[team] || team; }
+// Wood Brothers Racing entered a FORMAL alliance with Penske starting 2015
+// (the #21 / Trevor Bayne effort). Before 2015 they were a standalone team —
+// any pre-2015 view should treat WBR as its own group, not PEN. Hence the
+// alliance is keyed both by team and by the minimum year in which it applied.
+const TEAM_ALLIANCES = [
+  { team: "WBR", parent: "PEN", since: 2015 },
+];
+function teamGroup(team, year) {
+  const y = year || (typeof STATE !== "undefined" ? STATE.season : null);
+  for (const a of TEAM_ALLIANCES) {
+    if (a.team === team && (y == null || y >= a.since)) return a.parent;
+  }
+  return team;
+}
 
 // Friendly team names for the card header; fall back to the team code itself
 // Track type classification — standard 4-category NASCAR split.
@@ -3302,7 +3313,17 @@ function renderTeammates() {
     // Team pill color is keyed by the group's team code directly.
     const orgHex = orgColorForTeam(grp) || "#9ca3af";
     const orgTxt = contrastTextFor(orgHex);
-    const displayName = GROUP_DISPLAY_NAMES[grp] || TEAM_FULL_NAMES[grp] || grp;
+    // Group display names like "Team Penske + Wood Brothers" only apply when
+    // the alliance is in effect for the current season. In pre-2015 NCS,
+    // PEN is just "Team Penske" — WBR is its own group entirely (and shows
+    // as a separate row). teamGroup() already handled the bucketing; we just
+    // need to make sure the LABEL doesn't claim an alliance that didn't exist.
+    const allianceActive = TEAM_ALLIANCES.some(a =>
+      a.parent === grp && (STATE.season || 0) >= a.since
+    );
+    const displayName = (allianceActive && GROUP_DISPLAY_NAMES[grp])
+      || TEAM_FULL_NAMES[grp]
+      || grp;
     const bestCar = members[0];
     const ftCount = members.filter(m => m.car_full_time).length;
     const ptCount = members.length - ftCount;
@@ -3732,9 +3753,10 @@ function profileTeammates(entity) {
   const myTeam = entity.team_code;
   if (!myTeam) return [];
 
-  // Alliance: WBR rides with PEN
-  const ALLIANCE = { WBR: "PEN" };
-  const myGroup = ALLIANCE[myTeam] || myTeam;
+  // Alliance: WBR rides with PEN (2015+) — see TEAM_ALLIANCES at top of file.
+  // teamGroup() returns the alliance group for the given team in the CURRENT
+  // STATE.season, which is correct for profile views (always single-season).
+  const myGroup = teamGroup(myTeam);
 
   // Head-to-head record per teammate + avg delta
   const mates = {};  // teammate driver name → { car, beat, lost, tied, deltas: [] }
@@ -3746,7 +3768,7 @@ function profileTeammates(entity) {
       const t = d.team_code
         || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number);
       if (!t) return;
-      const g = ALLIANCE[t] || t;
+      const g = teamGroup(t);
       if (g !== myGroup) return;
       if (d.car_number === entity.car_number) myEntry = d;
       else teamEntries.push(d);
