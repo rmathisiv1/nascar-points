@@ -1169,11 +1169,19 @@ function profileHref(entity) {
 function computeSeasonTotals() {
   if (RENDER_CACHE.totals) return RENDER_CACHE.totals;
   const entities = allEntities();
-  RENDER_CACHE.totals = entities.map(d => {
+  const rows = entities.map(d => {
     const total = d.races.reduce((s, r) => s + r.total, 0);
     const avgFinish = mean(d.races.map(r => r.finish).filter(x => x != null));
     return { ...d, total, avgFinish };
-  }).sort((a, b) => b.total - a.total);
+  });
+
+  // Override summed totals with canonical year-end standings when present.
+  // This matches what the standings page does — applies to every view that
+  // surfaces season totals (Leader tile, Form panel, metric bar, etc.) so
+  // the entire UI agrees on who's #1 in champion-determined years.
+  applyCanonicalStandings(rows);
+
+  RENDER_CACHE.totals = rows.sort((a, b) => b.total - a.total);
   return RENDER_CACHE.totals;
 }
 
@@ -4593,6 +4601,11 @@ function renderStandings() {
     rows = rows.slice().reverse();
   }
 
+  // If canonical year-end standings are present (any non-zero gap field
+  // means we have real data attached), show a DIFF column with the actual
+  // championship-points gap to the leader.
+  const hasCanonicalGap = rows.some(r => r.canonicalGap != null);
+
   const body = rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
@@ -4610,6 +4623,18 @@ function renderStandings() {
     }
     const profileSlug = r.car_number;
     const profileKind = "car";
+    // DIFF cell — shows gap to leader using canonical data; "—" for the
+    // leader (gap=0) and rows without canonical match (part-timers).
+    let diffCell = "";
+    if (hasCanonicalGap) {
+      if (r.canonicalGap == null) {
+        diffCell = `<td class="num muted">—</td>`;
+      } else if (r.canonicalGap === 0) {
+        diffCell = `<td class="num leader-cell">—</td>`;
+      } else {
+        diffCell = `<td class="num diff-cell">${r.canonicalGap}</td>`;
+      }
+    }
     return `<tr data-car-key="${escapeHTML(r.key)}">
       <td class="rank-cell">${r.currRank}${pcPill}</td>
       <td><a class="driver-cell profile-link" href="#/${profileKind}/${profileSlug}">
@@ -4627,6 +4652,7 @@ function renderStandings() {
       <td class="num">${r.sumS2}</td>
       <td class="num">${r.sumFL}</td>` : ""}
       <td class="num total-col">${r.total}</td>
+      ${diffCell}
     </tr>`;
   }).join("");
 
@@ -4661,6 +4687,7 @@ function renderStandings() {
         ${th("sumS2", "S2", true)}
         ${thFL()}` : ""}
         ${th("total", "Total", true)}
+        ${hasCanonicalGap ? `<th class="num" title="Points gap to season champion">Diff</th>` : ""}
       </tr>
     </thead>
     <tbody>${body}</tbody>
@@ -4751,8 +4778,62 @@ function rankingRowsFrom(map) {
       : `#${e.car_number} · ${primaryDriver}`;
     return { ...e, avgFinish, displayLabel, primaryDriver, coDrivers, driversByStarts, driver: displayLabel };
   });
+
+  // Apply canonical year-end standings overlay if present. For Chase years
+  // (2004-2013), elimination years (2014+), and any future format, the
+  // scraper attaches `final_standings` from racing-reference's standings
+  // table — that's the AUTHORITATIVE championship outcome. Override our
+  // summed-race_pts total with the canonical points so the standings page
+  // shows the actual champion at row 1, not the regular-season points
+  // leader.
+  applyCanonicalStandings(rows);
+
   rows.sort((a, b) => b.total - a.total);
   return rows;
+}
+
+// Build a normalized-name → final-standing map from STATE.data.final_standings.
+// Returns null if no canonical standings are present (in-progress season).
+function canonicalStandingsMap() {
+  const arr = STATE.data && STATE.data.final_standings;
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const m = new Map();
+  arr.forEach(row => {
+    const key = normalizeDriverName(row.driver || "");
+    if (!key) return;
+    m.set(key, {
+      rank: row.rank,
+      points: row.points,
+      wins: row.wins,
+      gap: row.gap,
+      driver: row.driver,
+    });
+  });
+  return m;
+}
+
+// Mutate each row in-place: replace `total` with the canonical points and
+// attach `canonicalRank` + `canonicalGap` if we found a match. Rows whose
+// driver isn't in the canonical table keep their summed total (catches
+// part-timers and ineligible drivers correctly).
+function applyCanonicalStandings(rows) {
+  const canon = canonicalStandingsMap();
+  if (!canon) return;
+  rows.forEach(r => {
+    // Try matching by primaryDriver first (most accurate), then by driver.
+    const candidates = [r.primaryDriver, r.driver].filter(Boolean);
+    for (const name of candidates) {
+      const norm = normalizeDriverName(name || "");
+      const hit = norm && canon.get(norm);
+      if (hit) {
+        r.total = hit.points;
+        r.canonicalRank = hit.rank;
+        r.canonicalGap = hit.gap;
+        r.canonicalWins = hit.wins;
+        return;
+      }
+    }
+  });
 }
 
 // ============================================================

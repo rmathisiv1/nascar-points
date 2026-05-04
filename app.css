@@ -1143,6 +1143,18 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-weight: 700;
   color: var(--text);
 }
+#standings-table td.diff-cell {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 12px;
+}
+#standings-table td.leader-cell {
+  font-family: var(--mono);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 13px;
+}
 #standings-table td.rank-cell {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;

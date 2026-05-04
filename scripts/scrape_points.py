@@ -652,6 +652,117 @@ def discover_races(series_code: str, season: int) -> list[dict]:
     return races
 
 
+def parse_final_standings(series_code: str, season: int) -> list[dict]:
+    """
+    Scrape the canonical NASCAR year-end standings from
+    /standings/{year}/{rr_code}.
+
+    Returns a list of dicts (rank-ordered) with the post-format championship
+    totals — i.e. for Chase years (2004-2013 NCS) the points are post-reset,
+    for elimination years (2014+) they reflect the elimination format, and
+    for pre-Chase / NOS championship / NTS championship years they're just
+    the regular season-long totals. In every case, rank=1 is the actual
+    NASCAR-recognized champion of that season.
+
+    Output rows:
+        {rank: 1, driver: "Jimmie Johnson", points: 6622, wins: 6, gap: 0}
+        {rank: 2, driver: "Denny Hamlin",   points: 6583, wins: 8, gap: -39}
+
+    On parse failure or HTTP error returns an empty list. Caller should
+    treat empty as "no canonical standings available" rather than as an
+    error condition — the frontend will fall back to summed race_pts.
+    """
+    cfg = SERIES[series_code]
+    url = f"{BASE}/standings/{season}/{cfg['rr_code']}"
+    print(f"[{series_code}] fetching final standings: {url}", file=sys.stderr)
+
+    try:
+        html = fetch(url)
+    except Exception as e:
+        print(f"[{series_code}] standings fetch failed: {e}", file=sys.stderr)
+        return []
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # The standings table is <table class="tb standingsTbl">. We sniff for it
+    # by class. Older years use the same layout (verified across 2010-2024
+    # in recon).
+    table = soup.find("table", class_="standingsTbl")
+    if table is None:
+        # Fallback: any table with Driver + Points headers
+        for tbl in soup.find_all("table"):
+            headers = [c.get_text(strip=True).lower()
+                       for c in tbl.find_all(["th", "td"])[:20]]
+            if "driver" in headers and ("points" in headers or "pts" in headers):
+                table = tbl
+                break
+
+    if table is None:
+        print(f"[{series_code}] no standings table found at {url}",
+              file=sys.stderr)
+        return []
+
+    # Header row → column index map
+    header_row = table.find("tr")
+    if header_row is None:
+        print(f"[{series_code}] standings table has no header row",
+              file=sys.stderr)
+        return []
+    headers = [c.get_text(strip=True).lower()
+               for c in header_row.find_all(["th", "td"])]
+    col = {name: i for i, name in enumerate(headers)}
+
+    def cell_text(cells: list, *names: str) -> str:
+        for name in names:
+            idx = col.get(name.lower())
+            if idx is not None and idx < len(cells):
+                return cells[idx].get_text(" ", strip=True)
+        return ""
+
+    def to_int(s: str) -> Optional[int]:
+        s = (s or "").replace(",", "").strip()
+        m = re.match(r"^-?\d+$", s)
+        return int(m.group()) if m else None
+
+    rows: list[dict] = []
+    leader_pts: Optional[int] = None
+    for tr in table.find_all("tr")[1:]:
+        tds = tr.find_all(["td", "th"])
+        if len(tds) < 4:
+            continue
+        # First column is rank in standingsTbl. Sometimes it isn't named
+        # explicitly so we read positionally.
+        rank_text = tds[0].get_text(" ", strip=True)
+        rank = to_int(rank_text)
+        if rank is None:
+            continue
+
+        driver = cell_text(tds, "Driver")
+        points = to_int(cell_text(tds, "Points", "Pts"))
+        wins = to_int(cell_text(tds, "Win", "Wins"))
+        if not driver or points is None:
+            continue
+
+        if leader_pts is None:
+            leader_pts = points
+        gap = points - leader_pts  # 0 for leader, negative for others
+
+        rows.append({
+            "rank":   rank,
+            "driver": driver,
+            "points": points,
+            "wins":   wins or 0,
+            "gap":    gap,
+        })
+
+    print(f"[{series_code}] final standings: {len(rows)} drivers, "
+          f"champion = {rows[0]['driver'] if rows else '—'} "
+          f"({rows[0]['points'] if rows else 0} pts)",
+          file=sys.stderr)
+    return rows
+
+
+
 
 def build_series(series_code: str, season: int) -> dict:
     print(f"\n=== {series_code} — discovering schedule ===", file=sys.stderr)
@@ -695,11 +806,32 @@ def build_series(series_code: str, season: int) -> dict:
         time.sleep(0.8)
 
     out_races.sort(key=lambda x: (x.get("round") or 0, x.get("date") or ""))
+
+    # Fetch canonical year-end standings — but only for seasons where every
+    # race has been run. For an in-progress season, the rr.com standings
+    # page reflects current standings (not final), and we DON'T want to
+    # mistake those for the final championship outcome. The frontend handles
+    # missing final_standings by falling back to summed race_pts as before.
+    final_standings: list[dict] = []
+    has_unrun = any(not r.get("has_run") for r in race_list)
+    if not has_unrun and race_list:
+        time.sleep(0.8)  # be polite between page fetches
+        try:
+            final_standings = parse_final_standings(series_code, season)
+        except Exception as e:
+            print(f"[{series_code}] final standings parse failed: {e}",
+                  file=sys.stderr)
+            final_standings = []
+    elif has_unrun:
+        print(f"[{series_code}] season in progress — skipping final standings",
+              file=sys.stderr)
+
     return {
         "series_code": series_code,
         "series_name": SERIES[series_code]["name"],
         "season": season,
         "races": out_races,
+        "final_standings": final_standings,
     }
 
 
