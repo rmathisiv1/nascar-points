@@ -46,19 +46,21 @@ foreach ($season in $Seasons) {
     Write-Host "  SEASON $season" -ForegroundColor Cyan
     Write-Host "============================================================" -ForegroundColor DarkGray
 
-    $args = @(
-        "-Season", $season,
-        "-Only", $Only,
-        "-SkipBios"
-    )
-    if ($DryRun) { $args += "-DryRun" }
+    # Build a hashtable for splatting -- this is the canonical PS pattern
+    # for passing parameters to another script. Using an array with `& script @args`
+    # is fragile because $args is an auto-variable and the array form passes
+    # everything as positional strings, breaking parameter binding on -Season
+    # (which expects [int]).
+    $params = @{
+        Season   = $season
+        Only     = $Only
+        SkipBios = $true
+    }
+    if ($DryRun) { $params.DryRun = $true }
 
-    # Use & with -NoProfile so the called script gets a clean environment
-    # and any non-zero exit from update.ps1 is captured without throwing.
     try {
-        # Reset $LASTEXITCODE before the call so we know it's set by the child
         $global:LASTEXITCODE = 0
-        & "$PSScriptRoot\update.ps1" @args
+        & "$PSScriptRoot\update.ps1" @params
         $exitCode = $LASTEXITCODE
 
         if ($exitCode -eq 0) {
