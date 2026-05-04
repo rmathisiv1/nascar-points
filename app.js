@@ -507,15 +507,23 @@ async function loadDriverBios() {
 }
 
 async function discoverSeasons() {
+  // Probe for `data/points_YYYY.json` for each plausible year. We hardcode the
+  // lower bound (2016 — earliest year we've backfilled) but derive the upper
+  // bound from the calendar so we don't generate spurious 404s for future
+  // years that don't exist yet (the browser logs 404s at the network layer
+  // regardless of catch()). +1 gives us a one-year lookahead in case a stub
+  // file for next season is published early.
+  const currentYear = new Date().getFullYear();
+  const upper = currentYear + 1;
   const years = [];
-  for (let y = 2016; y <= 2028; y++) {
+  for (let y = 2016; y <= upper; y++) {
     const r = await fetch(`data/points_${y}.json`, { method: "HEAD" })
       .catch(() => null);
     if (r && r.ok) years.push(y);
   }
   if (years.length === 0) {
     const r = await fetch("data/points.json", { method: "HEAD" }).catch(() => null);
-    if (r && r.ok) years.push(2026);
+    if (r && r.ok) years.push(currentYear);
   }
   STATE.seasonsAvailable = years.sort((a, b) => b - a);
 }

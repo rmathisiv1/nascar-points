@@ -29,6 +29,26 @@ $ErrorActionPreference = "Stop"
 # Always run from the script's own dir so relative paths work
 Set-Location -Path $PSScriptRoot
 
+# Helper: invoke a native command (python) and capture its exit code WITHOUT
+# letting PowerShell's $ErrorActionPreference="Stop" turn a non-zero exit into
+# a terminating error that dumps the script source to stderr (cosmetic bug).
+# The scrapers intentionally exit 2 when they get 0 races (safety: don't
+# overwrite good data on a 403). That is expected behaviour, not a PS error.
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory)] [string] $Exe,
+        [Parameter(ValueFromRemainingArguments)] [string[]] $Args
+    )
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Exe @Args
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    return $LASTEXITCODE
+}
+
 Write-Host ""
 Write-Host "=== NASCAR data update ===" -ForegroundColor Cyan
 Write-Host "Season:      $Season"
@@ -64,8 +84,7 @@ if (-not $SkipPoints) {
     Write-Host "=== Scraping points ($Season) ===" -ForegroundColor Cyan
     Write-Host ""
 
-    & $python "scripts\scrape_points.py" --season $Season --only $Only --out $outFile
-    $scrapeExit = $LASTEXITCODE
+    $scrapeExit = Invoke-Native $python "scripts\scrape_points.py" --season $Season --only $Only --out $outFile
 
     if ($scrapeExit -ne 0) {
         Write-Host ""
@@ -82,8 +101,7 @@ if (-not $SkipBios) {
     Write-Host "=== Scraping driver bios ===" -ForegroundColor Cyan
     Write-Host ""
 
-    & $python "scripts\scrape_drivers.py" --keys "data\driver_keys.json" --out "data\drivers.json"
-    $bioExit = $LASTEXITCODE
+    $bioExit = Invoke-Native $python "scripts\scrape_drivers.py" --keys "data\driver_keys.json" --out "data\drivers.json"
 
     if ($bioExit -ne 0) {
         Write-Host ""
