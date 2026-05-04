@@ -507,16 +507,16 @@ async function loadDriverBios() {
 }
 
 async function discoverSeasons() {
-  // Probe for `data/points_YYYY.json` for each plausible year. We hardcode the
-  // lower bound (2016 — earliest year we've backfilled) but derive the upper
-  // bound from the calendar so we don't generate spurious 404s for future
-  // years that don't exist yet (the browser logs 404s at the network layer
+  // Probe for `data/points_YYYY.json` for each plausible year. Lower bound is
+  // 2001 (earliest historical year we've backfilled). Upper bound is derived
+  // from the calendar so we don't generate spurious 404s for future years
+  // that don't exist yet (the browser logs 404s at the network layer
   // regardless of catch()). +1 gives us a one-year lookahead in case a stub
   // file for next season is published early.
   const currentYear = new Date().getFullYear();
   const upper = currentYear + 1;
   const years = [];
-  for (let y = 2016; y <= upper; y++) {
+  for (let y = 2001; y <= upper; y++) {
     const r = await fetch(`data/points_${y}.json`, { method: "HEAD" })
       .catch(() => null);
     if (r && r.ok) years.push(y);
@@ -2416,21 +2416,30 @@ function renderBreakdown() {
 
   // Legend
   const isMulti = driverData.length > 1;
+  const stageEra = isStageEra();
   if (isMulti) {
     // In multi-driver mode: one legend entry per driver (color) + a note about the tint gradient
     const driverItems = driverData.map(dd =>
       `<span class="legend-item"><span class="legend-dot" style="background:${dd.color}"></span>#${dd.entity.car_number} ${escapeHTML(lastNameOf(dd.entity.driver))}</span>`
     ).join("");
+    const tintNote = stageEra
+      ? "darker = Finish · lighter = Stages · gold tint = FL"
+      : "shade = Finish points (no stages or FL bonus this era)";
     document.getElementById("breakdown-legend").innerHTML = `
       ${driverItems}
-      <span class="legend-item muted" style="margin-left:12px">darker = Finish · lighter = Stages · gold tint = FL</span>
+      <span class="legend-item muted" style="margin-left:12px">${tintNote}</span>
     `;
-  } else {
+  } else if (stageEra) {
     document.getElementById("breakdown-legend").innerHTML = `
       <span class="legend-item"><span class="legend-swatch" style="background:${COL_FN}"></span>Finish points</span>
       <span class="legend-item"><span class="legend-swatch" style="background:${COL_S1}"></span>Stage 1</span>
       <span class="legend-item"><span class="legend-swatch" style="background:${COL_S2}"></span>Stage 2</span>
       <span class="legend-item"><span class="legend-swatch" style="background:${COL_FL}"></span>Fastest lap</span>
+    `;
+  } else {
+    document.getElementById("breakdown-legend").innerHTML = `
+      <span class="legend-item"><span class="legend-swatch" style="background:${COL_FN}"></span>Finish points</span>
+      <span class="legend-item muted" style="margin-left:12px">Stages and the +1 fastest-lap bonus didn't exist before 2017/2025 — only finish points are shown.</span>
     `;
   }
 }
@@ -2503,6 +2512,40 @@ function renderTrajectory() {
   // Pull entities + metadata. In single-season mode this is allEntities();
   // in multi-season mode it's the combined cross-year roll-up.
   let { entities, totalRaces, seasonsUsed } = trajectoryEntities();
+
+  // Stage-era gate. The X-axis of this chart is stage points — if every
+  // season in the pool predates 2017, every dot would collapse onto X=0
+  // and the chart would be useless. Show an empty state instead. Mixed
+  // pools (e.g. 2015-2018) keep rendering — the stage-era seasons spread
+  // them along X, the pre-stage seasons sit at X=0 and that's fine context.
+  const seasonsForEra = seasonsUsed.length ? seasonsUsed : [STATE.season];
+  const anyStageEra = seasonsForEra.some(y => isStageEra(STATE.series, y));
+  if (!anyStageEra) {
+    renderTrajectorySeasonChips();
+    renderTrajectoryDriverGrid(entities);
+    const yearLabel = seasonsForEra.length === 1
+      ? seasonsForEra[0]
+      : `${seasonsForEra[0]}–${seasonsForEra[seasonsForEra.length - 1]}`;
+    svg.innerHTML = `
+      <text x="50%" y="42%" text-anchor="middle" fill="var(--muted)"
+            font-family="var(--mono)" font-size="13" font-weight="600">
+        Stage vs Finish is unavailable for ${yearLabel}.
+      </text>
+      <text x="50%" y="50%" text-anchor="middle" fill="var(--dim)"
+            font-family="var(--mono)" font-size="11">
+        NASCAR introduced stage racing in 2017.
+      </text>
+      <text x="50%" y="58%" text-anchor="middle" fill="var(--dim)"
+            font-family="var(--mono)" font-size="11">
+        Add a 2017+ season chip above to compare.
+      </text>`;
+    const subEl = document.getElementById("trajectory-sub");
+    if (subEl) subEl.textContent = `Stage vs Finish — pre-stage era (${yearLabel}), no stage data`;
+    const tl = document.getElementById("trajectory-legend"); if (tl) tl.innerHTML = "";
+    const to = document.getElementById("trajectory-over"); if (to) to.innerHTML = "";
+    const tu = document.getElementById("trajectory-under"); if (tu) tu.innerHTML = "";
+    return;
+  }
 
   // Full-time gate (toggleable). Threshold is ≥90% of races in the combined
   // pool, generalizing isFullTime() across multi-year aggregations.
@@ -4319,7 +4362,7 @@ function paintProfileTrackSplits(entity) {
         <div class="track-split-stat"><span class="k">Top 5</span><span class="v">${s.top5}</span></div>
         <div class="track-split-stat"><span class="k">Top 10</span><span class="v">${s.top10}</span></div>
         <div class="track-split-stat"><span class="k">Avg Fin</span><span class="v ${avgCls}">${s.avgFinish != null ? s.avgFinish.toFixed(1) : '—'}</span></div>
-        <div class="track-split-stat"><span class="k">Stage pts/race</span><span class="v">${s.avgStagePts != null ? s.avgStagePts.toFixed(1) : '—'}</span></div>
+        ${isStageEra() ? `<div class="track-split-stat"><span class="k">Stage pts/race</span><span class="v">${s.avgStagePts != null ? s.avgStagePts.toFixed(1) : '—'}</span></div>` : ""}
         <div class="track-split-stat"><span class="k">Best</span><span class="v">P${s.bestFinish ?? '—'}</span></div>
       </div>
     </div>`;
@@ -4483,6 +4526,10 @@ function renderStandings() {
   const table = document.getElementById("standings-table");
   if (!STATE.data) return;
 
+  // Stage-era gate. Pre-2017 has no stage points and no fastest-lap bonus;
+  // hiding those columns keeps the table honest for old years.
+  const stageEra = isStageEra();
+
   const races = racesSorted();
   const lastRaceRound = races.length ? races[races.length - 1].round : null;
   const previousCutoff = lastRaceRound ? lastRaceRound - 1 : null;
@@ -4507,9 +4554,20 @@ function renderStandings() {
 
   const sk = STATE.standings.sortKey;
   const sd = STATE.standings.sortDir;
-  if (sk && sk !== "total") {
-    rows = sortRows(rows, sk, sd);
-  } else if (sk === "total" && sd === "asc") {
+  // If we're in the pre-stage era and the user's sort key references a
+  // stage/FL column that won't be visible, fall back to total. Avoids the
+  // confusing case where the user sorts by "S1" then switches to 2003 and
+  // sees a constant-zero invisible-column sort that looks broken.
+  const stageSortKeys = new Set(["sumS1", "sumS2", "sumFL"]);
+  if (!stageEra && stageSortKeys.has(sk)) {
+    STATE.standings.sortKey = "total";
+    STATE.standings.sortDir = "desc";
+  }
+  const effSk = STATE.standings.sortKey;
+  const effSd = STATE.standings.sortDir;
+  if (effSk && effSk !== "total") {
+    rows = sortRows(rows, effSk, effSd);
+  } else if (effSk === "total" && effSd === "asc") {
     rows = rows.slice().reverse();
   }
 
@@ -4543,9 +4601,9 @@ function renderStandings() {
       <td class="num">${r.top5}</td>
       <td class="num">${r.top10}</td>
       <td class="num">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
-      <td class="num">${r.sumS1}</td>
+      ${stageEra ? `<td class="num">${r.sumS1}</td>
       <td class="num">${r.sumS2}</td>
-      <td class="num">${r.sumFL}</td>
+      <td class="num">${r.sumFL}</td>` : ""}
       <td class="num total-col">${r.total}</td>
     </tr>`;
   }).join("");
@@ -4577,9 +4635,9 @@ function renderStandings() {
         ${th("top5", "T5", true)}
         ${th("top10", "T10", true)}
         ${th("avgFinish", "Avg Fin", true)}
-        ${th("sumS1", "S1", true)}
+        ${stageEra ? `${th("sumS1", "S1", true)}
         ${th("sumS2", "S2", true)}
-        ${thFL()}
+        ${thFL()}` : ""}
         ${th("total", "Total", true)}
       </tr>
     </thead>
@@ -4750,6 +4808,19 @@ function resolvePlayoffRules(series, year) {
     if (year >= rule.start && (rule.end === null || year <= rule.end)) return rule;
   }
   return null;
+}
+
+// Era helper — was the stage-points format in use for this (series, year)?
+// NASCAR introduced stages across all three national series starting 2017.
+// Pre-2017 races have no stage data and views that depend on stages should
+// show empty states rather than collapsed/empty visualizations.
+//
+// Defaults: takes STATE.series + STATE.season if no args. Pass explicit
+// (series, year) to check a different season — useful for cross-year views.
+function isStageEra(series, year) {
+  const s = series || STATE.series;
+  const y = year || STATE.season;
+  return y >= 2017;  // All 3 series adopted stages simultaneously
 }
 
 // Compute playoff points for every driver from per-race data.
@@ -6091,16 +6162,18 @@ function renderChampionshipView(rule) {
 }
 
 function renderChaseView(rule) {
-  // Placeholder — needs historical data that isn't loaded yet. Show a message
-  // explaining the format so users know what they'd see if data were available.
+  // The 2004-2013 Chase formats used a points-reseed system with no eliminations
+  // until 2014. Per project decision, we don't render a separate bracket for
+  // these eras — final standings tell the story. This card explains the format
+  // and links to the Standings tab.
   const wildcardNote = rule.format === "chase-wildcard"
     ? ` With ${rule.wildcards} wildcard spots for non-top-10 drivers with wins.`
     : "";
   return `<div class="card"><div class="po-note">
-    The ${STATE.season} ${STATE.series} season used the Chase format: top ${rule.field} drivers after R${rule.regSeasonEndRound}
-    reseeded for the final ${rule.playoffRaces} races, with a ${rule.winBonus}-point bonus per win from the regular season.${wildcardNote}
-    Chase-era playoff points are not yet computed — currently just a placeholder.
-    See <a href="#/standings">Standings</a> for final points.
+    The ${STATE.season} ${STATE.series} season used the Chase format: the top ${rule.field} drivers after R${rule.regSeasonEndRound}
+    were reseeded for the final ${rule.playoffRaces} races, with a ${rule.winBonus}-point bonus per regular-season win.${wildcardNote}
+    Because there were no eliminations in this format, the championship came down to who scored
+    the most points across the Chase races — see <a href="#/standings">Standings</a> for the full picture.
   </div></div>`;
 }
 
