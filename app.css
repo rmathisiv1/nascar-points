@@ -2902,13 +2902,20 @@ a.driver-cell.profile-link:hover .car-tag {
     left: 0;
     width: 82%;
     max-width: 320px;
+    /* 100vh is broken on iOS Safari (counts URL bar's hidden space, so
+       bottom links get pushed off-screen and unreachable). 100dvh uses
+       the actual visible viewport. Fallback for old browsers. */
     height: 100vh;
+    height: 100dvh;
     background: var(--bg);
     border-right: 1px solid var(--border);
     z-index: 200;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
     animation: slideIn 0.2s ease-out;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;     /* momentum scroll on iOS */
+    overscroll-behavior: contain;          /* don't chain scroll to <body> */
+    touch-action: pan-y;                   /* iOS: route vertical drags here */
   }
   .mobile-nav[hidden] { display: none !important; }
   .mobile-nav-head {
