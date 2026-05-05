@@ -252,6 +252,97 @@ OWNER_TO_TEAM_CODE = {
     "Pat MacDonald":            "MAC",
     "Tad Geschickter":          "JTG",
     "Bobby Hamilton, Jr.":      "BHR",       # Bobby's son ran the team late
+
+    # === Second-pass historical additions (top of still-unresolved list) ===
+    "Gregg Mixon":              "MIX",   # Mixon Motorsports (NOS small team)
+    "MSRP Motorsports":         "MSRP",  # NOS 2008-2009
+    "Randy Moss":               "RMM",   # Randy Moss Motorsports — yes, the NFL HoFer (NTS 2008-2011)
+    "Randy Moss Motorsports":   "RMM",
+    "Ken Smith":                "ASI",   # ASI Limited — Ken Smith (NTS 2008-2013)
+    "Eddie Sharp":              "ESR",   # Eddie Sharp Racing (NTS 2010-2013)
+    "Eddie Sharp Racing":       "ESR",
+    "Phil Parsons":             "PPR",   # Phil Parsons Racing (NCS 2009-2011)
+    "Phil Parsons Racing":      "PPR",
+    "Dave Carroll":             "DCR",   # Dave Carroll Motorsports (NOS 2001-2003)
+    "Dusty Whitney":            "DWM",   # Dusty Whitney Motorsports
+    "John McGill":              "MMS",   # McGill Motorsports
+    "Bill Baumgardner":         "BMS",   # Baumgardner Motorsports
+    "Brian Baumgardner":        "BMS",   # Brother, same team
+    "Ed Evans":                 "EVA",   # Evans Motorsports
+    "Joe Falk":                 "CIR",   # Circle Sport (Joe Falk = owner)
+    "Circle Sport":             "CIR",
+    "Jason Sciavicco":          "JSR",   # Sciavicco Racing
+    "Chance2 Motorsports":      "CH2",   # Chance2 (Dale Jr/Teresa Earnhardt joint, NOS)
+    "John McNelly":             "MNR",   # McNelly Racing
+    "Dave Malcolmson":          "DMR",   # Malcolmson Motorsports
+    "StarCom Racing":           "STR",   # NCS 2017-2021
+    "Joe Reilly":               "JRY",   # Reilly Motorsports
+    "Bryan Mullet":             "BMR2",  # different from BMR Big Machine
+    "Emerling-Gase Motorsports":"EGM",   # NOS 2022-2024
+    "Steve Coulter":            "CLR",   # Coulter Racing
+    "Stanley Herzog":           "HZG",   # Herzog Motorsports
+    "Steven Lane":              "LNR",   # Lane Racing (NTS)
+    "Sam Rensi":                "SRR",   # Sam Rensi Motorsports (different from Ed Rensi RSI)
+    "Terry Bradshaw":           "BRT",   # Terry Bradshaw Motorsports — yes, the QB (NOS 2003-2005)
+    "Charles Shoffner":         "SHF",
+    "Brett Bodine":             "BBD",   # Brett Bodine Racing
+    "Frank Stoddard":           "FAS",   # FAS Lane Racing
+    "FAS Lane Racing":          "FAS",
+    "David Fuge":               "FUG",
+    "Andy Hillenburg":          "HBG",   # Hillenburg Motorsports
+    "Doc MacDonald":            "DMD",
+    "Stacy Compton":            "CMP",   # Stacy Compton Racing
+    "Bill Saunders":            "SAU",
+    "Petty GMS Motorsports":    "PGMS",  # 2022 brief PE/GMS combo (became LMC)
+    "Wayne Jesel":              "JES",
+    "Victor Obaika":            "OBA",   # Obaika Racing
+    "Obaika Racing":            "OBA",
+    "Ken Schrader":             "SCH",   # Schrader Racing
+    "Ken Schrader Racing":      "SCH",
+    "Chris Baluch":             "BAL",
+    "Hubert Hensley":           "HEN",
+    "Jeff Moorad":              "MOR",
+    "Bryan Smith":              "BSM",
+    "Roper Racing":             "RPR",   # NTS 2018+
+    "Keith Barnwell":           "BWL",
+    "Jimmy Dick":               "DCK",
+    "Tony Townley":             "TWN",
+    "Rick Goodwin":             "GDW",
+    "Derek White":              "DWH",
+    "Ricky Benton":             "RBR2",  # Ricky Benton Racing (different from Robby Benton RBR)
+    "Phil Bonifield":           "BNF",
+    "Stacy Holmes":             "HLM",
+    "Keith Coleman":            "COL",
+    "Fred Bickford":            "BKF",
+    "Ed Sutton":                "SUT",
+    "Joe Dennette":             "DNT",
+    "Ted Marsh":                "MSH",
+    "Don Arnold":               "ARN",
+    "Dwayne Gaulding":          "GLD",
+    "Ray Montgomery":           "MGY",
+    "Gaunt Brothers":           "GBR",   # Gaunt Brothers Racing (NCS 2017-2020)
+    "Gaunt Brothers Racing":    "GBR",
+    "Gary Baker":               "BAK",
+    "Joe Scott":                "JSC",
+    "Chris Fontaine":           "FON",
+    "Brandon Davis":            "BDV",   # not Bill Davis BDR
+    "Max Siegel":               "REV",   # Rev Racing / NASCAR D4D Program
+    "Rev Racing":                "REV",
+    "Jim Rosenblum":            "RZB",
+    "Steve Urvan":              "URV",
+    "Ray Ciccarelli":           "CCM",
+    "JP Motorsports":           "JPM",   # NOS 2018
+    "Tom Mazzuchi":             "MZZ",
+    "John Carter":              "CAR",
+    "Doug Stringer":            "STG",   # Stringer Motorsports / SS-Green Light early
+    "Ron Norick":               "NMS",   # Norick Motorsports (NTS)
+    "Mike Addington":           "ADD",
+    "Hermie Sadler":            "HSR",
+    "Billy Boat":               "BBT",
+    "Scott Welliver":           "WLV",   # Cicci-Welliver other side
+    "Alexander Meshkin":        "MSK",
+    "Larry Gunselman":          "GUN",   # Gunselman Motorsports
+    "Gunselman Motorsports":    "GUN",
 }
 
 
