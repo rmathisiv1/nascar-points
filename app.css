@@ -2146,6 +2146,17 @@ td.neg { color: #ff8a8a; }
 }
 .profile-hero-team { color: var(--muted); }
 .profile-hero-team strong { color: var(--text); }
+/* Team name is a navigation target but reads as text — no underline or link
+   color. Hover only nudges the brightness so users discover it's clickable. */
+.profile-team-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.profile-team-link:hover {
+  color: var(--text);
+  text-decoration: none;
+}
 .profile-hero-bio {
   color: var(--muted);
   display: inline-flex;
@@ -4377,7 +4388,8 @@ a.driver-cell.profile-link:hover .car-tag {
    ============================================================ */
 #race-takeover,
 #track-takeover,
-#schedule-takeover {
+#schedule-takeover,
+#team-takeover {
   /* Inherit profile-takeover sizing — flex:1 inside col-center, scroll-y */
   flex: 1;
   min-height: 0;
@@ -4390,11 +4402,13 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 #race-takeover[hidden],
 #track-takeover[hidden],
-#schedule-takeover[hidden] { display: none !important; }
+#schedule-takeover[hidden],
+#team-takeover[hidden] { display: none !important; }
 
 #race-takeover #view-race,
 #track-takeover #view-track,
-#schedule-takeover #view-schedule {
+#schedule-takeover #view-schedule,
+#team-takeover #view-team {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -4404,12 +4418,14 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 #race-takeover #view-race::-webkit-scrollbar,
 #track-takeover #view-track::-webkit-scrollbar,
-#schedule-takeover #view-schedule::-webkit-scrollbar { display: none; }
+#schedule-takeover #view-schedule::-webkit-scrollbar,
+#team-takeover #view-team::-webkit-scrollbar { display: none; }
 
 /* All cards inside center takeovers must not overflow horizontally */
 #race-host .rc-card,
 #track-host .rc-card,
-#schedule-host .rc-card {
+#schedule-host .rc-card,
+#team-host .rc-card {
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
@@ -4642,3 +4658,112 @@ a.driver-cell.profile-link:hover .car-tag {
   display: inline-block;
 }
 .team-pill-link:hover .team-pill { filter: brightness(1.15); }
+
+/* ============================================================
+   PROFILE: CAREER CONTEXT STRIP
+   ============================================================
+   Chip row that lets a user navigate a driver's career across seasons and
+   series WITHOUT changing the URL. Sits between the profile hero and the
+   Career By Series panel. Each chip is a (year, series) combo where the
+   driver appeared; the active chip is the currently-displayed context. */
+.profile-context-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 12px 0 16px;
+  flex-wrap: wrap;
+}
+.profile-context-strip.empty {
+  justify-content: center;
+}
+.profile-context-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.profile-context-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.ctx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  transition: all 0.1s ease;
+}
+.ctx-chip:hover {
+  background: var(--card);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.ctx-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ctx-chip.active .ctx-series { background: rgba(255,255,255,0.18); }
+.ctx-chip.active .ctx-pt { background: rgba(255,255,255,0.18); color: #fff; }
+.ctx-year {
+  font-weight: 700;
+  font-size: 12px;
+}
+.ctx-series {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+}
+.ctx-ncs { background: rgba(211, 47, 47, 0.85); color: #fff; }
+.ctx-nos { background: rgba(25, 118, 210, 0.85); color: #fff; }
+.ctx-nts { background: rgba(56, 142, 60, 0.85); color: #fff; }
+.ctx-pt {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--border);
+  color: var(--dim);
+  letter-spacing: 0.06em;
+}
+
+/* ============================================================
+   TEAM HISTORY: YEAR-GROUPED ROWS
+   ============================================================
+   Year cell uses rowspan to span all the cars from that season. Alternating
+   block backgrounds (yr-block-a/b) give visual rhythm so the eye groups by
+   year without needing thick borders. */
+.tm-history-table .yr-cell {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  vertical-align: top;
+  border-right: 1px solid var(--border);
+  padding-top: 10px;
+  letter-spacing: 0.04em;
+}
+.tm-history-table .yr-block-a { background: var(--card); }
+.tm-history-table .yr-block-b { background: var(--bg-2); }
+.tm-history-table tr.yr-first td:not(.yr-cell) {
+  border-top: 1px solid var(--border);
+}

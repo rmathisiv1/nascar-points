@@ -80,42 +80,14 @@ async function boot() {
   });
 }
 
-// Resolves a #/driver/<slug>[/<year>][/<series>] route to a concrete
-// (series, season) and loads data for it. Called from the hashchange handler
-// before rendering. If we can't find the driver in any cached year, falls
-// back to current view.
+// Resolves a #/driver/<slug> route to a concrete (series, season) and loads
+// data for it. Always picks the driver's home (most-recent full-time year);
+// users can switch year/series from inside the profile body.
 async function resolveDriverRoute() {
   const slug = STATE.profile && STATE.profile.slug;
   if (!slug) return;
 
-  // If the URL specified explicit year + series (e.g. clicking from a
-  // 2007 NCS standings row), honor that — that's the user's expressed
-  // intent, not our auto-detect heuristic.
-  const explicitYear = STATE.profile.explicitYear;
-  const explicitSeries = STATE.profile.explicitSeries;
-  if (explicitYear && explicitSeries) {
-    const needSwitchSeries = explicitSeries !== STATE.series;
-    const needSwitchSeason = explicitYear !== STATE.season;
-    if (needSwitchSeries || needSwitchSeason) {
-      STATE.series = explicitSeries;
-      STATE.season = explicitYear;
-      await loadCurrentData();
-      resetRenderCache();
-    }
-    // Find the entity (car) in this explicit context for this driver
-    const entity = allEntities().find(e =>
-      slugify(e.primaryDriver || e.driver) === slug
-    ) || allEntities().find(e =>
-      (e.driversByStarts || []).some(dc => slugify(dc.name) === slug)
-    );
-    if (entity) {
-      STATE.profile.resolvedCarNumber = entity.car_number;
-      STATE.profile.resolvedDriver = entity.primaryDriver || entity.driver;
-    }
-    return;
-  }
-
-  // No explicit context — auto-detect home from cached seasons.
+  // First-pass home detection from already-cached seasons
   let home = findDriverHomeContext(slug);
 
   // If not found, opportunistically try recent years that may not be cached
@@ -508,13 +480,10 @@ function syncMobileDropdowns() {
 function parseHash() {
   const h = location.hash.replace("#/", "").split("/");
   const view = h[0];
-  // Driver-centric route: #/driver/<slug>[/<year>][/<series>]
-  // Resolves driver's home (series, season) and locks the profile to it,
-  // independent of the user's current series picker. When year+series are
-  // explicit in the URL (e.g. clicking from 2007 NCS standings), use those
-  // directly instead of auto-detecting the driver's home year — that way
-  // a click from the 2007 standings stays on Tony Stewart's 2007 profile,
-  // not his most-recent (2015) home.
+  // Driver-centric route: #/driver/<slug>
+  // Resolves driver's home (series, season) automatically and locks the
+  // profile to it. The year/series selectors are presented INSIDE the
+  // profile body — not via the URL — so a driver has one canonical URL.
   if (view === "driver") {
     if (STATE.view && STATE.view !== "profile") {
       STATE.prevView = STATE.view;
@@ -522,13 +491,9 @@ function parseHash() {
       STATE.profile.preLockSeason = STATE.season;
     }
     STATE.view = "profile";
-    const explicitYear = h[2] ? parseInt(h[2], 10) : null;
-    const explicitSeries = h[3] || null;
     STATE.profile = {
       kind: "driver",
       slug: h[1] || null,
-      explicitYear: Number.isInteger(explicitYear) ? explicitYear : null,
-      explicitSeries: ["NCS", "NOS", "NTS"].includes(explicitSeries) ? explicitSeries : null,
       preLockSeries: STATE.profile.preLockSeries,
       preLockSeason: STATE.profile.preLockSeason,
       locked: true,
@@ -978,6 +943,18 @@ function wireUIControls() {
   document.getElementById("traj-clear")?.addEventListener("click", () => {
     STATE.trajectory.selected.clear();
     renderTrajectory();
+  });
+
+  // Career-context chip delegation. Lives on the profile takeover so clicks
+  // anywhere inside it find the chip via closest(). Switches the profile to
+  // the chosen (year, series) for the same driver — URL stays at #/driver/X.
+  document.getElementById("profile-takeover")?.addEventListener("click", (e) => {
+    const chip = e.target.closest(".ctx-chip");
+    if (!chip) return;
+    e.preventDefault();
+    const year = parseInt(chip.dataset.ctxYear, 10);
+    const series = chip.dataset.ctxSeries;
+    if (year && series) switchProfileContext(year, series);
   });
 }
 
@@ -4389,6 +4366,101 @@ function profileTeammates(entity) {
     .sort((a, b) => b.avgDelta - a.avgDelta);
 }
 
+// ============================================================
+// CAREER CONTEXT STRIP
+// ============================================================
+// In-profile year/series selector. Lets the user navigate a driver's career
+// without changing the URL or touching the topbar pickers (which are locked
+// on profile views). Each chip is a (year, series) combo where the driver
+// appeared; the active chip is the currently-displayed context.
+//
+// Returns the set of (year, series) pairs where this driver raced, sorted
+// newest-first. Only scans loaded SEASON_CACHE entries — so the strip grows
+// as the user navigates back and triggers more season loads.
+function driverCareerYears(driverSlug) {
+  const out = [];
+  Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    ["NCS", "NOS", "NTS"].forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block) return;
+      const hit = scanSeriesBlockForDriver(block, driverSlug);
+      if (hit) {
+        const runRaces = (block.races || []).filter(r =>
+          (r.results || []).some(d => d.finish_pos != null)
+        ).length;
+        const ftThreshold = Math.max(1, Math.ceil(runRaces * 0.9));
+        out.push({
+          year,
+          series: sCode,
+          car_number: hit.car_number,
+          starts: hit.starts,
+          fullTime: hit.starts >= ftThreshold,
+        });
+      }
+    });
+  });
+  return out;
+}
+
+function renderCareerContextStrip(driverSlug) {
+  const years = driverCareerYears(driverSlug);
+  if (!years.length) {
+    return `<div class="profile-context-strip empty">
+      <span class="muted">Career timeline loading…</span>
+    </div>`;
+  }
+  // Group by year so chips for the same year sit together. Years descend.
+  const byYear = {};
+  years.forEach(y => {
+    if (!byYear[y.year]) byYear[y.year] = [];
+    byYear[y.year].push(y);
+  });
+  const yearKeys = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+  const chips = yearKeys.map(year => {
+    return byYear[year].map(y => {
+      const isActive = (y.year === STATE.season && y.series === STATE.series);
+      const ftBadge = y.fullTime ? "" : `<span class="ctx-pt" title="Part-time">PT</span>`;
+      return `<button class="ctx-chip${isActive ? " active" : ""}"
+        data-ctx-year="${y.year}"
+        data-ctx-series="${y.series}"
+        title="#${y.car_number} · ${y.starts} start${y.starts === 1 ? "" : "s"}">
+        <span class="ctx-year">${y.year}</span>
+        <span class="ctx-series ctx-${y.series.toLowerCase()}">${y.series}</span>
+        ${ftBadge}
+      </button>`;
+    }).join("");
+  }).join("");
+  return `<div class="profile-context-strip">
+    <div class="profile-context-label">Seasons</div>
+    <div class="profile-context-chips">${chips}</div>
+  </div>`;
+}
+
+// Switch the profile to a different (year, series) for the same driver.
+// Unlike the topbar pickers (which are locked), this is the SANCTIONED way
+// for a user to view a driver across seasons. URL stays at #/driver/<slug>.
+async function switchProfileContext(year, series) {
+  if (!STATE.profile || !STATE.profile.slug) return;
+  if (year === STATE.season && series === STATE.series) return;
+  STATE.series = series;
+  STATE.season = year;
+  STATE.throughRound = null;
+  await loadCurrentData();
+  resetRenderCache();
+  // Re-resolve which car this driver drove THIS year/series
+  const ents = allEntities();
+  const slug = STATE.profile.slug;
+  const ent = ents.find(e => slugify(e.primaryDriver || e.driver) === slug)
+    || ents.find(e => (e.driversByStarts || []).some(dc => slugify(dc.name) === slug));
+  if (ent) {
+    STATE.profile.resolvedCarNumber = ent.car_number;
+    STATE.profile.resolvedDriver = ent.primaryDriver || ent.driver;
+  }
+  render();
+}
+
 function renderProfile() {
   const host = document.getElementById("view-profile");
   if (!host) return;
@@ -4486,6 +4558,8 @@ function renderProfile() {
 
     ${careerPanelHTML}
 
+    ${STATE.profile && STATE.profile.kind === "driver" ? renderCareerContextStrip(STATE.profile.slug) : ""}
+
     <div class="profile-section-label">${STATE.season} Season</div>
     <div class="profile-stats">
       <div class="stat"><span class="k">Starts</span><span class="v">${summary.starts}</span></div>
@@ -4579,6 +4653,20 @@ function renderProfile() {
   paintProfileRaceTable(rows, kind);
   paintProfileTeammates(entity);
   wireCoDriverBadges(host);
+
+  // For driver-routed profiles, opportunistically load more seasons so the
+  // career-context strip fills out. Re-renders when each batch completes.
+  if (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug) {
+    const allYears = Object.keys(SEASON_CACHE).map(Number);
+    const expectedYears = STATE.seasonsAvailable || [];
+    const missingYears = expectedYears.filter(y => !allYears.includes(y));
+    if (missingYears.length > 0) {
+      Promise.all(missingYears.slice(0, 8).map(y => loadSeasonIntoCache(y)))
+        .then(() => {
+          if (STATE.view === "profile") renderProfile();
+        });
+    }
+  }
 }
 
 function rankSuffix(n) {
@@ -5205,13 +5293,10 @@ function renderStandings() {
     } else {
       pcPill = `<span class="pos-change down">▼${Math.abs(pc)}</span>`;
     }
-    // Driver pill -> driver profile (auto-detects home series).
-    // Team pill is rendered with a link inside renderTeamPill when clickable=true.
-    // We embed the current (year, series) in the URL so a click from 2007 NCS
-    // standings stays on Stewart's 2007 profile rather than auto-flying to
-    // his most-recent home year.
+    // Driver pill -> driver profile (auto-detects driver's home year/series).
+    // Year/series can be changed from inside the profile body — URL stays clean.
     const driverSlug = slugify(r.primaryDriver || r.driver);
-    const driverHref = `#/driver/${driverSlug}/${STATE.season}/${STATE.series}`;
+    const driverHref = `#/driver/${driverSlug}`;
     // DIFF cell — shows gap to leader using canonical data; "—" for the
     // leader (gap=0) and rows without canonical match (part-timers).
     let diffCell = "";
@@ -6965,21 +7050,47 @@ function renderTeamHistoryTable(rows, teamCode) {
   if (!rows.length) {
     return `<div class="empty" style="padding:24px;">No history loaded yet. Loading recent seasons…</div>`;
   }
-  const body = rows.map(r => {
-    const carHex = colorFor(r.series, r.car_number);
-    const carTxt = contrastTextFor(carHex);
-    const drvSlug = slugify(r.driver);
-    const driverList = r.drivers.length > 1
-      ? `${escapeHTML(r.drivers[0])} <span class="tm-co">+${r.drivers.length - 1}</span>`
-      : escapeHTML(r.drivers[0]);
-    return `<tr>
-      <td>${r.year}</td>
-      <td><span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span></td>
-      <td><span class="car-tag" style="background:${carHex};color:${carTxt}">${r.car_number}</span></td>
-      <td><a class="profile-link" href="#/driver/${drvSlug}">${driverList}</a></td>
-      <td class="num">${r.wins}</td>
-      <td class="num">${r.total}</td>
-    </tr>`;
+  // Group by year so all cars from one season cluster together. Within each
+  // year, sort by series (NCS > NOS > NTS) then by points desc.
+  const byYear = {};
+  rows.forEach(r => {
+    if (!byYear[r.year]) byYear[r.year] = [];
+    byYear[r.year].push(r);
+  });
+  const seriesOrder = { NCS: 0, NOS: 1, NTS: 2 };
+  Object.values(byYear).forEach(yrRows => {
+    yrRows.sort((a, b) => {
+      const so = seriesOrder[a.series] - seriesOrder[b.series];
+      if (so !== 0) return so;
+      return b.total - a.total;
+    });
+  });
+  const yearKeys = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+
+  const body = yearKeys.map((year, yearIdx) => {
+    const yrRows = byYear[year];
+    const blockClass = (yearIdx % 2 === 0) ? "yr-block-a" : "yr-block-b";
+    return yrRows.map((r, rowIdx) => {
+      const carHex = colorFor(r.series, r.car_number);
+      const carTxt = contrastTextFor(carHex);
+      const drvSlug = slugify(r.driver);
+      const driverList = r.drivers.length > 1
+        ? `${escapeHTML(r.drivers[0])} <span class="tm-co">+${r.drivers.length - 1}</span>`
+        : escapeHTML(r.drivers[0]);
+      // Year cell only on first row of the year-block, spanning all rows
+      // for that year. The class identifies the block for striped backgrounds.
+      const yearCell = rowIdx === 0
+        ? `<td class="yr-cell" rowspan="${yrRows.length}">${year}</td>`
+        : "";
+      return `<tr class="${blockClass}${rowIdx === 0 ? " yr-first" : ""}">
+        ${yearCell}
+        <td><span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span></td>
+        <td><span class="car-tag" style="background:${carHex};color:${carTxt}">${r.car_number}</span></td>
+        <td><a class="profile-link" href="#/driver/${drvSlug}">${driverList}</a></td>
+        <td class="num">${r.wins}</td>
+        <td class="num">${r.total}</td>
+      </tr>`;
+    }).join("");
   }).join("");
   return `<table class="data-table tm-history-table">
     <thead><tr>
