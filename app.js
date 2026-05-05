@@ -2023,14 +2023,67 @@ function teamCodeFromName(team, seriesCode, carNumber) {
 // and looks up the team's brand color from colors.json's team-keyed section.
 // `seriesAndCar` kept as a trailing arg for back-compat with old call sites;
 // it's now unused for color resolution.
+// ============================================================
+// Era-aware team labels
+// ============================================================
+// Some teams kept the same continuous lineage (and thus the same internal
+// team_code) but changed brand name across eras. Examples:
+//   RFK  → "Roush Racing" pre-2007, "Roush Fenway" 2007-2021, "RFK" 2022+
+//   JTG  → "ST Motorsports" pre-2003, "JTG" 2003-2008, "JTG Daugherty" 2009+
+// The team_code in our data stays stable (RFK / JTG) so cross-era analytics
+// still work, but the rendered pill should reflect what fans actually called
+// the team in that season.
+//
+// Each rule is { since, abbr, full } where `since` is the first year the
+// label was in use. Rules are checked newest-first.
+const TEAM_ERA_LABELS = {
+  RFK: [
+    { since: 2022, abbr: "RFK", full: "RFK Racing" },
+    { since: 2007, abbr: "RFR", full: "Roush Fenway Racing" },
+    { since: 1988, abbr: "RR",  full: "Roush Racing" },
+  ],
+  JTG: [
+    { since: 2009, abbr: "JTG", full: "JTG Daugherty Racing" },
+    { since: 2003, abbr: "JTG", full: "JTG Racing" },             // same abbr, fuller-name only changed
+    { since: 1996, abbr: "ST",  full: "ST Motorsports" },
+  ],
+  RYR: [
+    { since: 2008, abbr: "YR",  full: "Yates Racing" },           // Doug Yates era
+    { since: 1989, abbr: "RYR", full: "Robert Yates Racing" },
+  ],
+};
+
+// Resolve era-appropriate label for a (teamCode, year). Returns the modern
+// label if no rule matches (i.e., team has always had one name).
+function teamLabelForEra(teamCode, year) {
+  const rules = TEAM_ERA_LABELS[teamCode];
+  const y = year || (typeof STATE !== "undefined" ? STATE.season : null);
+  if (!rules || y == null) {
+    return { abbr: teamCode, full: TEAM_FULL_NAMES[teamCode] || teamCode };
+  }
+  for (const r of rules) {
+    if (y >= r.since) return { abbr: r.abbr, full: r.full };
+  }
+  // Older than any rule — fall back to the oldest rule's label
+  const oldest = rules[rules.length - 1];
+  return { abbr: oldest.abbr, full: oldest.full };
+}
+
 function renderTeamPill(teamCode, _seriesUnused, _carUnused) {
   if (!teamCode) return `<span class="team-pill fallback">—</span>`;
+  const era = teamLabelForEra(teamCode, STATE.season);
   const orgHex = orgColorForTeam(teamCode);
+  // Tooltip shows the full era-correct name (e.g. "Roush Fenway Racing" for
+  // a 2015 race) so hovering surfaces the historical brand without changing
+  // the underlying team_code in our data.
+  const titleAttr = era.full && era.full !== era.abbr
+    ? ` title="${escapeHTML(era.full)}"`
+    : "";
   if (orgHex) {
     const textCol = contrastTextFor(orgHex);
-    return `<span class="team-pill" style="background:${orgHex};color:${textCol}">${escapeHTML(teamCode)}</span>`;
+    return `<span class="team-pill" style="background:${orgHex};color:${textCol}"${titleAttr}>${escapeHTML(era.abbr)}</span>`;
   }
-  return `<span class="team-pill fallback">${escapeHTML(teamCode)}</span>`;
+  return `<span class="team-pill fallback"${titleAttr}>${escapeHTML(era.abbr)}</span>`;
 }
 
 // ============================================================
@@ -3570,8 +3623,7 @@ function renderTeammates() {
       a.parent === grp && (STATE.season || 0) >= a.since
     );
     const displayName = (allianceActive && GROUP_DISPLAY_NAMES[grp])
-      || TEAM_FULL_NAMES[grp]
-      || grp;
+      || teamLabelForEra(grp, STATE.season).full;
     const bestCar = members[0];
     const ftCount = members.filter(m => m.car_full_time).length;
     const ptCount = members.length - ftCount;
@@ -4085,7 +4137,7 @@ function renderProfile() {
 
   const rows = profileRaceRows(entity);
   const mfr = manufacturerName(entity.manufacturer) || "—";
-  const teamName = TEAM_FULL_NAMES[teamCode] || teamCode;
+  const teamName = teamLabelForEra(teamCode, STATE.season).full;
 
   // Bio lookup — use the primary driver (car profile shows the primary driver's bio).
   const bioDriverName = primaryDrv;
