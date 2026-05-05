@@ -4431,6 +4431,11 @@ a.driver-cell.profile-link:hover .car-tag {
   overflow: hidden;
   min-width: 0;
 }
+/* Cards that contain a sticky-thead table need overflow: visible on the
+   card and its body so the sticky positioning isn't silently clipped.
+   .has-sticky-thead is added by JS where needed. */
+#team-host .rc-card.has-sticky-thead,
+#team-host .rc-card.has-sticky-thead .rc-card-body { overflow: visible; }
 
 /* The 2-col stat grid (Last 5 Winners + Hot at Track) and 3-col Track
    stat grid both need min-width:0 on their cells to prevent flex/grid

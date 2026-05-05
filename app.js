@@ -6923,13 +6923,14 @@ function renderTeamPage() {
   if (titleEl) titleEl.textContent = era.full || teamCode;
   if (subEl) subEl.textContent = `${STATE.season} ${STATE.series} · ${era.abbr}`;
 
-  // Build a per-car index from computeSeasonTotals — that's where wins/top5/
-  // top10/total/rank are properly computed against canonical year-end
-  // standings. The raw entity from allEntities() doesn't have rolled-up
-  // stats fields, just per-race rows, so reading e.wins returned undefined
-  // and the cards rendered as zeros.
+  // Build a per-car index from computeSeasonTotals — that's where total +
+  // canonicalRank are properly computed. wins/top5/top10 aren't on totals
+  // either, so we roll them up below from each entity's race rows.
   const totals = computeSeasonTotals();
   const totalsByKey = new Map(totals.map(t => [entityKey(t), t]));
+  // Live rank (sorted by total desc) — used for in-progress seasons that
+  // don't have canonical year-end standings yet, e.g. mid-season 2026.
+  const liveRankByKey = new Map(totals.map((t, i) => [entityKey(t), i + 1]));
 
   // Find every entity in the current (series, season) belonging to this team.
   // Use teamGroup() so alliance buckets (WBR-PEN 2015+) are honored.
@@ -6939,19 +6940,24 @@ function renderTeamPage() {
     if (!code) return false;
     return teamGroup(code, STATE.season) === teamCode || code === teamCode;
   }).map(e => {
-    // Decorate with totals data so render code has wins/top5/total/rank etc.
     const t = totalsByKey.get(entityKey(e)) || {};
+    // Roll up wins/top5/top10 from race rows — same logic profileSummary uses.
+    // computeSeasonTotals doesn't carry these fields, so we do it here.
+    const finishes = (e.races || []).map(r => r.finish).filter(x => x != null);
+    const wins  = finishes.filter(f => f === 1).length;
+    const top5  = finishes.filter(f => f <= 5).length;
+    const top10 = finishes.filter(f => f <= 10).length;
+    // Rank: prefer canonical year-end standings (completed seasons), fall
+    // back to live rank-by-points (in-progress seasons like 2026).
+    const rank = t.canonicalRank ?? liveRankByKey.get(entityKey(e)) ?? null;
     return {
       ...e,
-      wins: t.wins ?? 0,
-      top5: t.top5 ?? 0,
-      top10: t.top10 ?? 0,
-      total: t.total ?? t.totalPts ?? 0,
-      rank: t.rank ?? null,
+      wins, top5, top10,
+      total: t.total ?? 0,
+      rank,
       avgFinish: t.avgFinish ?? null,
     };
   }).sort((a, b) => {
-    // Sort by points desc, then car number asc
     if (b.total !== a.total) return b.total - a.total;
     return parseInt(a.car_number, 10) - parseInt(b.car_number, 10);
   });
@@ -7020,7 +7026,7 @@ function renderTeamPage() {
       </div>
     </div>
 
-    <div class="card rc-card rc-card-wide">
+    <div class="card rc-card rc-card-wide has-sticky-thead">
       <div class="rc-card-head">
         <span class="rc-card-title">Historical drivers</span>
         <span class="rc-card-sub">${historicalRows.length ? `across ${historicalRows.length} season${historicalRows.length === 1 ? "" : "s"}` : "loading…"}</span>
@@ -7068,6 +7074,23 @@ function computeTeamHistory(teamCode) {
         rankByDriverNorm.set(normalize(s.driver), s.rank);
       });
 
+      // Live rank fallback for in-progress seasons (2026): roll up every
+      // car's total points across this whole series block, sort desc, and
+      // assign ranks. Used when canonical final_standings isn't populated.
+      const liveTotals = {};
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          const car = d.car_number;
+          if (!car) return;
+          liveTotals[car] = (liveTotals[car] || 0) + (d.race_pts || 0);
+        });
+      });
+      const liveRanked = Object.entries(liveTotals)
+        .sort((a, b) => b[1] - a[1]);
+      const liveRankByCar = new Map();
+      liveRanked.forEach(([car], i) => liveRankByCar.set(car, i + 1));
+
       // Aggregate per-car for the year
       const byCar = {};
       block.races.forEach(race => {
@@ -7094,10 +7117,12 @@ function computeTeamHistory(teamCode) {
           .sort((a, b) => b[1] - a[1]);
         const primaryDriver = driverEntries[0]?.[0] || "—";
         const totalStarts = driverEntries.reduce((s, [, n]) => s + n, 0);
-        // Rank: prefer the canonical year-end standings rank for the
-        // primary driver. Falls back to null if not in final_standings
-        // (in-progress seasons or part-time cars).
-        const standingsRank = rankByDriverNorm.get(normalize(primaryDriver)) || null;
+        // Rank: prefer the canonical year-end standings rank for the primary
+        // driver (completed seasons), fall back to live points-derived rank
+        // (in-progress seasons), null if neither.
+        const standingsRank = rankByDriverNorm.get(normalize(primaryDriver))
+          ?? liveRankByCar.get(car)
+          ?? null;
         rows.push({
           year, series: sCode, car_number: car,
           driver: primaryDriver, wins: agg.wins, total: agg.total,
@@ -7163,19 +7188,20 @@ function renderTeamHistoryTable(rows, teamCode) {
         <td><span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span></td>
         <td><span class="car-tag" style="background:${carHex};color:${carTxt}">${r.car_number}</span></td>
         <td><a class="profile-link" href="#/driver/${drvSlug}">${driverList}</a></td>
-        ${rankCell}
-        ${racesCell}
         <td class="num">${r.wins}</td>
+        ${rankCell}
         <td class="num">${r.total}</td>
+        ${racesCell}
       </tr>`;
     }).join("");
   }).join("");
   return `<table class="data-table tm-history-table">
     <thead><tr>
       <th>Year</th><th>Series</th><th>Car</th><th>Driver</th>
-      <th class="num">Rank</th>
+      <th class="num">Wins</th>
+      <th class="num">Standings</th>
+      <th class="num">Pts</th>
       <th class="num">Starts</th>
-      <th class="num">Wins</th><th class="num">Pts</th>
     </tr></thead>
     <tbody>${body}</tbody>
   </table>`;
