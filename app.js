@@ -480,13 +480,27 @@ function syncMobileDropdowns() {
 function parseHash() {
   const h = location.hash.replace("#/", "").split("/");
   const view = h[0];
+  // Helper: stash the full PREVIOUS hash before we change view, so back
+  // buttons can restore parameterized routes (#/team/HMS, #/track/KAN, etc.)
+  // verbatim instead of dropping the parameter.
+  const stashPrev = (newView) => {
+    if (STATE.view && STATE.view !== newView) {
+      STATE.prevView = STATE.view;
+      // Take whatever the previous hash was before this navigation. We're
+      // mid-parseHash so the URL has already changed; the most reliable
+      // source is the prior STATE.lastHash we set at the bottom of this
+      // function on each successful resolve.
+      STATE.prevHash = STATE.lastHash || `#/${STATE.view}`;
+    }
+  };
+
   // Driver-centric route: #/driver/<slug>
   // Resolves driver's home (series, season) automatically and locks the
   // profile to it. The year/series selectors are presented INSIDE the
   // profile body — not via the URL — so a driver has one canonical URL.
   if (view === "driver") {
-    if (STATE.view && STATE.view !== "profile") {
-      STATE.prevView = STATE.view;
+    if (STATE.view !== "profile") {
+      stashPrev("profile");
       STATE.profile.preLockSeries = STATE.series;
       STATE.profile.preLockSeason = STATE.season;
     }
@@ -498,15 +512,15 @@ function parseHash() {
       preLockSeason: STATE.profile.preLockSeason,
       locked: true,
     };
+    STATE.lastHash = location.hash;
     return;
   }
   // Team route: #/team/<code> — landing page for an organization
   if (view === "team") {
-    if (STATE.view && STATE.view !== "team") {
-      STATE.prevView = STATE.view;
-    }
+    stashPrev("team");
     STATE.view = "team";
     STATE.team = { code: (h[1] || "").toUpperCase() };
+    STATE.lastHash = location.hash;
     return;
   }
   // Profile routes: #/profile/<slug> or #/car/<number> (legacy)
@@ -514,8 +528,8 @@ function parseHash() {
   // centric, and even when entered via car-number, we want the picker to be
   // hidden so the user can't accidentally swap drivers by changing the year.
   if (view === "profile" || view === "car") {
-    if (STATE.view && STATE.view !== "profile") {
-      STATE.prevView = STATE.view;
+    if (STATE.view !== "profile") {
+      stashPrev("profile");
       STATE.profile.preLockSeries = STATE.series;
       STATE.profile.preLockSeason = STATE.season;
     }
@@ -527,23 +541,22 @@ function parseHash() {
       preLockSeason: STATE.profile.preLockSeason,
       locked: true,
     };
+    STATE.lastHash = location.hash;
     return;
   }
   // Track route: #/track/KAN — single track landing page
   if (view === "track") {
-    if (STATE.view && STATE.view !== "track") {
-      STATE.prevView = STATE.view;
-    }
+    stashPrev("track");
     STATE.view = "track";
     STATE.track = { code: (h[1] || "").toUpperCase() };
+    STATE.lastHash = location.hash;
     return;
   }
   // Race / schedule routes — remember where we came from for back nav
   if (view === "race" || view === "schedule") {
-    if (STATE.view && STATE.view !== view) {
-      STATE.prevView = STATE.view;
-    }
+    stashPrev(view);
     STATE.view = view;
+    STATE.lastHash = location.hash;
     return;
   }
   // Leaving profile — restore pre-lock series/season if we set them
@@ -552,7 +565,8 @@ function parseHash() {
     if (STATE.profile.preLockSeason) STATE.season = STATE.profile.preLockSeason;
     STATE.profile.locked = false;
   }
-  STATE.view = VIEWS.includes(view) ? view : "arc";  // arc is the landing tab
+  STATE.view = VIEWS.includes(view) ? view : "arc";
+  STATE.lastHash = location.hash;
 }
 
 // Slug helper: "A.J. Allmendinger" → "a-j-allmendinger"
@@ -904,18 +918,25 @@ function wireUIControls() {
   });
 
   // Takeover back button returns to dashboard home (default = Trending tab)
-  // Profile back: return to the tab we were on before entering the profile.
-  // Falls back to Season Arc (the default landing tab) if nothing remembered.
+  // Profile back: return to the previous page IN FULL — including any
+  // parameter (so #/team/HMS restores cleanly, not as #/team).
   document.getElementById("takeover-back")?.addEventListener("click", (e) => {
     e.preventDefault();
+    if (STATE.prevHash && STATE.prevHash !== location.hash) {
+      location.hash = STATE.prevHash;
+      return;
+    }
     const prev = STATE.prevView && STATE.prevView !== "profile" ? STATE.prevView : "arc";
     location.hash = `#/${prev}`;
   });
-  // Race / Track / Schedule / Team back: same idea — return to remembered prev view
-  // or Season Arc default.
+  // Race / Track / Schedule / Team back: same logic as profile-back.
   ["race-back", "track-back", "schedule-back", "team-back"].forEach(id => {
     document.getElementById(id)?.addEventListener("click", (e) => {
       e.preventDefault();
+      if (STATE.prevHash && STATE.prevHash !== location.hash) {
+        location.hash = STATE.prevHash;
+        return;
+      }
       const cur = STATE.view;
       const prev = STATE.prevView && STATE.prevView !== cur ? STATE.prevView : "arc";
       location.hash = `#/${prev}`;
@@ -6902,6 +6923,14 @@ function renderTeamPage() {
   if (titleEl) titleEl.textContent = era.full || teamCode;
   if (subEl) subEl.textContent = `${STATE.season} ${STATE.series} · ${era.abbr}`;
 
+  // Build a per-car index from computeSeasonTotals — that's where wins/top5/
+  // top10/total/rank are properly computed against canonical year-end
+  // standings. The raw entity from allEntities() doesn't have rolled-up
+  // stats fields, just per-race rows, so reading e.wins returned undefined
+  // and the cards rendered as zeros.
+  const totals = computeSeasonTotals();
+  const totalsByKey = new Map(totals.map(t => [entityKey(t), t]));
+
   // Find every entity in the current (series, season) belonging to this team.
   // Use teamGroup() so alliance buckets (WBR-PEN 2015+) are honored.
   const entities = allEntities();
@@ -6909,13 +6938,25 @@ function renderTeamPage() {
     const code = e.team_code || teamCodeFromName(e.team, SERIES_TO_KEY[STATE.series], e.car_number);
     if (!code) return false;
     return teamGroup(code, STATE.season) === teamCode || code === teamCode;
+  }).map(e => {
+    // Decorate with totals data so render code has wins/top5/total/rank etc.
+    const t = totalsByKey.get(entityKey(e)) || {};
+    return {
+      ...e,
+      wins: t.wins ?? 0,
+      top5: t.top5 ?? 0,
+      top10: t.top10 ?? 0,
+      total: t.total ?? t.totalPts ?? 0,
+      rank: t.rank ?? null,
+      avgFinish: t.avgFinish ?? null,
+    };
   }).sort((a, b) => {
     // Sort by points desc, then car number asc
     if (b.total !== a.total) return b.total - a.total;
     return parseInt(a.car_number, 10) - parseInt(b.car_number, 10);
   });
 
-  // Aggregate team stats across the season
+  // Aggregate team stats across the season — sum the now-decorated cars
   let teamWins = 0, teamTop5s = 0, teamTop10s = 0, teamPoles = 0, teamLapsLed = 0;
   currentCars.forEach(e => {
     teamWins   += e.wins   || 0;
@@ -7011,8 +7052,24 @@ function computeTeamHistory(teamCode) {
     seriesPriority.forEach(sCode => {
       const block = seriesBlocks[sCode];
       if (!block || !block.races) return;
+      // How many races actually ran in this season (RUN, not scheduled).
+      // Used as denominator in the "X / Y races" cell so part-timers read at
+      // a glance.
+      const totalRunRaces = (block.races || []).filter(r =>
+        (r.results || []).some(d => d.finish_pos != null)
+      ).length;
+
+      // Lookup table for canonical year-end standings rank by driver name
+      // (only present on completed seasons — scrape_points populates this).
+      const finalStandings = block.final_standings || [];
+      const rankByDriverNorm = new Map();
+      const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+      finalStandings.forEach(s => {
+        rankByDriverNorm.set(normalize(s.driver), s.rank);
+      });
+
       // Aggregate per-car for the year
-      const byCar = {};   // car_number → { driver_starts: {name: count}, wins, total }
+      const byCar = {};
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
           if (d.ineligible) return;
@@ -7031,14 +7088,23 @@ function computeTeamHistory(teamCode) {
           entry.total += d.race_pts || 0;
         });
       });
+
       Object.entries(byCar).forEach(([car, agg]) => {
-        const primaryDriver = Object.entries(agg.driverStarts)
-          .sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
+        const driverEntries = Object.entries(agg.driverStarts)
+          .sort((a, b) => b[1] - a[1]);
+        const primaryDriver = driverEntries[0]?.[0] || "—";
+        const totalStarts = driverEntries.reduce((s, [, n]) => s + n, 0);
+        // Rank: prefer the canonical year-end standings rank for the
+        // primary driver. Falls back to null if not in final_standings
+        // (in-progress seasons or part-time cars).
+        const standingsRank = rankByDriverNorm.get(normalize(primaryDriver)) || null;
         rows.push({
           year, series: sCode, car_number: car,
           driver: primaryDriver, wins: agg.wins, total: agg.total,
-          drivers: Object.entries(agg.driverStarts)
-            .sort((a, b) => b[1] - a[1]).map(([n]) => n),
+          drivers: driverEntries.map(([n]) => n),
+          starts: totalStarts,
+          totalRaces: totalRunRaces,
+          standingsRank,
         });
       });
     });
@@ -7082,11 +7148,23 @@ function renderTeamHistoryTable(rows, teamCode) {
       const yearCell = rowIdx === 0
         ? `<td class="yr-cell" rowspan="${yrRows.length}">${year}</td>`
         : "";
+      // Rank: shown only when canonical standings exist (completed season +
+      // driver finished there). Em-dash otherwise so the column reads cleanly.
+      const rankCell = r.standingsRank != null
+        ? `<td class="num">P${r.standingsRank}</td>`
+        : `<td class="num muted">—</td>`;
+      // Starts vs races: e.g. "36/36" for full-time, "12/36" for part-time.
+      // Subtle muted color for the denominator so the eye reads "starts" first.
+      const racesCell = r.totalRaces > 0
+        ? `<td class="num">${r.starts}<span class="muted">/${r.totalRaces}</span></td>`
+        : `<td class="num">${r.starts}</td>`;
       return `<tr class="${blockClass}${rowIdx === 0 ? " yr-first" : ""}">
         ${yearCell}
         <td><span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span></td>
         <td><span class="car-tag" style="background:${carHex};color:${carTxt}">${r.car_number}</span></td>
         <td><a class="profile-link" href="#/driver/${drvSlug}">${driverList}</a></td>
+        ${rankCell}
+        ${racesCell}
         <td class="num">${r.wins}</td>
         <td class="num">${r.total}</td>
       </tr>`;
@@ -7095,6 +7173,8 @@ function renderTeamHistoryTable(rows, teamCode) {
   return `<table class="data-table tm-history-table">
     <thead><tr>
       <th>Year</th><th>Series</th><th>Car</th><th>Driver</th>
+      <th class="num">Rank</th>
+      <th class="num">Starts</th>
       <th class="num">Wins</th><th class="num">Pts</th>
     </tr></thead>
     <tbody>${body}</tbody>

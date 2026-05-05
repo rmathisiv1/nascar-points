@@ -4767,3 +4767,16 @@ a.driver-cell.profile-link:hover .car-tag {
 .tm-history-table tr.yr-first td:not(.yr-cell) {
   border-top: 1px solid var(--border);
 }
+
+/* Sticky-header for the team-history table — when the user scrolls down to
+   2001 the column labels stay anchored at the top of the scroll container.
+   `position: sticky` requires the table cell to have a top offset and the
+   nearest scrolling ancestor (here #view-team) to be the scroll context. */
+.tm-history-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  z-index: 5;
+  /* Visual seam so sticky headers don't bleed into the first row */
+  box-shadow: 0 1px 0 var(--border);
+}
