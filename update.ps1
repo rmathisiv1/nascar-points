@@ -111,7 +111,10 @@ if (-not $SkipBios) {
     }
 }
 
-# --- 4. Check if anything changed and commit ---
+# --- 4. Stage changed files and check if anything actually differs from HEAD ---
+# We `git add` BEFORE checking diff so brand-new files (not yet tracked) are
+# also detected. `git diff --cached --stat` then shows everything staged for
+# commit. This is more reliable than `git diff` against the working tree.
 if ($changedFiles.Count -eq 0) {
     Write-Host ""
     Write-Host "Nothing to commit." -ForegroundColor Yellow
@@ -120,30 +123,26 @@ if ($changedFiles.Count -eq 0) {
 
 Write-Host ""
 Write-Host "=== Changes ===" -ForegroundColor Cyan
-$anyDiff = $false
-foreach ($f in $changedFiles) {
-    $diff = git diff --stat -- $f 2>$null
-    if ($diff) {
-        Write-Host $diff
-        $anyDiff = $true
-    }
-}
+foreach ($f in $changedFiles) { git add -- $f }
 
-if (-not $anyDiff) {
+$cachedDiff = git diff --cached --stat 2>$null
+if (-not $cachedDiff) {
     Write-Host "No changes detected vs. current commit." -ForegroundColor Green
     exit 0
 }
+Write-Host $cachedDiff
 
 if ($DryRun) {
     Write-Host ""
     Write-Host "DryRun: skipping commit + push. Run without -DryRun to publish." -ForegroundColor Yellow
+    # Unstage so DryRun is non-destructive
+    foreach ($f in $changedFiles) { git reset HEAD -- $f | Out-Null }
     exit 0
 }
 
 # --- 5. Commit and push ---
 Write-Host ""
 Write-Host "Committing + pushing..." -ForegroundColor Yellow
-foreach ($f in $changedFiles) { git add $f }
 $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
 $msgParts = @()
 if (-not $SkipPoints) { $msgParts += "points_$Season" }
