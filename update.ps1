@@ -21,7 +21,8 @@ param(
     [string]$Only = "NCS,NOS,NTS",
     [switch]$DryRun,
     [switch]$SkipBios,
-    [switch]$SkipPoints
+    [switch]$SkipPoints,
+    [switch]$SkipPush      # Commit but don't push -- caller will push later (used by batch wrapper)
 )
 
 $ErrorActionPreference = "Stop"
@@ -150,6 +151,13 @@ if (-not $SkipBios)   { $msgParts += "bios" }
 $msg = "data: refresh " + ($msgParts -join " + ") + " ($timestamp)"
 git commit -m $msg
 if ($LASTEXITCODE -ne 0) { throw "git commit failed" }
+
+if ($SkipPush) {
+    Write-Host ""
+    Write-Host "Committed (push deferred to caller)." -ForegroundColor Green
+    exit 0
+}
+
 git push
 if ($LASTEXITCODE -ne 0) { throw "git push failed" }
 

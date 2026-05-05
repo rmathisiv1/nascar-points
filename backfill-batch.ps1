@@ -55,6 +55,7 @@ foreach ($season in $Seasons) {
         Season   = $season
         Only     = $Only
         SkipBios = $true
+        SkipPush = $true     # Commits stay local; we push once at the end of the batch
     }
     if ($DryRun) { $params.DryRun = $true }
 
@@ -73,6 +74,22 @@ foreach ($season in $Seasons) {
     } catch {
         $failed += [PSCustomObject]@{ Season = $season; Reason = $_.Exception.Message }
         Write-Host "[$season] FAILED: $_" -ForegroundColor Red
+    }
+}
+
+# --- Single push at end of batch ---
+# update.ps1 was called with -SkipPush so all the year-by-year commits are
+# sitting locally. Push them in one shot now, which produces ONE GH Pages
+# deploy instead of N (avoids the rapid-fire cancellation churn we saw on
+# the first big backfill). Skip if nothing succeeded or if DryRun.
+if ($succeeded.Count -gt 0 -and -not $DryRun) {
+    Write-Host ""
+    Write-Host "Pushing $($succeeded.Count) commit(s)..." -ForegroundColor Yellow
+    git push
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "git push failed -- commits remain local. You can push manually with 'git push'." -ForegroundColor Red
+    } else {
+        Write-Host "Pushed. Site will redeploy in ~30 seconds." -ForegroundColor Green
     }
 }
 
