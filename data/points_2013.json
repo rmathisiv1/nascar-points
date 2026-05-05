@@ -1,6 +1,6 @@
 {
   "season": 2013,
-  "generated_at": "2026-05-04T20:15:17Z",
+  "generated_at": "2026-05-05T13:47:05Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -31508,6 +31508,379 @@
             }
           ]
         }
+      ],
+      "final_standings": [
+        {
+          "rank": 1,
+          "driver": "Jimmie Johnson",
+          "points": 2419,
+          "wins": 6,
+          "gap": 0
+        },
+        {
+          "rank": 2,
+          "driver": "Matt Kenseth",
+          "points": 2400,
+          "wins": 7,
+          "gap": -19
+        },
+        {
+          "rank": 3,
+          "driver": "Kevin Harvick",
+          "points": 2385,
+          "wins": 4,
+          "gap": -34
+        },
+        {
+          "rank": 4,
+          "driver": "Kyle Busch",
+          "points": 2364,
+          "wins": 4,
+          "gap": -55
+        },
+        {
+          "rank": 5,
+          "driver": "Dale Earnhardt, Jr.",
+          "points": 2363,
+          "wins": 0,
+          "gap": -56
+        },
+        {
+          "rank": 6,
+          "driver": "Jeff Gordon",
+          "points": 2337,
+          "wins": 1,
+          "gap": -82
+        },
+        {
+          "rank": 7,
+          "driver": "Clint Bowyer",
+          "points": 2336,
+          "wins": 0,
+          "gap": -83
+        },
+        {
+          "rank": 8,
+          "driver": "Joey Logano",
+          "points": 2323,
+          "wins": 1,
+          "gap": -96
+        },
+        {
+          "rank": 9,
+          "driver": "Greg Biffle",
+          "points": 2321,
+          "wins": 1,
+          "gap": -98
+        },
+        {
+          "rank": 10,
+          "driver": "Kurt Busch",
+          "points": 2309,
+          "wins": 0,
+          "gap": -110
+        },
+        {
+          "rank": 11,
+          "driver": "Ryan Newman",
+          "points": 2286,
+          "wins": 1,
+          "gap": -133
+        },
+        {
+          "rank": 12,
+          "driver": "Kasey Kahne",
+          "points": 2283,
+          "wins": 2,
+          "gap": -136
+        },
+        {
+          "rank": 13,
+          "driver": "Carl Edwards",
+          "points": 2282,
+          "wins": 2,
+          "gap": -137
+        },
+        {
+          "rank": 14,
+          "driver": "Brad Keselowski",
+          "points": 1041,
+          "wins": 1,
+          "gap": -1378
+        },
+        {
+          "rank": 15,
+          "driver": "Jamie McMurray",
+          "points": 1007,
+          "wins": 1,
+          "gap": -1412
+        },
+        {
+          "rank": 16,
+          "driver": "Martin Truex Jr",
+          "points": 998,
+          "wins": 1,
+          "gap": -1421
+        },
+        {
+          "rank": 17,
+          "driver": "Paul Menard",
+          "points": 949,
+          "wins": 0,
+          "gap": -1470
+        },
+        {
+          "rank": 18,
+          "driver": "Aric Almirola",
+          "points": 913,
+          "wins": 0,
+          "gap": -1506
+        },
+        {
+          "rank": 19,
+          "driver": "Ricky Stenhouse Jr",
+          "points": 909,
+          "wins": 0,
+          "gap": -1510
+        },
+        {
+          "rank": 20,
+          "driver": "Jeff Burton",
+          "points": 906,
+          "wins": 0,
+          "gap": -1513
+        },
+        {
+          "rank": 21,
+          "driver": "Juan Pablo Montoya",
+          "points": 894,
+          "wins": 0,
+          "gap": -1525
+        },
+        {
+          "rank": 22,
+          "driver": "Marcos Ambrose",
+          "points": 872,
+          "wins": 0,
+          "gap": -1547
+        },
+        {
+          "rank": 23,
+          "driver": "Denny Hamlin",
+          "points": 753,
+          "wins": 1,
+          "gap": -1666
+        },
+        {
+          "rank": 24,
+          "driver": "Casey Mears",
+          "points": 719,
+          "wins": 0,
+          "gap": -1700
+        },
+        {
+          "rank": 25,
+          "driver": "Mark Martin",
+          "points": 649,
+          "wins": 0,
+          "gap": -1770
+        },
+        {
+          "rank": 26,
+          "driver": "David Gilliland",
+          "points": 648,
+          "wins": 0,
+          "gap": -1771
+        },
+        {
+          "rank": 27,
+          "driver": "Danica Patrick",
+          "points": 646,
+          "wins": 0,
+          "gap": -1773
+        },
+        {
+          "rank": 28,
+          "driver": "David Ragan",
+          "points": 633,
+          "wins": 1,
+          "gap": -1786
+        },
+        {
+          "rank": 29,
+          "driver": "Tony Stewart",
+          "points": 594,
+          "wins": 1,
+          "gap": -1825
+        },
+        {
+          "rank": 30,
+          "driver": "Dave Blaney",
+          "points": 526,
+          "wins": 0,
+          "gap": -1893
+        },
+        {
+          "rank": 31,
+          "driver": "Travis Kvapil",
+          "points": 496,
+          "wins": 0,
+          "gap": -1923
+        },
+        {
+          "rank": 32,
+          "driver": "J.J. Yeley",
+          "points": 472,
+          "wins": 0,
+          "gap": -1947
+        },
+        {
+          "rank": 33,
+          "driver": "David Reutimann",
+          "points": 465,
+          "wins": 0,
+          "gap": -1954
+        },
+        {
+          "rank": 34,
+          "driver": "Bobby Labonte",
+          "points": 412,
+          "wins": 0,
+          "gap": -2007
+        },
+        {
+          "rank": 35,
+          "driver": "A.J. Allmendinger",
+          "points": 410,
+          "wins": 0,
+          "gap": -2009
+        },
+        {
+          "rank": 36,
+          "driver": "David Stremme",
+          "points": 362,
+          "wins": 0,
+          "gap": -2057
+        },
+        {
+          "rank": 37,
+          "driver": "Michael McDowell",
+          "points": 210,
+          "wins": 0,
+          "gap": -2209
+        },
+        {
+          "rank": 38,
+          "driver": "Timmy Hill",
+          "points": 190,
+          "wins": 0,
+          "gap": -2229
+        },
+        {
+          "rank": 39,
+          "driver": "Ken Schrader",
+          "points": 118,
+          "wins": 0,
+          "gap": -2301
+        },
+        {
+          "rank": 40,
+          "driver": "Michael Waltrip",
+          "points": 114,
+          "wins": 0,
+          "gap": -2305
+        },
+        {
+          "rank": 41,
+          "driver": "Scott Speed",
+          "points": 99,
+          "wins": 0,
+          "gap": -2320
+        },
+        {
+          "rank": 42,
+          "driver": "Terry Labonte",
+          "points": 87,
+          "wins": 0,
+          "gap": -2332
+        },
+        {
+          "rank": 43,
+          "driver": "Boris Said",
+          "points": 48,
+          "wins": 0,
+          "gap": -2371
+        },
+        {
+          "rank": 44,
+          "driver": "Ron Fellows",
+          "points": 31,
+          "wins": 0,
+          "gap": -2388
+        },
+        {
+          "rank": 45,
+          "driver": "Alex Kennedy",
+          "points": 21,
+          "wins": 0,
+          "gap": -2398
+        },
+        {
+          "rank": 46,
+          "driver": "Justin Marks",
+          "points": 14,
+          "wins": 0,
+          "gap": -2405
+        },
+        {
+          "rank": 47,
+          "driver": "Scott Riggs",
+          "points": 11,
+          "wins": 0,
+          "gap": -2408
+        },
+        {
+          "rank": 48,
+          "driver": "Victor Gonzalez, Jr.",
+          "points": 10,
+          "wins": 0,
+          "gap": -2409
+        },
+        {
+          "rank": 49,
+          "driver": "Brian Keselowski",
+          "points": 9,
+          "wins": 0,
+          "gap": -2410
+        },
+        {
+          "rank": 50,
+          "driver": "Tomy Drissi",
+          "points": 8,
+          "wins": 0,
+          "gap": -2411
+        },
+        {
+          "rank": 51,
+          "driver": "Jacques Villeneuve",
+          "points": 3,
+          "wins": 0,
+          "gap": -2416
+        },
+        {
+          "rank": 52,
+          "driver": "Jason Leffler",
+          "points": 1,
+          "wins": 0,
+          "gap": -2418
+        },
+        {
+          "rank": 53,
+          "driver": "Brian Vickers",
+          "points": -50,
+          "wins": 1,
+          "gap": -2469
+        }
       ]
     },
     "NOS": {
@@ -58370,6 +58743,624 @@
             }
           ]
         }
+      ],
+      "final_standings": [
+        {
+          "rank": 1,
+          "driver": "Austin Dillon",
+          "points": 1180,
+          "wins": 0,
+          "gap": 0
+        },
+        {
+          "rank": 2,
+          "driver": "Sam Hornish, Jr.",
+          "points": 1177,
+          "wins": 1,
+          "gap": -3
+        },
+        {
+          "rank": 3,
+          "driver": "Regan Smith",
+          "points": 1108,
+          "wins": 2,
+          "gap": -72
+        },
+        {
+          "rank": 4,
+          "driver": "Elliott Sadler",
+          "points": 1090,
+          "wins": 0,
+          "gap": -90
+        },
+        {
+          "rank": 5,
+          "driver": "Justin Allgaier",
+          "points": 1090,
+          "wins": 0,
+          "gap": -90
+        },
+        {
+          "rank": 6,
+          "driver": "Trevor Bayne",
+          "points": 1086,
+          "wins": 1,
+          "gap": -94
+        },
+        {
+          "rank": 7,
+          "driver": "Brian Scott",
+          "points": 1053,
+          "wins": 0,
+          "gap": -127
+        },
+        {
+          "rank": 8,
+          "driver": "Kyle Larson",
+          "points": 995,
+          "wins": 0,
+          "gap": -185
+        },
+        {
+          "rank": 9,
+          "driver": "Parker Kligerman",
+          "points": 993,
+          "wins": 0,
+          "gap": -187
+        },
+        {
+          "rank": 10,
+          "driver": "Brian Vickers",
+          "points": 970,
+          "wins": 0,
+          "gap": -210
+        },
+        {
+          "rank": 11,
+          "driver": "Alex Bowman",
+          "points": 884,
+          "wins": 0,
+          "gap": -296
+        },
+        {
+          "rank": 12,
+          "driver": "Nelson Piquet, Jr.",
+          "points": 861,
+          "wins": 0,
+          "gap": -319
+        },
+        {
+          "rank": 13,
+          "driver": "Mike Bliss",
+          "points": 814,
+          "wins": 0,
+          "gap": -366
+        },
+        {
+          "rank": 14,
+          "driver": "Travis Pastrana",
+          "points": 751,
+          "wins": 0,
+          "gap": -429
+        },
+        {
+          "rank": 15,
+          "driver": "Michael Annett",
+          "points": 696,
+          "wins": 0,
+          "gap": -484
+        },
+        {
+          "rank": 16,
+          "driver": "Jeremy Clements",
+          "points": 638,
+          "wins": 0,
+          "gap": -542
+        },
+        {
+          "rank": 17,
+          "driver": "Mike Wallace",
+          "points": 609,
+          "wins": 0,
+          "gap": -571
+        },
+        {
+          "rank": 18,
+          "driver": "Reed Sorenson",
+          "points": 524,
+          "wins": 0,
+          "gap": -656
+        },
+        {
+          "rank": 19,
+          "driver": "Joe Nemechek",
+          "points": 513,
+          "wins": 0,
+          "gap": -667
+        },
+        {
+          "rank": 20,
+          "driver": "Eric McClure",
+          "points": 482,
+          "wins": 0,
+          "gap": -698
+        },
+        {
+          "rank": 21,
+          "driver": "Cole Whitt",
+          "points": 426,
+          "wins": 0,
+          "gap": -754
+        },
+        {
+          "rank": 22,
+          "driver": "Brad Sweet",
+          "points": 420,
+          "wins": 0,
+          "gap": -760
+        },
+        {
+          "rank": 23,
+          "driver": "Johanna Long",
+          "points": 414,
+          "wins": 0,
+          "gap": -766
+        },
+        {
+          "rank": 24,
+          "driver": "Landon Cassill",
+          "points": 359,
+          "wins": 0,
+          "gap": -821
+        },
+        {
+          "rank": 25,
+          "driver": "Blake Koch",
+          "points": 349,
+          "wins": 0,
+          "gap": -831
+        },
+        {
+          "rank": 26,
+          "driver": "Kevin Swindell",
+          "points": 342,
+          "wins": 0,
+          "gap": -838
+        },
+        {
+          "rank": 27,
+          "driver": "Jeffrey Earnhardt",
+          "points": 339,
+          "wins": 0,
+          "gap": -841
+        },
+        {
+          "rank": 28,
+          "driver": "Jamie Dick",
+          "points": 277,
+          "wins": 0,
+          "gap": -903
+        },
+        {
+          "rank": 29,
+          "driver": "Jeff Green",
+          "points": 274,
+          "wins": 0,
+          "gap": -906
+        },
+        {
+          "rank": 30,
+          "driver": "Dexter Stacey",
+          "points": 257,
+          "wins": 0,
+          "gap": -923
+        },
+        {
+          "rank": 31,
+          "driver": "Joey Gase",
+          "points": 242,
+          "wins": 0,
+          "gap": -938
+        },
+        {
+          "rank": 32,
+          "driver": "Robert Richardson, Jr.",
+          "points": 222,
+          "wins": 0,
+          "gap": -958
+        },
+        {
+          "rank": 33,
+          "driver": "Josh Wise",
+          "points": 217,
+          "wins": 0,
+          "gap": -963
+        },
+        {
+          "rank": 34,
+          "driver": "Chris Buescher",
+          "points": 199,
+          "wins": 0,
+          "gap": -981
+        },
+        {
+          "rank": 35,
+          "driver": "Hal Martin",
+          "points": 186,
+          "wins": 0,
+          "gap": -994
+        },
+        {
+          "rank": 36,
+          "driver": "Drew Herring",
+          "points": 175,
+          "wins": 0,
+          "gap": -1005
+        },
+        {
+          "rank": 37,
+          "driver": "Ryan Reed",
+          "points": 171,
+          "wins": 0,
+          "gap": -1009
+        },
+        {
+          "rank": 38,
+          "driver": "Kenny Wallace",
+          "points": 155,
+          "wins": 0,
+          "gap": -1025
+        },
+        {
+          "rank": 39,
+          "driver": "Kevin Lepage",
+          "points": 148,
+          "wins": 0,
+          "gap": -1032
+        },
+        {
+          "rank": 40,
+          "driver": "Juan Carlos Blum",
+          "points": 140,
+          "wins": 0,
+          "gap": -1040
+        },
+        {
+          "rank": 41,
+          "driver": "Jason White",
+          "points": 138,
+          "wins": 0,
+          "gap": -1042
+        },
+        {
+          "rank": 42,
+          "driver": "Carl Long",
+          "points": 123,
+          "wins": 0,
+          "gap": -1057
+        },
+        {
+          "rank": 43,
+          "driver": "Kyle Fowler",
+          "points": 119,
+          "wins": 0,
+          "gap": -1061
+        },
+        {
+          "rank": 44,
+          "driver": "Mike Harmon",
+          "points": 106,
+          "wins": 0,
+          "gap": -1074
+        },
+        {
+          "rank": 45,
+          "driver": "T.J. Bell",
+          "points": 102,
+          "wins": 0,
+          "gap": -1078
+        },
+        {
+          "rank": 46,
+          "driver": "Ken Butler III",
+          "points": 99,
+          "wins": 0,
+          "gap": -1081
+        },
+        {
+          "rank": 47,
+          "driver": "Daryl Harr",
+          "points": 89,
+          "wins": 0,
+          "gap": -1091
+        },
+        {
+          "rank": 48,
+          "driver": "Max Papis",
+          "points": 81,
+          "wins": 0,
+          "gap": -1099
+        },
+        {
+          "rank": 49,
+          "driver": "Harrison Rhodes",
+          "points": 78,
+          "wins": 0,
+          "gap": -1102
+        },
+        {
+          "rank": 50,
+          "driver": "Danny Efland",
+          "points": 78,
+          "wins": 0,
+          "gap": -1102
+        },
+        {
+          "rank": 51,
+          "driver": "Tony Raines",
+          "points": 76,
+          "wins": 0,
+          "gap": -1104
+        },
+        {
+          "rank": 52,
+          "driver": "Morgan Shepherd",
+          "points": 64,
+          "wins": 0,
+          "gap": -1116
+        },
+        {
+          "rank": 53,
+          "driver": "Owen Kelly",
+          "points": 62,
+          "wins": 0,
+          "gap": -1118
+        },
+        {
+          "rank": 54,
+          "driver": "Billy Johnson",
+          "points": 59,
+          "wins": 0,
+          "gap": -1121
+        },
+        {
+          "rank": 55,
+          "driver": "Ryan Ellis",
+          "points": 57,
+          "wins": 0,
+          "gap": -1123
+        },
+        {
+          "rank": 56,
+          "driver": "Kenny Habul",
+          "points": 54,
+          "wins": 0,
+          "gap": -1126
+        },
+        {
+          "rank": 57,
+          "driver": "Scott Lagasse, Jr.",
+          "points": 52,
+          "wins": 0,
+          "gap": -1128
+        },
+        {
+          "rank": 58,
+          "driver": "Tanner Berryhill",
+          "points": 52,
+          "wins": 0,
+          "gap": -1128
+        },
+        {
+          "rank": 59,
+          "driver": "Stanton Barrett",
+          "points": 51,
+          "wins": 0,
+          "gap": -1129
+        },
+        {
+          "rank": 60,
+          "driver": "Kyle Kelley",
+          "points": 50,
+          "wins": 0,
+          "gap": -1130
+        },
+        {
+          "rank": 61,
+          "driver": "Chase Miller",
+          "points": 48,
+          "wins": 0,
+          "gap": -1132
+        },
+        {
+          "rank": 62,
+          "driver": "Brad Teague",
+          "points": 38,
+          "wins": 0,
+          "gap": -1142
+        },
+        {
+          "rank": 63,
+          "driver": "Ryan Gifford",
+          "points": 35,
+          "wins": 0,
+          "gap": -1145
+        },
+        {
+          "rank": 64,
+          "driver": "Donnie Neuenberger",
+          "points": 35,
+          "wins": 0,
+          "gap": -1145
+        },
+        {
+          "rank": 65,
+          "driver": "Johnny O'Connell",
+          "points": 32,
+          "wins": 0,
+          "gap": -1148
+        },
+        {
+          "rank": 66,
+          "driver": "Kevin O'Connell",
+          "points": 32,
+          "wins": 0,
+          "gap": -1148
+        },
+        {
+          "rank": 67,
+          "driver": "Matt DiBenedetto",
+          "points": 31,
+          "wins": 0,
+          "gap": -1149
+        },
+        {
+          "rank": 68,
+          "driver": "Brett Butler",
+          "points": 29,
+          "wins": 0,
+          "gap": -1151
+        },
+        {
+          "rank": 69,
+          "driver": "Anthony Gandon",
+          "points": 28,
+          "wins": 0,
+          "gap": -1152
+        },
+        {
+          "rank": 70,
+          "driver": "Bobby Gerhart",
+          "points": 28,
+          "wins": 0,
+          "gap": -1152
+        },
+        {
+          "rank": 71,
+          "driver": "Derek White",
+          "points": 27,
+          "wins": 0,
+          "gap": -1153
+        },
+        {
+          "rank": 72,
+          "driver": "Ryan Preece",
+          "points": 20,
+          "wins": 0,
+          "gap": -1160
+        },
+        {
+          "rank": 73,
+          "driver": "Steve Wallace",
+          "points": 19,
+          "wins": 0,
+          "gap": -1161
+        },
+        {
+          "rank": 74,
+          "driver": "T.J. Duke",
+          "points": 19,
+          "wins": 0,
+          "gap": -1161
+        },
+        {
+          "rank": 75,
+          "driver": "Andrew Ranger",
+          "points": 18,
+          "wins": 0,
+          "gap": -1162
+        },
+        {
+          "rank": 76,
+          "driver": "John Young",
+          "points": 16,
+          "wins": 0,
+          "gap": -1164
+        },
+        {
+          "rank": 77,
+          "driver": "Richard Harriman",
+          "points": 15,
+          "wins": 0,
+          "gap": -1165
+        },
+        {
+          "rank": 78,
+          "driver": "Tim Andrews",
+          "points": 14,
+          "wins": 0,
+          "gap": -1166
+        },
+        {
+          "rank": 79,
+          "driver": "Travis Sauter",
+          "points": 14,
+          "wins": 0,
+          "gap": -1166
+        },
+        {
+          "rank": 80,
+          "driver": "Derrike Cope",
+          "points": 14,
+          "wins": 0,
+          "gap": -1166
+        },
+        {
+          "rank": 81,
+          "driver": "Maryeve Dufault",
+          "points": 13,
+          "wins": 0,
+          "gap": -1167
+        },
+        {
+          "rank": 82,
+          "driver": "Kelly Admiraal",
+          "points": 13,
+          "wins": 0,
+          "gap": -1167
+        },
+        {
+          "rank": 83,
+          "driver": "Tim Schendel",
+          "points": 11,
+          "wins": 0,
+          "gap": -1169
+        },
+        {
+          "rank": 84,
+          "driver": "Corey LaJoie",
+          "points": 10,
+          "wins": 0,
+          "gap": -1170
+        },
+        {
+          "rank": 85,
+          "driver": "Paulie Harraka",
+          "points": 9,
+          "wins": 0,
+          "gap": -1171
+        },
+        {
+          "rank": 86,
+          "driver": "Alx Danielsson",
+          "points": 7,
+          "wins": 0,
+          "gap": -1173
+        },
+        {
+          "rank": 87,
+          "driver": "David Green",
+          "points": 6,
+          "wins": 0,
+          "gap": -1174
+        },
+        {
+          "rank": 88,
+          "driver": "Jason Bowles",
+          "points": 5,
+          "wins": 0,
+          "gap": -1175
+        }
       ]
     },
     "NTS": {
@@ -73966,6 +74957,589 @@
               "status": "fuel pump"
             }
           ]
+        }
+      ],
+      "final_standings": [
+        {
+          "rank": 1,
+          "driver": "Matt Crafton",
+          "points": 804,
+          "wins": 1,
+          "gap": 0
+        },
+        {
+          "rank": 2,
+          "driver": "Ty Dillon",
+          "points": 764,
+          "wins": 2,
+          "gap": -40
+        },
+        {
+          "rank": 3,
+          "driver": "James Buescher",
+          "points": 761,
+          "wins": 2,
+          "gap": -43
+        },
+        {
+          "rank": 4,
+          "driver": "Johnny Sauter",
+          "points": 732,
+          "wins": 3,
+          "gap": -72
+        },
+        {
+          "rank": 5,
+          "driver": "Jeb Burton",
+          "points": 731,
+          "wins": 1,
+          "gap": -73
+        },
+        {
+          "rank": 6,
+          "driver": "Ryan Blaney",
+          "points": 726,
+          "wins": 1,
+          "gap": -78
+        },
+        {
+          "rank": 7,
+          "driver": "Brendan Gaughan",
+          "points": 717,
+          "wins": 0,
+          "gap": -87
+        },
+        {
+          "rank": 8,
+          "driver": "Bubba Wallace",
+          "points": 704,
+          "wins": 1,
+          "gap": -100
+        },
+        {
+          "rank": 9,
+          "driver": "Miguel Paludo",
+          "points": 697,
+          "wins": 0,
+          "gap": -107
+        },
+        {
+          "rank": 10,
+          "driver": "Timothy Peters",
+          "points": 683,
+          "wins": 2,
+          "gap": -121
+        },
+        {
+          "rank": 11,
+          "driver": "John Wes Townley",
+          "points": 641,
+          "wins": 0,
+          "gap": -163
+        },
+        {
+          "rank": 12,
+          "driver": "Dakoda Armstrong",
+          "points": 628,
+          "wins": 0,
+          "gap": -176
+        },
+        {
+          "rank": 13,
+          "driver": "German Quiroga",
+          "points": 625,
+          "wins": 0,
+          "gap": -179
+        },
+        {
+          "rank": 14,
+          "driver": "Ron Hornaday, Jr.",
+          "points": 612,
+          "wins": 0,
+          "gap": -192
+        },
+        {
+          "rank": 15,
+          "driver": "Joey Coulter",
+          "points": 605,
+          "wins": 0,
+          "gap": -199
+        },
+        {
+          "rank": 16,
+          "driver": "Max Gresham",
+          "points": 579,
+          "wins": 0,
+          "gap": -225
+        },
+        {
+          "rank": 17,
+          "driver": "Ryan Sieg",
+          "points": 500,
+          "wins": 0,
+          "gap": -304
+        },
+        {
+          "rank": 18,
+          "driver": "Ross Chastain",
+          "points": 484,
+          "wins": 0,
+          "gap": -320
+        },
+        {
+          "rank": 19,
+          "driver": "Brennan Newberry",
+          "points": 452,
+          "wins": 0,
+          "gap": -352
+        },
+        {
+          "rank": 20,
+          "driver": "Norm Benning",
+          "points": 370,
+          "wins": 0,
+          "gap": -434
+        },
+        {
+          "rank": 21,
+          "driver": "Bryan Silas",
+          "points": 354,
+          "wins": 0,
+          "gap": -450
+        },
+        {
+          "rank": 22,
+          "driver": "Chase Elliott",
+          "points": 315,
+          "wins": 1,
+          "gap": -489
+        },
+        {
+          "rank": 23,
+          "driver": "Jeff Agnew",
+          "points": 314,
+          "wins": 0,
+          "gap": -490
+        },
+        {
+          "rank": 24,
+          "driver": "David Starr",
+          "points": 284,
+          "wins": 0,
+          "gap": -520
+        },
+        {
+          "rank": 25,
+          "driver": "Jennifer Jo Cobb",
+          "points": 262,
+          "wins": 0,
+          "gap": -542
+        },
+        {
+          "rank": 26,
+          "driver": "Tim George, Jr.",
+          "points": 252,
+          "wins": 0,
+          "gap": -552
+        },
+        {
+          "rank": 27,
+          "driver": "Justin Lofton",
+          "points": 250,
+          "wins": 0,
+          "gap": -554
+        },
+        {
+          "rank": 28,
+          "driver": "Todd Bodine",
+          "points": 215,
+          "wins": 0,
+          "gap": -589
+        },
+        {
+          "rank": 29,
+          "driver": "Erik Jones",
+          "points": 195,
+          "wins": 1,
+          "gap": -609
+        },
+        {
+          "rank": 30,
+          "driver": "Chris Jones",
+          "points": 177,
+          "wins": 0,
+          "gap": -627
+        },
+        {
+          "rank": 31,
+          "driver": "Justin Jennings",
+          "points": 157,
+          "wins": 0,
+          "gap": -647
+        },
+        {
+          "rank": 32,
+          "driver": "Tyler Young",
+          "points": 139,
+          "wins": 0,
+          "gap": -665
+        },
+        {
+          "rank": 33,
+          "driver": "Ben Kennedy",
+          "points": 135,
+          "wins": 0,
+          "gap": -669
+        },
+        {
+          "rank": 34,
+          "driver": "Caleb Holman",
+          "points": 135,
+          "wins": 0,
+          "gap": -669
+        },
+        {
+          "rank": 35,
+          "driver": "Chris Lafferty",
+          "points": 124,
+          "wins": 0,
+          "gap": -680
+        },
+        {
+          "rank": 36,
+          "driver": "Chad Hackenbracht",
+          "points": 116,
+          "wins": 0,
+          "gap": -688
+        },
+        {
+          "rank": 37,
+          "driver": "Cale Gale",
+          "points": 103,
+          "wins": 0,
+          "gap": -701
+        },
+        {
+          "rank": 38,
+          "driver": "Clay Greenfield",
+          "points": 87,
+          "wins": 0,
+          "gap": -717
+        },
+        {
+          "rank": 39,
+          "driver": "Jimmy Weller III",
+          "points": 82,
+          "wins": 0,
+          "gap": -722
+        },
+        {
+          "rank": 40,
+          "driver": "Chris Cockrum",
+          "points": 77,
+          "wins": 0,
+          "gap": -727
+        },
+        {
+          "rank": 41,
+          "driver": "Brandon Jones",
+          "points": 67,
+          "wins": 0,
+          "gap": -737
+        },
+        {
+          "rank": 42,
+          "driver": "Spencer Gallagher",
+          "points": 58,
+          "wins": 0,
+          "gap": -746
+        },
+        {
+          "rank": 43,
+          "driver": "Brett Moffitt",
+          "points": 57,
+          "wins": 0,
+          "gap": -747
+        },
+        {
+          "rank": 44,
+          "driver": "Jake Crum",
+          "points": 54,
+          "wins": 0,
+          "gap": -750
+        },
+        {
+          "rank": 45,
+          "driver": "John H. Nemechek",
+          "points": 51,
+          "wins": 0,
+          "gap": -753
+        },
+        {
+          "rank": 46,
+          "driver": "Mason Mingus",
+          "points": 49,
+          "wins": 0,
+          "gap": -755
+        },
+        {
+          "rank": 47,
+          "driver": "Daniel Hemric",
+          "points": 43,
+          "wins": 0,
+          "gap": -761
+        },
+        {
+          "rank": 48,
+          "driver": "Frank Kimmel",
+          "points": 43,
+          "wins": 0,
+          "gap": -761
+        },
+        {
+          "rank": 49,
+          "driver": "Chris Fontaine",
+          "points": 40,
+          "wins": 0,
+          "gap": -764
+        },
+        {
+          "rank": 50,
+          "driver": "Kyle Martel",
+          "points": 40,
+          "wins": 0,
+          "gap": -764
+        },
+        {
+          "rank": 51,
+          "driver": "C.J. Faison",
+          "points": 39,
+          "wins": 0,
+          "gap": -765
+        },
+        {
+          "rank": 52,
+          "driver": "Ryan Lynch",
+          "points": 39,
+          "wins": 0,
+          "gap": -765
+        },
+        {
+          "rank": 53,
+          "driver": "Matt Kurzejewski",
+          "points": 37,
+          "wins": 0,
+          "gap": -767
+        },
+        {
+          "rank": 54,
+          "driver": "Jared Landers",
+          "points": 32,
+          "wins": 0,
+          "gap": -772
+        },
+        {
+          "rank": 55,
+          "driver": "Todd Peck",
+          "points": 32,
+          "wins": 0,
+          "gap": -772
+        },
+        {
+          "rank": 56,
+          "driver": "Tracy Hines",
+          "points": 31,
+          "wins": 0,
+          "gap": -773
+        },
+        {
+          "rank": 57,
+          "driver": "Mike Skeen",
+          "points": 31,
+          "wins": 0,
+          "gap": -773
+        },
+        {
+          "rank": 58,
+          "driver": "Sean Corr",
+          "points": 29,
+          "wins": 0,
+          "gap": -775
+        },
+        {
+          "rank": 59,
+          "driver": "Steve Smith",
+          "points": 29,
+          "wins": 0,
+          "gap": -775
+        },
+        {
+          "rank": 60,
+          "driver": "John King",
+          "points": 26,
+          "wins": 0,
+          "gap": -778
+        },
+        {
+          "rank": 61,
+          "driver": "D.J. Kennington",
+          "points": 26,
+          "wins": 0,
+          "gap": -778
+        },
+        {
+          "rank": 62,
+          "driver": "B.J. McLeod",
+          "points": 25,
+          "wins": 0,
+          "gap": -779
+        },
+        {
+          "rank": 63,
+          "driver": "Dusty Davis",
+          "points": 24,
+          "wins": 0,
+          "gap": -780
+        },
+        {
+          "rank": 64,
+          "driver": "Matt McCall",
+          "points": 22,
+          "wins": 0,
+          "gap": -782
+        },
+        {
+          "rank": 65,
+          "driver": "Devin Jones",
+          "points": 20,
+          "wins": 0,
+          "gap": -784
+        },
+        {
+          "rank": 66,
+          "driver": "Scott Stenzel",
+          "points": 19,
+          "wins": 0,
+          "gap": -785
+        },
+        {
+          "rank": 67,
+          "driver": "Clay Rogers",
+          "points": 19,
+          "wins": 0,
+          "gap": -785
+        },
+        {
+          "rank": 68,
+          "driver": "Josh Reaume",
+          "points": 19,
+          "wins": 0,
+          "gap": -785
+        },
+        {
+          "rank": 69,
+          "driver": "Scott Bloomquist",
+          "points": 19,
+          "wins": 0,
+          "gap": -785
+        },
+        {
+          "rank": 70,
+          "driver": "Alex Guenette",
+          "points": 19,
+          "wins": 0,
+          "gap": -785
+        },
+        {
+          "rank": 71,
+          "driver": "Grant Galloway",
+          "points": 17,
+          "wins": 0,
+          "gap": -787
+        },
+        {
+          "rank": 72,
+          "driver": "Johnny Chapman",
+          "points": 16,
+          "wins": 0,
+          "gap": -788
+        },
+        {
+          "rank": 73,
+          "driver": "Ryan Truex",
+          "points": 16,
+          "wins": 0,
+          "gap": -788
+        },
+        {
+          "rank": 74,
+          "driver": "Robert Bruce",
+          "points": 16,
+          "wins": 0,
+          "gap": -788
+        },
+        {
+          "rank": 75,
+          "driver": "Caleb Roark",
+          "points": 16,
+          "wins": 0,
+          "gap": -788
+        },
+        {
+          "rank": 76,
+          "driver": "Dominick Casola",
+          "points": 15,
+          "wins": 0,
+          "gap": -789
+        },
+        {
+          "rank": 77,
+          "driver": "Tyler Reddick",
+          "points": 14,
+          "wins": 0,
+          "gap": -790
+        },
+        {
+          "rank": 78,
+          "driver": "Jeff Babcock",
+          "points": 14,
+          "wins": 0,
+          "gap": -790
+        },
+        {
+          "rank": 79,
+          "driver": "Chad McCumbee",
+          "points": 11,
+          "wins": 0,
+          "gap": -793
+        },
+        {
+          "rank": 80,
+          "driver": "Bradley Riethmeyer",
+          "points": 10,
+          "wins": 0,
+          "gap": -794
+        },
+        {
+          "rank": 81,
+          "driver": "Nate Monteith",
+          "points": 9,
+          "wins": 0,
+          "gap": -795
+        },
+        {
+          "rank": 82,
+          "driver": "Scott Saunders",
+          "points": 8,
+          "wins": 0,
+          "gap": -796
+        },
+        {
+          "rank": 83,
+          "driver": "Ricky Ehrgott",
+          "points": 8,
+          "wins": 0,
+          "gap": -796
         }
       ]
     }
