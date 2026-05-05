@@ -32,7 +32,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 # Import the production resolver so we use the EXACT same logic the scraper
 # would. If we add a new owner mapping in team_codes.py and re-run this,
 # we'll see it shrink the unresolved list immediately.
-from team_codes import OWNER_TO_TEAM_CODE, extract_owner  # noqa: E402
+from team_codes import OWNER_TO_TEAM_CODE, extract_owner, resolve_team_code  # noqa: E402
 
 DATA_DIR = (SCRIPT_DIR.parent / "data").resolve()
 
@@ -72,6 +72,9 @@ def main() -> int:
     per_block: dict = defaultdict(lambda: {"resolved": 0, "unresolved": 0,
                                             "missing_team": 0, "ineligible": 0})
 
+    # Series-key map for the CAR_FALLBACK_CODES lookup
+    SERIES_KEY = {"NCS": "W", "NOS": "B", "NTS": "C"}
+
     for fpath in files:
         try:
             data = json.loads(fpath.read_text(encoding="utf-8"))
@@ -93,6 +96,14 @@ def main() -> int:
                     if not team_str:
                         per_block[(year, series_code)]["missing_team"] += 1
                         continue
+                    # If JSON has null but team_codes.py CAN resolve it now
+                    # (because we expanded the map without re-scraping), count
+                    # it as resolved. This shows the EFFECTIVE resolution rate
+                    # the live site will display via JS fallback.
+                    if not code:
+                        code = resolve_team_code(
+                            team_str, SERIES_KEY.get(series_code), d.get("car_number")
+                        )
                     if code:
                         per_block[(year, series_code)]["resolved"] += 1
                         owner = extract_owner(team_str) or "(bare)"
