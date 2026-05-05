@@ -80,21 +80,49 @@ async function boot() {
   });
 }
 
-// Resolves a #/driver/<slug> route to a concrete (series, season) and loads
-// data for it. Called from the hashchange handler before rendering. If we
-// can't find the driver in any cached year, falls back to current view.
+// Resolves a #/driver/<slug>[/<year>][/<series>] route to a concrete
+// (series, season) and loads data for it. Called from the hashchange handler
+// before rendering. If we can't find the driver in any cached year, falls
+// back to current view.
 async function resolveDriverRoute() {
   const slug = STATE.profile && STATE.profile.slug;
   if (!slug) return;
 
-  // First-pass home detection from already-cached seasons
+  // If the URL specified explicit year + series (e.g. clicking from a
+  // 2007 NCS standings row), honor that — that's the user's expressed
+  // intent, not our auto-detect heuristic.
+  const explicitYear = STATE.profile.explicitYear;
+  const explicitSeries = STATE.profile.explicitSeries;
+  if (explicitYear && explicitSeries) {
+    const needSwitchSeries = explicitSeries !== STATE.series;
+    const needSwitchSeason = explicitYear !== STATE.season;
+    if (needSwitchSeries || needSwitchSeason) {
+      STATE.series = explicitSeries;
+      STATE.season = explicitYear;
+      await loadCurrentData();
+      resetRenderCache();
+    }
+    // Find the entity (car) in this explicit context for this driver
+    const entity = allEntities().find(e =>
+      slugify(e.primaryDriver || e.driver) === slug
+    ) || allEntities().find(e =>
+      (e.driversByStarts || []).some(dc => slugify(dc.name) === slug)
+    );
+    if (entity) {
+      STATE.profile.resolvedCarNumber = entity.car_number;
+      STATE.profile.resolvedDriver = entity.primaryDriver || entity.driver;
+    }
+    return;
+  }
+
+  // No explicit context — auto-detect home from cached seasons.
   let home = findDriverHomeContext(slug);
 
   // If not found, opportunistically try recent years that may not be cached
   if (!home.found) {
     const yearsToTry = [STATE.season, STATE.season - 1, STATE.season - 2];
     for (const y of yearsToTry) {
-      if (SEASON_CACHE[y]) continue;  // already tried via cache scan above
+      if (SEASON_CACHE[y]) continue;
       try {
         await loadSeasonIntoCache(y);
         home = findDriverHomeContext(slug);
@@ -103,18 +131,16 @@ async function resolveDriverRoute() {
     }
   }
 
-  if (!home.found) return;  // render will show "not found" state
+  if (!home.found) return;
 
-  // Apply lock — switch series/season if needed, load data
   const needSwitchSeries = home.series !== STATE.series;
   const needSwitchSeason = home.season !== STATE.season;
   if (needSwitchSeries || needSwitchSeason) {
     STATE.series = home.series;
     STATE.season = home.season;
     await loadCurrentData();
+    resetRenderCache();
   }
-  // Set the canonical car_number in the slug so existing profile machinery
-  // (which is car-keyed under the hood) can resolve the entity.
   STATE.profile.resolvedCarNumber = home.car_number;
   STATE.profile.resolvedDriver = home.driver;
 }
@@ -482,9 +508,13 @@ function syncMobileDropdowns() {
 function parseHash() {
   const h = location.hash.replace("#/", "").split("/");
   const view = h[0];
-  // Driver-centric route: #/driver/<slug>
+  // Driver-centric route: #/driver/<slug>[/<year>][/<series>]
   // Resolves driver's home (series, season) and locks the profile to it,
-  // independent of the user's current series picker.
+  // independent of the user's current series picker. When year+series are
+  // explicit in the URL (e.g. clicking from 2007 NCS standings), use those
+  // directly instead of auto-detecting the driver's home year — that way
+  // a click from the 2007 standings stays on Tony Stewart's 2007 profile,
+  // not his most-recent (2015) home.
   if (view === "driver") {
     if (STATE.view && STATE.view !== "profile") {
       STATE.prevView = STATE.view;
@@ -492,9 +522,13 @@ function parseHash() {
       STATE.profile.preLockSeason = STATE.season;
     }
     STATE.view = "profile";
+    const explicitYear = h[2] ? parseInt(h[2], 10) : null;
+    const explicitSeries = h[3] || null;
     STATE.profile = {
       kind: "driver",
       slug: h[1] || null,
+      explicitYear: Number.isInteger(explicitYear) ? explicitYear : null,
+      explicitSeries: ["NCS", "NOS", "NTS"].includes(explicitSeries) ? explicitSeries : null,
       preLockSeries: STATE.profile.preLockSeries,
       preLockSeason: STATE.profile.preLockSeason,
       locked: true,
@@ -511,15 +545,22 @@ function parseHash() {
     return;
   }
   // Profile routes: #/profile/<slug> or #/car/<number> (legacy)
+  // Both legacy routes are TREATED AS LOCKED — the entire app is now driver-
+  // centric, and even when entered via car-number, we want the picker to be
+  // hidden so the user can't accidentally swap drivers by changing the year.
   if (view === "profile" || view === "car") {
     if (STATE.view && STATE.view !== "profile") {
       STATE.prevView = STATE.view;
+      STATE.profile.preLockSeries = STATE.series;
+      STATE.profile.preLockSeason = STATE.season;
     }
     STATE.view = "profile";
     STATE.profile = {
       kind: view,
       slug: h[1] || null,
-      locked: false,
+      preLockSeries: STATE.profile.preLockSeries,
+      preLockSeason: STATE.profile.preLockSeason,
+      locked: true,
     };
     return;
   }
@@ -816,6 +857,7 @@ function wireUIControls() {
       STATE.trajectory.selected.clear();
       STATE.trajectory.seasons.clear();
       await loadCurrentData();
+      resetRenderCache();   // STATE.data changed; clear cached races/entities
       populateRacePicker();
       renderTimeCursorBanner();
       render();
@@ -951,6 +993,7 @@ function populateSeasonPicker() {
     STATE.trajectory.selected.clear();
     STATE.trajectory.seasons.clear();
     await loadCurrentData();
+    resetRenderCache();   // crucial: STATE.data just changed; cached races/entities are stale
     populateRacePicker();
     renderTimeCursorBanner();
     render();
@@ -1054,18 +1097,22 @@ function render() {
     pageTitleEl.textContent = titleMap[STATE.view] || "NASCAR Points";
   }
 
-  // Lock the series picker when the view is bound to a specific driver/team:
-  //   - Driver profile from #/driver/<slug> auto-targets the driver's home series
-  //   - Team page operates on whichever series the team is featured in
-  // In both cases, letting the user click NCS/NOS/NTS would yank them to the
-  // wrong context. Hide the picker so the lock is visible, not silent.
+  // Lock the navigation pickers when the view is bound to a specific driver
+  // or team. On a locked driver profile we silently switched series/season
+  // to the driver's home — letting the user touch the picker would yank the
+  // profile to "whoever drives this car number in the new year/series",
+  // which is the bug we're trying to prevent. Hide both pickers and the
+  // race-cursor picker so the lock is explicit, not silent.
   const seriesSwitcher = document.getElementById("series-sw");
-  if (seriesSwitcher) {
-    const lockedProfile = STATE.view === "profile"
-      && STATE.profile && STATE.profile.locked;
-    const onTeam = STATE.view === "team";
-    seriesSwitcher.classList.toggle("locked", lockedProfile || onTeam);
-  }
+  const seasonPicker = document.getElementById("season-picker");
+  const racePicker = document.getElementById("race-picker");
+  const lockedProfile = STATE.view === "profile"
+    && STATE.profile && STATE.profile.locked;
+  const onTeam = STATE.view === "team";
+  const navLocked = lockedProfile || onTeam;
+  if (seriesSwitcher) seriesSwitcher.classList.toggle("locked", navLocked);
+  if (seasonPicker)   seasonPicker.classList.toggle("locked", navLocked);
+  if (racePicker)     racePicker.classList.toggle("locked", navLocked);
 
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
@@ -4425,8 +4472,8 @@ function renderProfile() {
       <div class="profile-hero-info">
         <h1 class="profile-hero-name">${displayTitleHTML}</h1>
         <div class="profile-hero-meta">
-          <span class="team-pill" style="background:${orgHex};color:${orgTxt}">${escapeHTML(teamCode)}</span>
-          <span class="profile-hero-team"><strong>${escapeHTML(mfr)}</strong> · ${escapeHTML(teamName)}</span>
+          ${renderTeamPill(teamCode, /*clickable=*/true)}
+          <span class="profile-hero-team"><strong>${escapeHTML(mfr)}</strong> · <a href="#/team/${encodeURIComponent(teamCode)}" class="profile-team-link">${escapeHTML(teamName)}</a></span>
           ${bioLine}
         </div>
       </div>
@@ -5160,7 +5207,11 @@ function renderStandings() {
     }
     // Driver pill -> driver profile (auto-detects home series).
     // Team pill is rendered with a link inside renderTeamPill when clickable=true.
+    // We embed the current (year, series) in the URL so a click from 2007 NCS
+    // standings stays on Stewart's 2007 profile rather than auto-flying to
+    // his most-recent home year.
     const driverSlug = slugify(r.primaryDriver || r.driver);
+    const driverHref = `#/driver/${driverSlug}/${STATE.season}/${STATE.series}`;
     // DIFF cell — shows gap to leader using canonical data; "—" for the
     // leader (gap=0) and rows without canonical match (part-timers).
     let diffCell = "";
@@ -5175,7 +5226,7 @@ function renderStandings() {
     }
     return `<tr data-car-key="${escapeHTML(r.key)}">
       <td class="rank-cell">${r.currRank}${pcPill}</td>
-      <td><a class="driver-cell profile-link" href="#/driver/${driverSlug}">
+      <td><a class="driver-cell profile-link" href="${driverHref}">
         <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span>${escapeHTML(r.displayLabel)}</span>
         ${renderCoDriverBadge(r)}

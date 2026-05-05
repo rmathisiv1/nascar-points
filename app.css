@@ -95,10 +95,15 @@ html, body {
   color: #fff;
 }
 .series-sw button:not(.on):hover { color: var(--text); }
-/* When a driver profile or team page is bound to a specific series we hide
-   the picker entirely so the user can't accidentally yank context. */
-.series-sw.locked { display: none; }
-#series-sw.locked { display: none; }
+/* When a driver profile or team page is bound to a specific series/season we
+   hide the topbar pickers entirely. Letting the user touch them would silently
+   change the profile to "whoever drives this number in the new context" —
+   bug-prone behavior we explicitly want to prevent. */
+.series-sw.locked,
+#series-sw.locked,
+.season-select.locked,
+#season-picker.locked,
+#race-picker.locked { display: none; }
 
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .season-select, .select {
