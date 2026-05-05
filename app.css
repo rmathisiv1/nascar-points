@@ -95,6 +95,10 @@ html, body {
   color: #fff;
 }
 .series-sw button:not(.on):hover { color: var(--text); }
+/* When a driver profile or team page is bound to a specific series we hide
+   the picker entirely so the user can't accidentally yank context. */
+.series-sw.locked { display: none; }
+#series-sw.locked { display: none; }
 
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .season-select, .select {
@@ -4482,3 +4486,154 @@ a.driver-cell.profile-link:hover .car-tag {
   color: var(--dim);
   font-weight: 400;
 }
+
+/* ============================================================
+   TEAM PAGE  (#/team/<code>)
+   ============================================================
+   Mirrors the visual rhythm of the Track page: a chunky hero with the
+   team's color as a left border, a row of compact stat tiles, then card
+   sections for current cars and historical drivers. Class names use the
+   `tm-` prefix paired with `tm-hero`/`tm-car-*`/`tm-history-*` so they
+   don't collide with the Teammate Delta view's existing tm-grid/tm-card.
+*/
+.tm-hero {
+  /* tm-hero just adjusts the rc-hero rhythm slightly — most styling comes
+     from the shared .rc-hero rule. The accent border is set inline because
+     it depends on the team's color. */
+  margin-bottom: 12px;
+}
+
+/* Five compact tiles for season-aggregate team stats (wins, top-5s, etc.).
+   Auto-fits down to two columns on narrow screens via grid. */
+.tm-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.tm-stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tm-stat .k {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+.tm-stat .v {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Current-cars body — vertical stack of clickable driver cards. Each card
+   surfaces #N + driver + W/T5/T10/pts so a glance gives the gist before
+   tapping through to the driver profile. */
+.tm-cars-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+.tm-car-card {
+  display: grid;
+  grid-template-columns: 50px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s ease;
+}
+.tm-car-card:last-child { border-bottom: none; }
+.tm-car-card:hover { background: var(--bg-2); }
+.tm-car-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.tm-car-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tm-car-driver {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-car-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.tm-car-stats .tm-car-pts {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: 6px;
+}
+.tm-car-rank {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+/* Historical drivers table — same data-table look, with a small co-driver
+   indicator when the year had multiple drivers in the car. */
+.tm-history-table {
+  width: 100%;
+  font-size: 12px;
+}
+.tm-history-table th { font-size: 10px; }
+.tm-history-table td { padding: 6px 10px; }
+.tm-co {
+  font-size: 10px;
+  color: var(--dim);
+  margin-left: 4px;
+}
+
+/* Series tag — small colored chip identifying NCS/NOS/NTS in tables that
+   span multiple series. */
+.series-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fff;
+}
+.series-ncs { background: #d32f2f; }
+.series-nos { background: #1976d2; }
+.series-nts { background: #388e3c; }
+
+/* Make team pills act like links when wrapped */
+.team-pill-link {
+  text-decoration: none;
+  display: inline-block;
+}
+.team-pill-link:hover .team-pill { filter: brightness(1.15); }

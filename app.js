@@ -36,7 +36,7 @@ const STATE = {
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile"];
+const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team"];
 
 // ============================================================
 // BOOT
@@ -57,6 +57,10 @@ async function boot() {
   await loadCurrentData();
   populateRacePicker();
   renderTimeCursorBanner();
+  // If the user landed directly on a driver route, resolve home before render
+  if (STATE.view === "profile" && STATE.profile && STATE.profile.kind === "driver") {
+    await resolveDriverRoute();
+  }
   document.getElementById("time-cursor-reset")?.addEventListener("click", () => {
     STATE.throughRound = null;
     populateRacePicker();   // refresh selected state
@@ -64,12 +68,55 @@ async function boot() {
     render();
   });
   render();
-  window.addEventListener("hashchange", () => {
+  window.addEventListener("hashchange", async () => {
     parseHash();
+    // Driver-centric route: resolve home (series, season) before rendering
+    if (STATE.view === "profile" && STATE.profile && STATE.profile.kind === "driver") {
+      await resolveDriverRoute();
+    }
     render();
     markMobileNavActive();
     closeMobileNav();
   });
+}
+
+// Resolves a #/driver/<slug> route to a concrete (series, season) and loads
+// data for it. Called from the hashchange handler before rendering. If we
+// can't find the driver in any cached year, falls back to current view.
+async function resolveDriverRoute() {
+  const slug = STATE.profile && STATE.profile.slug;
+  if (!slug) return;
+
+  // First-pass home detection from already-cached seasons
+  let home = findDriverHomeContext(slug);
+
+  // If not found, opportunistically try recent years that may not be cached
+  if (!home.found) {
+    const yearsToTry = [STATE.season, STATE.season - 1, STATE.season - 2];
+    for (const y of yearsToTry) {
+      if (SEASON_CACHE[y]) continue;  // already tried via cache scan above
+      try {
+        await loadSeasonIntoCache(y);
+        home = findDriverHomeContext(slug);
+        if (home.found) break;
+      } catch (_) { /* skip year */ }
+    }
+  }
+
+  if (!home.found) return;  // render will show "not found" state
+
+  // Apply lock — switch series/season if needed, load data
+  const needSwitchSeries = home.series !== STATE.series;
+  const needSwitchSeason = home.season !== STATE.season;
+  if (needSwitchSeries || needSwitchSeason) {
+    STATE.series = home.series;
+    STATE.season = home.season;
+    await loadCurrentData();
+  }
+  // Set the canonical car_number in the slug so existing profile machinery
+  // (which is car-keyed under the hood) can resolve the entity.
+  STATE.profile.resolvedCarNumber = home.car_number;
+  STATE.profile.resolvedDriver = home.driver;
 }
 
 // ============================================================
@@ -435,7 +482,35 @@ function syncMobileDropdowns() {
 function parseHash() {
   const h = location.hash.replace("#/", "").split("/");
   const view = h[0];
-  // Profile routes: #/profile/tyler-reddick or #/car/45
+  // Driver-centric route: #/driver/<slug>
+  // Resolves driver's home (series, season) and locks the profile to it,
+  // independent of the user's current series picker.
+  if (view === "driver") {
+    if (STATE.view && STATE.view !== "profile") {
+      STATE.prevView = STATE.view;
+      STATE.profile.preLockSeries = STATE.series;
+      STATE.profile.preLockSeason = STATE.season;
+    }
+    STATE.view = "profile";
+    STATE.profile = {
+      kind: "driver",
+      slug: h[1] || null,
+      preLockSeries: STATE.profile.preLockSeries,
+      preLockSeason: STATE.profile.preLockSeason,
+      locked: true,
+    };
+    return;
+  }
+  // Team route: #/team/<code> — landing page for an organization
+  if (view === "team") {
+    if (STATE.view && STATE.view !== "team") {
+      STATE.prevView = STATE.view;
+    }
+    STATE.view = "team";
+    STATE.team = { code: (h[1] || "").toUpperCase() };
+    return;
+  }
+  // Profile routes: #/profile/<slug> or #/car/<number> (legacy)
   if (view === "profile" || view === "car") {
     if (STATE.view && STATE.view !== "profile") {
       STATE.prevView = STATE.view;
@@ -444,6 +519,7 @@ function parseHash() {
     STATE.profile = {
       kind: view,
       slug: h[1] || null,
+      locked: false,
     };
     return;
   }
@@ -464,6 +540,12 @@ function parseHash() {
     STATE.view = view;
     return;
   }
+  // Leaving profile — restore pre-lock series/season if we set them
+  if (STATE.view === "profile" && STATE.profile && STATE.profile.locked) {
+    if (STATE.profile.preLockSeries) STATE.series = STATE.profile.preLockSeries;
+    if (STATE.profile.preLockSeason) STATE.season = STATE.profile.preLockSeason;
+    STATE.profile.locked = false;
+  }
   STATE.view = VIEWS.includes(view) ? view : "arc";  // arc is the landing tab
 }
 
@@ -476,6 +558,116 @@ function slugify(name) {
     .replace(/[^a-z0-9]+/g, "-")     // non-alphanumeric → dash
     .replace(/^-+|-+$/g, "")         // trim leading/trailing dashes
     || "driver";
+}
+
+// Find the (series, season, car_number) where this driver was most recently
+// full-time. Used for driver-centric profile routing — when a user clicks a
+// driver from any series/year, we land them on that driver's HOME profile
+// rather than wherever they currently sit in the cached data.
+//
+// Resolution order:
+//   1. Most recent year (any series) where driver was full-time
+//   2. Most recent year (any series) where driver appeared at all
+//   3. Fall back to current STATE if nothing found
+//
+// Returns { series, season, car_number, driver, found: boolean, fallback: boolean }
+function findDriverHomeContext(driverSlug, fallbackSeries, fallbackSeason) {
+  const fallback = {
+    series: fallbackSeries || STATE.series,
+    season: fallbackSeason || STATE.season,
+    car_number: null,
+    driver: null,
+    found: false,
+    fallback: true,
+  };
+  if (!driverSlug) return fallback;
+
+  // Scan SEASON_CACHE newest → oldest. Track best (any-appearance) and best
+  // (full-time) candidates separately.
+  const years = Object.keys(SEASON_CACHE).map(Number)
+    .sort((a, b) => b - a);  // newest first
+  if (!years.length) {
+    // Cache empty — try current data
+    if (STATE.data && STATE.data.series) {
+      for (const [sCode, block] of Object.entries(STATE.data.series)) {
+        const hit = scanSeriesBlockForDriver(block, driverSlug);
+        if (hit) {
+          return {
+            series: sCode,
+            season: STATE.data.season,
+            car_number: hit.car_number,
+            driver: hit.driver,
+            found: true,
+            fallback: false,
+          };
+        }
+      }
+    }
+    return fallback;
+  }
+
+  let bestFullTime = null;
+  let bestAny = null;
+  const seriesPriority = ["NCS", "NOS", "NTS"];  // Cup wins ties
+
+  for (const year of years) {
+    const seriesBlocks = SEASON_CACHE[year];
+    if (!seriesBlocks) continue;
+    for (const sCode of seriesPriority) {
+      const block = seriesBlocks[sCode];
+      if (!block) continue;
+      const hit = scanSeriesBlockForDriver(block, driverSlug);
+      if (!hit) continue;
+      // Determine full-time status: ≥90% of the season's run races.
+      const runRaces = (block.races || []).filter(r =>
+        (r.results || []).some(d => d.finish_pos != null)
+      ).length;
+      const ftThreshold = Math.max(1, Math.ceil(runRaces * 0.9));
+      const isFt = hit.starts >= ftThreshold;
+      const candidate = {
+        series: sCode,
+        season: year,
+        car_number: hit.car_number,
+        driver: hit.driver,
+        starts: hit.starts,
+      };
+      if (isFt && !bestFullTime) bestFullTime = candidate;
+      if (!bestAny) bestAny = candidate;
+      if (bestFullTime) break;  // newest FT season wins
+    }
+    if (bestFullTime) break;
+  }
+
+  const winner = bestFullTime || bestAny;
+  if (winner) {
+    return { ...winner, found: true, fallback: false };
+  }
+  return fallback;
+}
+
+// Scan one (year, series) block for a driver matching the given slug.
+// Returns the car they drove most often + their starts count, or null.
+function scanSeriesBlockForDriver(block, driverSlug) {
+  if (!block || !block.races) return null;
+  const carStarts = {};   // car_number → { starts, driverName }
+  block.races.forEach(race => {
+    (race.results || []).forEach(d => {
+      if (d.ineligible) return;
+      const drvSlug = slugify(d.driver || "");
+      if (drvSlug !== driverSlug) return;
+      const car = d.car_number;
+      if (!carStarts[car]) carStarts[car] = { starts: 0, driverName: d.driver };
+      carStarts[car].starts++;
+    });
+  });
+  // Most-driven car wins
+  let best = null;
+  for (const [car, info] of Object.entries(carStarts)) {
+    if (!best || info.starts > best.starts) {
+      best = { car_number: car, starts: info.starts, driver: info.driverName };
+    }
+  }
+  return best;
 }
 
 // ============================================================
@@ -712,9 +904,9 @@ function wireUIControls() {
     const prev = STATE.prevView && STATE.prevView !== "profile" ? STATE.prevView : "arc";
     location.hash = `#/${prev}`;
   });
-  // Race / Track / Schedule back: same idea — return to remembered prev view
+  // Race / Track / Schedule / Team back: same idea — return to remembered prev view
   // or Season Arc default.
-  ["race-back", "track-back", "schedule-back"].forEach(id => {
+  ["race-back", "track-back", "schedule-back", "team-back"].forEach(id => {
     document.getElementById(id)?.addEventListener("click", (e) => {
       e.preventDefault();
       const cur = STATE.view;
@@ -828,7 +1020,7 @@ const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatm
 const TAKEOVER_VIEWS = ["playoffs"];
 // Center-column takeovers — these hide tab-body and live in the center pane,
 // alongside left (standings) and right (form) panels.
-const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule"];
+const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -857,8 +1049,22 @@ function render() {
       standings: "Standings",
       playoffs: "Playoff Picture",
       profile: "Driver Profile",
+      team: "Team",
     };
     pageTitleEl.textContent = titleMap[STATE.view] || "NASCAR Points";
+  }
+
+  // Lock the series picker when the view is bound to a specific driver/team:
+  //   - Driver profile from #/driver/<slug> auto-targets the driver's home series
+  //   - Team page operates on whichever series the team is featured in
+  // In both cases, letting the user click NCS/NOS/NTS would yank them to the
+  // wrong context. Hide the picker so the lock is visible, not silent.
+  const seriesSwitcher = document.getElementById("series-sw");
+  if (seriesSwitcher) {
+    const lockedProfile = STATE.view === "profile"
+      && STATE.profile && STATE.profile.locked;
+    const onTeam = STATE.view === "team";
+    seriesSwitcher.classList.toggle("locked", lockedProfile || onTeam);
   }
 
   if (dashboard) dashboard.hidden = inTakeover;
@@ -873,11 +1079,13 @@ function render() {
   const raceTakeover    = document.getElementById("race-takeover");
   const trackTakeover   = document.getElementById("track-takeover");
   const schedTakeover   = document.getElementById("schedule-takeover");
+  const teamTakeover    = document.getElementById("team-takeover");
   const tabBody         = document.getElementById("tab-body");
   if (profileTakeover) profileTakeover.hidden = (STATE.view !== "profile");
   if (raceTakeover)    raceTakeover.hidden    = (STATE.view !== "race");
   if (trackTakeover)   trackTakeover.hidden   = (STATE.view !== "track");
   if (schedTakeover)   schedTakeover.hidden   = (STATE.view !== "schedule");
+  if (teamTakeover)    teamTakeover.hidden    = (STATE.view !== "team");
   if (tabBody)         tabBody.hidden         = inCenterTakeover;
 
   // Tab-panel visibility. Default to "arc" when the URL doesn't point to a
@@ -914,6 +1122,8 @@ function render() {
       renderTrackPage();
     } else if (STATE.view === "schedule") {
       renderSchedulePage();
+    } else if (STATE.view === "team") {
+      renderTeamPage();
     } else {
       // Render the active tab's content
       switch (activeTab) {
@@ -2069,7 +2279,7 @@ function teamLabelForEra(teamCode, year) {
   return { abbr: oldest.abbr, full: oldest.full };
 }
 
-function renderTeamPill(teamCode, _seriesUnused, _carUnused) {
+function renderTeamPill(teamCode, clickable) {
   if (!teamCode) return `<span class="team-pill fallback">—</span>`;
   const era = teamLabelForEra(teamCode, STATE.season);
   const orgHex = orgColorForTeam(teamCode);
@@ -2079,11 +2289,19 @@ function renderTeamPill(teamCode, _seriesUnused, _carUnused) {
   const titleAttr = era.full && era.full !== era.abbr
     ? ` title="${escapeHTML(era.full)}"`
     : "";
+  let inner;
   if (orgHex) {
     const textCol = contrastTextFor(orgHex);
-    return `<span class="team-pill" style="background:${orgHex};color:${textCol}"${titleAttr}>${escapeHTML(era.abbr)}</span>`;
+    inner = `<span class="team-pill" style="background:${orgHex};color:${textCol}"${titleAttr}>${escapeHTML(era.abbr)}</span>`;
+  } else {
+    inner = `<span class="team-pill fallback"${titleAttr}>${escapeHTML(era.abbr)}</span>`;
   }
-  return `<span class="team-pill fallback"${titleAttr}>${escapeHTML(era.abbr)}</span>`;
+  // Clickable mode: wrap in a link to the team page. Used in standings
+  // and other dense tables where you want every team-pill to deep-link.
+  if (clickable) {
+    return `<a class="team-pill-link" href="#/team/${encodeURIComponent(teamCode)}">${inner}</a>`;
+  }
+  return inner;
 }
 
 // ============================================================
@@ -3940,6 +4158,33 @@ function tmDeltaClass(metric, avg) {
 function findEntityFromSlug() {
   if (!STATE.data || !STATE.profile.slug) return null;
 
+  // Driver-centric route: if we resolved a car number during route handling,
+  // use it directly. Otherwise fall through to slug-match logic.
+  if (STATE.profile.kind === "driver") {
+    if (STATE.profile.resolvedCarNumber) {
+      const hit = allEntities().find(
+        e => e.car_number === STATE.profile.resolvedCarNumber
+      );
+      if (hit) return hit;
+    }
+    // Fallback — try matching by slug like the legacy profile route does
+    const slug = STATE.profile.slug;
+    const entities = allEntities();
+    const primaryHit = entities.find(e => slugify(e.primaryDriver || e.driver) === slug);
+    if (primaryHit) return primaryHit;
+    let bestHit = null;
+    let bestStarts = -1;
+    entities.forEach(e => {
+      (e.driversByStarts || []).forEach(dc => {
+        if (slugify(dc.name) === slug && dc.starts > bestStarts) {
+          bestHit = e;
+          bestStarts = dc.starts;
+        }
+      });
+    });
+    return bestHit;
+  }
+
   if (STATE.profile.kind === "car") {
     // Direct car lookup
     return allEntities().find(e => e.car_number === STATE.profile.slug) || null;
@@ -4901,7 +5146,7 @@ function renderStandings() {
   const body = rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
-    const teamPill = renderTeamPill(r.team_code);
+    const teamPill = renderTeamPill(r.team_code, /*clickable=*/true);
     const pc = r.posChange;
     let pcPill;
     if (r.prevRank == null) {
@@ -4913,8 +5158,9 @@ function renderStandings() {
     } else {
       pcPill = `<span class="pos-change down">▼${Math.abs(pc)}</span>`;
     }
-    const profileSlug = r.car_number;
-    const profileKind = "car";
+    // Driver pill -> driver profile (auto-detects home series).
+    // Team pill is rendered with a link inside renderTeamPill when clickable=true.
+    const driverSlug = slugify(r.primaryDriver || r.driver);
     // DIFF cell — shows gap to leader using canonical data; "—" for the
     // leader (gap=0) and rows without canonical match (part-timers).
     let diffCell = "";
@@ -4929,7 +5175,7 @@ function renderStandings() {
     }
     return `<tr data-car-key="${escapeHTML(r.key)}">
       <td class="rank-cell">${r.currRank}${pcPill}</td>
-      <td><a class="driver-cell profile-link" href="#/${profileKind}/${profileSlug}">
+      <td><a class="driver-cell profile-link" href="#/driver/${driverSlug}">
         <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span>${escapeHTML(r.displayLabel)}</span>
         ${renderCoDriverBadge(r)}
@@ -6494,6 +6740,205 @@ function renderTrackThisSeason(history) {
 
   return `<div class="tk-this-row${thisYear.length > 1 ? " multi" : ""}">${cards}</div>`;
 }
+
+// ============================================================
+// TEAM PAGE
+// ============================================================
+// Renders the #/team/<code> view — a landing page for a single organization
+// showing its current cars, season stats, and historical drivers. Inspired
+// by the track page but team-keyed.
+function renderTeamPage() {
+  const host = document.getElementById("team-host");
+  if (!host) return;
+  if (!STATE.data) { host.innerHTML = `<div class="empty">No data loaded.</div>`; return; }
+
+  const teamCode = STATE.team && STATE.team.code;
+  const subEl = document.getElementById("team-sub");
+  const titleEl = document.getElementById("team-title");
+  if (!teamCode) {
+    if (titleEl) titleEl.textContent = "Team not specified";
+    if (subEl) subEl.textContent = "—";
+    host.innerHTML = `<div class="empty">No team code in URL. <a href="#/standings">Back to Standings</a></div>`;
+    return;
+  }
+
+  const era = teamLabelForEra(teamCode, STATE.season);
+  if (titleEl) titleEl.textContent = era.full || teamCode;
+  if (subEl) subEl.textContent = `${STATE.season} ${STATE.series} · ${era.abbr}`;
+
+  // Find every entity in the current (series, season) belonging to this team.
+  // Use teamGroup() so alliance buckets (WBR-PEN 2015+) are honored.
+  const entities = allEntities();
+  const currentCars = entities.filter(e => {
+    const code = e.team_code || teamCodeFromName(e.team, SERIES_TO_KEY[STATE.series], e.car_number);
+    if (!code) return false;
+    return teamGroup(code, STATE.season) === teamCode || code === teamCode;
+  }).sort((a, b) => {
+    // Sort by points desc, then car number asc
+    if (b.total !== a.total) return b.total - a.total;
+    return parseInt(a.car_number, 10) - parseInt(b.car_number, 10);
+  });
+
+  // Aggregate team stats across the season
+  let teamWins = 0, teamTop5s = 0, teamTop10s = 0, teamPoles = 0, teamLapsLed = 0;
+  currentCars.forEach(e => {
+    teamWins   += e.wins   || 0;
+    teamTop5s  += e.top5   || 0;
+    teamTop10s += e.top10  || 0;
+    teamPoles  += e.poles  || 0;
+    teamLapsLed += e.lapsLed || 0;
+  });
+
+  const orgHex = orgColorForTeam(teamCode) || "#555";
+  const orgTxt = contrastTextFor(orgHex);
+
+  // Current cars cards — clickable, route to driver profile
+  const carCards = currentCars.map(e => {
+    const carHex = colorFor(STATE.series, e.car_number);
+    const carTxt = contrastTextFor(carHex);
+    const primaryDrv = e.primaryDriver || e.driver;
+    const drvSlug = slugify(primaryDrv);
+    const standingsRank = e.rank || "—";
+    return `<a class="tm-car-card profile-link" href="#/driver/${drvSlug}">
+      <div class="tm-car-tag" style="background:${carHex};color:${carTxt}">${e.car_number}</div>
+      <div class="tm-car-body">
+        <div class="tm-car-driver">${escapeHTML(primaryDrv)}</div>
+        <div class="tm-car-stats">
+          <span>${e.wins || 0}W</span>·<span>${e.top5 || 0} T5</span>·<span>${e.top10 || 0} T10</span>
+          <span class="tm-car-pts">${e.total || 0} pts</span>
+        </div>
+      </div>
+      <div class="tm-car-rank">P${standingsRank}</div>
+    </a>`;
+  }).join("");
+
+  // Historical drivers — scan SEASON_CACHE for any year where this team had cars.
+  // Only show years that are loaded; lazy-load remaining recent years if needed.
+  const historicalRows = computeTeamHistory(teamCode);
+
+  host.innerHTML = `
+    <div class="rc-hero tm-hero" style="border-left: 4px solid ${orgHex};">
+      <div class="rc-hero-badge" style="background:${orgHex};color:${orgTxt}">${escapeHTML(era.abbr)}</div>
+      <div class="rc-hero-track">${escapeHTML(era.full || teamCode)}</div>
+      <div class="rc-hero-meta">
+        ${currentCars.length} car${currentCars.length === 1 ? "" : "s"} · ${STATE.season} ${STATE.series}
+      </div>
+    </div>
+
+    <div class="tm-stats-row">
+      <div class="tm-stat"><span class="k">Wins</span><span class="v">${teamWins}</span></div>
+      <div class="tm-stat"><span class="k">Top 5</span><span class="v">${teamTop5s}</span></div>
+      <div class="tm-stat"><span class="k">Top 10</span><span class="v">${teamTop10s}</span></div>
+      <div class="tm-stat"><span class="k">Poles</span><span class="v">${teamPoles}</span></div>
+      <div class="tm-stat"><span class="k">Laps led</span><span class="v">${teamLapsLed.toLocaleString()}</span></div>
+    </div>
+
+    <div class="card rc-card rc-card-wide">
+      <div class="rc-card-head">
+        <span class="rc-card-title">Current cars</span>
+        <span class="rc-card-sub">click a driver to see their full profile</span>
+      </div>
+      <div class="rc-card-body tm-cars-body">
+        ${carCards || `<div class="empty">No cars in ${STATE.season} ${STATE.series}.</div>`}
+      </div>
+    </div>
+
+    <div class="card rc-card rc-card-wide">
+      <div class="rc-card-head">
+        <span class="rc-card-title">Historical drivers</span>
+        <span class="rc-card-sub">${historicalRows.length ? `across ${historicalRows.length} season${historicalRows.length === 1 ? "" : "s"}` : "loading…"}</span>
+      </div>
+      <div class="rc-card-body" style="padding:0;">${renderTeamHistoryTable(historicalRows, teamCode)}</div>
+    </div>
+  `;
+
+  // If history is sparse, lazy-load more years and re-render
+  const allYears = Object.keys(SEASON_CACHE).map(Number);
+  const expectedYears = STATE.seasonsAvailable || [];
+  const missingYears = expectedYears.filter(y => !allYears.includes(y));
+  if (missingYears.length > 0) {
+    Promise.all(missingYears.slice(0, 5).map(y => loadSeasonIntoCache(y)))
+      .then(() => {
+        if (STATE.view === "team") renderTeamPage();
+      });
+  }
+}
+
+// Aggregate team's drivers across all loaded seasons. Returns an array of
+// { year, series, car_number, driver, wins, total } sorted newest-first.
+function computeTeamHistory(teamCode) {
+  const rows = [];
+  const seriesPriority = ["NCS", "NOS", "NTS"];
+  Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
+    const seriesBlocks = SEASON_CACHE[year];
+    if (!seriesBlocks) return;
+    seriesPriority.forEach(sCode => {
+      const block = seriesBlocks[sCode];
+      if (!block || !block.races) return;
+      // Aggregate per-car for the year
+      const byCar = {};   // car_number → { driver_starts: {name: count}, wins, total }
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          const code = d.team_code || teamCodeFromName(
+            d.team, SERIES_TO_KEY[sCode], d.car_number
+          );
+          if (!code) return;
+          const grp = teamGroup(code, year);
+          if (grp !== teamCode && code !== teamCode) return;
+          const car = d.car_number;
+          const entry = byCar[car] = byCar[car] || {
+            driverStarts: {}, wins: 0, total: 0
+          };
+          entry.driverStarts[d.driver] = (entry.driverStarts[d.driver] || 0) + 1;
+          if (d.finish_pos === 1) entry.wins++;
+          entry.total += d.race_pts || 0;
+        });
+      });
+      Object.entries(byCar).forEach(([car, agg]) => {
+        const primaryDriver = Object.entries(agg.driverStarts)
+          .sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
+        rows.push({
+          year, series: sCode, car_number: car,
+          driver: primaryDriver, wins: agg.wins, total: agg.total,
+          drivers: Object.entries(agg.driverStarts)
+            .sort((a, b) => b[1] - a[1]).map(([n]) => n),
+        });
+      });
+    });
+  });
+  return rows;
+}
+
+function renderTeamHistoryTable(rows, teamCode) {
+  if (!rows.length) {
+    return `<div class="empty" style="padding:24px;">No history loaded yet. Loading recent seasons…</div>`;
+  }
+  const body = rows.map(r => {
+    const carHex = colorFor(r.series, r.car_number);
+    const carTxt = contrastTextFor(carHex);
+    const drvSlug = slugify(r.driver);
+    const driverList = r.drivers.length > 1
+      ? `${escapeHTML(r.drivers[0])} <span class="tm-co">+${r.drivers.length - 1}</span>`
+      : escapeHTML(r.drivers[0]);
+    return `<tr>
+      <td>${r.year}</td>
+      <td><span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span></td>
+      <td><span class="car-tag" style="background:${carHex};color:${carTxt}">${r.car_number}</span></td>
+      <td><a class="profile-link" href="#/driver/${drvSlug}">${driverList}</a></td>
+      <td class="num">${r.wins}</td>
+      <td class="num">${r.total}</td>
+    </tr>`;
+  }).join("");
+  return `<table class="data-table tm-history-table">
+    <thead><tr>
+      <th>Year</th><th>Series</th><th>Car</th><th>Driver</th>
+      <th class="num">Wins</th><th class="num">Pts</th>
+    </tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+}
+
 
 function renderPlayoffs() {
   const host = document.getElementById("playoffs-host");
