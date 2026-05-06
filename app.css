@@ -66,6 +66,15 @@ html, body {
 .brand-name {
   font-weight: 700;
 }
+/* Logo image — kept compact so it fits the topbar height. The original
+   PNG is wide (~3:2 with checkered flag), so we height-cap it and let
+   width auto-scale. */
+.brand-logo {
+  height: 28px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+}
 .brand-mark {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
   padding: 2px 6px; border-radius: 3px;
@@ -4063,7 +4072,10 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 .rc-sched-row:last-child { border-bottom: none; }
 .rc-sched-row:hover { background: rgba(255,255,255,0.03); }
-.rc-sched-row.upcoming { opacity: 0.65; }
+/* Upcoming races render at full opacity so race name + date stay sharp;
+   only the prior-year-winner indicator (.rc-sched-prior) is muted to
+   distinguish it from the current-year winner. */
+.rc-sched-row.upcoming { opacity: 1; }
 .rc-sched-row.current {
   background: rgba(59,130,246,0.08);
   border-left-color: var(--accent);
@@ -5429,4 +5441,130 @@ a.driver-cell.profile-link:hover .car-tag {
   }
   .tm-car-num { width: 36px; height: 30px; font-size: 12px; }
   .tm-car-driver { font-size: 12px; }
+}
+
+/* ============================================================
+   Championship pill series breakdown
+   Series-mini-pills inside the championship pill: "2 NCS · 1 NTS"
+   so the user can see at a glance which series each title is in.
+   ============================================================ */
+.champ-series-breakdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255,200,50,0.35);
+}
+.champ-series-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================
+   Team page: multi-series stats block
+   Replaces the single team-stats row with one card per series so the
+   user can compare NCS vs NOS vs NTS performance for the team in one
+   view. Cards are auto-grid: as many across as will fit at ~340px each.
+   ============================================================ */
+.tm-stats-multi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.tm-stats-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.tm-stats-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+.tm-stats-card-cars {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-2);
+  letter-spacing: 0.04em;
+}
+.tm-stats-card-body {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.tm-stats-card-body .tm-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+}
+.tm-stats-card-body .tm-stat .k {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+}
+.tm-stats-card-body .tm-stat .v {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+@media (max-width: 767.98px) {
+  .tm-stats-card-body { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .tm-stats-card-body .tm-stat .v { font-size: 13px; }
+}
+
+/* ============================================================
+   Historical drivers table — wins + standings rank pills
+   Conditional formatting so a championship year (P1 standings) reads
+   gold and a year with multiple wins also pops gold. Same tier scheme
+   as the heatmap so the visual story is consistent across the app.
+   ============================================================ */
+.rank-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 32px;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+.rank-pill.ph-win   { background: rgba(255,200,50,0.85); color: #2a1d00; box-shadow: 0 0 6px rgba(255,200,50,0.45); }
+.rank-pill.ph-t5    { background: rgba(50,230,100,0.55); color: #00140a; }
+.rank-pill.ph-t10   { background: rgba(50,230,100,0.18); color: #a7f0bc; }
+.rank-pill.ph-mid   { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.rank-pill.ph-down  { background: rgba(255,70,70,0.22); color: #ffc2c2; }
+.rank-pill.ph-bot   { background: rgba(255,70,70,0.55); color: #230707; }
+.wins-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255,200,50,0.30);
+  color: #ffd166;
+  min-width: 24px;
+  text-align: center;
+}
+.wins-pill.wins-many {
+  background: rgba(255,200,50,0.85);
+  color: #2a1d00;
+  box-shadow: 0 0 6px rgba(255,200,50,0.45);
 }
