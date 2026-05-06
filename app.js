@@ -36,7 +36,7 @@ const STATE = {
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team"];
+const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team", "cc"];
 
 // ============================================================
 // BOOT
@@ -523,6 +523,14 @@ function parseHash() {
     STATE.lastHash = location.hash;
     return;
   }
+  // Crew chief route: #/cc/<slug> — landing page for a crew chief
+  if (view === "cc") {
+    stashPrev("cc");
+    STATE.view = "cc";
+    STATE.cc = { slug: h[1] || null };
+    STATE.lastHash = location.hash;
+    return;
+  }
   // Profile routes: #/profile/<slug> or #/car/<number> (legacy)
   // Both legacy routes are TREATED AS LOCKED — the entire app is now driver-
   // centric, and even when entered via car-number, we want the picker to be
@@ -930,7 +938,7 @@ function wireUIControls() {
     location.hash = `#/${prev}`;
   });
   // Race / Track / Schedule / Team back: same logic as profile-back.
-  ["race-back", "track-back", "schedule-back", "team-back"].forEach(id => {
+  ["race-back", "track-back", "schedule-back", "team-back", "cc-back"].forEach(id => {
     document.getElementById(id)?.addEventListener("click", (e) => {
       e.preventDefault();
       if (STATE.prevHash && STATE.prevHash !== location.hash) {
@@ -1103,7 +1111,7 @@ const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatm
 const TAKEOVER_VIEWS = ["playoffs"];
 // Center-column takeovers — these hide tab-body and live in the center pane,
 // alongside left (standings) and right (form) panels.
-const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team"];
+const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -1133,6 +1141,7 @@ function render() {
       playoffs: "Playoff Picture",
       profile: "Driver Profile",
       team: "Team",
+      cc: "Crew Chief",
     };
     pageTitleEl.textContent = titleMap[STATE.view] || "NASCAR Points";
   }
@@ -1149,7 +1158,8 @@ function render() {
   const lockedProfile = STATE.view === "profile"
     && STATE.profile && STATE.profile.locked;
   const onTeam = STATE.view === "team";
-  const navLocked = lockedProfile || onTeam;
+  const onCC = STATE.view === "cc";
+  const navLocked = lockedProfile || onTeam || onCC;
   if (seriesSwitcher) seriesSwitcher.classList.toggle("locked", navLocked);
   if (seasonPicker)   seasonPicker.classList.toggle("locked", navLocked);
   if (racePicker)     racePicker.classList.toggle("locked", navLocked);
@@ -1167,12 +1177,14 @@ function render() {
   const trackTakeover   = document.getElementById("track-takeover");
   const schedTakeover   = document.getElementById("schedule-takeover");
   const teamTakeover    = document.getElementById("team-takeover");
+  const ccTakeover      = document.getElementById("cc-takeover");
   const tabBody         = document.getElementById("tab-body");
   if (profileTakeover) profileTakeover.hidden = (STATE.view !== "profile");
   if (raceTakeover)    raceTakeover.hidden    = (STATE.view !== "race");
   if (trackTakeover)   trackTakeover.hidden   = (STATE.view !== "track");
   if (schedTakeover)   schedTakeover.hidden   = (STATE.view !== "schedule");
   if (teamTakeover)    teamTakeover.hidden    = (STATE.view !== "team");
+  if (ccTakeover)      ccTakeover.hidden      = (STATE.view !== "cc");
   if (tabBody)         tabBody.hidden         = inCenterTakeover;
 
   // Tab-panel visibility. Default to "arc" when the URL doesn't point to a
@@ -1211,6 +1223,8 @@ function render() {
       renderSchedulePage();
     } else if (STATE.view === "team") {
       renderTeamPage();
+    } else if (STATE.view === "cc") {
+      renderCrewChiefPage();
     } else {
       // Render the active tab's content
       switch (activeTab) {
@@ -4815,6 +4829,47 @@ function renderProfile() {
     ? `<span class="profile-hero-bio">${bioParts.join(" · ")}</span>`
     : "";
 
+  // Current crew chief — for driver profiles we look up the CC named most
+  // recently for THIS driver (this season). Tenure: count consecutive seasons
+  // with the same CC by walking SEASON_CACHE backward from current year.
+  let ccLine = "";
+  const driverSlugForCC = (kind === "driver")
+    ? (STATE.profile && STATE.profile.slug)
+    : slugify(primaryDrv);
+  const currentCC = currentCrewChiefForDriver(driverSlugForCC);
+  if (currentCC) {
+    // Compute tenure by walking SEASON_CACHE for this driver, year by year
+    // backwards, counting how many continuous seasons their CC was the same.
+    const ccSlug = slugify(currentCC);
+    let tenureStartYear = STATE.season;
+    const yrs = Object.keys(SEASON_CACHE).map(Number)
+      .filter(y => y <= STATE.season).sort((a, b) => b - a);
+    for (const y of yrs) {
+      const blocks = SEASON_CACHE[y];
+      if (!blocks) continue;
+      let foundDifferent = false, foundSame = false;
+      ["NCS", "NOS", "NTS"].forEach(sCode => {
+        const block = blocks[sCode];
+        if (!block || !block.races) return;
+        block.races.forEach(race => {
+          (race.results || []).forEach(d => {
+            if (d.ineligible) return;
+            if (slugify(d.driver || "") !== driverSlugForCC) return;
+            if (!d.crew_chief) return;
+            if (slugify(d.crew_chief) === ccSlug) foundSame = true;
+            else foundDifferent = true;
+          });
+        });
+      });
+      if (foundDifferent) break;       // found a year w/ different CC
+      if (foundSame) tenureStartYear = y;   // year confirmed same CC
+    }
+    const tenureSpan = (tenureStartYear < STATE.season)
+      ? `<span class="muted">(since ${tenureStartYear})</span>`
+      : "";
+    ccLine = `<span class="profile-hero-cc">CC: <a class="profile-link" href="#/cc/${ccSlug}">${escapeHTML(currentCC)}</a> ${tenureSpan}</span>`;
+  }
+
   // Career totals panel: works for both driver and car profiles.
   // Car profiles label it explicitly as being the primary driver's career.
   const careerPanelHTML = (bio && bio.career && Object.keys(bio.career).length > 0)
@@ -4838,6 +4893,7 @@ function renderProfile() {
         <div class="profile-hero-meta">
           ${renderTeamPill(teamCode, /*clickable=*/true)}
           <span class="profile-hero-team"><strong>${escapeHTML(mfr)}</strong> · <a href="#/team/${encodeURIComponent(teamCode)}" class="profile-team-link">${escapeHTML(teamName)}</a></span>
+          ${ccLine}
           ${bioLine}
         </div>
       </div>
@@ -4911,6 +4967,7 @@ function renderProfile() {
                 <th>R</th>
                 <th>Track</th>
                 <th>Race</th>
+                <th>Crew Chief</th>
                 <th class="num">Start</th>
                 <th class="num">Finish</th>
                 <th class="num">S1</th>
@@ -5260,16 +5317,45 @@ function paintProfileHeatStrip(rows) {
 function paintProfileRaceTable(rows, kind) {
   const tbody = document.getElementById("profile-race-tbody");
   if (!tbody) return;
+  // Build a per-round CC lookup. For driver profiles, look up the CC named
+  // for this driver in each race. For owner/car profiles, the CC is whoever
+  // led the car, which we can pull straight from results matched on car_number.
+  const ccByRound = new Map();
+  if (STATE.data && STATE.data.races) {
+    const slug = STATE.profile && STATE.profile.kind === "driver"
+      ? STATE.profile.slug : null;
+    STATE.data.races.forEach(race => {
+      if (!race || race.round == null) return;
+      let ccName = null;
+      if (slug) {
+        const hit = (race.results || []).find(d =>
+          !d.ineligible && slugify(d.driver || "") === slug
+        );
+        ccName = hit ? hit.crew_chief : null;
+      } else {
+        // Owner/car kind — match by car_number on the row's stored value
+        // (rows[i].car_number is on the entity, not the row, so fall through
+        // to first non-ineligible result with a CC; simpler heuristic).
+        const hit = (race.results || []).find(d =>
+          !d.ineligible && d.crew_chief
+        );
+        ccName = hit ? hit.crew_chief : null;
+      }
+      if (ccName) ccByRound.set(race.round, ccName);
+    });
+  }
+
   tbody.innerHTML = rows.map(r => {
     const trackDisplay = escapeHTML(prettyTrack(r.track_code, r.track));
     const trackLink = r.track_code
       ? `<a class="rc-track-link" href="#/track/${escapeHTML(r.track_code)}"><strong>${escapeHTML(r.track_code)}</strong> · ${trackDisplay}</a>`
       : `<strong>${escapeHTML(r.track_code || '')}</strong> · ${trackDisplay}`;
     if (r.dns) {
+      // 9 columns to span: Race, CC, Start, Finish, S1, S2, FL, Fin, Total
       return `<tr style="opacity:0.4">
         <td class="rnd">R${r.round}</td>
         <td class="track">${trackLink}</td>
-        <td colspan="8" style="color:var(--dim);font-style:italic">DNS</td>
+        <td colspan="9" style="color:var(--dim);font-style:italic">DNS</td>
       </tr>`;
     }
     let cls = "f-normal";
@@ -5278,10 +5364,16 @@ function paintProfileRaceTable(rows, kind) {
     else if (r.finish <= 10) cls = "f-t10";
     else if (r.finish > 25) cls = "f-bad";
     const driverNote = (kind === "owner" && r.driver) ? `<div class="race-driver-tag">${escapeHTML(r.driver)}</div>` : "";
+    // Crew chief cell — link to #/cc/<slug> if we have it
+    const ccName = ccByRound.get(r.round);
+    const ccCell = ccName
+      ? `<a class="profile-link" href="#/cc/${slugify(ccName)}">${escapeHTML(ccName)}</a>`
+      : `<span class="muted">—</span>`;
     return `<tr>
       <td class="rnd">R${r.round}</td>
       <td class="track">${trackLink}${driverNote}</td>
       <td style="color:var(--muted)">${escapeHTML(r.name || '')}</td>
+      <td>${ccCell}</td>
       <td class="num">${r.start ?? '—'}</td>
       <td class="num"><span class="finish-badge ${cls}">${r.finish ?? '—'}</span></td>
       <td class="num">${r.s1 || '—'}</td>
@@ -5292,11 +5384,12 @@ function paintProfileRaceTable(rows, kind) {
     </tr>`;
   }).join("");
 
-  // Mobile collapse — keep R (0), Track (1), Finish (4), Total (9).
-  // Hide Name, Start, S1, S2, FL, Fin pts.
+  // Mobile collapse — keep R(0), Track(1), Finish(5), Total(10).
+  // Hide Name(2), CC(3), Start(4), S1(6), S2(7), FL(8), Fin(9). Indices
+  // shifted by +1 from before since CC inserted at column 3.
   const table = tbody.closest("table.profile-race-table");
-  if (table) applyMobileTableCollapse(table, [0, 1, 4, 9], {
-    2: "Race", 3: "Start", 5: "S1", 6: "S2", 7: "FL", 8: "Fin pts"
+  if (table) applyMobileTableCollapse(table, [0, 1, 5, 10], {
+    2: "Race", 3: "Crew Chief", 4: "Start", 6: "S1", 7: "S2", 8: "FL", 9: "Fin pts"
   });
 }
 
@@ -7369,6 +7462,8 @@ function renderTeamPage() {
       </div>
     </div>
 
+    ${renderTeamCrewChiefsCard(currentCars)}
+
     <div class="card rc-card rc-card-wide has-sticky-thead">
       <div class="rc-card-head">
         <span class="rc-card-title">Historical drivers</span>
@@ -7388,6 +7483,41 @@ function renderTeamPage() {
         if (STATE.view === "team") renderTeamPage();
       });
   }
+}
+
+// Render the "Crew Chiefs" card on a team page. For each current car, finds
+// the current CC and links to their CC profile. Hidden if no CC data
+// available (pre-backfill state, or non-current series).
+function renderTeamCrewChiefsCard(currentCars) {
+  if (!currentCars || currentCars.length === 0) return "";
+  const rows = currentCars.map(e => {
+    const drvSlug = slugify(e.primaryDriver || e.driver || "");
+    const ccName = currentCrewChiefForDriver(drvSlug);
+    if (!ccName) return null;
+    const carHex = colorFor(STATE.series, e.car_number);
+    const carTxt = contrastTextFor(carHex);
+    const drvName = e.primaryDriver || e.driver;
+    return `<a class="tm-cc-row profile-link" href="#/cc/${slugify(ccName)}">
+      <div class="tm-cc-car" style="background:${carHex};color:${carTxt}">${e.car_number}</div>
+      <div class="tm-cc-body">
+        <div class="tm-cc-name">${escapeHTML(ccName)}</div>
+        <div class="tm-cc-driver muted">${escapeHTML(drvName)}</div>
+      </div>
+      <div class="tm-cc-arrow">→</div>
+    </a>`;
+  }).filter(Boolean);
+
+  if (rows.length === 0) return "";   // no CC data yet for any car
+
+  return `<div class="card rc-card rc-card-wide">
+    <div class="rc-card-head">
+      <span class="rc-card-title">Crew Chiefs</span>
+      <span class="rc-card-sub">click for career stats</span>
+    </div>
+    <div class="rc-card-body tm-cc-body-wrap">
+      ${rows.join("")}
+    </div>
+  </div>`;
 }
 
 // Aggregate team's drivers across all loaded seasons. Returns an array of
@@ -7548,6 +7678,333 @@ function renderTeamHistoryTable(rows, teamCode) {
     </tr></thead>
     <tbody>${body}</tbody>
   </table>`;
+}
+
+
+// ============================================================
+// CREW CHIEF PAGE  (#/cc/<slug>)
+// ============================================================
+// Crew chief data lives on each per-race result row as `crew_chief`. We
+// build career stats by walking SEASON_CACHE and aggregating across every
+// race a CC is named on. Same lazy-load pattern as driver profiles —
+// background-load missing seasons and re-render when each batch lands.
+//
+// Slug ↔ name conversion: we use the same slugify() as drivers since CCs
+// are also human names. An index of slug → canonical name is built on the
+// fly; the page title uses the most-frequent capitalization seen in data.
+
+// Crew-chief-by-driver lookup for the CURRENT (year, series) — used by
+// driver-profile sidebar. Returns the CC name if any race in this season
+// shows the driver paired with one. Falls back to most-recent race's CC.
+function currentCrewChiefForDriver(driverSlug) {
+  if (!driverSlug || !STATE.data) return null;
+  const races = (STATE.data.races || [])
+    .slice()
+    .sort((a, b) => (b.round || 0) - (a.round || 0)); // newest first
+  for (const race of races) {
+    for (const d of race.results || []) {
+      if (d.ineligible) continue;
+      if (slugify(d.driver || "") !== driverSlug) continue;
+      if (d.crew_chief) return d.crew_chief;
+    }
+  }
+  return null;
+}
+
+// Per-race CC for a driver across a single season. Returns array of
+// { round, track_code, cc_name, cc_slug }. Used for the per-race CC column
+// on the profile race table.
+function crewChiefRowsForDriver(driverSlug, races) {
+  if (!driverSlug || !races) return [];
+  return races.map(race => {
+    const hit = (race.results || []).find(d =>
+      !d.ineligible && slugify(d.driver || "") === driverSlug
+    );
+    if (!hit || !hit.crew_chief) return null;
+    return {
+      round: race.round,
+      track_code: race.track_code,
+      cc_name: hit.crew_chief,
+      cc_slug: slugify(hit.crew_chief),
+    };
+  }).filter(Boolean);
+}
+
+// Career CC partnerships for a driver: list of { cc_name, cc_slug, years
+// (Set), starts, wins } sorted by starts desc. Multi-year stints with the
+// same CC collapse into a single row. Walks all loaded SEASON_CACHE years.
+function crewChiefHistoryForDriver(driverSlug) {
+  if (!driverSlug) return [];
+  const map = new Map();   // cc_slug → { cc_name, years, starts, wins }
+  Object.keys(SEASON_CACHE).forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    ["NCS", "NOS", "NTS"].forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block || !block.races) return;
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          if (slugify(d.driver || "") !== driverSlug) return;
+          if (!d.crew_chief) return;
+          const slug = slugify(d.crew_chief);
+          let rec = map.get(slug);
+          if (!rec) {
+            rec = { cc_name: d.crew_chief, cc_slug: slug,
+                    years: new Set(), seriesSet: new Set(),
+                    starts: 0, wins: 0 };
+            map.set(slug, rec);
+          }
+          rec.years.add(parseInt(year, 10));
+          rec.seriesSet.add(sCode);
+          rec.starts++;
+          if (d.finish_pos === 1) rec.wins++;
+        });
+      });
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => b.starts - a.starts);
+}
+
+// Career stats for a crew chief (called from #/cc/<slug>). Walks every
+// loaded year × series and builds:
+//   - starts, wins, top5, top10, championships (year-end #1 driver count)
+//   - drivers worked with (slug → { name, starts, wins, years })
+//   - per-year breakdown (year → { series, starts, wins, partner_drivers })
+function crewChiefStats(ccSlug) {
+  const result = {
+    name: null, slug: ccSlug,
+    starts: 0, wins: 0, top5: 0, top10: 0,
+    championships: 0,
+    finishes: [],
+    drivers: new Map(),     // driver_slug → { name, starts, wins, years (Set) }
+    perYear: new Map(),     // year → { series_set, starts, wins, drivers (Set), best_rank }
+    seriesSet: new Set(),
+  };
+
+  const yrs = Object.keys(SEASON_CACHE).map(Number).sort((a, b) => a - b);
+  yrs.forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    ["NCS", "NOS", "NTS"].forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block || !block.races) return;
+      // For championship counting: year-end #1 driver from canonical standings
+      const finalStandings = block.final_standings || [];
+      const championDriverNorm = finalStandings.length
+        ? (finalStandings[0].driver || "").toLowerCase().replace(/[^a-z]/g, "")
+        : null;
+      let championPartneredWithThisCC = false;
+
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          if (!d.crew_chief) return;
+          if (slugify(d.crew_chief) !== ccSlug) return;
+          if (!result.name) result.name = d.crew_chief;
+          result.starts++;
+          result.seriesSet.add(sCode);
+          if (d.finish_pos === 1) result.wins++;
+          if (d.finish_pos != null) {
+            result.finishes.push(d.finish_pos);
+            if (d.finish_pos <= 5) result.top5++;
+            if (d.finish_pos <= 10) result.top10++;
+          }
+          // Driver tracking
+          const drvSlug = slugify(d.driver || "");
+          let drv = result.drivers.get(drvSlug);
+          if (!drv) {
+            drv = { name: d.driver, slug: drvSlug,
+                    starts: 0, wins: 0, years: new Set() };
+            result.drivers.set(drvSlug, drv);
+          }
+          drv.starts++;
+          drv.years.add(year);
+          if (d.finish_pos === 1) drv.wins++;
+          // Per-year tracking
+          let yr = result.perYear.get(year);
+          if (!yr) {
+            yr = { series_set: new Set(), starts: 0, wins: 0,
+                   drivers: new Set(), top5: 0, top10: 0 };
+            result.perYear.set(year, yr);
+          }
+          yr.series_set.add(sCode);
+          yr.starts++;
+          yr.drivers.add(drvSlug);
+          if (d.finish_pos === 1) yr.wins++;
+          if (d.finish_pos != null && d.finish_pos <= 5) yr.top5++;
+          if (d.finish_pos != null && d.finish_pos <= 10) yr.top10++;
+          // Championship check: did THIS CC's driver win the title?
+          if (championDriverNorm) {
+            const drvNorm = (d.driver || "").toLowerCase().replace(/[^a-z]/g, "");
+            if (drvNorm === championDriverNorm) championPartneredWithThisCC = true;
+          }
+        });
+      });
+      if (championPartneredWithThisCC) result.championships++;
+    });
+  });
+
+  result.avgFinish = result.finishes.length
+    ? result.finishes.reduce((s, x) => s + x, 0) / result.finishes.length
+    : null;
+  result.bestFinish = result.finishes.length ? Math.min(...result.finishes) : null;
+  return result;
+}
+
+function renderCrewChiefPage() {
+  const host = document.getElementById("cc-host");
+  if (!host) return;
+
+  const ccSlug = STATE.cc && STATE.cc.slug;
+  const titleEl = document.getElementById("cc-title");
+  const subEl = document.getElementById("cc-sub");
+  if (!ccSlug) {
+    if (titleEl) titleEl.textContent = "Crew chief not specified";
+    if (subEl) subEl.textContent = "—";
+    host.innerHTML = `<div class="empty">No crew chief in URL.</div>`;
+    return;
+  }
+
+  const stats = crewChiefStats(ccSlug);
+  const displayName = stats.name || ccSlug.split("-").map(s =>
+    s.charAt(0).toUpperCase() + s.slice(1)
+  ).join(" ");
+  if (titleEl) titleEl.textContent = displayName;
+  if (subEl) subEl.textContent = stats.starts > 0
+    ? `${stats.starts} starts · ${stats.seriesSet.size} series · ${stats.perYear.size} seasons`
+    : "loading career data…";
+
+  if (stats.starts === 0) {
+    host.innerHTML = `
+      <div class="empty" style="padding:24px;">
+        <div>Loading career data for ${escapeHTML(displayName)}…</div>
+        <div class="muted" style="margin-top:8px;font-size:11px;">
+          If this stays empty, this crew chief may not appear in any loaded season yet.
+        </div>
+      </div>`;
+    // Trigger a load of any missing years
+    const allYears = Object.keys(SEASON_CACHE).map(Number);
+    const missing = (STATE.seasonsAvailable || []).filter(y => !allYears.includes(y));
+    if (missing.length > 0) {
+      Promise.all(missing.slice(0, 8).map(y => loadSeasonIntoCache(y)))
+        .then(() => {
+          if (STATE.view === "cc") renderCrewChiefPage();
+        });
+    }
+    return;
+  }
+
+  // Top stat tiles
+  const winPct = stats.starts > 0
+    ? ((stats.wins / stats.starts) * 100).toFixed(1) + "%"
+    : "—";
+  const topStats = `
+    <div class="tm-stats-row">
+      <div class="tm-stat"><span class="k">Starts</span><span class="v">${stats.starts}</span></div>
+      <div class="tm-stat"><span class="k">Wins</span><span class="v">${stats.wins}</span></div>
+      <div class="tm-stat"><span class="k">Win %</span><span class="v">${winPct}</span></div>
+      <div class="tm-stat"><span class="k">Top 5</span><span class="v">${stats.top5}</span></div>
+      <div class="tm-stat"><span class="k">Top 10</span><span class="v">${stats.top10}</span></div>
+      <div class="tm-stat"><span class="k">Championships</span><span class="v ${stats.championships > 0 ? 'hot' : ''}">${stats.championships}</span></div>
+      <div class="tm-stat"><span class="k">Avg Finish</span><span class="v">${stats.avgFinish ? stats.avgFinish.toFixed(1) : '—'}</span></div>
+      <div class="tm-stat"><span class="k">Best</span><span class="v">P${stats.bestFinish ?? '—'}</span></div>
+    </div>`;
+
+  // Drivers worked with — sorted by starts desc
+  const driversList = Array.from(stats.drivers.values())
+    .sort((a, b) => b.starts - a.starts);
+  const driversBody = driversList.map(d => {
+    const yrs = Array.from(d.years).sort((a, b) => a - b);
+    const yrSpan = yrs.length === 1 ? `${yrs[0]}` : `${yrs[0]}-${yrs[yrs.length - 1]}`;
+    return `<tr>
+      <td><a class="profile-link" href="#/driver/${d.slug}">${escapeHTML(d.name)}</a></td>
+      <td class="num">${d.starts}</td>
+      <td class="num">${d.wins}</td>
+      <td>${yrSpan}</td>
+    </tr>`;
+  }).join("");
+
+  // Per-year breakdown — newest first
+  const yearsSorted = Array.from(stats.perYear.keys()).sort((a, b) => b - a);
+  const yearRows = yearsSorted.map(year => {
+    const y = stats.perYear.get(year);
+    const seriesTags = Array.from(y.series_set).sort().map(s =>
+      `<span class="series-tag series-${s.toLowerCase()}">${s}</span>`
+    ).join(" ");
+    const drvNames = Array.from(y.drivers).map(slug => {
+      const d = stats.drivers.get(slug);
+      return d ? d.name : slug;
+    }).join(", ");
+    return `<tr>
+      <td><strong>${year}</strong></td>
+      <td>${seriesTags}</td>
+      <td>${escapeHTML(drvNames)}</td>
+      <td class="num">${y.starts}</td>
+      <td class="num">${y.wins}</td>
+      <td class="num">${y.top5}</td>
+      <td class="num">${y.top10}</td>
+    </tr>`;
+  }).join("");
+
+  host.innerHTML = `
+    <div class="rc-hero" style="border-left: 4px solid var(--accent);">
+      <div class="rc-hero-track">${escapeHTML(displayName)}</div>
+      <div class="rc-hero-meta">
+        Crew chief · ${stats.perYear.size} season${stats.perYear.size === 1 ? "" : "s"} ·
+        ${stats.drivers.size} driver${stats.drivers.size === 1 ? "" : "s"} ·
+        ${Array.from(stats.seriesSet).sort().join(", ")}
+      </div>
+    </div>
+    ${topStats}
+    <div class="card rc-card rc-card-wide">
+      <div class="rc-card-head">
+        <span class="rc-card-title">Drivers</span>
+        <span class="rc-card-sub">all drivers this CC worked with</span>
+      </div>
+      <div class="rc-card-body" style="padding:0;">
+        <table class="data-table">
+          <thead><tr>
+            <th>Driver</th>
+            <th class="num">Starts</th>
+            <th class="num">Wins</th>
+            <th>Years</th>
+          </tr></thead>
+          <tbody>${driversBody}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card rc-card rc-card-wide has-sticky-thead">
+      <div class="rc-card-head">
+        <span class="rc-card-title">Season-by-season</span>
+        <span class="rc-card-sub">${yearsSorted.length} season${yearsSorted.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="rc-card-body" style="padding:0;">
+        <table class="data-table tm-history-table">
+          <thead><tr>
+            <th>Year</th>
+            <th>Series</th>
+            <th>Driver(s)</th>
+            <th class="num">Starts</th>
+            <th class="num">Wins</th>
+            <th class="num">T5</th>
+            <th class="num">T10</th>
+          </tr></thead>
+          <tbody>${yearRows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // Lazy-load any missing seasons + re-render when done
+  const allYears = Object.keys(SEASON_CACHE).map(Number);
+  const missing = (STATE.seasonsAvailable || []).filter(y => !allYears.includes(y));
+  if (missing.length > 0) {
+    Promise.all(missing.slice(0, 8).map(y => loadSeasonIntoCache(y)))
+      .then(() => {
+        if (STATE.view === "cc") renderCrewChiefPage();
+      });
+  }
 }
 
 

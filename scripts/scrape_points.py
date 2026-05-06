@@ -141,6 +141,7 @@ class DriverRace:
     race_pts: int = 0
     ineligible: bool = False
     status: str = ""
+    crew_chief: Optional[str] = None   # "Chad Knaus", "Rodney Childers", etc. — None if column missing
 
 
 @dataclass
@@ -406,6 +407,19 @@ def parse_race(race_url: str, series_code: str, round_num: int,
         # Resolve 3-letter team code from owner string (falls back to car-number map)
         team_code = resolve_team_code(team, series_key=series_code, car_number=car)
 
+        # Crew chief — RR's column header has varied slightly over the years.
+        # "Crew Chief" is the modern standard; some old pages use "C. Chief".
+        # If absent, leave None (pre-2001 pages may not have it; pages where
+        # parsing fails just won't populate the field).
+        cc_raw = cell(tds, "Crew Chief", "C. Chief", "CC", "Chief")
+        crew_chief = cc_raw.strip() if cc_raw else None
+        # RR sometimes puts asterisks/daggers on CC names too (relief CCs etc.)
+        # Strip them so aggregation matches across rows.
+        if crew_chief:
+            crew_chief = re.sub(r"^[*†]\s*", "", crew_chief).strip()
+            if not crew_chief:
+                crew_chief = None
+
         dr = DriverRace(
             driver=driver, car_number=car, team=team, team_code=team_code,
             manufacturer=manufacturer_code(mfr_raw),
@@ -416,6 +430,7 @@ def parse_race(race_url: str, series_code: str, round_num: int,
             stage_2_pts=stage_pts(s2_pos),
             race_pts=pts or 0,
             ineligible=ineligible, status=status,
+            crew_chief=crew_chief,
         )
         race.results.append(dr)
 
