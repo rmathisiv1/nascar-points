@@ -301,8 +301,8 @@ def scrape_driver(scraper, name: str, rr_key: str, delay: float = 1.0) -> dict |
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--keys", default="data/driver_keys.json",
-                    help="Path to driver name→rr_key mapping")
+    ap.add_argument("--keys", default="driver_keys.json",
+                    help="Path to driver name→rr_key mapping (default: ./driver_keys.json at repo root)")
     ap.add_argument("--out", default="data/drivers.json",
                     help="Output file")
     ap.add_argument("--only", help="Only scrape this one driver (exact name)")
