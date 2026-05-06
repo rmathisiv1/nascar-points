@@ -1103,7 +1103,10 @@ function parseHash() {
   if (view === "track") {
     stashPrev("track");
     STATE.view = "track";
-    STATE.track = { code: (h[1] || "").toUpperCase() };
+    STATE.track = {
+      code: (h[1] || "").toUpperCase(),
+      seriesView: (STATE.track && STATE.track.seriesView) || STATE.series,
+    };
     STATE.lastHash = location.hash;
     return;
   }
@@ -7905,11 +7908,28 @@ function trackTypeLabel(code) {
 
 // Walk SEASON_CACHE + current data, return all races at this track in this
 // series, newest-first. Each race entry includes year, round, results.
+// Some tracks have shifted track_code across years due to scraper drift.
+// Map a canonical code to the set of historical aliases so lookups find
+// every race at that physical track regardless of which scrape touched it.
+// Same map used by lastWinnerAt() in the schedule renderer — keep them in
+// sync if you add more.
+const TRACK_CODE_ALIASES_LOOKUP = {
+  NSV: ["NSV", "NSH"],            // Nashville Superspeedway
+  NSH: ["NSV", "NSH"],            // (legacy code, same track)
+  FON: ["FON", "AUS", "CAL"],     // Fontana — pre-migration files use AUS or CAL
+  CAL: ["FON", "AUS", "CAL"],
+  AUS: ["AUS", "COTA"],           // COTA — newer files may use COTA
+};
+function trackCodesForLookup(canon) {
+  return TRACK_CODE_ALIASES_LOOKUP[canon] || [canon];
+}
+
 function collectTrackHistory(trackCode, series) {
   if (!trackCode) return [];
+  const codesToCheck = trackCodesForLookup(trackCode);
   const out = [];
   // Current season first
-  const curRaces = (STATE.data?.races || []).filter(r => r.track_code === trackCode);
+  const curRaces = (STATE.data?.races || []).filter(r => codesToCheck.includes(r.track_code));
   curRaces.forEach(r => out.push({ year: STATE.season, ...r }));
   // Then prior cached seasons, newest-first
   const years = Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a);
@@ -7917,7 +7937,7 @@ function collectTrackHistory(trackCode, series) {
     if (y === STATE.season) return;
     const block = SEASON_CACHE[y] && SEASON_CACHE[y][series];
     if (!block || !block.races) return;
-    block.races.filter(r => r.track_code === trackCode).forEach(r => {
+    block.races.filter(r => codesToCheck.includes(r.track_code)).forEach(r => {
       out.push({ year: y, ...r });
     });
   });
@@ -8164,21 +8184,12 @@ function renderSchedulePage() {
 
   // Build a lookup of "most recent winner at this track" — search current
   // year first, then prior years newest-first. Returns the winner row from
-  // the latest race we have at the given track_code.
-  //
-  // Some tracks are logged under multiple codes across years due to historical
-  // scraper drift (e.g. Nashville Superspeedway is NSV in modern data but
-  // earlier exports used NSH). The TRACK_CODE_ALIASES map below routes those
-  // legacy codes to the current canonical so the lookup still finds them.
-  const TRACK_CODE_ALIASES = {
-    NSV: ["NSV", "NSH"],            // Nashville Superspeedway
-    NSH: ["NSV", "NSH"],            // (legacy code, same track)
-    FON: ["FON", "AUS", "CAL"],     // Fontana — pre-migration files use AUS or CAL
-    AUS: ["AUS", "COTA"],           // COTA — newer files may use COTA
-  };
+  // the latest race we have at the given track_code. Uses the shared
+  // trackCodesForLookup helper to handle scraper-drift aliases (NSV/NSH,
+  // FON/AUS/CAL, AUS/COTA).
   function lastWinnerAt(trackCode) {
     if (!trackCode) return null;
-    const codesToCheck = TRACK_CODE_ALIASES[trackCode] || [trackCode];
+    const codesToCheck = trackCodesForLookup(trackCode);
     // Current season — only completed races
     const curRun = (STATE.data?.races || [])
       .filter(r => codesToCheck.includes(r.track_code) && (r.results || []).length > 0)
@@ -8251,15 +8262,22 @@ function renderTrackPage() {
     return;
   }
 
-  // Background-load up to 10 prior years for this series
-  const seasonsToLoad = [];
-  for (let y = STATE.season - 1; y >= STATE.season - 10 && y >= 2014; y--) {
-    seasonsToLoad.push(y);
-  }
-  const allLoaded = seasonsToLoad.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]);
+  // Series this track page is viewing — defaults to the user's current
+  // series but can be changed via the per-page toggle without leaving the
+  // track view (since the topbar series switcher is locked while inside
+  // a takeover).
+  const tSeries = (STATE.track && STATE.track.seriesView) || STATE.series;
+
+  // Background-load every prior year we have data for so the "All Races
+  // at this track" history is complete. NCS and NOS have data back to 2001;
+  // truck has less. Walks STATE.seasonsAvailable to find what's loadable.
+  const seasonsToLoad = (STATE.seasonsAvailable || [])
+    .filter(y => y < STATE.season);
+  const allLoaded = seasonsToLoad.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][tSeries]);
   if (!allLoaded) {
     Promise.all(seasonsToLoad
-      .filter(y => !(SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]))
+      .filter(y => !(SEASON_CACHE[y] && SEASON_CACHE[y][tSeries]))
+      .slice(0, 12)   // batch to avoid stampeding the server
       .map(y => loadSeasonIntoCache(y))
     ).then(() => {
       if (STATE.view === "track") renderTrackPage();
@@ -8267,7 +8285,7 @@ function renderTrackPage() {
   }
 
   // Gather all races at this track across loaded years
-  const history = collectTrackHistory(code, STATE.series);
+  const history = collectTrackHistory(code, tSeries);
   const trackName = history[0]?.track || code;
   const trackTypeStr = trackTypeLabel(history[0]?.track_code) || "";
 
@@ -8470,11 +8488,30 @@ function renderTrackPage() {
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-head">
         <span class="rc-card-title">All Races at ${escapeHTML(trackName)}</span>
-        <span class="rc-card-sub">newest first</span>
+        <div class="rc-card-controls">
+          <div class="toggle-group mini" id="track-series-toggle" role="tablist" aria-label="Series filter">
+            <button class="${tSeries === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
+            <button class="${tSeries === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
+            <button class="${tSeries === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
+          </div>
+          <span class="rc-card-sub">newest first</span>
+        </div>
       </div>
       <div class="rc-card-body" style="padding:0;">${histTableHTML}</div>
     </div>
   `;
+
+  // Wire the series toggle. Updates STATE.track.seriesView and re-renders
+  // — the lazy-load logic at the top will fetch any missing data for
+  // the new series automatically.
+  document.getElementById("track-series-toggle")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    const newSeries = btn.dataset.srs;
+    if (!newSeries || newSeries === tSeries) return;
+    STATE.track.seriesView = newSeries;
+    renderTrackPage();
+  });
 }
 
 // Render the "this season's winner at this track" hero card. If multiple races

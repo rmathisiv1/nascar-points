@@ -5640,3 +5640,11 @@ a.driver-cell.profile-link:hover .car-tag {
 .ph-cell-link:focus-visible {
   outline: 2px solid var(--accent);
 }
+
+/* Track page: card-head controls strip — keeps the title on the left and
+   the per-card series toggle + sub-text grouped on the right. */
+.rc-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
