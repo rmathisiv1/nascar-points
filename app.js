@@ -510,6 +510,7 @@ function parseHash() {
       slug: h[1] || null,
       preLockSeries: STATE.profile.preLockSeries,
       preLockSeason: STATE.profile.preLockSeason,
+      splitsRange: STATE.profile.splitsRange || "season",
       locked: true,
     };
     STATE.lastHash = location.hash;
@@ -547,6 +548,7 @@ function parseHash() {
       slug: h[1] || null,
       preLockSeries: STATE.profile.preLockSeries,
       preLockSeason: STATE.profile.preLockSeason,
+      splitsRange: STATE.profile.splitsRange || "season",
       locked: true,
     };
     STATE.lastHash = location.hash;
@@ -1014,12 +1016,21 @@ function wireUIControls() {
         const allYears = Object.keys(SEASON_CACHE).map(Number);
         const missing = (STATE.seasonsAvailable || []).filter(y => !allYears.includes(y));
         if (missing.length > 0) {
-          // Show a loading state in the title so the user knows it's working
-          if (titleEl) titleEl.textContent = `Career Track Splits  (loading ${missing.length} season${missing.length === 1 ? "" : "s"}…)`;
+          // Show a loading state in the title so the user knows it's working.
+          // Re-grab the element right before each write — re-renders may have
+          // replaced it since the click handler fired.
+          const t1 = document.getElementById("profile-track-splits-title");
+          if (t1) t1.textContent = `Career Track Splits  (loading ${missing.length} season${missing.length === 1 ? "" : "s"}…)`;
           Promise.all(missing.map(y => loadSeasonIntoCache(y)))
             .then(() => {
-              if (STATE.view !== "profile" || STATE.profile.splitsRange !== "career") return;
-              if (titleEl) titleEl.textContent = "Career Track Splits";
+              // Repaint as long as the user is still on a profile in career
+              // mode. We don't gate on STATE.profile.kind === "driver" since
+              // paintProfileTrackSplits derives the slug from the entity for
+              // car-routed profiles too.
+              if (STATE.view !== "profile") return;
+              if ((STATE.profile && STATE.profile.splitsRange) !== "career") return;
+              const t2 = document.getElementById("profile-track-splits-title");
+              if (t2) t2.textContent = "Career Track Splits";
               const e2 = findEntityFromSlug();
               if (e2) paintProfileTrackSplits(e2);
             });
@@ -5482,12 +5493,19 @@ function paintProfileTrackSplits(entity) {
   const host = document.getElementById("profile-track-splits");
   if (!host) return;
   // Pick season-only (entity.races) or career (cross-year SEASON_CACHE walk)
-  // based on the toggle. For non-driver profiles, career mode falls back to
-  // season since we can't reliably resolve a slug.
+  // based on the toggle. Career mode needs a driver slug — we prefer the
+  // explicit STATE.profile.slug (set by #/driver/<slug> routes) but fall
+  // back to deriving it from the entity's primary driver, which works for
+  // car-number profiles too. This is a behavior fix: previously kind !==
+  // "driver" silently rendered season data, making the Career button look
+  // broken on car-routed profiles.
   const mode = (STATE.profile && STATE.profile.splitsRange) || "season";
-  const driverSlug = STATE.profile && STATE.profile.kind === "driver"
-    ? STATE.profile.slug
-    : null;
+  let driverSlug = null;
+  if (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug) {
+    driverSlug = STATE.profile.slug;
+  } else if (entity && (entity.primaryDriver || entity.driver)) {
+    driverSlug = slugify(entity.primaryDriver || entity.driver);
+  }
   const splits = (mode === "career" && driverSlug)
     ? computeCareerTrackSplits(driverSlug)
     : computeTrackSplits(entity);
