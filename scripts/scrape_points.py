@@ -507,10 +507,16 @@ def _fetch_cc_page(cc_url: str) -> dict:
     any failure (network, missing table, parse error).
 
     Page layout (NASCAR Cup Series example):
-        NBR | DRIVER | OWNER | CAR | CREW CHIEF
+        Nbr | Driver | Owner | Car | Crew Chief
         1   | Ross Chastain | Trackhouse Racing | Chevrolet | Brandon McSwain
         2   | Austin Cindric | Roger Penske | Ford | Brian Wilson
         ...
+
+    NOTE: Racing-Reference's CC page collapses the table rows in a way
+    that BeautifulSoup's `tr` walker misreads — the entire data block ends
+    up in one logical row with hundreds of cells. So instead of iterating
+    rows, we flatten ALL `<td>` text in the table and walk it as a flat
+    sequence of 5-cell groups (Nbr, Driver, Owner, Car, Crew Chief).
     """
     try:
         html = fetch(cc_url)
@@ -519,68 +525,69 @@ def _fetch_cc_page(cc_url: str) -> dict:
         return {}
     soup = BeautifulSoup(html, "html.parser")
 
-    # Locate the CC table — it's the one whose header contains both
-    # "Crew Chief" (or close variant) and "Driver". Walk all tables since
-    # RR pages have a lot of layout cruft.
+    # Find the CC table — the one whose flattened text contains the
+    # "Crew Chiefs for this race" header. Walk all tables since RR pages
+    # have a lot of layout cruft.
     cc_table = None
     for tbl in soup.find_all("table"):
-        first_tr = tbl.find("tr")
-        if not first_tr:
-            continue
-        headers = [c.get_text(strip=True).lower()
-                   for c in first_tr.find_all(["th", "td"])]
-        # Match "crew chief" header (also tolerate spelling drift like
-        # "crew cheif" — yes, that exact typo appears on some RR pages
-        # as visible in the user's screenshot title!)
-        has_cc = any(("crew chief" in h or "crew cheif" in h or h == "cc")
-                     for h in headers)
-        has_driver = any("driver" in h for h in headers)
-        if has_cc and has_driver:
+        text = tbl.get_text(" ", strip=True).lower()
+        if "crew chiefs for this race" in text and "crew chief" in text:
             cc_table = tbl
             break
     if cc_table is None:
         return {}
 
-    # Build header→col index lookup
-    header_row = cc_table.find("tr")
-    header_cells = [c.get_text(strip=True).lower()
-                    for c in header_row.find_all(["th", "td"])]
-    col_idx = {h: i for i, h in enumerate(header_cells)}
+    # Flatten all <td> cells across the whole table into a flat list of
+    # text values. We skip the leading "wrapper" cells (the title cell
+    # and individual header cells "Nbr", "Driver", "Owner", "Car", "Crew
+    # Chief") by finding the first numeric cell and starting the data
+    # walk from there.
+    all_cells = [td.get_text(" ", strip=True)
+                 for td in cc_table.find_all(["td", "th"])]
 
-    def col_for(*names):
-        for n in names:
-            if n in col_idx:
-                return col_idx[n]
-        return None
-
-    nbr_i = col_for("nbr", "#", "no", "no.", "car", "car #")
-    drv_i = col_for("driver")
-    cc_i = col_for("crew chief", "crew cheif", "cc")
-    if drv_i is None or cc_i is None:
+    # Find where the data starts: first cell that's a pure number (car #).
+    # That's row 1's "Nbr" cell. Everything from that index onward is
+    # the data, in groups of 5: Nbr, Driver, Owner, Car, Crew Chief.
+    start_idx = None
+    for i, c in enumerate(all_cells):
+        # Car numbers are 1-3 digit strings, optionally with letters (66, 7A, etc.).
+        # Pure-digit match is enough for modern NASCAR.
+        if c.isdigit() and len(c) <= 3 and i + 4 < len(all_cells):
+            # Sanity: the next cell should look like a driver name (alphabetic),
+            # the cell 4 ahead should look like a CC name (also alphabetic).
+            next_cell = all_cells[i + 1]
+            cc_cell = all_cells[i + 4]
+            if (next_cell and any(ch.isalpha() for ch in next_cell)
+                    and cc_cell and any(ch.isalpha() for ch in cc_cell)):
+                start_idx = i
+                break
+    if start_idx is None:
         return {}
 
     cc_map = {}
-    for tr in cc_table.find_all("tr")[1:]:
-        tds = tr.find_all(["td", "th"])
-        if len(tds) <= cc_i:
+    i = start_idx
+    while i + 4 < len(all_cells):
+        car = all_cells[i].strip()
+        driver = all_cells[i + 1].strip()
+        # owner = all_cells[i + 2]   # unused
+        # mfr   = all_cells[i + 3]   # unused
+        cc_name = all_cells[i + 4].strip()
+        # Stop if we've left the data zone (cells become non-numeric or empty).
+        if not car or not car.replace("A", "").replace("B", "").isdigit():
+            # Not a numeric/alphanumeric car — we've gone past the table data
+            # into the trailing "A note about crew chief data:" text or similar.
+            break
+        if not driver or not cc_name:
+            i += 5
             continue
-        driver = tds[drv_i].get_text(" ", strip=True) if drv_i < len(tds) else ""
-        cc_name = tds[cc_i].get_text(" ", strip=True) if cc_i < len(tds) else ""
-        car = tds[nbr_i].get_text(" ", strip=True) if (nbr_i is not None and nbr_i < len(tds)) else ""
-        if not cc_name or not driver:
-            continue
-        # Strip relief-CC markers (* or †) — same as we do on the results page.
+        # Strip relief-CC markers
         cc_name = re.sub(r"^[*†]\s*", "", cc_name).strip()
         cc_name = re.sub(r"\s*[*†]\s*$", "", cc_name).strip()
-        if not cc_name:
-            continue
-        # Index by both keys so callers can match on whatever they have.
-        if car:
+        if cc_name:
             cc_map[(car, driver)] = cc_name
-            # Only set car-only key if not already present — so a primary
-            # driver's CC wins over a co-driver's if both share a car.
             cc_map.setdefault(car, cc_name)
-        cc_map[("__by_driver__", driver)] = cc_name
+            cc_map[("__by_driver__", driver)] = cc_name
+        i += 5
     return cc_map
 
 
