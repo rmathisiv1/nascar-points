@@ -504,7 +504,7 @@
             {
               "driver": "Ty Gibbs",
               "car_number": "54",
-              "team": "Monster Energy \u00e2\u20ac\u201c Interstate Batteries ( Joe Gibbs )",
+              "team": "Monster Energy â€“ Interstate Batteries ( Joe Gibbs )",
               "team_code": "JGR",
               "manufacturer": "TYT",
               "start_pos": 33,
@@ -744,7 +744,7 @@
             {
               "driver": "Erik Jones",
               "car_number": "43",
-              "team": "GUNS N\u00e2\u20ac\u2122 ROSES ( Legacy Motor Club )",
+              "team": "GUNS Nâ€™ ROSES ( Legacy Motor Club )",
               "team_code": "LMC",
               "manufacturer": "CHV",
               "start_pos": 25,
@@ -828,7 +828,7 @@
           "round": 2,
           "date": "2023-02-26",
           "track": "Auto Club Speedway",
-          "track_code": "AUS",
+          "track_code": "FON",
           "name": "Pala Casino 400",
           "time": "",
           "tv": "",
@@ -7439,7 +7439,7 @@
             {
               "driver": "Noah Gragson",
               "car_number": "42",
-              "team": "Wendy\u00e2\u20ac\u2122s Beef is in the Bag ( Legacy Motor Club )",
+              "team": "Wendyâ€™s Beef is in the Bag ( Legacy Motor Club )",
               "team_code": "LMC",
               "manufacturer": "CHV",
               "start_pos": 30,
@@ -17389,7 +17389,7 @@
             {
               "driver": "Christopher Bell",
               "car_number": "20",
-              "team": "Rheem / PSC Industries \u00e2\u20ac\u201c Johns Manville ( Joe Gibbs )",
+              "team": "Rheem / PSC Industries â€“ Johns Manville ( Joe Gibbs )",
               "team_code": "JGR",
               "manufacturer": "TYT",
               "start_pos": 7,
@@ -28024,7 +28024,7 @@
           "round": 2,
           "date": "2023-02-26",
           "track": "Auto Club Speedway",
-          "track_code": "AUS",
+          "track_code": "FON",
           "name": "Production Alliance Group 300",
           "time": "",
           "tv": "",
@@ -41870,7 +41870,7 @@
             {
               "driver": "Connor Mosack",
               "car_number": "19",
-              "team": "IRWIN\u00c2\u00ae TRADE STRONG\u00e2\u201e\u00a2 ( Joe Gibbs )",
+              "team": "IRWINÂ® TRADE STRONGâ„¢ ( Joe Gibbs )",
               "team_code": "JGR",
               "manufacturer": "TYT",
               "start_pos": 4,
@@ -51150,7 +51150,7 @@
             {
               "driver": "Mason Maggio",
               "car_number": "29",
-              "team": "\u2013",
+              "team": "–",
               "team_code": null,
               "manufacturer": "FRD",
               "start_pos": 30,
@@ -52025,7 +52025,7 @@
             {
               "driver": "Kyle Sieg",
               "car_number": "29",
-              "team": "\u2013",
+              "team": "–",
               "team_code": null,
               "manufacturer": "FRD",
               "start_pos": 28,
@@ -55873,7 +55873,7 @@
             {
               "driver": "Daniel Dye",
               "car_number": "43",
-              "team": "Dell Children\u00e2\u20ac\u2122s Medical Center / Nyle Maxwe ( Maury Gallagher )",
+              "team": "Dell Childrenâ€™s Medical Center / Nyle Maxwe ( Maury Gallagher )",
               "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 36,
