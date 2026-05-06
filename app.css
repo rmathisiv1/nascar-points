@@ -1241,12 +1241,20 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-variant-numeric: tabular-nums;
   min-width: 20px; text-align: center;
 }
-.heat-top   { background: rgba(50,230,100,0.55); color: #00140a; font-weight:700; }
-.heat-up    { background: rgba(50,230,100,0.20); color: #a7f0bc; }
-.heat-mid   { color: var(--dim); }
-.heat-down  { background: rgba(255, 70, 70,0.20); color: #ffc2c2; }
-.heat-bot   { background: rgba(255, 70, 70,0.55); color: #230707; font-weight:700; }
-.heat-none  { color: var(--dim); }
+/* Inline heat cells (form table, etc.) — 6-tier: win is gold/celebratory,
+   T5 bright green, T10 muted green, 11-20 neutral, 21-30 warm orange,
+   31+ red. The old .heat-top/.heat-up class names are kept as aliases for
+   backward compatibility — anything still using them maps to the new tiers. */
+.heat-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; font-weight: 800; box-shadow: 0 0 6px rgba(255,200,50,0.45); }
+.heat-t5   { background: rgba(50,230,100,0.55); color: #00140a; font-weight: 700; }
+.heat-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
+.heat-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.heat-down { background: rgba(220,140, 70,0.30); color: #f7c79a; }
+.heat-bot  { background: rgba(255, 70, 70,0.55); color: #230707; font-weight: 700; }
+.heat-none { color: var(--dim); }
+/* Backward-compat aliases — older class names still work but map to new tiers */
+.heat-top  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; font-weight: 800; box-shadow: 0 0 6px rgba(255,200,50,0.45); }
+.heat-up   { background: rgba(50,230,100,0.55); color: #00140a; font-weight: 700; }
 
 /* sparkline + form column */
 .form-wrap { display: inline-flex; align-items: center; gap: 6px; }
@@ -2368,12 +2376,18 @@ td.neg { color: #ff8a8a; }
 }
 .profile-heat-cell .r { font-size: 8px; opacity: 0.6; font-weight: 500; }
 .profile-heat-cell:hover { outline: 1px solid rgba(255,255,255,0.3); }
-.profile-heat-cell.heat-top { background: rgba(50,230,100,0.55); color: #00140a; }
-.profile-heat-cell.heat-up { background: rgba(50,230,100,0.20); color: #a7f0bc; }
-.profile-heat-cell.heat-mid { background: rgba(255,255,255,0.04); color: var(--text-2); }
-.profile-heat-cell.heat-down { background: rgba(255,70,70,0.20); color: #ffc2c2; }
-.profile-heat-cell.heat-bot { background: rgba(255,70,70,0.55); color: #230707; }
-.profile-heat-cell.heat-dns { background: rgba(255,255,255,0.02); color: var(--dim); font-style: italic; }
+/* New tier scheme — wins are gold/celebratory, T5 bright green, T10 muted
+   green, 11-20 neutral, 21-30 warm orange, 31+ deep red. */
+.profile-heat-cell.heat-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45), 0 0 8px rgba(255,200,50,0.35); }
+.profile-heat-cell.heat-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
+.profile-heat-cell.heat-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
+.profile-heat-cell.heat-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.profile-heat-cell.heat-down { background: rgba(220,140,70,0.30); color: #f7c79a; }
+.profile-heat-cell.heat-bot  { background: rgba(255,70,70,0.55); color: #230707; }
+.profile-heat-cell.heat-dns  { background: rgba(255,255,255,0.02); color: var(--dim); font-style: italic; }
+/* Backward-compat aliases */
+.profile-heat-cell.heat-top  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45), 0 0 8px rgba(255,200,50,0.35); }
+.profile-heat-cell.heat-up   { background: rgba(50,230,100,0.55); color: #00140a; }
 
 /* Track Splits panel */
 .profile-panel-head-right {
@@ -5091,14 +5105,22 @@ a.driver-cell.profile-link:hover .car-tag {
   background: rgba(255,255,255,0.02);
   border-radius: 2px;
 }
-.ph-cell.ph-top  { background: rgba(50,230,100,0.55); color: #00140a; }
-.ph-cell.ph-up   { background: rgba(50,230,100,0.20); color: #a7f0bc; }
-.ph-cell.ph-mid  { background: rgba(255,255,255,0.06); color: var(--text-2); }
-.ph-cell.ph-down { background: rgba(255,70,70,0.20); color: #ffc2c2; }
+/* Career heatmap tier mapping — wins are gold/celebratory (always pop),
+   T5 bright green, T10 muted green, 11-20 neutral, 21-30 warm orange,
+   31+ deep red. The old ph-top / ph-up class names are aliased below for
+   backward compat with any leftover references. */
+.ph-cell.ph-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45); }
+.ph-cell.ph-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
+.ph-cell.ph-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
+.ph-cell.ph-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.ph-cell.ph-down { background: rgba(220,140,70,0.30); color: #f7c79a; }
 .ph-cell.ph-bot  { background: rgba(255,70,70,0.55); color: #230707; }
 .ph-cell:hover {
   outline: 1px solid rgba(255,255,255,0.3);
 }
+/* Backward-compat aliases */
+.ph-cell.ph-top  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45); }
+.ph-cell.ph-up   { background: rgba(50,230,100,0.55); color: #00140a; }
 
 @media (max-width: 767.98px) {
   .ph-grid {

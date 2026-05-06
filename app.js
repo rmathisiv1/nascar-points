@@ -2528,9 +2528,13 @@ function renderFormTable() {
 }
 
 function heatCell(finish) {
+  // Same 6-tier scheme as the Career Heatmap and Finish Per Race:
+  // win = gold, T5 bright green, T10 muted green, 11-20 neutral,
+  // 21-30 warm, 31+ red.
   let cls = "heat-mid";
-  if (finish <= 5)  cls = "heat-top";
-  else if (finish <= 10) cls = "heat-up";
+  if (finish === 1) cls = "heat-win";
+  else if (finish <= 5) cls = "heat-t5";
+  else if (finish <= 10) cls = "heat-t10";
   else if (finish > 30)  cls = "heat-bot";
   else if (finish > 20)  cls = "heat-down";
   return `<span class="heat ${cls}">${finish}</span>`;
@@ -5994,11 +5998,15 @@ function paintProfileHeatStrip(rows) {
     if (r.dns) {
       return `<div class="profile-heat-cell heat-dns" data-round="${r.round}" data-dns="1"><span>—</span><span class="r">R${r.round}</span></div>`;
     }
+    // Tier mapping mirrors the Career Heatmap so colors are consistent
+    // across the page: wins are gold (always pop), T5 bright green, T10
+    // muted green, 11-20 neutral, 21-30 warm orange, 31+ red.
     let cls = "heat-mid";
-    if (r.finish === 1) cls = "heat-top";
-    else if (r.finish <= 5) cls = "heat-up";
-    else if (r.finish <= 10) cls = "heat-mid";
-    else if (r.finish <= 20) cls = "heat-down";
+    if (r.finish === 1) cls = "heat-win";
+    else if (r.finish <= 5) cls = "heat-t5";
+    else if (r.finish <= 10) cls = "heat-t10";
+    else if (r.finish <= 20) cls = "heat-mid";
+    else if (r.finish <= 30) cls = "heat-down";
     else cls = "heat-bot";
     return `<div class="profile-heat-cell ${cls}" data-round="${r.round}">${r.finish}<span class="r">R${r.round}</span></div>`;
   }).join("");
@@ -6415,12 +6423,20 @@ function paintProfileCareerHeatmap() {
   // Build the grid: header row of round labels + one row per (year, series).
   // Each cell's bg color follows the same finish-tier scheme as the season
   // heat strip: top1 = green, t5 light green, t10 dim, t20 muted, t25+ red.
+  // Tier mapping (6 levels):
+  //   1     = ph-win   gold/celebratory — wins always pop
+  //   2-5   = ph-t5    bright green
+  //   6-10  = ph-t10   muted green
+  //   11-20 = ph-mid   neutral (not red — these aren't bad days)
+  //   21-30 = ph-down  warm orange/brown
+  //   31+   = ph-bot   deep red (true bad day)
   const cellClass = (fin) => {
     if (fin == null) return "ph-cell-empty";
-    if (fin === 1) return "ph-cell ph-top";
-    if (fin <= 5) return "ph-cell ph-up";
-    if (fin <= 10) return "ph-cell ph-mid";
-    if (fin <= 20) return "ph-cell ph-down";
+    if (fin === 1) return "ph-cell ph-win";
+    if (fin <= 5) return "ph-cell ph-t5";
+    if (fin <= 10) return "ph-cell ph-t10";
+    if (fin <= 20) return "ph-cell ph-mid";
+    if (fin <= 30) return "ph-cell ph-down";
     return "ph-cell ph-bot";
   };
 
