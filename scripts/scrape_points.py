@@ -447,11 +447,141 @@ def parse_race(race_url: str, series_code: str, round_num: int,
     for d in race.results:
         d.finish_pts = max(0, d.race_pts - d.stage_1_pts - d.stage_2_pts - d.fastest_lap_pt)
 
+    # --- Crew chief data lives on a SEPARATE page on Racing-Reference ---
+    # The race results page does NOT have a Crew Chief column. RR puts CC
+    # data on its own page reached via /race-results?series=W&raceId=YYYY-RR&rType=cc
+    # (or the equivalent path-form URL with /cc suffix). We fetch that page,
+    # parse the table (NBR | DRIVER | OWNER | CAR | CREW CHIEF), and merge
+    # back into the per-driver result rows we already have.
+    #
+    # Skip if the per-result rows already have CC populated (some old pages
+    # may have inlined it) or if the race had no results to begin with.
+    needs_cc_fetch = race.results and all(d.crew_chief is None for d in race.results)
+    if needs_cc_fetch and season is not None:
+        cc_url = _build_cc_url(race_url, season, round_num, series_code)
+        if cc_url:
+            cc_map = _fetch_cc_page(cc_url)
+            if cc_map:
+                # Merge into results — match on (car_number, driver) pair first
+                # since car alone isn't unique when multiple drivers shared a
+                # car in one race (the rare relief-driver case). Fall back to
+                # car-number-only match if the CC page only carries the
+                # primary driver's name for the car.
+                for d in race.results:
+                    cc = cc_map.get((d.car_number, d.driver))
+                    if cc is None:
+                        cc = cc_map.get(d.car_number)   # car-only fallback
+                    if cc:
+                        d.crew_chief = cc
+
     # Even if results parsing failed for some reason, keep the race entry
     # if we have date/track info — schedule data is more useful than nothing.
     if not race.results and not (race.date or race.track):
         return None
     return race
+
+
+def _build_cc_url(race_url: str, season: int, round_num: int, series_code: str) -> Optional[str]:
+    """
+    Derive the Crew Chief page URL from a race-results URL. RR's CC page
+    sits at the same raceId but with rType=cc. Two URL formats exist on
+    the site; we prefer query-style since it's most reliable across years.
+    """
+    # Map our internal series code (NCS/NOS/NTS) to RR's letter (W/B/C).
+    series_letter = {"NCS": "W", "NOS": "B", "NTS": "C"}.get(series_code)
+    if not series_letter:
+        return None
+    # raceId format: YYYY-NN (zero-padded round number)
+    race_id = f"{season}-{round_num:02d}"
+    return (
+        f"https://www.racing-reference.info/race-results"
+        f"?series={series_letter}&raceId={race_id}&rType=cc"
+    )
+
+
+def _fetch_cc_page(cc_url: str) -> dict:
+    """
+    Fetch and parse the Crew Chief listing for a single race. Returns a
+    dict keyed both by (car_number, driver) AND by car_number alone — so
+    callers can match by either depending on data quality. Returns {} on
+    any failure (network, missing table, parse error).
+
+    Page layout (NASCAR Cup Series example):
+        NBR | DRIVER | OWNER | CAR | CREW CHIEF
+        1   | Ross Chastain | Trackhouse Racing | Chevrolet | Brandon McSwain
+        2   | Austin Cindric | Roger Penske | Ford | Brian Wilson
+        ...
+    """
+    try:
+        html = fetch(cc_url)
+    except Exception as e:
+        print(f"    ! cc fetch failed: {e}", file=sys.stderr)
+        return {}
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Locate the CC table — it's the one whose header contains both
+    # "Crew Chief" (or close variant) and "Driver". Walk all tables since
+    # RR pages have a lot of layout cruft.
+    cc_table = None
+    for tbl in soup.find_all("table"):
+        first_tr = tbl.find("tr")
+        if not first_tr:
+            continue
+        headers = [c.get_text(strip=True).lower()
+                   for c in first_tr.find_all(["th", "td"])]
+        # Match "crew chief" header (also tolerate spelling drift like
+        # "crew cheif" — yes, that exact typo appears on some RR pages
+        # as visible in the user's screenshot title!)
+        has_cc = any(("crew chief" in h or "crew cheif" in h or h == "cc")
+                     for h in headers)
+        has_driver = any("driver" in h for h in headers)
+        if has_cc and has_driver:
+            cc_table = tbl
+            break
+    if cc_table is None:
+        return {}
+
+    # Build header→col index lookup
+    header_row = cc_table.find("tr")
+    header_cells = [c.get_text(strip=True).lower()
+                    for c in header_row.find_all(["th", "td"])]
+    col_idx = {h: i for i, h in enumerate(header_cells)}
+
+    def col_for(*names):
+        for n in names:
+            if n in col_idx:
+                return col_idx[n]
+        return None
+
+    nbr_i = col_for("nbr", "#", "no", "no.", "car", "car #")
+    drv_i = col_for("driver")
+    cc_i = col_for("crew chief", "crew cheif", "cc")
+    if drv_i is None or cc_i is None:
+        return {}
+
+    cc_map = {}
+    for tr in cc_table.find_all("tr")[1:]:
+        tds = tr.find_all(["td", "th"])
+        if len(tds) <= cc_i:
+            continue
+        driver = tds[drv_i].get_text(" ", strip=True) if drv_i < len(tds) else ""
+        cc_name = tds[cc_i].get_text(" ", strip=True) if cc_i < len(tds) else ""
+        car = tds[nbr_i].get_text(" ", strip=True) if (nbr_i is not None and nbr_i < len(tds)) else ""
+        if not cc_name or not driver:
+            continue
+        # Strip relief-CC markers (* or †) — same as we do on the results page.
+        cc_name = re.sub(r"^[*†]\s*", "", cc_name).strip()
+        cc_name = re.sub(r"\s*[*†]\s*$", "", cc_name).strip()
+        if not cc_name:
+            continue
+        # Index by both keys so callers can match on whatever they have.
+        if car:
+            cc_map[(car, driver)] = cc_name
+            # Only set car-only key if not already present — so a primary
+            # driver's CC wins over a co-driver's if both share a car.
+            cc_map.setdefault(car, cc_name)
+        cc_map[("__by_driver__", driver)] = cc_name
+    return cc_map
 
 
 def _finish_points_for(finish_pos: int) -> int:
