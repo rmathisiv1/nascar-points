@@ -2340,17 +2340,21 @@ td.neg { color: #ff8a8a; }
 
 /* Heat strip */
 .profile-heat-strip {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  /* Fixed 58px tracks via auto-fill — partial last rows leave trailing empty
+     cells rather than stretching, so every tile in the strip is the same
+     width regardless of how full each row is. justify-content: start keeps
+     the partial row left-aligned with the rest. */
+  grid-template-columns: repeat(auto-fill, 58px);
+  justify-content: start;
   gap: 3px;
   padding: 8px;
   background: rgba(255,255,255,0.015);
   border-radius: 4px;
 }
 .profile-heat-cell {
-  flex: 1 1 44px;
-  min-width: 38px;
-  max-width: 80px;
+  /* Cell is now a grid item — let the grid track decide width. Height
+     stays consistent so last-row partials look identical to full rows. */
   padding: 5px 0;
   text-align: center;
   border-radius: 3px;
