@@ -27,7 +27,7 @@ const STATE = {
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
-  profile: { kind: null, slug: null, splitsRange: "season", splitsSeries: "all" },
+  profile: { kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all" },
   standings: { sortKey: "total", sortDir: "desc" },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
@@ -1019,6 +1019,7 @@ function parseHash() {
       preLockSeason: STATE.profile.preLockSeason,
       splitsRange: STATE.profile.splitsRange || "season",
       splitsSeries: STATE.profile.splitsSeries || "all",
+      heatmapSeries: STATE.profile.heatmapSeries || "all",
       locked: true,
     };
     STATE.lastHash = location.hash;
@@ -1058,6 +1059,7 @@ function parseHash() {
       preLockSeason: STATE.profile.preLockSeason,
       splitsRange: STATE.profile.splitsRange || "season",
       splitsSeries: STATE.profile.splitsSeries || "all",
+      heatmapSeries: STATE.profile.heatmapSeries || "all",
       locked: true,
     };
     STATE.lastHash = location.hash;
@@ -1565,6 +1567,19 @@ function wireUIControls() {
       );
       const entity = findEntityFromSlug();
       if (entity) paintProfileTrackSplits(entity);
+      return;
+    }
+    // Career-heatmap series filter (separate toggle, separate state)
+    const heatBtn = e.target.closest("#profile-heatmap-series-toggle button");
+    if (heatBtn) {
+      e.preventDefault();
+      const newSeries = heatBtn.dataset.srs;
+      if (!newSeries || newSeries === STATE.profile.heatmapSeries) return;
+      STATE.profile.heatmapSeries = newSeries;
+      heatBtn.parentElement.querySelectorAll("button").forEach(b =>
+        b.classList.toggle("on", b === heatBtn)
+      );
+      paintProfileCareerHeatmap();
     }
   });
 }
@@ -5025,38 +5040,93 @@ function tmDeltaClass(metric, avg) {
 //
 // After a successful "profile" resolution, we rewrite the URL hash to the
 // canonical "#/car/<N>" form so subsequent copies of the URL are canonical.
+// Returns a copy of `entity` rewritten to show ONLY the target driver's
+// races and stats. Used when a driver was a part-time co-driver in
+// someone else's car: the underlying entity holds every race that car
+// ran, but the driver profile should reflect only that driver's slice.
+//
+// Behavior:
+//   - races[] is filtered to rows where the driver matches targetSlug
+//   - primaryDriver / driver / driversByStarts are rewritten so the hero
+//     shows the target driver's name, not the host car's primary driver
+//   - everything else is preserved (car_number, team, manufacturer, etc.)
+function driverPerspectiveEntity(entity, targetDriverSlug) {
+  if (!entity || !targetDriverSlug) return entity;
+  // If THIS driver IS the primary, no perspective shift needed — the entity
+  // already reflects their season correctly.
+  if (slugify(entity.primaryDriver || entity.driver) === targetDriverSlug) {
+    return entity;
+  }
+  // Find the target driver's name as it appears in this entity (preserve
+  // capitalization / punctuation from the source data).
+  const targetName = (entity.driversByStarts || [])
+    .map(dc => dc.name)
+    .find(n => slugify(n) === targetDriverSlug)
+    || entity.primaryDriver
+    || entity.driver
+    || "";
+  // Filter the per-race rows to ones the target driver drove. Each row
+  // has a `driver` field we can match against.
+  const filteredRaces = (entity.races || []).filter(r =>
+    slugify(r.driver || "") === targetDriverSlug
+  );
+  // Rebuild driversByStarts as a single-entry list reflecting our filter
+  const driversByStarts = [{ name: targetName, starts: filteredRaces.length }];
+  return {
+    ...entity,
+    primaryDriver: targetName,
+    driver: targetName,
+    races: filteredRaces,
+    driversByStarts,
+    coDrivers: [],
+    // Annotate so downstream code knows this is a perspective-filtered view
+    _perspectiveDriver: targetDriverSlug,
+  };
+}
+
 function findEntityFromSlug() {
   if (!STATE.data || !STATE.profile.slug) return null;
 
-  // Driver-centric route: if we resolved a car number during route handling,
-  // use it directly. Otherwise fall through to slug-match logic.
+  // Driver-centric route: we always render from the TARGET driver's
+  // perspective — even when the underlying car was primarily driven by
+  // someone else (substitute / part-time appearances). Without this, a
+  // 1-race relief stint in another driver's car would render that other
+  // driver's full season as if it were ours. We solve this by wrapping
+  // the entity with race rows filtered to the target driver only and
+  // overriding the display name.
   if (STATE.profile.kind === "driver") {
+    const slug = STATE.profile.slug;
+    let chosen = null;
     if (STATE.profile.resolvedCarNumber) {
       const hit = allEntities().find(
         e => e.car_number === STATE.profile.resolvedCarNumber
       );
-      if (hit) return hit;
+      // Validate: the cached car must actually contain THIS driver in its
+      // primaryDriver or driversByStarts list. Otherwise the resolution
+      // is stale (different season, different driver in that #).
+      if (hit) {
+        const primaryMatch = slugify(hit.primaryDriver || hit.driver) === slug;
+        const coMatch = (hit.driversByStarts || [])
+          .some(dc => slugify(dc.name) === slug);
+        if (primaryMatch || coMatch) chosen = hit;
+      }
     }
-    // Fallback — try matching by slug like the legacy profile route does
-    const slug = STATE.profile.slug;
-    const entities = allEntities();
-    const primaryHit = entities.find(e => slugify(e.primaryDriver || e.driver) === slug);
-    if (primaryHit) return primaryHit;
-    let bestHit = null;
-    let bestStarts = -1;
-    entities.forEach(e => {
-      (e.driversByStarts || []).forEach(dc => {
-        if (slugify(dc.name) === slug && dc.starts > bestStarts) {
-          bestHit = e;
-          bestStarts = dc.starts;
-        }
-      });
-    });
-    return bestHit;
+    if (!chosen) {
+      // Fallback / fresh-resolve path. Pick the entity where this driver
+      // had the most starts in the currently-loaded data. Returns null
+      // cleanly if the driver isn't in the current season/series at all.
+      chosen = pickBestEntityForDriver(slug);
+      if (chosen) {
+        STATE.profile.resolvedCarNumber = chosen.car_number;
+        STATE.profile.resolvedDriver = chosen.primaryDriver || chosen.driver;
+      }
+    }
+    if (!chosen) return null;
+    return driverPerspectiveEntity(chosen, slug);
   }
 
   if (STATE.profile.kind === "car") {
-    // Direct car lookup
+    // Direct car lookup — car-centric profile shows the WHOLE car (any driver)
     return allEntities().find(e => e.car_number === STATE.profile.slug) || null;
   }
 
@@ -5295,16 +5365,52 @@ async function switchProfileContext(year, series) {
   STATE.throughRound = null;
   await loadCurrentData();
   resetRenderCache();
-  // Re-resolve which car this driver drove THIS year/series
-  const ents = allEntities();
+  // Re-resolve which car this driver drove THIS year/series. We MUST pick
+  // the car where the target driver had the most starts — not just the first
+  // entity that mentions them. Otherwise a one-off relief appearance gets
+  // chosen over the car they regularly drove, and the profile renders with
+  // some OTHER driver's data (different primary driver of the wrong car).
   const slug = STATE.profile.slug;
-  const ent = ents.find(e => slugify(e.primaryDriver || e.driver) === slug)
-    || ents.find(e => (e.driversByStarts || []).some(dc => slugify(dc.name) === slug));
+  const ent = pickBestEntityForDriver(slug);
   if (ent) {
     STATE.profile.resolvedCarNumber = ent.car_number;
     STATE.profile.resolvedDriver = ent.primaryDriver || ent.driver;
+  } else {
+    // Driver didn't actually appear this year/series — clear resolution so
+    // the profile shows its "no entity matched" empty state instead of
+    // silently rendering some unrelated driver's data.
+    STATE.profile.resolvedCarNumber = null;
+    STATE.profile.resolvedDriver = null;
   }
   render();
+}
+
+// Find the entity (car) where the target driver had the most starts in
+// the currently-loaded series + season. Returns null if the driver didn't
+// appear at all. Used by both the context switcher and findEntityFromSlug
+// so they agree on which car a driver "owns" for a given year/series.
+function pickBestEntityForDriver(driverSlug) {
+  if (!driverSlug) return null;
+  const ents = allEntities();
+  // Primary-driver match (their main car this year) wins outright if it exists.
+  // primaryDriver is whoever drove this car the most across the season.
+  const primary = ents.find(e =>
+    slugify(e.primaryDriver || e.driver) === driverSlug
+  );
+  if (primary) return primary;
+  // No primary match — driver may have run as a substitute / part-time co-
+  // driver. Score each entity by how many starts THIS driver had in it.
+  let best = null;
+  let bestStarts = 0;
+  ents.forEach(e => {
+    (e.driversByStarts || []).forEach(dc => {
+      if (slugify(dc.name) === driverSlug && dc.starts > bestStarts) {
+        best = e;
+        bestStarts = dc.starts;
+      }
+    });
+  });
+  return best;
 }
 
 function renderProfile() {
@@ -5545,11 +5651,18 @@ function renderProfile() {
 
       <div class="profile-panel full">
         <div class="profile-panel-head">
-          <span class="profile-panel-title">${STATE.season} Teammates</span>
-          <span class="profile-panel-sub">Head-to-head vs. ${escapeHTML(teamCode)} drivers</span>
+          <span class="profile-panel-title">Career Heatmap</span>
+          <div class="profile-panel-head-right">
+            <div class="toggle-group mini" id="profile-heatmap-series-toggle">
+              <button class="${(STATE.profile.heatmapSeries || "all") === "all" ? "on" : ""}" data-srs="all">All</button>
+              <button class="${STATE.profile.heatmapSeries === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
+              <button class="${STATE.profile.heatmapSeries === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
+              <button class="${STATE.profile.heatmapSeries === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
+            </div>
+          </div>
         </div>
         <div class="profile-panel-body">
-          <div id="profile-teammates"></div>
+          <div id="profile-career-heatmap"></div>
         </div>
       </div>
     </div>
@@ -5560,7 +5673,7 @@ function renderProfile() {
   paintProfileHeatStrip(rows);
   paintProfileTrackSplits(entity);
   paintProfileRaceTable(rows, kind);
-  paintProfileTeammates(entity);
+  paintProfileCareerHeatmap();
   wireCoDriverBadges(host);
 
   // Opportunistically load more seasons so the career-context strip fills
@@ -6145,6 +6258,147 @@ function paintProfileTeammates(entity) {
   `;
   // Paint the sparkline SVGs after they're inserted into the DOM
   tmPaintSparklines(host);
+}
+
+// ============================================================
+// PROFILE — CAREER HEATMAP
+// ------------------------------------------------------------
+// Compact grid showing every race the driver ran across their career.
+// Rows = (year, series) combinations; columns = R1, R2, R3 ... up to the
+// max round in any of the rendered seasons. Cells are color-coded by
+// finish position. Empty cell = didn't drive that race.
+//
+// Series toggle in the panel head (All/NCS/NOS/NTS) filters rows.
+// All loaded seasons in SEASON_CACHE are scanned.
+// ============================================================
+function paintProfileCareerHeatmap() {
+  const host = document.getElementById("profile-career-heatmap");
+  if (!host) return;
+
+  // Resolve the target driver slug. Same fallback as elsewhere — works
+  // whether profile.kind is "driver" or "car" (car-routed profiles can
+  // still derive the slug from primaryDriver of the entity).
+  let driverSlug = null;
+  if (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug) {
+    driverSlug = STATE.profile.slug;
+  } else {
+    const entity = findEntityFromSlug();
+    if (entity && (entity.primaryDriver || entity.driver)) {
+      driverSlug = slugify(entity.primaryDriver || entity.driver);
+    }
+  }
+  if (!driverSlug) {
+    host.innerHTML = `<div class="muted" style="padding:10px;font-size:11px;">No driver to heatmap.</div>`;
+    return;
+  }
+
+  const seriesFilter = (STATE.profile && STATE.profile.heatmapSeries) || "all";
+
+  // Scan SEASON_CACHE for every (year, series) where this driver appeared.
+  // For each match, build a Map<round, finish_pos> lookup. If the driver
+  // didn't run a race that round, the cell is left blank.
+  // We also track the max round per (year, series) so we know how wide the
+  // grid needs to be — different years and series have different schedule
+  // lengths.
+  const rows = [];
+  let maxRound = 0;
+  Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    const seriesToWalk = (seriesFilter === "all")
+      ? ["NCS", "NOS", "NTS"]
+      : [seriesFilter];
+    seriesToWalk.forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block || !block.races) return;
+      const finishByRound = new Map();
+      const trackByRound = new Map();
+      let driverDrove = false;
+      block.races.forEach(race => {
+        if (race.round == null) return;
+        // Track the schedule length so the grid is wide enough even when
+        // the target driver didn't run the late races.
+        if (race.round > maxRound) maxRound = race.round;
+        const hit = (race.results || []).find(d =>
+          !d.ineligible && slugify(d.driver || "") === driverSlug
+        );
+        if (hit) {
+          driverDrove = true;
+          finishByRound.set(race.round, hit.finish_pos);
+          trackByRound.set(race.round, race);
+        }
+      });
+      if (driverDrove) {
+        rows.push({ year, series: sCode, finishByRound, trackByRound });
+      }
+    });
+  });
+
+  if (rows.length === 0) {
+    host.innerHTML = `<div class="muted" style="padding:10px;font-size:11px;">
+      No races${seriesFilter === "all" ? "" : ` in ${seriesFilter}`} yet for this driver.
+    </div>`;
+    return;
+  }
+
+  // Build the grid: header row of round labels + one row per (year, series).
+  // Each cell's bg color follows the same finish-tier scheme as the season
+  // heat strip: top1 = green, t5 light green, t10 dim, t20 muted, t25+ red.
+  const cellClass = (fin) => {
+    if (fin == null) return "ph-cell-empty";
+    if (fin === 1) return "ph-cell ph-top";
+    if (fin <= 5) return "ph-cell ph-up";
+    if (fin <= 10) return "ph-cell ph-mid";
+    if (fin <= 20) return "ph-cell ph-down";
+    return "ph-cell ph-bot";
+  };
+
+  // Header — column labels R1..Rn
+  const headCols = [];
+  for (let i = 1; i <= maxRound; i++) {
+    headCols.push(`<div class="ph-head-cell">${i}</div>`);
+  }
+  const headHTML = `<div class="ph-row ph-header">
+    <div class="ph-row-label ph-row-label-head">Year</div>
+    ${headCols.join("")}
+  </div>`;
+
+  const bodyHTML = rows.map(r => {
+    const cells = [];
+    for (let i = 1; i <= maxRound; i++) {
+      const fin = r.finishByRound.get(i);
+      const race = r.trackByRound.get(i);
+      const trackTip = race ? prettyTrack(race.track_code, race.track) : "";
+      const titleAttr = fin != null
+        ? `${r.year} ${r.series} R${i}${trackTip ? " · " + trackTip : ""} · P${fin}`
+        : "";
+      cells.push(
+        `<div class="${cellClass(fin)}"${titleAttr ? ` title="${escapeHTML(titleAttr)}"` : ""}>${fin != null ? fin : ""}</div>`
+      );
+    }
+    return `<div class="ph-row">
+      <div class="ph-row-label">
+        <span class="ph-yr">${r.year}</span>
+        <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
+      </div>
+      ${cells.join("")}
+    </div>`;
+  }).join("");
+
+  host.innerHTML = `<div class="ph-grid" style="--ph-cols: ${maxRound};">
+    ${headHTML}
+    ${bodyHTML}
+  </div>`;
+
+  // Lazy-load missing years so the heatmap fills out
+  const allYears = Object.keys(SEASON_CACHE).map(Number);
+  const missing = (STATE.seasonsAvailable || []).filter(y => !allYears.includes(y));
+  if (missing.length > 0) {
+    Promise.all(missing.slice(0, 8).map(y => loadSeasonIntoCache(y)))
+      .then(() => {
+        if (STATE.view === "profile") paintProfileCareerHeatmap();
+      });
+  }
 }
 
 // ============================================================
