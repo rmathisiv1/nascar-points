@@ -5646,3 +5646,46 @@ a.driver-cell.profile-link:hover .car-tag {
   align-items: center;
   gap: 12px;
 }
+
+/* Race-detail link inside the profile race table — renders looking like
+   plain text but with a subtle hover affordance. We don't want a wall of
+   blue underlines for every race row; the click target is still the whole
+   text but the visual stays dim. Track-code link stays styled normally
+   since the user expects "PHO" to look navigable. */
+.rc-race-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.rc-race-link:hover {
+  color: var(--text);
+  border-bottom-color: rgba(110,168,254,0.6);
+}
+
+/* Race-results table on the race detail page */
+.rc-results-table {
+  width: 100%;
+}
+.rc-results-table .finish-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 28px;
+  text-align: center;
+}
+.rc-results-table .finish-badge.f-win  { background: rgba(255,200,50,0.85); color: #2a1d00; box-shadow: 0 0 6px rgba(255,200,50,0.45); }
+.rc-results-table .finish-badge.f-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
+.rc-results-table .finish-badge.f-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
+.rc-results-table .finish-badge.f-bad  { background: rgba(255,70,70,0.30); color: #ffc2c2; }
+.rc-results-table .car-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}

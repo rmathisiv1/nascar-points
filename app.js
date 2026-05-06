@@ -551,6 +551,55 @@ function wireSearch() {
 // ============================================================
 // BOOT
 // ============================================================
+
+// Dev/debug helper exposed on `window.dcDebug` so the user can inspect
+// data presence from the browser console. Run any of:
+//   dcDebug.cc()              — summary of CC data in current season
+//   dcDebug.cc(2024)          — same but for a specific year (must be loaded)
+//   dcDebug.field("crew_chief") — counts how many rows have this field
+window.dcDebug = {
+  cc(year) {
+    const block = year != null
+      ? (SEASON_CACHE[year] && SEASON_CACHE[year][STATE.series])
+      : STATE.data;
+    if (!block) {
+      console.log(`No data loaded for ${year || "current"} ${STATE.series}.`);
+      return;
+    }
+    const races = block.races || [];
+    let total = 0, withCC = 0;
+    const sample = [];
+    races.forEach(r => {
+      (r.results || []).forEach(d => {
+        total++;
+        if (d.crew_chief) {
+          withCC++;
+          if (sample.length < 5) sample.push(`R${r.round} #${d.car_number} ${d.driver} → ${d.crew_chief}`);
+        }
+      });
+    });
+    console.log(`Season: ${year || STATE.season} ${STATE.series}`);
+    console.log(`Result rows: ${total} total, ${withCC} with crew_chief (${total ? Math.round(100*withCC/total) : 0}%)`);
+    if (sample.length) console.log("Sample:", sample);
+    if (withCC === 0 && total > 0) {
+      console.log("⚠️  Zero crew_chief values — either data file lacks the field or the field name differs.");
+      const firstRow = (races[0]?.results || [])[0];
+      if (firstRow) console.log("First-row keys:", Object.keys(firstRow));
+    }
+  },
+  field(fieldName) {
+    if (!STATE.data) { console.log("No data loaded."); return; }
+    let total = 0, present = 0;
+    (STATE.data.races || []).forEach(r => {
+      (r.results || []).forEach(d => {
+        total++;
+        if (d[fieldName] != null && d[fieldName] !== "") present++;
+      });
+    });
+    console.log(`Field "${fieldName}": ${present}/${total} rows populated`);
+  },
+};
+
 async function boot() {
   wireUIControls();
   wireMobileNav();
@@ -1422,14 +1471,20 @@ function wireUIControls() {
   document.getElementById("topbar-now-btn")?.addEventListener("click", async () => {
     const targetSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0])
       || STATE.season;
-    const seasonChanged = targetSeason !== STATE.season;
+    const targetSeries = "NCS";   // Now always returns to the top series
+    const needsLoad = (targetSeason !== STATE.season) || (targetSeries !== STATE.series);
     STATE.season = targetSeason;
+    STATE.series = targetSeries;
     STATE.throughRound = null;          // clear time cursor
-    if (seasonChanged) {
+    if (needsLoad) {
       await loadCurrentData();
       resetRenderCache();
       populateRacePicker();
     }
+    // Sync the series-switcher button "on" state
+    document.querySelectorAll("#series-sw button").forEach(b =>
+      b.classList.toggle("on", b.dataset.series === targetSeries)
+    );
     renderTimeCursorBanner();
     // Sync the season-picker UI to match
     const sel = document.getElementById("season-picker");
@@ -5654,10 +5709,12 @@ function renderProfile() {
     return;
   }
 
-  // Car-centric app: every profile is a car profile. `kind` remains as "owner"
-  // for any code paths downstream that still branch on it (will be cleaned up
-  // incrementally).
-  const kind = "owner";
+  // Profile kind: "driver" for driver-centric routes, "owner" for legacy
+  // car-centric. The race-by-race table uses this to decide whether to
+  // tag each row with a driver name (only meaningful on car profiles where
+  // multiple drivers may have shared the car). On a driver profile every
+  // row IS that driver, so the tag is redundant and clutters the column.
+  const kind = (STATE.profile && STATE.profile.kind === "driver") ? "driver" : "owner";
   const summary = profileSummary(entity);
   const { rank, of } = profileRank(entity);
   const carHex = colorFor(STATE.series, entity.car_number);
@@ -7887,7 +7944,17 @@ function renderRaceCenter() {
   const trackStr = nextRace.track || "—";
   const seriesLabel = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" }[STATE.series] || STATE.series;
   const trackTypeStr = trackTypeLabel(nextRace.track_code);
-  const heroBadge = isUpcoming ? "UPCOMING" : "MOST RECENT";
+  // Hero badge depends on what we're showing:
+  //   - User clicked a specific past race → "RACE RESULTS"
+  //   - User clicked a specific future race → "UPCOMING"
+  //   - No selection, latest run race → "MOST RECENT"
+  //   - No selection, future race → "UPCOMING"
+  let heroBadge;
+  if (selectedRound != null) {
+    heroBadge = isUpcoming ? "UPCOMING" : "RACE RESULTS";
+  } else {
+    heroBadge = isUpcoming ? "UPCOMING" : "MOST RECENT";
+  }
 
   if (sub) sub.textContent = `${STATE.season} ${seriesLabel} · ${trackStr} · ${dateStr}`;
 
@@ -7901,6 +7968,14 @@ function renderRaceCenter() {
   const raceNameLine = nextRace.name ? `<div class="rc-hero-name">"${escapeHTML(nextRace.name)}"</div>` : "";
   const timeTVLine = timeTV ? `<div class="rc-hero-time">${escapeHTML(timeTV)}</div>` : "";
 
+  // Race results table — only for completed races. Lists every driver's
+  // finish, start, stages won, fastest laps, points, total. Sorted by
+  // finish position. This is the core "I clicked a race, show me what
+  // happened" view.
+  const resultsHTML = (!isUpcoming && (nextRace.results || []).length)
+    ? renderRaceResultsTable(nextRace)
+    : "";
+
   host.innerHTML = `
     <div class="rc-hero">
       <div class="rc-hero-badge">${heroBadge}</div>
@@ -7910,6 +7985,8 @@ function renderRaceCenter() {
         ${dateStr}${timeTV ? " · " + escapeHTML(timeTV) : ""} · ${seriesLabel}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
       </div>
     </div>
+
+    ${resultsHTML}
 
     <div class="rc-grid">
       <div class="card rc-card">
@@ -7926,6 +8003,82 @@ function renderRaceCenter() {
       <a class="btn-ghost" href="#/schedule">View full ${STATE.season} schedule →</a>
     </div>
   `;
+}
+
+// Build a finish-order results table for a single race. Every row links the
+// driver name to their profile and the car number tag uses the series color
+// palette. Stage points and FL columns are gated to stage-era seasons.
+function renderRaceResultsTable(race) {
+  if (!race || !(race.results || []).length) return "";
+  const rows = (race.results || [])
+    .filter(d => d.finish_pos != null)
+    .sort((a, b) => a.finish_pos - b.finish_pos);
+  if (!rows.length) return "";
+  const stageEra = isStageEra(STATE.series, STATE.season);
+  const trHTML = rows.map(d => {
+    const carHex = colorFor(STATE.series, d.car_number);
+    const carTxt = contrastTextFor(carHex);
+    // Finish-position color tier — same scheme as the heatmap so wins
+    // pop gold, T5 green, etc.
+    let finCls = "f-normal";
+    if (d.finish_pos === 1) finCls = "f-win";
+    else if (d.finish_pos <= 5) finCls = "f-t5";
+    else if (d.finish_pos <= 10) finCls = "f-t10";
+    else if (d.finish_pos > 25) finCls = "f-bad";
+    const drvSlug = slugify(d.driver || "");
+    const driverCell = drvSlug
+      ? `<a class="profile-link" href="#/driver/${drvSlug}">${escapeHTML(d.driver || "")}</a>`
+      : escapeHTML(d.driver || "");
+    const teamCode = d.team_code
+      || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number)
+      || "";
+    const teamCell = teamCode
+      ? `<a class="profile-link muted" href="#/team/${encodeURIComponent(teamCode)}">${escapeHTML(teamCode)}</a>`
+      : `<span class="muted">—</span>`;
+    const stageCells = stageEra
+      ? `<td class="num">${d.stage_1_pts || "—"}</td>
+         <td class="num">${d.stage_2_pts || "—"}</td>
+         <td class="num">${d.fastest_laps_pts || "—"}</td>`
+      : "";
+    return `<tr>
+      <td class="num"><span class="finish-badge ${finCls}">${d.finish_pos}</span></td>
+      <td class="num">${d.start_pos ?? "—"}</td>
+      <td><span class="car-tag" style="background:${carHex};color:${carTxt}">${d.car_number}</span></td>
+      <td>${driverCell}</td>
+      <td>${teamCell}</td>
+      ${stageCells}
+      <td class="num">${d.race_pts ?? "—"}</td>
+      <td class="num" style="font-weight:700">${d.total_pts ?? "—"}</td>
+    </tr>`;
+  }).join("");
+
+  const stageHeaders = stageEra
+    ? `<th class="num">S1</th><th class="num">S2</th><th class="num">FL</th>`
+    : "";
+
+  return `<div class="card rc-card rc-card-wide rc-results-card">
+    <div class="rc-card-head">
+      <span class="rc-card-title">Race Results</span>
+      <span class="rc-card-sub">${rows.length} finishers</span>
+    </div>
+    <div class="rc-card-body" style="padding:0;">
+      <div style="overflow-x:auto;">
+        <table class="data-table rc-results-table">
+          <thead><tr>
+            <th class="num">Pos</th>
+            <th class="num">Start</th>
+            <th>Car</th>
+            <th>Driver</th>
+            <th>Team</th>
+            ${stageHeaders}
+            <th class="num">Race pts</th>
+            <th class="num">Total</th>
+          </tr></thead>
+          <tbody>${trHTML}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
 }
 
 // Format an ISO-ish date string into "Sun, Apr 27" form. Falls back to raw.
