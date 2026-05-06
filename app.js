@@ -27,7 +27,7 @@ const STATE = {
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
-  profile: { kind: null, slug: null, splitsRange: "season" },
+  profile: { kind: null, slug: null, splitsRange: "season", splitsSeries: "all" },
   standings: { sortKey: "total", sortDir: "desc" },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
@@ -511,6 +511,7 @@ function parseHash() {
       preLockSeries: STATE.profile.preLockSeries,
       preLockSeason: STATE.profile.preLockSeason,
       splitsRange: STATE.profile.splitsRange || "season",
+      splitsSeries: STATE.profile.splitsSeries || "all",
       locked: true,
     };
     STATE.lastHash = location.hash;
@@ -549,6 +550,7 @@ function parseHash() {
       preLockSeries: STATE.profile.preLockSeries,
       preLockSeason: STATE.profile.preLockSeason,
       splitsRange: STATE.profile.splitsRange || "season",
+      splitsSeries: STATE.profile.splitsSeries || "all",
       locked: true,
     };
     STATE.lastHash = location.hash;
@@ -1000,6 +1002,11 @@ function wireUIControls() {
       splitsBtn.parentElement.querySelectorAll("button").forEach(b =>
         b.classList.toggle("on", b === splitsBtn)
       );
+      // Show/hide the series filter — only relevant in Career mode
+      const seriesToggle = document.getElementById("profile-splits-series-toggle");
+      if (seriesToggle) {
+        seriesToggle.style.display = (newMode === "career") ? "" : "none";
+      }
       // Update panel title to match the mode
       const titleEl = document.getElementById("profile-track-splits-title");
       if (titleEl) {
@@ -1036,6 +1043,21 @@ function wireUIControls() {
             });
         }
       }
+      return;
+    }
+    // Series-filter toggle (All / NCS / NOS / NTS) — only meaningful in
+    // Career mode but the button is hidden in Season mode anyway.
+    const seriesBtn = e.target.closest("#profile-splits-series-toggle button");
+    if (seriesBtn) {
+      e.preventDefault();
+      const newSeries = seriesBtn.dataset.srs;
+      if (!newSeries || newSeries === STATE.profile.splitsSeries) return;
+      STATE.profile.splitsSeries = newSeries;
+      seriesBtn.parentElement.querySelectorAll("button").forEach(b =>
+        b.classList.toggle("on", b === seriesBtn)
+      );
+      const entity = findEntityFromSlug();
+      if (entity) paintProfileTrackSplits(entity);
     }
   });
 }
@@ -4917,7 +4939,20 @@ function renderProfile() {
 
     ${careerPanelHTML}
 
-    ${STATE.profile && STATE.profile.kind === "driver" ? renderCareerContextStrip(STATE.profile.slug) : ""}
+    ${(() => {
+      // Career-context strip — renders the year-by-year/series chips that
+      // let a user jump across a driver's career. Works for any profile
+      // route: explicit driver slug from #/driver/<slug>, or derived from
+      // the entity's primary driver for car-routed profiles. Without this
+      // fallback, car-routed profiles (the default for many in-app links)
+      // would never show the strip.
+      const slug = (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug)
+        ? STATE.profile.slug
+        : (entity && (entity.primaryDriver || entity.driver)
+            ? slugify(entity.primaryDriver || entity.driver)
+            : null);
+      return slug ? renderCareerContextStrip(slug) : "";
+    })()}
 
     <div class="profile-section-label">${STATE.season} Season</div>
     <div class="profile-stats">
@@ -4954,6 +4989,13 @@ function renderProfile() {
         <div class="profile-panel-head">
           <span class="profile-panel-title" id="profile-track-splits-title">${STATE.profile.splitsRange === "career" ? "Career" : STATE.season} Track Splits</span>
           <div class="profile-panel-head-right">
+            <div class="toggle-group mini" id="profile-splits-series-toggle"
+              ${STATE.profile.splitsRange === "career" ? "" : 'style="display:none"'}>
+              <button class="${STATE.profile.splitsSeries === "all" ? "on" : ""}" data-srs="all">All</button>
+              <button class="${STATE.profile.splitsSeries === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
+              <button class="${STATE.profile.splitsSeries === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
+              <button class="${STATE.profile.splitsSeries === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
+            </div>
             <div class="toggle-group mini" data-group="splits-range" id="profile-splits-toggle">
               <button class="${STATE.profile.splitsRange === "season" ? "on" : ""}" data-val="season">Season</button>
               <button class="${STATE.profile.splitsRange === "career" ? "on" : ""}" data-val="career">Career</button>
@@ -5014,9 +5056,16 @@ function renderProfile() {
   paintProfileTeammates(entity);
   wireCoDriverBadges(host);
 
-  // For driver-routed profiles, opportunistically load more seasons so the
-  // career-context strip fills out. Re-renders when each batch completes.
-  if (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug) {
+  // Opportunistically load more seasons so the career-context strip fills
+  // out and Career splits work. Triggered for ANY profile route — driver,
+  // car, or legacy — since the strip and splits are useful in all cases.
+  // Re-renders when each batch completes.
+  const profileSlug = (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug)
+    ? STATE.profile.slug
+    : (entity && (entity.primaryDriver || entity.driver)
+        ? slugify(entity.primaryDriver || entity.driver)
+        : null);
+  if (profileSlug) {
     const allYears = Object.keys(SEASON_CACHE).map(Number);
     const expectedYears = STATE.seasonsAvailable || [];
     const missingYears = expectedYears.filter(y => !allYears.includes(y));
@@ -5439,14 +5488,22 @@ function computeTrackSplits(entity) {
 // doesn't care which one it's rendering. Years not yet in SEASON_CACHE are
 // silently skipped — caller is responsible for triggering more season loads
 // if it wants completeness (renderProfile already does this on driver routes).
-function computeCareerTrackSplits(driverSlug) {
+//
+// seriesFilter: null/undefined = aggregate all 3 series; "NCS"/"NOS"/"NTS"
+// limits to that series only. Used by the NCS/NOS/NTS tabs on the splits
+// panel header.
+function computeCareerTrackSplits(driverSlug, seriesFilter) {
   const buckets = { super: [], short: [], inter: [], road: [] };
   if (!driverSlug) return computeTrackSplits({ races: [] });
+
+  const seriesToWalk = (seriesFilter && seriesFilter !== "all")
+    ? [seriesFilter]
+    : ["NCS", "NOS", "NTS"];
 
   Object.keys(SEASON_CACHE).forEach(year => {
     const seriesBlocks = SEASON_CACHE[year];
     if (!seriesBlocks) return;
-    ["NCS", "NOS", "NTS"].forEach(sCode => {
+    seriesToWalk.forEach(sCode => {
       const block = seriesBlocks[sCode];
       if (!block || !block.races) return;
       block.races.forEach(race => {
@@ -5500,6 +5557,7 @@ function paintProfileTrackSplits(entity) {
   // "driver" silently rendered season data, making the Career button look
   // broken on car-routed profiles.
   const mode = (STATE.profile && STATE.profile.splitsRange) || "season";
+  const seriesFilter = (STATE.profile && STATE.profile.splitsSeries) || "all";
   let driverSlug = null;
   if (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug) {
     driverSlug = STATE.profile.slug;
@@ -5507,7 +5565,7 @@ function paintProfileTrackSplits(entity) {
     driverSlug = slugify(entity.primaryDriver || entity.driver);
   }
   const splits = (mode === "career" && driverSlug)
-    ? computeCareerTrackSplits(driverSlug)
+    ? computeCareerTrackSplits(driverSlug, seriesFilter)
     : computeTrackSplits(entity);
   const ORDER = ["super", "short", "inter", "road"];
 
