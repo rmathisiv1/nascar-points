@@ -4717,17 +4717,25 @@ a.driver-cell.profile-link:hover .car-tag {
    driver appeared; the active chip is the currently-displayed context. */
 .profile-context-strip {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 8px;
   margin: 12px 0 16px;
-  flex-wrap: wrap;
 }
 .profile-context-strip.empty {
+  align-items: center;
+  flex-direction: row;
   justify-content: center;
+}
+.profile-context-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border);
 }
 .profile-context-label {
   font-family: var(--mono);
@@ -4737,24 +4745,53 @@ a.driver-cell.profile-link:hover .car-tag {
   text-transform: uppercase;
   flex-shrink: 0;
 }
-.profile-context-chips {
-  display: flex;
-  flex-wrap: wrap;
+/* Year-row grid: each row = year label + 3 fixed-width series slots so
+   chips for the same series line up vertically across years. Compact,
+   scannable, no awkward wrap. Multiple year-rows use auto-fill columns
+   so on a wide screen we get 2 or 3 year-rows side by side. */
+.profile-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 4px 16px;
+}
+.ctx-row {
+  display: grid;
+  grid-template-columns: 44px repeat(3, minmax(0, 1fr));
   gap: 6px;
-  flex: 1;
-  min-width: 0;
+  align-items: center;
+  padding: 2px 0;
+}
+.ctx-row-year {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.ctx-chip-slot {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ctx-chip-empty {
+  /* Empty cell when the driver wasn't in this series that year. Visually
+     distinguishable from a chip but doesn't draw the eye away. */
+  background: rgba(255,255,255,0.02);
+  border-radius: 4px;
+  border: 1px dashed transparent;
 }
 .ctx-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted);
   letter-spacing: 0.04em;
   transition: all 0.1s ease;
@@ -5311,6 +5348,13 @@ a.driver-cell.profile-link:hover .car-tag {
   font-weight: 700;
   color: #ffd166;
   cursor: help;
+  /* Force the championship pill onto its own row inside the hero meta
+     flex-wrap container. Without this it crowds the team / CC / bio
+     line and looks visually heavy next to other text. */
+  flex-basis: 100%;
+  margin-top: 2px;
+  align-self: flex-start;
+  width: fit-content;
 }
 .profile-hero-champ .champ-trophy {
   font-size: 12px;
@@ -5567,4 +5611,32 @@ a.driver-cell.profile-link:hover .car-tag {
   background: rgba(255,200,50,0.85);
   color: #2a1d00;
   box-shadow: 0 0 6px rgba(255,200,50,0.45);
+}
+
+/* Mobile: collapse to a single column grid so each year-row spans full width */
+@media (max-width: 767.98px) {
+  .profile-context-grid {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .ctx-row {
+    grid-template-columns: 38px repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .ctx-row-year { font-size: 11px; }
+  .ctx-chip { padding: 3px 6px; font-size: 9px; }
+}
+
+/* Heatmap cell as a link — pointer cursor + focus outline for keyboard
+   nav. Anchor inherits the .ph-cell tier classes so colors stay correct. */
+.ph-cell-link {
+  text-decoration: none;
+  cursor: pointer;
+}
+.ph-cell-link:hover {
+  outline: 1px solid rgba(255,255,255,0.5);
+  z-index: 1;
+}
+.ph-cell-link:focus-visible {
+  outline: 2px solid var(--accent);
 }

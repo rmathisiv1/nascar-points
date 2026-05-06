@@ -5525,24 +5525,43 @@ function renderCareerContextStrip(driverSlug) {
   const todayBtn = (latest && !onLatest)
     ? `<button class="ctx-today" data-ctx-year="${latest.year}" data-ctx-series="${latest.series}" title="Jump back to ${latest.year} ${latest.series}">← Today (${latest.year} ${latest.series})</button>`
     : "";
-  const chips = yearKeys.map(year => {
-    return byYear[year].map(y => {
+  // Render the chip grid: one row per year. The year label sits on the
+  // left of each row, then the series chips for that year sit in a
+  // fixed-slot layout (NCS, NOS, NTS) so series chips line up vertically
+  // across years. This makes scanning a career path much cleaner — the
+  // user can read down a "column" to follow one series over time.
+  const seriesOrder = ["NCS", "NOS", "NTS"];
+  const rows = yearKeys.map(year => {
+    const entries = byYear[year];
+    const bySeries = {};
+    entries.forEach(e => { bySeries[e.series] = e; });
+    const chipCells = seriesOrder.map(sCode => {
+      const y = bySeries[sCode];
+      if (!y) {
+        // Empty slot — keeps the columns aligned across rows
+        return `<span class="ctx-chip-slot ctx-chip-empty"></span>`;
+      }
       const isActive = (y.year === STATE.season && y.series === STATE.series);
       const ftBadge = y.fullTime ? "" : `<span class="ctx-pt" title="Part-time">PT</span>`;
-      return `<button class="ctx-chip${isActive ? " active" : ""}"
+      return `<button class="ctx-chip ctx-chip-slot${isActive ? " active" : ""}"
         data-ctx-year="${y.year}"
         data-ctx-series="${y.series}"
         title="#${y.car_number} · ${y.starts} start${y.starts === 1 ? "" : "s"}">
-        <span class="ctx-year">${y.year}</span>
         <span class="ctx-series ctx-${y.series.toLowerCase()}">${y.series}</span>
         ${ftBadge}
       </button>`;
     }).join("");
+    return `<div class="ctx-row">
+      <span class="ctx-row-year">${year}</span>
+      ${chipCells}
+    </div>`;
   }).join("");
   return `<div class="profile-context-strip">
-    <div class="profile-context-label">Seasons</div>
-    ${todayBtn}
-    <div class="profile-context-chips">${chips}</div>
+    <div class="profile-context-strip-head">
+      <div class="profile-context-label">Seasons</div>
+      ${todayBtn}
+    </div>
+    <div class="profile-context-grid">${rows}</div>
   </div>`;
 }
 
@@ -6655,9 +6674,22 @@ function paintProfileCareerHeatmap() {
       const titleAttr = fin != null
         ? `${r.year} ${r.series} R${i}${trackTip ? " · " + trackTip : ""} · P${fin}`
         : "";
-      cells.push(
-        `<div class="${cellClass(fin)}"${titleAttr ? ` title="${escapeHTML(titleAttr)}"` : ""}>${fin != null ? fin : ""}</div>`
-      );
+      // Wrap clickable cells in an anchor pointing at the race route. Use
+      // the search-format URL (#/race/<round>?_y=<year>&_s=<series>) so we
+      // get year/series context-switching for free via the existing click
+      // delegation in wireSearch. Empty cells stay non-interactive.
+      if (fin != null && race) {
+        cells.push(
+          `<a class="${cellClass(fin)} ph-cell-link"
+            href="#/race/${i}?_y=${r.year}&_s=${r.series}"
+            data-ph-race="1"
+            title="${escapeHTML(titleAttr)}">${fin}</a>`
+        );
+      } else {
+        cells.push(
+          `<div class="${cellClass(fin)}"${titleAttr ? ` title="${escapeHTML(titleAttr)}"` : ""}>${fin != null ? fin : ""}</div>`
+        );
+      }
     }
     const rankCell = r.standingsRank != null
       ? `<div class="${rankCellClass(r.standingsRank)}" title="${r.year} ${r.series} year-end standings: P${r.standingsRank}">P${r.standingsRank}</div>`
@@ -6676,6 +6708,18 @@ function paintProfileCareerHeatmap() {
     ${headHTML}
     ${bodyHTML}
   </div>`;
+
+  // Wire heatmap cell clicks to switch into the race profile, including
+  // year + series context. Re-uses the same handler the search dropdown
+  // uses for race results — it changes STATE.season + STATE.series and
+  // navigates to #/race/<round> in one shot.
+  host.querySelectorAll(".ph-cell-link").forEach(a => {
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const href = a.getAttribute("href");
+      if (href) await handleSearchRaceClick(href);
+    });
+  });
 
   // Lazy-load missing years so the heatmap fills out
   const allYears = Object.keys(SEASON_CACHE).map(Number);
