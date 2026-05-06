@@ -1249,7 +1249,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .heat-t5   { background: rgba(50,230,100,0.55); color: #00140a; font-weight: 700; }
 .heat-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
 .heat-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
-.heat-down { background: rgba(220,140, 70,0.30); color: #f7c79a; }
+.heat-down { background: rgba(255, 70, 70, 0.22); color: #ffc2c2; }
 .heat-bot  { background: rgba(255, 70, 70,0.55); color: #230707; font-weight: 700; }
 .heat-none { color: var(--dim); }
 /* Backward-compat aliases — older class names still work but map to new tiers */
@@ -2382,7 +2382,7 @@ td.neg { color: #ff8a8a; }
 .profile-heat-cell.heat-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
 .profile-heat-cell.heat-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
 .profile-heat-cell.heat-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
-.profile-heat-cell.heat-down { background: rgba(220,140,70,0.30); color: #f7c79a; }
+.profile-heat-cell.heat-down { background: rgba(255,70,70,0.22); color: #ffc2c2; }
 .profile-heat-cell.heat-bot  { background: rgba(255,70,70,0.55); color: #230707; }
 .profile-heat-cell.heat-dns  { background: rgba(255,255,255,0.02); color: var(--dim); font-style: italic; }
 /* Backward-compat aliases */
@@ -4671,9 +4671,16 @@ a.driver-cell.profile-link:hover .car-tag {
   letter-spacing: 0.06em;
   color: #fff;
 }
-.series-ncs { background: #d32f2f; }
-.series-nos { background: #1976d2; }
-.series-nts { background: #388e3c; }
+/* Series color story (consistent across the whole app):
+     NCS = gold  (the premier Cup series — "the gold standard")
+     NOS = green (Xfinity)
+     NTS = red   (Truck)
+   Used by .series-tag (small label) and .ctx-ncs/.ctx-nos/.ctx-nts (chip
+   variants in the career-context strip). Keep the gold readable by giving
+   it a dark text color rather than white. */
+.series-ncs { background: #d4a017; color: #1a1100; }   /* gold, dark text */
+.series-nos { background: #2e7d32; color: #fff; }      /* green */
+.series-nts { background: #c62828; color: #fff; }      /* red */
 
 /* Make team pills act like links when wrapped */
 .team-pill-link {
@@ -4756,9 +4763,9 @@ a.driver-cell.profile-link:hover .car-tag {
   border-radius: 3px;
   letter-spacing: 0.06em;
 }
-.ctx-ncs { background: rgba(211, 47, 47, 0.85); color: #fff; }
-.ctx-nos { background: rgba(25, 118, 210, 0.85); color: #fff; }
-.ctx-nts { background: rgba(56, 142, 60, 0.85); color: #fff; }
+.ctx-ncs { background: rgba(212, 160, 23, 0.85); color: #1a1100; }
+.ctx-nos { background: rgba(46, 125, 50, 0.85); color: #fff; }
+.ctx-nts { background: rgba(198, 40, 40, 0.85); color: #fff; }
 .ctx-pt {
   font-size: 8px;
   font-weight: 700;
@@ -5135,7 +5142,7 @@ a.driver-cell.profile-link:hover .car-tag {
 .ph-cell.ph-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
 .ph-cell.ph-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
 .ph-cell.ph-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
-.ph-cell.ph-down { background: rgba(220,140,70,0.30); color: #f7c79a; }
+.ph-cell.ph-down { background: rgba(255,70,70,0.22); color: #ffc2c2; }
 .ph-cell.ph-bot  { background: rgba(255,70,70,0.55); color: #230707; }
 .ph-cell:hover {
   outline: 1px solid rgba(255,255,255,0.3);
