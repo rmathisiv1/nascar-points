@@ -144,24 +144,47 @@ def parse_career_totals(soup: BeautifulSoup) -> dict[str, dict]:
     followed by a table of year-by-year rows. The final row has class='tot'
     and contains the career total for that series.
 
-    We iterate all H1 elements, map the series name to our code, and walk
-    forward to the next table, reading its headers + the 'tot' row.
+    We iterate all H1/H2/H3 elements, look for known series names appearing
+    anywhere in their text (so wrappers/extra spans don't break matching),
+    and walk forward to the next table with a 'tot' row. Multiple variants
+    of the series name and heading levels are accepted.
     """
     out: dict[str, dict] = {}
 
-    for h1 in soup.find_all("h1"):
-        title = normalize_text(h1.get_text())
-        # Strip trailing " Statistics" to match our map keys
-        series_name = re.sub(r"\s*Statistics\s*$", "", title, flags=re.I)
-        code = SERIES_LABEL_MAP.get(series_name)
+    # Look at all heading levels. Some drivers' pages put series in h1, others
+    # use h2 (especially when there's a single big h1 page title above).
+    headings = soup.find_all(["h1", "h2", "h3"])
+    for hd in headings:
+        title = normalize_text(hd.get_text())
+        # Strip trailing variants ("Statistics", "Career", "Stats")
+        cleaned = re.sub(r"\s*(Statistics|Career\s*Stats|Stats)\s*$", "", title, flags=re.I)
+        # Try direct map hit first
+        code = SERIES_LABEL_MAP.get(cleaned)
+        # Fallback: find any known series name as a substring of the heading.
+        # Sort candidates by length desc so "Craftsman Truck Series" wins over
+        # the bare "Truck Series".
+        if not code:
+            for series_name in sorted(SERIES_LABEL_MAP.keys(), key=len, reverse=True):
+                if series_name.lower() in cleaned.lower():
+                    code = SERIES_LABEL_MAP[series_name]
+                    break
         if not code:
             continue
+        # Don't overwrite a hit from an earlier heading (sometimes a page has
+        # both a section h2 and a sub-h3 that both reference the same series;
+        # the h2's table is the real career table).
+        if code in out:
+            continue
 
-        # Find the next <table> that contains a 'tot' class row
-        table = h1.find_next("table")
-        while table and not table.find("tr", class_="tot"):
+        # Find the next <table> that contains a 'tot' class row. Walk forward
+        # through siblings; cap at a reasonable distance to avoid finding a
+        # table from the next series section.
+        table = hd.find_next("table")
+        steps = 0
+        while table and not table.find("tr", class_="tot") and steps < 6:
             table = table.find_next("table")
-        if not table:
+            steps += 1
+        if not table or not table.find("tr", class_="tot"):
             continue
 
         # Grab the column headers from the first <tr> containing <th> elements
@@ -170,7 +193,6 @@ def parse_career_totals(soup: BeautifulSoup) -> dict[str, dict]:
             continue
         headers = [normalize_text(th.get_text()) for th in header_tr.find_all(["th"])]
         if not headers:
-            # Maybe headers are in <td> with class=newhead
             head_cells = header_tr.find_all(["td", "th"])
             headers = [normalize_text(c.get_text()) for c in head_cells]
 
