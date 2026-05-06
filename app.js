@@ -27,7 +27,7 @@ const STATE = {
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
-  profile: { kind: null, slug: null },
+  profile: { kind: null, slug: null, splitsRange: "season" },
   standings: { sortKey: "total", sortDir: "desc" },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
@@ -966,16 +966,39 @@ function wireUIControls() {
     renderTrajectory();
   });
 
-  // Career-context chip delegation. Lives on the profile takeover so clicks
-  // anywhere inside it find the chip via closest(). Switches the profile to
-  // the chosen (year, series) for the same driver — URL stays at #/driver/X.
+  // Profile-takeover click delegation. We bind one listener at the takeover
+  // root and let event.target.closest() figure out what was clicked. Two
+  // interactive controls live here:
+  //   1. .ctx-chip — career timeline chips (year + series jumps)
+  //   2. #profile-splits-toggle button — Track Splits Season/Career toggle
   document.getElementById("profile-takeover")?.addEventListener("click", (e) => {
     const chip = e.target.closest(".ctx-chip");
-    if (!chip) return;
-    e.preventDefault();
-    const year = parseInt(chip.dataset.ctxYear, 10);
-    const series = chip.dataset.ctxSeries;
-    if (year && series) switchProfileContext(year, series);
+    if (chip) {
+      e.preventDefault();
+      const year = parseInt(chip.dataset.ctxYear, 10);
+      const series = chip.dataset.ctxSeries;
+      if (year && series) switchProfileContext(year, series);
+      return;
+    }
+    const splitsBtn = e.target.closest("#profile-splits-toggle button");
+    if (splitsBtn) {
+      e.preventDefault();
+      const newMode = splitsBtn.dataset.val;   // "season" or "career"
+      if (!newMode || newMode === STATE.profile.splitsRange) return;
+      STATE.profile.splitsRange = newMode;
+      // Update toggle visual state immediately (no full re-render needed)
+      splitsBtn.parentElement.querySelectorAll("button").forEach(b =>
+        b.classList.toggle("on", b === splitsBtn)
+      );
+      // Update panel title to match the mode
+      const titleEl = document.getElementById("profile-track-splits-title");
+      if (titleEl) {
+        titleEl.textContent = (newMode === "career" ? "Career" : STATE.season) + " Track Splits";
+      }
+      // Repaint just the splits grid — no need to rebuild entire profile
+      const entity = findEntityFromSlug();
+      if (entity) paintProfileTrackSplits(entity);
+    }
   });
 }
 
@@ -4614,11 +4637,11 @@ function renderProfile() {
 
       <div class="profile-panel full">
         <div class="profile-panel-head">
-          <span class="profile-panel-title">${STATE.season} Track Splits</span>
+          <span class="profile-panel-title" id="profile-track-splits-title">${STATE.profile.splitsRange === "career" ? "Career" : STATE.season} Track Splits</span>
           <div class="profile-panel-head-right">
-            <div class="toggle-group mini" data-group="splits-range">
-              <button class="on" data-val="season">Season</button>
-              <button data-val="career" disabled title="Career-wide splits require multi-year data (coming with lazy-load feature)">Career</button>
+            <div class="toggle-group mini" data-group="splits-range" id="profile-splits-toggle">
+              <button class="${STATE.profile.splitsRange === "season" ? "on" : ""}" data-val="season">Season</button>
+              <button class="${STATE.profile.splitsRange === "career" ? "on" : ""}" data-val="career">Career</button>
             </div>
           </div>
         </div>
@@ -5051,10 +5074,75 @@ function computeTrackSplits(entity) {
   return result;
 }
 
+// Career-wide track splits — aggregates every race a driver ran across all
+// loaded SEASON_CACHE years and series. Returns the same {super, short,
+// inter, road} shape as the season-only version, so paintProfileTrackSplits
+// doesn't care which one it's rendering. Years not yet in SEASON_CACHE are
+// silently skipped — caller is responsible for triggering more season loads
+// if it wants completeness (renderProfile already does this on driver routes).
+function computeCareerTrackSplits(driverSlug) {
+  const buckets = { super: [], short: [], inter: [], road: [] };
+  if (!driverSlug) return computeTrackSplits({ races: [] });
+
+  Object.keys(SEASON_CACHE).forEach(year => {
+    const seriesBlocks = SEASON_CACHE[year];
+    if (!seriesBlocks) return;
+    ["NCS", "NOS", "NTS"].forEach(sCode => {
+      const block = seriesBlocks[sCode];
+      if (!block || !block.races) return;
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          if (slugify(d.driver || "") !== driverSlug) return;
+          const t = trackType(race.track_code);
+          if (!t || !buckets[t]) return;
+          // Normalize the per-race shape so it matches what entity.races
+          // looks like in the season-only path. computeTrackSplits reads
+          // r.finish, r.s1/s2 — provide those.
+          buckets[t].push({
+            finish: d.finish_pos,
+            s1: d.stage_1_pts || 0,
+            s2: d.stage_2_pts || 0,
+            track_code: race.track_code,
+            year: parseInt(year, 10),
+            series: sCode,
+          });
+        });
+      });
+    });
+  });
+
+  const result = {};
+  for (const [key, races] of Object.entries(buckets)) {
+    const finishes = races.map(r => r.finish).filter(x => x != null);
+    const starts = races.length;
+    const stagePts = races.map(r => (r.s1 || 0) + (r.s2 || 0));
+    result[key] = {
+      starts,
+      wins: finishes.filter(f => f === 1).length,
+      top5: finishes.filter(f => f <= 5).length,
+      top10: finishes.filter(f => f <= 10).length,
+      avgFinish: finishes.length ? finishes.reduce((s, x) => s + x, 0) / finishes.length : null,
+      avgStagePts: stagePts.length ? stagePts.reduce((s, x) => s + x, 0) / stagePts.length : null,
+      bestFinish: finishes.length ? Math.min(...finishes) : null,
+    };
+  }
+  return result;
+}
+
 function paintProfileTrackSplits(entity) {
   const host = document.getElementById("profile-track-splits");
   if (!host) return;
-  const splits = computeTrackSplits(entity);
+  // Pick season-only (entity.races) or career (cross-year SEASON_CACHE walk)
+  // based on the toggle. For non-driver profiles, career mode falls back to
+  // season since we can't reliably resolve a slug.
+  const mode = (STATE.profile && STATE.profile.splitsRange) || "season";
+  const driverSlug = STATE.profile && STATE.profile.kind === "driver"
+    ? STATE.profile.slug
+    : null;
+  const splits = (mode === "career" && driverSlug)
+    ? computeCareerTrackSplits(driverSlug)
+    : computeTrackSplits(entity);
   const ORDER = ["super", "short", "inter", "road"];
 
   host.innerHTML = ORDER.map(key => {
@@ -5085,7 +5173,7 @@ function paintProfileTrackSplits(entity) {
         <div class="track-split-stat"><span class="k">Top 5</span><span class="v">${s.top5}</span></div>
         <div class="track-split-stat"><span class="k">Top 10</span><span class="v">${s.top10}</span></div>
         <div class="track-split-stat"><span class="k">Avg Fin</span><span class="v ${avgCls}">${s.avgFinish != null ? s.avgFinish.toFixed(1) : '—'}</span></div>
-        ${isStageEra() ? `<div class="track-split-stat"><span class="k">Stage pts/race</span><span class="v">${s.avgStagePts != null ? s.avgStagePts.toFixed(1) : '—'}</span></div>` : ""}
+        ${(isStageEra() && mode !== "career") ? `<div class="track-split-stat"><span class="k">Stage pts/race</span><span class="v">${s.avgStagePts != null ? s.avgStagePts.toFixed(1) : '—'}</span></div>` : ""}
         <div class="track-split-stat"><span class="k">Best</span><span class="v">P${s.bestFinish ?? '—'}</span></div>
       </div>
     </div>`;
