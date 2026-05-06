@@ -39,6 +39,512 @@ const FALLBACK_COLOR = "#9ca3af";
 const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team", "cc"];
 
 // ============================================================
+// GLOBAL SEARCH  (topbar search bar)
+// ------------------------------------------------------------
+// Searches across drivers, teams, crew chiefs, and races. Indexed lazily
+// from SEASON_CACHE (whatever years are loaded) and STATE.driverBios. On
+// the first search-bar focus, kicks off a background load of every year
+// in STATE.seasonsAvailable so the index is complete after a beat.
+//
+// Query parsing for races extracts a 4-digit year token (if present) and
+// uses the rest as track-name keywords. So "2003 daytona" finds the 2003
+// Daytona races, "talladega" finds every Talladega race in cached data.
+// ============================================================
+
+const SEARCH = {
+  index: null,           // built on demand, invalidated when SEASON_CACHE grows
+  indexCacheKey: "",     // cache invalidation: number of cached years stringified
+  fullDataLoaded: false, // true after first-focus background fetch completes
+  fullDataLoading: false,
+  selectedIdx: -1,       // keyboard cursor in dropdown
+  results: [],           // last rendered result set (for keyboard nav)
+};
+
+// Build a flat search index from currently-cached data. Returns an array
+// of { type, key, label, sub, href, score_base } objects. Cached on
+// SEARCH.index until SEASON_CACHE changes (years load).
+function buildSearchIndex() {
+  const cacheKey = Object.keys(SEASON_CACHE).sort().join(",");
+  if (SEARCH.index && SEARCH.indexCacheKey === cacheKey) return SEARCH.index;
+
+  // Maps to dedupe across years — drivers/teams/CCs span seasons.
+  const driverMap = new Map();   // slug → { name, starts, years (Set) }
+  const teamMap = new Map();     // code → { code, fullName, starts, years (Set) }
+  const ccMap = new Map();       // slug → { name, starts, years (Set) }
+  const races = [];
+
+  Object.keys(SEASON_CACHE).forEach(yearStr => {
+    const year = parseInt(yearStr, 10);
+    const blocks = SEASON_CACHE[yearStr];
+    if (!blocks) return;
+    ["NCS", "NOS", "NTS"].forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block || !block.races) return;
+      block.races.forEach(race => {
+        // Race entry — only include if it has results (was actually run)
+        const hasResults = (race.results || []).some(d => d.finish_pos != null);
+        if (hasResults && race.track) {
+          races.push({
+            year,
+            series: sCode,
+            round: race.round,
+            track: race.track,
+            track_code: race.track_code,
+            name: race.name || "",
+            date: race.date || "",
+          });
+        }
+        // Walk every result row for drivers, teams, CCs
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          // Driver
+          if (d.driver) {
+            const slug = slugify(d.driver);
+            let drv = driverMap.get(slug);
+            if (!drv) {
+              drv = { name: d.driver, slug, starts: 0, years: new Set(),
+                      seriesSet: new Set() };
+              driverMap.set(slug, drv);
+            }
+            drv.starts++;
+            drv.years.add(year);
+            drv.seriesSet.add(sCode);
+          }
+          // Team
+          const teamCode = d.team_code || teamCodeFromName(
+            d.team, SERIES_TO_KEY[sCode], d.car_number
+          );
+          if (teamCode) {
+            let tm = teamMap.get(teamCode);
+            if (!tm) {
+              tm = { code: teamCode,
+                     fullName: TEAM_FULL_NAMES[teamCode] || teamCode,
+                     starts: 0, years: new Set(), seriesSet: new Set() };
+              teamMap.set(teamCode, tm);
+            }
+            tm.starts++;
+            tm.years.add(year);
+            tm.seriesSet.add(sCode);
+          }
+          // Crew chief
+          if (d.crew_chief) {
+            const slug = slugify(d.crew_chief);
+            let cc = ccMap.get(slug);
+            if (!cc) {
+              cc = { name: d.crew_chief, slug, starts: 0, years: new Set(),
+                     seriesSet: new Set() };
+              ccMap.set(slug, cc);
+            }
+            cc.starts++;
+            cc.years.add(year);
+            cc.seriesSet.add(sCode);
+          }
+        });
+      });
+    });
+  });
+
+  // Also pull driver names from STATE.driverBios — lets us find drivers
+  // who had bios scraped but whose seasons aren't loaded into cache yet.
+  if (STATE.driverBios) {
+    Object.values(STATE.driverBios).forEach(bio => {
+      if (!bio || !bio.name) return;
+      const slug = bio.slug || slugify(bio.name);
+      if (!driverMap.has(slug)) {
+        driverMap.set(slug, {
+          name: bio.name, slug, starts: 0, years: new Set(),
+          seriesSet: new Set(), fromBio: true,
+        });
+      }
+    });
+  }
+
+  // Also seed teams from TEAM_FULL_NAMES so well-known codes are findable
+  // even before any race data with that team has loaded.
+  Object.entries(TEAM_FULL_NAMES).forEach(([code, fullName]) => {
+    if (!teamMap.has(code)) {
+      teamMap.set(code, {
+        code, fullName, starts: 0, years: new Set(), seriesSet: new Set(),
+        fromTable: true,
+      });
+    }
+  });
+
+  const idx = [];
+
+  // Drivers
+  driverMap.forEach(d => {
+    const yrs = Array.from(d.years).sort();
+    const yrSpan = yrs.length === 0 ? "" :
+      (yrs.length === 1 ? `${yrs[0]}` : `${yrs[0]}-${yrs[yrs.length - 1]}`);
+    idx.push({
+      type: "driver",
+      key: d.slug,
+      label: d.name,
+      sub: yrSpan + (d.starts > 0 ? ` · ${d.starts} start${d.starts === 1 ? "" : "s"}` : ""),
+      href: `#/driver/${d.slug}`,
+      // Score base: starts (popularity). Bios-only entries score low so
+      // active drivers rank above one-off historical figures.
+      score_base: Math.log(1 + (d.starts || 0)) * 10,
+    });
+  });
+
+  // Teams
+  teamMap.forEach(t => {
+    const yrs = Array.from(t.years).sort();
+    const yrSpan = yrs.length === 0 ? "" :
+      (yrs.length === 1 ? `${yrs[0]}` : `${yrs[0]}-${yrs[yrs.length - 1]}`);
+    idx.push({
+      type: "team",
+      key: t.code,
+      label: t.fullName,
+      sub: `${t.code}${yrSpan ? " · " + yrSpan : ""}`,
+      href: `#/team/${t.code}`,
+      score_base: Math.log(1 + (t.starts || 0)) * 8,
+    });
+  });
+
+  // Crew chiefs
+  ccMap.forEach(c => {
+    const yrs = Array.from(c.years).sort();
+    const yrSpan = yrs.length === 0 ? "" :
+      (yrs.length === 1 ? `${yrs[0]}` : `${yrs[0]}-${yrs[yrs.length - 1]}`);
+    idx.push({
+      type: "cc",
+      key: c.slug,
+      label: c.name,
+      sub: yrSpan + ` · ${c.starts} race${c.starts === 1 ? "" : "s"} called`,
+      href: `#/cc/${c.slug}`,
+      score_base: Math.log(1 + (c.starts || 0)) * 6,
+    });
+  });
+
+  // Races — keyed by year+round+series so we can deep-link
+  races.forEach(r => {
+    const trackName = prettyTrack(r.track_code, r.track);
+    idx.push({
+      type: "race",
+      key: `${r.year}-${r.series}-${r.round}`,
+      label: `${r.year} ${trackName}`,
+      sub: `${r.series} R${r.round}${r.name ? " · " + r.name : ""}${r.date ? " · " + r.date : ""}`,
+      // Race route lives within a series+season context, so we navigate
+      // to that season's race-detail view via hash. The race view reads
+      // STATE.season + STATE.series + round; we'll switch context first
+      // via a special handler below.
+      href: `#/race/${r.round}?_y=${r.year}&_s=${r.series}`,
+      score_base: 1, // races score low by default; year+track match boosts
+      _race: r,
+    });
+  });
+
+  SEARCH.index = idx;
+  SEARCH.indexCacheKey = cacheKey;
+  return idx;
+}
+
+// Score a query against a single index entry. Returns 0 if no match.
+function scoreSearchEntry(entry, query, queryParts) {
+  const labelLow = entry.label.toLowerCase();
+  const subLow = (entry.sub || "").toLowerCase();
+  const keyLow = (entry.key || "").toLowerCase();
+
+  // For races, parse year token from query if present
+  if (entry.type === "race" && entry._race) {
+    const yearMatch = queryParts.find(p => /^\d{4}$/.test(p));
+    const trackQ = queryParts.filter(p => !/^\d{4}$/.test(p)).join(" ");
+    if (yearMatch) {
+      if (entry._race.year !== parseInt(yearMatch, 10)) return 0;
+    }
+    if (trackQ) {
+      const trackName = (prettyTrack(entry._race.track_code, entry._race.track) || "").toLowerCase();
+      const rawTrack = (entry._race.track || "").toLowerCase();
+      const code = (entry._race.track_code || "").toLowerCase();
+      const name = (entry._race.name || "").toLowerCase();
+      const hits = [trackName, rawTrack, code, name];
+      if (!hits.some(h => h.includes(trackQ))) return 0;
+    }
+    // Year-only match returns all races in that year, score = base + recency
+    let s = 100 + entry.score_base;
+    if (yearMatch) s += 50;
+    if (trackQ) s += 100;
+    return s;
+  }
+
+  // Generic match: label hit > sub hit > key hit
+  let score = 0;
+  // Exact label match
+  if (labelLow === query) score += 1000;
+  // Word-boundary prefix in label (each query part must hit some word)
+  const labelWords = labelLow.split(/\s+/);
+  let prefixHits = 0;
+  let substringHits = 0;
+  for (const part of queryParts) {
+    let hitWord = false;
+    for (const word of labelWords) {
+      if (word.startsWith(part)) { hitWord = true; prefixHits++; break; }
+    }
+    if (!hitWord && labelLow.includes(part)) {
+      substringHits++;
+    } else if (!hitWord) {
+      // Try sub or key
+      if (subLow.includes(part) || keyLow.includes(part)) {
+        substringHits++;
+      } else {
+        return 0;   // any unmatched part disqualifies
+      }
+    }
+  }
+  score += prefixHits * 50;
+  score += substringHits * 15;
+  // Boost: query is exact prefix of label
+  if (labelLow.startsWith(query)) score += 200;
+  // Type weighting — drivers > teams > CCs > races (when no year/track ctx)
+  const typeWeight = { driver: 30, team: 20, cc: 10, race: 5 };
+  score += typeWeight[entry.type] || 0;
+  // Add popularity base
+  score += entry.score_base;
+  return score;
+}
+
+function searchAll(query) {
+  query = (query || "").trim().toLowerCase();
+  if (query.length < 1) return [];
+  const idx = buildSearchIndex();
+  const queryParts = query.split(/\s+/).filter(Boolean);
+
+  const scored = [];
+  for (const entry of idx) {
+    const s = scoreSearchEntry(entry, query, queryParts);
+    if (s > 0) scored.push({ entry, score: s });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  // Cap at 50 results so the dropdown stays manageable
+  return scored.slice(0, 50).map(x => x.entry);
+}
+
+function renderSearchResults(results) {
+  const drop = document.getElementById("search-dropdown");
+  if (!drop) return;
+  if (results.length === 0) {
+    drop.innerHTML = `<div class="search-empty">No matches</div>`;
+    drop.hidden = false;
+    SEARCH.results = [];
+    SEARCH.selectedIdx = -1;
+    return;
+  }
+  // Group by type for visual organization
+  const groups = { driver: [], team: [], cc: [], race: [] };
+  results.forEach(r => groups[r.type] && groups[r.type].push(r));
+  const TYPE_LABEL = { driver: "Drivers", team: "Teams", cc: "Crew Chiefs", race: "Races" };
+  const TYPE_BADGE = { driver: "DRV", team: "TM", cc: "CC", race: "R" };
+
+  let flatIdx = 0;
+  const html = ["driver", "team", "cc", "race"].map(t => {
+    const list = groups[t];
+    if (!list.length) return "";
+    return `<div class="search-group">
+      <div class="search-group-head">${TYPE_LABEL[t]}</div>
+      ${list.map(r => {
+        const i = flatIdx++;
+        return `<a class="search-result" data-idx="${i}" href="${r.href}">
+          <span class="search-result-icon r-${t}">${TYPE_BADGE[t]}</span>
+          <div class="search-result-body">
+            <div class="search-result-label">${escapeHTML(r.label)}</div>
+            <div class="search-result-sub">${escapeHTML(r.sub || "")}</div>
+          </div>
+        </a>`;
+      }).join("")}
+    </div>`;
+  }).join("");
+
+  drop.innerHTML = html + `
+    <div class="search-shortcut-hint">
+      <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>↵</kbd> open · <kbd>Esc</kbd> close
+    </div>`;
+  drop.hidden = false;
+
+  // Flatten results in display order for keyboard nav
+  const flat = [];
+  ["driver", "team", "cc", "race"].forEach(t => groups[t].forEach(r => flat.push(r)));
+  SEARCH.results = flat;
+  SEARCH.selectedIdx = -1;
+}
+
+function setSearchKbdSelection(newIdx) {
+  const drop = document.getElementById("search-dropdown");
+  if (!drop) return;
+  const items = drop.querySelectorAll(".search-result");
+  if (items.length === 0) return;
+  // Wrap
+  if (newIdx < 0) newIdx = items.length - 1;
+  if (newIdx >= items.length) newIdx = 0;
+  items.forEach((el, i) => el.classList.toggle("kbd-active", i === newIdx));
+  SEARCH.selectedIdx = newIdx;
+  // Scroll into view
+  const sel = items[newIdx];
+  if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+
+// Race href has special form: #/race/<round>?_y=<year>&_s=<series>
+// We need to switch STATE.series + STATE.season then navigate. Detect this
+// shape on click and handle imperatively.
+async function handleSearchRaceClick(rawHref) {
+  const m = rawHref.match(/^#\/race\/(\d+)\?_y=(\d+)&_s=(NCS|NOS|NTS)$/);
+  if (!m) return false;
+  const round = parseInt(m[1], 10);
+  const year = parseInt(m[2], 10);
+  const series = m[3];
+  const drop = document.getElementById("search-dropdown");
+  if (drop) drop.hidden = true;
+  // Switch context if needed
+  if (STATE.series !== series || STATE.season !== year) {
+    STATE.series = series;
+    STATE.season = year;
+    STATE.throughRound = null;
+    await loadCurrentData();
+    resetRenderCache();
+    populateRacePicker();
+    renderTimeCursorBanner();
+  }
+  location.hash = `#/race/${round}`;
+  return true;
+}
+
+function clearSearch() {
+  const input = document.getElementById("search-input");
+  const drop = document.getElementById("search-dropdown");
+  if (input) input.value = "";
+  if (drop) { drop.hidden = true; drop.innerHTML = ""; }
+  SEARCH.results = [];
+  SEARCH.selectedIdx = -1;
+}
+
+// Trigger background load of all unloaded seasons so the index covers
+// every year. Cheap to call repeatedly — guarded by SEARCH.fullDataLoading.
+function ensureFullSearchData() {
+  if (SEARCH.fullDataLoaded || SEARCH.fullDataLoading) return;
+  const allYears = Object.keys(SEASON_CACHE).map(Number);
+  const missing = (STATE.seasonsAvailable || []).filter(y => !allYears.includes(y));
+  if (missing.length === 0) {
+    SEARCH.fullDataLoaded = true;
+    return;
+  }
+  SEARCH.fullDataLoading = true;
+  Promise.all(missing.map(y => loadSeasonIntoCache(y)))
+    .then(() => {
+      SEARCH.fullDataLoaded = true;
+      SEARCH.fullDataLoading = false;
+      SEARCH.index = null;   // invalidate so next query rebuilds
+      // If user is still in the search box, refresh results
+      const input = document.getElementById("search-input");
+      if (input && document.activeElement === input && input.value.trim()) {
+        renderSearchResults(searchAll(input.value));
+      }
+    })
+    .catch(() => { SEARCH.fullDataLoading = false; });
+}
+
+function wireSearch() {
+  const input = document.getElementById("search-input");
+  const drop = document.getElementById("search-dropdown");
+  if (!input || !drop) return;
+
+  // Debounced query handler — keystrokes are cheap but rebuilding the index
+  // when years just landed isn't, so debounce ~120ms.
+  let debounceTimer = null;
+  input.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const q = input.value.trim();
+      if (q.length === 0) {
+        drop.hidden = true;
+        drop.innerHTML = "";
+        return;
+      }
+      renderSearchResults(searchAll(q));
+    }, 120);
+  });
+
+  // First focus → kick off background full load
+  input.addEventListener("focus", () => {
+    ensureFullSearchData();
+    // If there's already a query, re-render with current index
+    const q = input.value.trim();
+    if (q) renderSearchResults(searchAll(q));
+  });
+
+  // Keyboard navigation in the dropdown
+  input.addEventListener("keydown", async (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSearchKbdSelection(SEARCH.selectedIdx + 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSearchKbdSelection(SEARCH.selectedIdx - 1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      let target = SEARCH.results[SEARCH.selectedIdx];
+      // If user hits Enter without selecting, take first result
+      if (!target && SEARCH.results.length > 0) target = SEARCH.results[0];
+      if (target) {
+        if (target.type === "race") {
+          await handleSearchRaceClick(target.href);
+        } else {
+          location.hash = target.href;
+        }
+        clearSearch();
+        input.blur();
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      clearSearch();
+      input.blur();
+    }
+  });
+
+  // Click on a result — special-case races for context switching
+  drop.addEventListener("click", async (e) => {
+    const a = e.target.closest(".search-result");
+    if (!a) return;
+    const href = a.getAttribute("href");
+    if (href && href.startsWith("#/race/") && href.includes("?_y=")) {
+      e.preventDefault();
+      await handleSearchRaceClick(href);
+      clearSearch();
+      return;
+    }
+    // Standard hash routes — let the browser handle it but close dropdown
+    setTimeout(() => clearSearch(), 0);
+  });
+
+  // Click anywhere outside → close dropdown
+  document.addEventListener("click", (e) => {
+    if (drop.hidden) return;
+    if (e.target.closest("#topbar-search")) return;
+    drop.hidden = true;
+  });
+
+  // Global hotkey: "/" or Cmd/Ctrl-K focuses the search bar
+  document.addEventListener("keydown", (e) => {
+    // Skip if user is typing in another input/textarea
+    const t = e.target;
+    const inField = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA"
+      || t.isContentEditable);
+    if (e.key === "/" && !inField) {
+      e.preventDefault();
+      input.focus();
+      input.select();
+    } else if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      input.focus();
+      input.select();
+    }
+  });
+}
+
+
+
+// ============================================================
 // BOOT
 // ============================================================
 async function boot() {
@@ -46,6 +552,7 @@ async function boot() {
   wireMobileNav();
   wirePickerDrawers();
   applyMobileLanding();
+  wireSearch();
   await loadColors();
   loadDriverBios();  // async, not awaited — profile will use it whenever it arrives
   await discoverSeasons();
