@@ -3625,10 +3625,11 @@ function trackType(trackCode) {
 // people actually say. When in doubt, use what a NASCAR fan/insider would call it in
 // conversation, not the official venue name.
 const TRACK_NAMES = {
+  // Modern tracks (current schedule)
   DAY: "Daytona",
   ECH: "Atlanta",        // rebranded EchoPark Speedway, still called Atlanta
   ATL: "Atlanta",        // older code for the same track
-  AUS: "COTA",           // Circuit of the Americas
+  AUS: "COTA",           // Circuit of the Americas (Austin, TX)
   PHO: "Phoenix",
   LAS: "Las Vegas",
   DAR: "Darlington",
@@ -3647,11 +3648,13 @@ const TRACK_NAMES = {
   POC: "Pocono",
   CHI: "Chicago Street",
   CHG: "Chicago Street",
-  NSH: "Nashville",
+  NSH: "Nashville",         // Fairgrounds (modern, occasional Cup return)
+  NSV: "Nashville Superspeedway",  // Lebanon TN — separate from NSH
   MIA: "Homestead",
   HOM: "Homestead",
   IOW: "Iowa",
   GWY: "Gateway",
+  GTW: "Gateway",
   WWT: "Gateway",
   SON: "Sonoma",
   WGI: "Watkins Glen",
@@ -3664,6 +3667,27 @@ const TRACK_NAMES = {
   NWK: "North Wilkesboro",
   MXI: "Mexico City",    // 2026 international date
   MEX: "Mexico City",
+
+  // Historical tracks no longer on the schedule (2001-2010 era)
+  // Many had multiple sponsor names over time — we use the venue name.
+  ROC: "Rockingham",         // North Carolina Speedway (1965-2004 Cup, returned 2025+ NTS)
+  NAZ: "Nazareth",           // PA short oval, closed 2004
+  PPI: "Pikes Peak",         // Pikes Peak Intl Raceway, NTS through 2005
+  MMR: "Mesa Marin",         // Bakersfield CA, NTS through 2003
+  MEM: "Memphis",            // Memphis Motorsports Park, closed 2010
+  MIL: "Milwaukee",          // The Mile, NOS/NTS through 2009 + return 2025 NTS
+  KEN: "Kentucky",           // Sparta, KY — closed for NASCAR after 2020
+  TWS: "Texas World",        // Texas World Speedway, NTS '01 only (different from TEX)
+  IRP: "Lucas Oil Raceway",  // Indianapolis Raceway Park / O'Reilly / Lucas Oil
+  EVG: "Evergreen",          // Evergreen Speedway, NTS '01
+
+  // Rare visits / road courses
+  STP: "St. Petersburg",     // St. Pete street course
+  LRP: "Lime Rock",          // Lime Rock Park CT
+  CAL: "Auto Club",          // California Speedway (Fontana) — distinct from AUS!
+  FON: "Auto Club",          // alt code for Fontana
+
+  // Bowman Gray / Daytona / etc. internationals already covered above
 };
 
 // Return the short, insider-friendly track name.
@@ -3697,22 +3721,227 @@ function prettyTrack(code, fallbackName) {
 }
 
 const TEAM_FULL_NAMES = {
-  "JGR": "Joe Gibbs Racing", "HMS": "Hendrick Motorsports", "RCR": "Richard Childress Racing",
-  "23XI": "23XI Racing", "PEN": "Team Penske", "RFK": "RFK Racing",
-  "FRM": "Front Row Motorsports", "THR": "Trackhouse Racing", "LMC": "Legacy Motor Club",
-  "SPI": "Spire Motorsports", "KR": "Kaulig Racing", "HAAS": "Haas Factory Team",
-  "HYAK": "HYAK Motorsports", "WBR": "Wood Brothers",
-  "JTG": "JTG Daugherty", "RWR": "Rick Ware Racing",
-  // NOS / NTS teams
-  "JRM": "JR Motorsports", "APR": "Alpha Prime", "SSG": "Sam Hunt Racing",
-  "JAR": "Jordan Anderson Racing", "RSS": "RSS Racing", "JGM": "Joey Gase Motorsports",
-  "MHR": "MBM/Motorsports", "BMR": "Big Machine Racing", "JCR": "Jesse Iwuji Motorsports",
-  "MBM": "Mike Beam Motorsports", "DGM": "DGM Racing", "YM": "Young's Motorsports",
-  "CFR": "Reaume Brothers", "OM": "Our Motorsports", "SH": "Stewart-Haas",
-  "BMM": "Bassett Motorsports", "PRG": "Precision Racing",
-  "VM": "Viking Motorsports", "AMR": "AM Racing",
-  "TRICON": "Tricon Garage", "KBM": "Kyle Busch Motorsports", "HAT": "Hattori Racing",
-  "CR7": "CR7 Motorsports", "HTM": "Halmar Friesen", "BAP": "Bret Holmes Racing",
+  // === Modern Cup teams (current era) ===
+  "JGR": "Joe Gibbs Racing",
+  "HMS": "Hendrick Motorsports",
+  "RCR": "Richard Childress Racing",
+  "23XI": "23XI Racing",
+  "PEN": "Team Penske",
+  "RFK": "RFK Racing",
+  "FRM": "Front Row Motorsports",
+  "THR": "Trackhouse Racing",
+  "LMC": "Legacy Motor Club",
+  "SPI": "Spire Motorsports",
+  "KR": "Kaulig Racing",
+  "HAAS": "Haas Factory Team",
+  "SHR": "Stewart-Haas Racing",
+  "HYAK": "HYAK Motorsports",
+  "WBR": "Wood Brothers Racing",
+  "JTG": "JTG Daugherty Racing",
+  "RWR": "Rick Ware Racing",
+
+  // === Modern NOS / NTS teams ===
+  "JRM": "JR Motorsports",
+  "APR": "Alpha Prime Racing",
+  "SSG": "SS-Green Light Racing",
+  "JAR": "Jordan Anderson Racing",
+  "RSS": "RSS Racing",
+  "JGM": "Joey Gase Motorsports",
+  "MHR": "MBM Motorsports",
+  "BMR": "Big Machine Racing",
+  "JCR": "Jeremy Clements Racing",
+  "MBM": "Carl Long Motorsports",
+  "DGM": "DGM Racing",
+  "YM": "Young's Motorsports",
+  "CFR": "Reaume Brothers Racing",
+  "OPM": "Our Motorsports",
+  "OM": "Our Motorsports",
+  "BMM": "Bassett Motorsports",
+  "PRG": "Precision Racing",
+  "VM": "Viking Motorsports",
+  "AMR": "AM Racing",
+  "TRICON": "Tricon Garage",
+  "KBM": "Kyle Busch Motorsports",
+  "HAT": "Hattori Racing Enterprises",
+  "CR7": "CR7 Motorsports",
+  "HTM": "Halmar Friesen Racing",
+  "BAP": "Bret Holmes Racing",
+  "BMA": "Bill McAnally Racing",
+  "TTM": "ThorSport Racing",
+  "RWM": "Rackley W.A.R.",
+  "BJM": "BJ McLeod Motorsports",
+  "JMR": "Jimmy Means Racing",
+  "MGM": "GMS Racing",
+  "REV": "Rev Racing",
+  "BAR": "Stanton Barrett Motorsports",
+  "VAV": "VaVia Motorsports",
+  "RGM": "Robby Gordon Motorsports",
+  "GO": "Go FAS Racing",
+
+  // === Historical Cup teams (pre-2014, but some persisted) ===
+  "DEI": "Dale Earnhardt, Inc.",
+  "MWR": "Michael Waltrip Racing",
+  "RYR": "Robert Yates Racing",
+  "PE":  "Petty Enterprises",
+  "RPM": "Richard Petty Motorsports",
+  "PGMS": "Petty GMS Motorsports",
+  "EVR": "Evernham Motorsports",
+  "BDR": "Bill Davis Racing",
+  "CGR": "Chip Ganassi Racing",
+  "EGR": "Earnhardt Ganassi Racing",
+  "PPI": "PPI Motorsports",
+  "MBV": "Morgan-McClure Motorsports",
+  "APR_C": "Andy Petree Racing",   // collision-safe variant if needed
+  "PHR": "Phoenix Racing",
+  "TBR": "Red Bull Racing Team",
+  "TBR2": "Tommy Baldwin Racing",
+  "BKR": "BK Racing",
+  "FRR": "Furniture Row Racing",
+  "FRR2": "Freedom Racing",
+  "LFR": "Leavine Family Racing",
+  "GER": "Germain Racing",
+  "AJF": "AJ Foyt Racing",
+  "HSM": "HScott Motorsports",
+  "GNN": "Ginn Racing",
+  "JEG": "Jasper Engines / Penske-Jasper",
+  "MBM2": "MB2 Motorsports",
+  "TCM": "Travis Carter Motorsports",
+  "TCM2": "Terry Carroll Motorsports",
+  "TBR2_C": "Tommy Baldwin Racing",   // alias
+
+  // === Historical NOS (Busch / Nationwide / Xfinity) ===
+  "JDM": "Davis Motorsports",
+  "JRR": "Jay Robinson Racing",
+  "MSR": "TriStar Motorsports",
+  "MSR2": "Shepherd Racing Ventures",
+  "KHI": "Kevin Harvick Inc.",
+  "TUR": "Turner Motorsports",
+  "NEM": "NEMCO Motorsports",
+  "RHR": "Red Horse Racing",
+  "BRA": "Braun Racing",
+  "BRE": "Brewco Motorsports",
+  "KMR": "Key Motorsports",
+  "PPC": "PPC Racing",
+  "RSI": "Team Rensi Motorsports",
+  "FTZ": "FitzBradshaw Racing",
+  "RWR2": "Rusty Wallace Racing",
+  "BKR2": "Brad Keselowski Racing",
+  "MAC": "MacDonald Motorsports",
+  "K-A": "K-Automotive Motorsports",
+  "JWR": "Whitener Motorsports",
+  "RBR": "RBR Enterprises",
+  "RBR2": "Ricky Benton Racing",
+  "BIA": "Biagi-DenBeste Racing",
+  "DAY": "Day Enterprise",   // NOTE: same code as Daytona track — namespaces don't collide
+  "MLM": "ML Motorsports",
+  "AKR": "Akins Motorsports",
+  "STR": "StarCom Racing",
+  "EGM": "Emerling-Gase Motorsports",
+  "TRG": "The Racer's Group",
+  "CPE": "Cope Family Racing",
+  "DWR": "Darrell Waltrip Motorsports",
+  "WYL": "Jeff Wyler Racing",
+  "BMT": "Belmont Racing",
+  "KSR": "Kirk Shelmerdine Racing",
+  "GAU": "Gaughan Motorsports",
+  "JBR2": "Jerry Brown Racing",
+  "JCR2": "Jesse Iwuji Motorsports",  // JCR taken by Jeremy Clements
+  "WPR": "Wayne Peterson Racing",
+
+  // === Historical NTS ===
+  "BHR": "Bobby Hamilton Racing",
+  "BBR": "Billy Ballew Motorsports",
+  "ULT": "Ultra Motorsports",
+  "MMR": "MB Motorsports",       // namespace separate from MMR track code
+  "GCR": "Christensen Motorsports",
+  "CMR": "Circle M Racing",
+  "SPM": "Spears Motorsports",
+  "HMR": "Harris Motorsports",
+  "DDM": "Dollar Motorsports",
+  "NBR": "Norm Benning Racing",
+  "BVM": "Beaver Motorsports",
+  "JJC": "Jennifer Jo Cobb Racing",
+  "RRR": "Robert Richardson Racing",
+  "DEB": "Debidart Motorsports",
+  "JGR2": "Johnny Gray Racing",
+  "LBM": "Larry Berg Motorsports",
+  "HLR": "Hattori Larsen Racing",
+  "HLL": "Timmy Hill Motorsports",
+  "RPR": "Roper Racing",
+
+  // === 2nd-pass historical additions ===
+  "MIX": "Mixon Motorsports",
+  "MSRP": "MSRP Motorsports",
+  "RMM": "Randy Moss Motorsports",
+  "ASI": "ASI Limited",
+  "ESR": "Eddie Sharp Racing",
+  "PPR": "Phil Parsons Racing",
+  "DCR": "Dave Carroll Motorsports",
+  "DWM": "Dusty Whitney Motorsports",
+  "MMS": "McGill Motorsports",
+  "BMS": "Baumgardner Motorsports",
+  "EVA": "Evans Motorsports",
+  "CIR": "Circle Sport",
+  "JSR": "Sciavicco Racing",
+  "CH2": "Chance 2 Motorsports",
+  "MNR": "McNelly Racing",
+  "DMR": "Malcolmson Motorsports",
+  "JRY": "Reilly Motorsports",
+  "BMR2": "Mullet Motorsports",
+  "CLR": "Coulter Racing",
+  "HZG": "Herzog Motorsports",
+  "LNR": "Lane Racing",
+  "SRR": "Sam Rensi Motorsports",
+  "BRT": "Terry Bradshaw Motorsports",
+  "SHF": "Shoffner Motorsports",
+  "BBD": "Brett Bodine Racing",
+  "FAS": "FAS Lane Racing",
+  "FUG": "Fuge Racing",
+  "HBG": "Hillenburg Motorsports",
+  "DMD": "Doc MacDonald Racing",
+  "CMP": "Stacy Compton Racing",
+  "SAU": "Saunders Racing",
+  "JES": "Jesel Motorsports",
+  "OBA": "Obaika Racing",
+  "SCH": "Schrader Racing",
+  "BAL": "Baluch Motorsports",
+  "HEN": "Hensley Racing",
+  "MOR": "Moorad Motorsports",
+  "BSM": "Bryan Smith Racing",
+  "BWL": "Barnwell Racing",
+  "DCK": "Dick Racing",
+  "TWN": "Townley Racing",
+  "GDW": "Goodwin Motorsports",
+  "DWH": "Derek White Racing",
+  "BNF": "Bonifield Racing",
+  "HLM": "Holmes Racing",
+  "COL": "Coleman Racing",
+  "BKF": "Bickford Motorsports",
+  "SUT": "Sutton Racing",
+  "DNT": "Dennette Racing",
+  "MSH": "Marsh Racing",
+  "ARN": "Arnold Motorsports",
+  "GLD": "Gaulding Racing",
+  "MGY": "Montgomery Motorsports",
+  "GBR": "Gaunt Brothers Racing",
+  "BAK": "Baker Motorsports",
+  "JSC": "Joe Scott Racing",
+  "FON": "Fontaine Motorsports",   // NOTE: namespace separate from FON track code
+  "BDV": "Brandon Davis Racing",
+  "RZB": "Rosenblum Motorsports",
+  "URV": "Urvan Motorsports",
+  "CCM": "Ciccarelli Motorsports",
+  "JPM": "JP Motorsports",
+  "MZZ": "Mazzuchi Racing",
+  "CAR": "Carter Motorsports",
+  "STG": "Stringer Motorsports",
+  "NMS": "Norick Motorsports",
+  "ADD": "Addington Racing",
+  "HSR": "Hermie Sadler Racing",
+  "BBT": "Boat Racing",
+  "WLV": "Welliver Motorsports",
+  "MSK": "Meshkin Motorsports",
+  "GUN": "Gunselman Motorsports",
 };
 // Display label for the card header when an alliance groups multiple teams together
 const GROUP_DISPLAY_NAMES = {

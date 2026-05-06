@@ -183,10 +183,12 @@ TRACK_CODES = {
     "north carolina speedway": "ROC",     # rr.com's name for Rockingham
     "st. petersburg": "STP", "st petersburg": "STP",
     "lime rock": "LRP",
-    # Auto Club / Fontana — same physical track, two names over its lifetime
-    "auto club": "AUS",                   # rr.com calls it Auto Club Speedway
-    "fontana": "AUS",                     # season page sometimes shows Fontana
-    "california speedway": "AUS",         # name used 1997-2007
+    # Auto Club / Fontana / California Speedway — same physical track in CA,
+    # multiple names over its lifetime (1997-2023, demolished after). Distinct
+    # from AUS = Circuit of the Americas (Austin TX), which is a road course.
+    "auto club": "FON",                   # rr.com calls it Auto Club Speedway
+    "fontana": "FON",                     # season page sometimes shows Fontana
+    "california speedway": "FON",         # name used 1997-2007
     # Historical tracks no longer on the schedule (2001-2013 era)
     "nazareth": "NAZ",                    # NOS through 2004
     "pikes peak": "PPI",                  # NTS through 2005
