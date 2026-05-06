@@ -58,6 +58,13 @@ html, body {
   display: flex; align-items: center; gap: 10px;
   font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
   white-space: nowrap;
+  text-decoration: none;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.brand:hover { color: var(--accent); }
+.brand-name {
+  font-weight: 700;
 }
 .brand-mark {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
@@ -5072,11 +5079,10 @@ a.driver-cell.profile-link:hover .car-tag {
 .ph-grid {
   display: grid;
   /* Width strategy: row-label column at fixed 70px, then race columns share
-     remaining space equally via 1fr. On desktop this lets cells stretch to
-     fill the panel — no awkward dead zone to the right of the last column.
-     On mobile, the @media block below switches to fixed-px columns so the
-     grid scrolls horizontally instead of cramming cells into 8-10px each. */
-  grid-template-columns: 70px repeat(var(--ph-cols, 36), minmax(20px, 1fr));
+     remaining space equally via 1fr, and a fixed 44px "Final" column at
+     the end for the year-end standings rank. Sticky-left on the row label
+     keeps the year visible while horizontal-scrolling on mobile. */
+  grid-template-columns: 70px repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
   gap: 2px;
   font-family: var(--mono);
   font-size: 10px;
@@ -5134,6 +5140,39 @@ a.driver-cell.profile-link:hover .car-tag {
   background: rgba(255,255,255,0.02);
   border-radius: 2px;
 }
+/* Year-end standings rank pill at the right edge of each row. Same
+   color tiers as finish cells — but with stronger weight since it's a
+   summary stat. */
+.ph-rank {
+  height: 22px;
+  text-align: center;
+  border-radius: 2px;
+  font-weight: 800;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.02em;
+}
+.ph-rank.ph-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.55), 0 0 6px rgba(255,200,50,0.45); }
+.ph-rank.ph-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
+.ph-rank.ph-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
+.ph-rank.ph-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.ph-rank.ph-down { background: rgba(255,70,70,0.22); color: #ffc2c2; }
+.ph-rank.ph-bot  { background: rgba(255,70,70,0.55); color: #230707; }
+.ph-rank-empty {
+  height: 22px;
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+.ph-rank-head {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
 /* Career heatmap tier mapping — wins are gold/celebratory (always pop),
    T5 bright green, T10 muted green, 11-20 neutral, 21-30 warm orange,
    31+ deep red. The old ph-top / ph-up class names are aliased below for
@@ -5155,12 +5194,12 @@ a.driver-cell.profile-link:hover .car-tag {
   .ph-grid {
     /* On mobile we want fixed cell widths so the grid stays readable;
        overflow-x on the host scrolls horizontally for long schedules. */
-    grid-template-columns: 56px repeat(var(--ph-cols, 36), 18px);
+    grid-template-columns: 56px repeat(var(--ph-cols, 36), 18px) 38px;
     font-size: 9px;
     width: max-content;
     min-width: 100%;
   }
-  .ph-cell, .ph-cell-empty {
+  .ph-cell, .ph-cell-empty, .ph-rank, .ph-rank-empty {
     height: 18px;
   }
   .ph-head-cell {
@@ -5222,4 +5261,172 @@ a.driver-cell.profile-link:hover .car-tag {
     padding: 4px 8px;
     font-size: 10px;
   }
+}
+
+/* Clickable driver names in the metric bar (Leader / Hottest / Coldest).
+   Inherit color from the parent .v / .v.hot / .v.cold so the visual
+   styling stays the same — but show as a link affordance on hover. */
+.metric-name-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.12s ease;
+}
+.metric-name-link:hover {
+  border-bottom-color: currentColor;
+}
+
+/* Mobile/narrow topbar: hide the long wordmark, keep just the DC badge */
+@media (max-width: 767.98px) {
+  .brand-name { display: none; }
+}
+
+/* ============================================================
+   Championship pill + Team page polish
+   ============================================================ */
+
+/* Driver hero championship pill — gold star + count + label */
+.profile-hero-champ {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 200, 50, 0.14);
+  border: 1px solid rgba(255, 200, 50, 0.45);
+  border-radius: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffd166;
+  cursor: help;
+}
+.profile-hero-champ .champ-trophy {
+  font-size: 12px;
+  filter: drop-shadow(0 0 4px rgba(255,200,50,0.45));
+}
+.profile-hero-champ .champ-count {
+  font-size: 13px;
+  color: #ffe293;
+}
+.profile-hero-champ .champ-label {
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Team-hero championship pill — slightly larger, sits in top-right of hero */
+.tm-hero-champ {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 200, 50, 0.14);
+  border: 1px solid rgba(255, 200, 50, 0.45);
+  border-radius: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffd166;
+  cursor: help;
+  white-space: pre;
+}
+.tm-hero-champ .champ-trophy {
+  font-size: 14px;
+  filter: drop-shadow(0 0 4px rgba(255,200,50,0.45));
+}
+.tm-hero-champ .champ-count {
+  font-size: 14px;
+  color: #ffe293;
+}
+.tm-hero {
+  position: relative;   /* anchor for the absolute champ pill */
+}
+
+/* Team stats row context label — makes it obvious the stats below are
+   scoped to the user's pre-takeover series + season ("2026 NCS team
+   stats" rather than ambiguous bare numbers). */
+.tm-stats-row {
+  position: relative;
+}
+.tm-stats-context {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  width: 100%;
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border);
+}
+.tm-stats-context-sub {
+  color: var(--dim);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Team "Current cars" rows — multi-series version */
+.tm-car-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.12s ease;
+}
+.tm-car-row:last-child { border-bottom: none; }
+.tm-car-row:hover { background: rgba(255,255,255,0.03); }
+.tm-car-num {
+  width: 44px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 800;
+}
+.tm-car-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tm-car-driver {
+  font-weight: 700;
+  font-size: 13px;
+}
+.tm-car-stats {
+  font-family: var(--mono);
+  font-size: 10px;
+  margin-top: 2px;
+}
+.tm-car-rank {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+@media (max-width: 767.98px) {
+  .tm-hero-champ {
+    top: 10px;
+    right: 12px;
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .tm-stats-context {
+    font-size: 9px;
+  }
+  .tm-car-row {
+    grid-template-columns: 36px 1fr auto;
+    gap: 10px;
+    padding: 8px 12px;
+  }
+  .tm-car-num { width: 36px; height: 30px; font-size: 12px; }
+  .tm-car-driver { font-size: 12px; }
 }

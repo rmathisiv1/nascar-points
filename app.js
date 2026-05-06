@@ -2344,13 +2344,23 @@ function renderMetricBar() {
     upcomingHTML = "Season complete";
   }
 
+  // Build clickable name spans for the leader/hot/cold rows so the user
+  // can jump straight into a driver profile from the metric bar. Plain
+  // text fallback if we can't resolve a primary driver (rare).
+  const driverLink = (entity, suffix = "") => {
+    if (!entity) return "—";
+    const drv = entity.primaryDriver || entity.driver;
+    if (!drv) return escapeHTML(displayName(entity)) + suffix;
+    return `<a href="#/driver/${slugify(drv)}" class="metric-name-link">${escapeHTML(displayName(entity))}</a>${suffix}`;
+  };
+
   const metricsHTML = `
     <div class="metric" data-tip="${escapeHTML(leaderTip)}"><span class="k">Leader</span>
-      <span class="v">${leader ? `${escapeHTML(displayName(leader))} \u00b7 ${leader.total}` : "\u2014"}</span></div>
+      <span class="v">${leader ? `${driverLink(leader)} \u00b7 ${leader.total}` : "\u2014"}</span></div>
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Hottest</span>
-      <span class="v hot">${hottest ? `${escapeHTML(displayName(hottest.entity))} ${signed(hottest.delta.toFixed(1))}` : "\u2014"}</span></div>
+      <span class="v hot">${hottest ? `${driverLink(hottest.entity)} ${signed(hottest.delta.toFixed(1))}` : "\u2014"}</span></div>
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Coldest</span>
-      <span class="v cold">${coldest ? `${escapeHTML(displayName(coldest.entity))} ${signed(coldest.delta.toFixed(1))}` : "\u2014"}</span></div>
+      <span class="v cold">${coldest ? `${driverLink(coldest.entity)} ${signed(coldest.delta.toFixed(1))}` : "\u2014"}</span></div>
     <div class="metric metric-lastrace" data-tip="${escapeHTML(raceTip)}"><span class="k">${STATE.throughRound != null ? "As Of" : "Last Race"}</span>
       <div class="metric-lastrace-row">
         <span class="v">${lastRace ? `R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}` : "\u2014"}</span>
@@ -3132,6 +3142,16 @@ function renderArc() {
   const svg = document.getElementById("arc-svg");
   if (!STATE.data) return;
 
+  // Default selection: when the user hasn't actively chosen drivers (and
+  // hasn't explicitly cleared the selection via the Clear button), seed
+  // with the current top-5 in points. This way the first time a user
+  // lands on Cumulative Season they see something useful instead of a
+  // blank chart.
+  if (STATE.arc.selected.size === 0 && !STATE.arc.userCleared) {
+    const totals = computeSeasonTotals();
+    totals.slice(0, 5).forEach(t => STATE.arc.selected.add(entityKey(t)));
+  }
+
   // Team pills toggle team-wide selection in STATE.arc.selected
   renderTeamFilter(
     "arc-team-filter",
@@ -3224,11 +3244,6 @@ function renderArc() {
         s.values[i] = rankByIdx[idx] ?? null;
       });
     });
-  }
-
-  if (STATE.arc.selected.size === 0 && !STATE.arc.userCleared) {
-    const totals = computeSeasonTotals();
-    totals.slice(0, 5).forEach(t => STATE.arc.selected.add(entityKey(t)));
   }
 
   const isMob = isMobile();
@@ -5378,6 +5393,81 @@ function profileTeammates(entity) {
 // Returns the set of (year, series) pairs where this driver raced, sorted
 // newest-first. Only scans loaded SEASON_CACHE entries — so the strip grows
 // as the user navigates back and triggers more season loads.
+// Counts year-end championships across all loaded series for a driver
+// slug. Walks SEASON_CACHE for each year × series; a championship is a
+// final_standings[0] match. Returns { total, byYear: [{year, series}] }
+// so callers can render either a single number or a tooltip listing the
+// specific championship years.
+function countDriverChampionships(driverSlug) {
+  if (!driverSlug) return { total: 0, byYear: [] };
+  const byYear = [];
+  const seriesList = ["NCS", "NOS", "NTS"];
+  Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    seriesList.forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block || !block.final_standings || !block.final_standings.length) return;
+      const champ = block.final_standings[0];
+      if (!champ || !champ.driver) return;
+      if (slugify(champ.driver) === driverSlug) {
+        byYear.push({ year, series: sCode });
+      }
+    });
+  });
+  return { total: byYear.length, byYear };
+}
+
+// Counts year-end championships for a team code. A team championship is
+// a year/series where final_standings[0]'s driver was in a car owned by
+// this team. Resolves driver→car→team via the per-season race results
+// (we don't have a direct champion-team field). Same return shape as
+// countDriverChampionships, plus a `driver` field so the tooltip can
+// say "2010 NCS · Jimmie Johnson".
+function countTeamChampionships(teamCode) {
+  if (!teamCode) return { total: 0, byYear: [] };
+  const byYear = [];
+  const seriesList = ["NCS", "NOS", "NTS"];
+  Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    seriesList.forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block || !block.final_standings || !block.final_standings.length) return;
+      const champ = block.final_standings[0];
+      if (!champ || !champ.driver) return;
+      // Find the car the champion drove most. Walk this year/series races
+      // and tally the champ's starts per car_number; pick the dominant car.
+      const champNorm = slugify(champ.driver);
+      const carStarts = {};
+      (block.races || []).forEach(race => {
+        (race.results || []).forEach(d => {
+          if (!d.driver || slugify(d.driver) !== champNorm) return;
+          carStarts[d.car_number] = (carStarts[d.car_number] || 0) + 1;
+        });
+      });
+      let dominantCar = null, max = 0;
+      for (const [c, n] of Object.entries(carStarts)) {
+        if (n > max) { dominantCar = c; max = n; }
+      }
+      if (!dominantCar) return;
+      // Look up that car's team_code in this year/series. We can pull from
+      // the first race row that has the car. Check team_code AND any team
+      // grouping (e.g. WBR allied to PEN doesn't count as a PEN champ).
+      let carTeam = null;
+      (block.races || []).some(race => {
+        const hit = (race.results || []).find(d => d.car_number === dominantCar);
+        if (hit && hit.team_code) { carTeam = hit.team_code; return true; }
+        return false;
+      });
+      if (carTeam === teamCode) {
+        byYear.push({ year, series: sCode, driver: champ.driver });
+      }
+    });
+  });
+  return { total: byYear.length, byYear };
+}
+
 function driverCareerYears(driverSlug) {
   const out = [];
   Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
@@ -5634,6 +5724,21 @@ function renderProfile() {
              </div>
            </div>`);
 
+  // Championship count across all series. Walks SEASON_CACHE for every
+  // (year, series) and counts where final_standings[0] matches the driver.
+  // Renders as a small gold pill — only shown if > 0.
+  const driverSlugForChips = STATE.profile && STATE.profile.kind === "driver"
+    ? STATE.profile.slug : slugify(primaryDrv);
+  const champData = countDriverChampionships(driverSlugForChips);
+  const champTooltip = champData.byYear.map(c => `${c.year} ${c.series}`).join(" · ");
+  const champLine = champData.total > 0
+    ? `<span class="profile-hero-champ" title="${escapeHTML(champTooltip)}">
+         <span class="champ-trophy">★</span>
+         <span class="champ-count">${champData.total}</span>
+         <span class="champ-label">${champData.total === 1 ? "Championship" : "Championships"}</span>
+       </span>`
+    : "";
+
   host.innerHTML = `
     <div class="profile-hero" style="--driver-color:${carHex}">
       <div class="profile-hero-car" style="background:${carHex};color:${carTxt}">${entity.car_number}</div>
@@ -5642,6 +5747,7 @@ function renderProfile() {
         <div class="profile-hero-meta">
           ${renderTeamPill(teamCode, /*clickable=*/true)}
           <span class="profile-hero-team"><strong>${escapeHTML(mfr)}</strong> · <a href="#/team/${encodeURIComponent(teamCode)}" class="profile-team-link">${escapeHTML(teamName)}</a></span>
+          ${champLine}
           ${ccLine}
           ${bioLine}
         </div>
@@ -6423,6 +6529,7 @@ function paintProfileCareerHeatmap() {
       const finishByRound = new Map();
       const trackByRound = new Map();
       let driverDrove = false;
+      let driverNameThisYear = null;
       block.races.forEach(race => {
         if (race.round == null) return;
         // Track the schedule length so the grid is wide enough even when
@@ -6439,10 +6546,41 @@ function paintProfileCareerHeatmap() {
           driverDrove = true;
           finishByRound.set(race.round, hit.finish_pos);
           trackByRound.set(race.round, race);
+          driverNameThisYear = hit.driver;
         }
       });
       if (driverDrove) {
-        rows.push({ year, series: sCode, finishByRound, trackByRound });
+        // Year-end standings rank for this driver in this series. Prefer
+        // canonical final_standings (completed seasons); fall back to a
+        // live rank derived from points totals for in-progress years.
+        let standingsRank = null;
+        const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+        const targetNorm = normalize(driverNameThisYear || "");
+        if (block.final_standings && block.final_standings.length) {
+          const finalHit = block.final_standings.find(s =>
+            normalize(s.driver) === targetNorm
+          );
+          if (finalHit) standingsRank = finalHit.rank;
+        }
+        if (standingsRank == null) {
+          // Live rank fallback — sum points per driver across the year, sort
+          // desc, find target's position. Skip ineligible rows for live
+          // standings purposes (they don't earn points).
+          const ptsByDriver = new Map();
+          block.races.forEach(race => {
+            (race.results || []).forEach(d => {
+              if (d.ineligible) return;
+              if (!d.driver) return;
+              const key = normalize(d.driver);
+              ptsByDriver.set(key, (ptsByDriver.get(key) || 0) + (d.race_pts || 0));
+            });
+          });
+          const ranked = Array.from(ptsByDriver.entries())
+            .sort((a, b) => b[1] - a[1]);
+          const idx = ranked.findIndex(([k]) => k === targetNorm);
+          if (idx >= 0) standingsRank = idx + 1;
+        }
+        rows.push({ year, series: sCode, finishByRound, trackByRound, standingsRank });
       }
     });
   });
@@ -6474,7 +6612,7 @@ function paintProfileCareerHeatmap() {
     return "ph-cell ph-bot";
   };
 
-  // Header — column labels R1..Rn
+  // Header — column labels R1..Rn + a "Final" header for the rank column
   const headCols = [];
   for (let i = 1; i <= maxRound; i++) {
     headCols.push(`<div class="ph-head-cell">${i}</div>`);
@@ -6482,7 +6620,21 @@ function paintProfileCareerHeatmap() {
   const headHTML = `<div class="ph-row ph-header">
     <div class="ph-row-label ph-row-label-head">Year</div>
     ${headCols.join("")}
+    <div class="ph-head-cell ph-rank-head">Final</div>
   </div>`;
+
+  // Color the rank pill: P1 gold (champion), P2-P5 green, P6-P10 muted
+  // green, P11-P20 neutral, P21+ red. Pulls from the same tier scheme as
+  // finish cells so the visual story is consistent.
+  const rankCellClass = (rank) => {
+    if (rank == null) return "ph-rank ph-rank-empty";
+    if (rank === 1) return "ph-rank ph-win";
+    if (rank <= 5) return "ph-rank ph-t5";
+    if (rank <= 10) return "ph-rank ph-t10";
+    if (rank <= 20) return "ph-rank ph-mid";
+    if (rank <= 30) return "ph-rank ph-down";
+    return "ph-rank ph-bot";
+  };
 
   const bodyHTML = rows.map(r => {
     const cells = [];
@@ -6497,12 +6649,16 @@ function paintProfileCareerHeatmap() {
         `<div class="${cellClass(fin)}"${titleAttr ? ` title="${escapeHTML(titleAttr)}"` : ""}>${fin != null ? fin : ""}</div>`
       );
     }
+    const rankCell = r.standingsRank != null
+      ? `<div class="${rankCellClass(r.standingsRank)}" title="${r.year} ${r.series} year-end standings: P${r.standingsRank}">P${r.standingsRank}</div>`
+      : `<div class="ph-rank ph-rank-empty">—</div>`;
     return `<div class="ph-row">
       <div class="ph-row-label">
         <span class="ph-yr">${r.year}</span>
         <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
       </div>
       ${cells.join("")}
+      ${rankCell}
     </div>`;
   }).join("");
 
@@ -8393,6 +8549,26 @@ function renderTeamPage() {
   // Only show years that are loaded; lazy-load remaining recent years if needed.
   const historicalRows = computeTeamHistory(teamCode);
 
+  // Championship count (across all series). Hero gold-star pill.
+  const teamChamps = countTeamChampionships(teamCode);
+  const champTip = teamChamps.byYear
+    .map(c => `${c.year} ${c.series} · ${c.driver}`)
+    .join("\n");
+  const champLine = teamChamps.total > 0
+    ? `<div class="tm-hero-champ" title="${escapeHTML(champTip)}">
+         <span class="champ-trophy">★</span>
+         <span class="champ-count">${teamChamps.total}</span>
+         <span class="champ-label">${teamChamps.total === 1 ? "Championship" : "Championships"}</span>
+       </div>`
+    : "";
+
+  // Current cars across ALL series for the current year — the user can't
+  // pick a series while inside a team takeover, so we surface every car
+  // owned by this team (or its alliance group) regardless of series. The
+  // stats row above is intentionally still scoped to STATE.series so the
+  // numbers tie back to the user's pre-takeover context.
+  const allSeriesCurrentCars = computeAllSeriesCurrentCars(teamCode);
+
   host.innerHTML = `
     <div class="rc-hero tm-hero" style="border-left: 4px solid ${orgHex};">
       <div class="rc-hero-badge" style="background:${orgHex};color:${orgTxt}">${escapeHTML(era.abbr)}</div>
@@ -8400,9 +8576,11 @@ function renderTeamPage() {
       <div class="rc-hero-meta">
         ${currentCars.length} car${currentCars.length === 1 ? "" : "s"} · ${STATE.season} ${STATE.series}
       </div>
+      ${champLine}
     </div>
 
     <div class="tm-stats-row">
+      <div class="tm-stats-context">${STATE.season} ${STATE.series} <span class="tm-stats-context-sub">team stats</span></div>
       <div class="tm-stat"><span class="k">Wins</span><span class="v">${teamWins}</span></div>
       <div class="tm-stat"><span class="k">Top 5</span><span class="v">${teamTop5s}</span></div>
       <div class="tm-stat"><span class="k">Top 10</span><span class="v">${teamTop10s}</span></div>
@@ -8412,11 +8590,11 @@ function renderTeamPage() {
 
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-head">
-        <span class="rc-card-title">Current cars</span>
-        <span class="rc-card-sub">click a driver to see their full profile</span>
+        <span class="rc-card-title">Current cars · ${STATE.season}</span>
+        <span class="rc-card-sub">all series · click a driver for full profile</span>
       </div>
       <div class="rc-card-body tm-cars-body">
-        ${carCards || `<div class="empty">No cars in ${STATE.season} ${STATE.series}.</div>`}
+        ${renderAllSeriesCarCards(allSeriesCurrentCars) || `<div class="empty">No cars in ${STATE.season}.</div>`}
       </div>
     </div>
 
@@ -8424,7 +8602,7 @@ function renderTeamPage() {
 
     <div class="card rc-card rc-card-wide has-sticky-thead">
       <div class="rc-card-head">
-        <span class="rc-card-title">Historical drivers</span>
+        <span class="rc-card-title">Historical drivers · ${STATE.series}</span>
         <span class="rc-card-sub">${historicalRows.length ? `across ${historicalRows.length} season${historicalRows.length === 1 ? "" : "s"}` : "loading…"}</span>
       </div>
       <div class="rc-card-body" style="padding:0;">${renderTeamHistoryTable(historicalRows, teamCode)}</div>
@@ -8441,6 +8619,95 @@ function renderTeamPage() {
         if (STATE.view === "team") renderTeamPage();
       });
   }
+}
+
+// Aggregate every car owned by a team across all 3 series for the current
+// season. Returns [{ series, entity, total, rank, wins, top5, top10 }]
+// sorted by series priority then car number. Used by the "Current cars"
+// card on team pages — the user can't pick a series within a team take-
+// over, so we surface every car the team fields regardless of series.
+function computeAllSeriesCurrentCars(teamCode) {
+  if (!teamCode) return [];
+  const out = [];
+  const year = STATE.season;
+  const seriesList = ["NCS", "NOS", "NTS"];
+  const blocks = SEASON_CACHE[year];
+  if (!blocks) return [];
+  seriesList.forEach(sCode => {
+    const block = blocks[sCode];
+    if (!block || !block.races) return;
+    // SEASON_CACHE holds raw race data. Build entities on the fly using the
+    // same aggregation we use for STATE.data — that gives us per-car races[],
+    // primaryDriver, team_code, etc.
+    const seriesEntities = entitiesFromRaces(block.races);
+    seriesEntities.forEach(e => {
+      const code = e.team_code
+        || teamCodeFromName(e.team, SERIES_TO_KEY[sCode], e.car_number);
+      if (!code) return;
+      const matches = teamGroup(code, year) === teamCode || code === teamCode;
+      if (!matches) return;
+      const finishes = (e.races || []).map(r => r.finish).filter(x => x != null);
+      const wins  = finishes.filter(f => f === 1).length;
+      const top5  = finishes.filter(f => f <= 5).length;
+      const top10 = finishes.filter(f => f <= 10).length;
+      const total = (e.races || []).reduce((s, r) => s + (r.total || 0), 0);
+      // Rank: prefer canonical year-end standings, fall back to live rank
+      let rank = null;
+      if (block.final_standings && block.final_standings.length) {
+        const drv = e.primaryDriver || e.driver;
+        const norm = (s) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+        const finalHit = block.final_standings.find(s =>
+          norm(s.driver) === norm(drv)
+        );
+        if (finalHit) rank = finalHit.rank;
+      }
+      if (rank == null) {
+        const sortedTotals = seriesEntities
+          .map(x => ({ key: entityKey(x), total: (x.races || []).reduce((s, r) => s + (r.total || 0), 0) }))
+          .sort((a, b) => b.total - a.total);
+        const idx = sortedTotals.findIndex(t => t.key === entityKey(e));
+        if (idx >= 0) rank = idx + 1;
+      }
+      out.push({ series: sCode, entity: e, total, rank, wins, top5, top10 });
+    });
+  });
+  const seriesPri = { NCS: 0, NOS: 1, NTS: 2 };
+  out.sort((a, b) => {
+    const sd = (seriesPri[a.series] ?? 9) - (seriesPri[b.series] ?? 9);
+    if (sd !== 0) return sd;
+    return parseInt(a.entity.car_number, 10) - parseInt(b.entity.car_number, 10);
+  });
+  return out;
+}
+
+// Render the "Current cars" card body when showing all 3 series at once.
+// Each row gets a series tag so the user can tell what series the car is
+// in. Clicking the row routes to the driver profile.
+function renderAllSeriesCarCards(rows) {
+  if (!rows || rows.length === 0) return "";
+  return rows.map(row => {
+    const e = row.entity;
+    const sCode = row.series;
+    // Color comes from the SERIES the car is in — not STATE.series — so
+    // each series's cars use their own color palette.
+    const carHex = colorFor(sCode, e.car_number);
+    const carTxt = contrastTextFor(carHex);
+    const drvName = e.primaryDriver || e.driver || "—";
+    const rankStr = row.rank != null ? `P${row.rank}` : "—";
+    return `<a class="tm-car-row profile-link" href="#/driver/${slugify(drvName)}">
+      <div class="tm-car-num" style="background:${carHex};color:${carTxt}">${e.car_number}</div>
+      <div class="tm-car-body">
+        <div class="tm-car-headline">
+          <span class="tm-car-driver">${escapeHTML(drvName)}</span>
+          <span class="series-tag series-${sCode.toLowerCase()}">${sCode}</span>
+        </div>
+        <div class="tm-car-stats muted">
+          ${row.wins}W · ${row.top5} T5 · ${row.top10} T10 · ${row.total} pts
+        </div>
+      </div>
+      <div class="tm-car-rank">${rankStr}</div>
+    </a>`;
+  }).join("");
 }
 
 // Render the "Crew Chiefs" card on a team page. For each current car, finds
@@ -8482,7 +8749,10 @@ function renderTeamCrewChiefsCard(currentCars) {
 // { year, series, car_number, driver, wins, total } sorted newest-first.
 function computeTeamHistory(teamCode) {
   const rows = [];
-  const seriesPriority = ["NCS", "NOS", "NTS"];
+  // User requested: while inside a team takeover, the historical-drivers
+  // table reflects the series the user came from (since they can't switch
+  // series within team view). Filter to STATE.series only.
+  const seriesPriority = [STATE.series];
   Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
     const seriesBlocks = SEASON_CACHE[year];
     if (!seriesBlocks) return;
