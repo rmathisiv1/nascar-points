@@ -5109,3 +5109,26 @@ a.driver-cell.profile-link:hover .car-tag {
     font-size: 8px;
   }
 }
+
+/* "Today" jump button in the career-context strip — escape hatch when
+   the user has navigated to an old year via chips and wants to get back
+   to the most recent (year, series) the driver appeared in. Hidden when
+   the user is already on that latest context. */
+.ctx-today {
+  background: rgba(110, 168, 254, 0.14);
+  border: 1px solid rgba(110, 168, 254, 0.35);
+  color: #6ea8fe;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-right: 8px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.ctx-today:hover {
+  background: rgba(110, 168, 254, 0.22);
+  border-color: rgba(110, 168, 254, 0.55);
+}

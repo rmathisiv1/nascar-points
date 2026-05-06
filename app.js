@@ -568,6 +568,10 @@ async function boot() {
   if (STATE.view === "profile" && STATE.profile && STATE.profile.kind === "driver") {
     await resolveDriverRoute();
   }
+  // Legacy car-route redirect: if user came in via #/car/N, resolve to the
+  // current primary driver's slug and rewrite the URL. Falls through cleanly
+  // if the car isn't in current data (renderProfile shows "not found").
+  redirectLegacyCarRoute();
   document.getElementById("time-cursor-reset")?.addEventListener("click", () => {
     STATE.throughRound = null;
     populateRacePicker();   // refresh selected state
@@ -581,10 +585,40 @@ async function boot() {
     if (STATE.view === "profile" && STATE.profile && STATE.profile.kind === "driver") {
       await resolveDriverRoute();
     }
+    redirectLegacyCarRoute();
     render();
     markMobileNavActive();
     closeMobileNav();
   });
+}
+
+// If the current route is #/car/<N>, look up the primary driver of that
+// car in current data and rewrite the URL to #/driver/<slug>. This makes
+// every profile driver-centric — clicks anywhere become driver routes,
+// chip jumps work without accidentally swapping driver, and old bookmarks
+// of car URLs survive. If we can't resolve (no data, car not present),
+// leave it as car-kind so renderProfile shows "Profile not found" cleanly.
+function redirectLegacyCarRoute() {
+  if (!STATE.profile || STATE.profile.kind !== "car") return;
+  if (!STATE.data) return;
+  const carNum = STATE.profile.slug;
+  if (!carNum) return;
+  const ents = allEntities();
+  const ent = ents.find(e => e.car_number === carNum);
+  if (!ent) return;
+  const drv = ent.primaryDriver || ent.driver;
+  if (!drv) return;
+  const drvSlug = slugify(drv);
+  // Update STATE in place + rewrite URL hash without firing hashchange
+  STATE.profile.kind = "driver";
+  STATE.profile.slug = drvSlug;
+  STATE.profile.resolvedCarNumber = ent.car_number;
+  STATE.profile.resolvedDriver = drv;
+  const canonical = `#/driver/${drvSlug}`;
+  if (location.hash !== canonical) {
+    try { history.replaceState(null, "", canonical); } catch (_) {}
+    STATE.lastHash = canonical;
+  }
 }
 
 // Resolves a #/driver/<slug> route to a concrete (series, season) and loads
@@ -1193,8 +1227,11 @@ function scanSeriesBlockForDriver(block, driverSlug) {
   const carStarts = {};   // car_number → { starts, driverName }
   block.races.forEach(race => {
     (race.results || []).forEach(d => {
-      if (d.ineligible) return;
-      const drvSlug = slugify(d.driver || "");
+      // Include ineligible (cross-over) appearances — they're real starts.
+      // Without this, a Cup regular's 1-off Xfinity stint never shows in
+      // their career history, breaking the chip strip and heatmap.
+      if (!d.driver) return;
+      const drvSlug = slugify(d.driver);
       if (drvSlug !== driverSlug) return;
       const car = d.car_number;
       if (!carStarts[car]) carStarts[car] = { starts: 0, driverName: d.driver };
@@ -1493,11 +1530,13 @@ function wireUIControls() {
   //   1. .ctx-chip — career timeline chips (year + series jumps)
   //   2. #profile-splits-toggle button — Track Splits Season/Career toggle
   document.getElementById("profile-takeover")?.addEventListener("click", (e) => {
-    const chip = e.target.closest(".ctx-chip");
-    if (chip) {
+    // Both .ctx-chip (year/series chip) and .ctx-today (Today escape hatch)
+    // use data-ctx-year/data-ctx-series so we handle them in one branch.
+    const ctxBtn = e.target.closest(".ctx-chip, .ctx-today");
+    if (ctxBtn) {
       e.preventDefault();
-      const year = parseInt(chip.dataset.ctxYear, 10);
-      const series = chip.dataset.ctxSeries;
+      const year = parseInt(ctxBtn.dataset.ctxYear, 10);
+      const series = ctxBtn.dataset.ctxSeries;
       if (year && series) switchProfileContext(year, series);
       return;
     }
@@ -2026,9 +2065,13 @@ function normalizeDriverName(name) {
     .trim();
 }
 
-// Returns the hash URL for this entity's profile page.
-// Car-centric app: every profile is a car profile.
+// Returns the hash URL for this entity's profile page. Driver-centric app:
+// every profile resolves to #/driver/<slug>. We pick the slug from the
+// primary driver of the entity. Falls back to the legacy car-number form
+// only if there's no usable driver name (rare).
 function profileHref(entity) {
+  const drv = entity && (entity.primaryDriver || entity.driver);
+  if (drv) return `#/driver/${slugify(drv)}`;
   return `#/car/${entity.car_number}`;
 }
 
@@ -2246,7 +2289,7 @@ function renderMetricBar() {
     top3HTML = top3.map(d => {
       const carHex = colorFor(STATE.series, d.car_number);
       const txtCol = contrastTextFor(carHex);
-      return `<a class="metric-finisher profile-link" href="#/car/${d.car_number}" title="P${d.finish_pos} \u00b7 ${escapeHTML(d.driver)}">
+      return `<a class="metric-finisher profile-link" href="#/driver/${slugify(d.driver)}" title="P${d.finish_pos} \u00b7 ${escapeHTML(d.driver)}">
         <span class="metric-pos">${d.finish_pos}</span>
         <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
         <span class="metric-finisher-name">${escapeHTML(lastNameOf(d.driver))}</span>
@@ -4741,7 +4784,7 @@ function renderTeammates() {
       const isShared = d.drivers.length > 1;
       const showWbrTag = (d.team !== d.group);
       const ptTag = d.car_full_time ? "" : ` <span class="tm-pt-tag">PT</span>`;
-      const tmHref = `#/car/${d.car_number}`;
+      const tmHref = `#/driver/${slugify(d.primary_driver)}`;
       return `<div class="tm-row${d.car_full_time ? "" : " part-time"}">
         <span class="tm-car" style="background:${carHex};color:${carTxt}">${d.car_number}</span>
         <div class="tm-name">
@@ -5162,19 +5205,23 @@ function findEntityFromSlug() {
   return null;
 }
 
-// Rewrites the URL to the canonical car-profile form without triggering a
-// navigation event. Only called after a legacy slug route has been resolved.
+// Rewrites the URL to the canonical driver-profile form without triggering a
+// navigation event. Called only from the legacy `#/profile/<slug>` fallback
+// path in findEntityFromSlug — modern URLs all start as #/driver/<slug>.
 function canonicalizeProfileURL(entity) {
-  if (!entity || !entity.car_number) return;
-  const canonical = `#/car/${entity.car_number}`;
+  if (!entity) return;
+  const drv = entity.primaryDriver || entity.driver;
+  if (!drv) return;
+  const drvSlug = slugify(drv);
+  const canonical = `#/driver/${drvSlug}`;
   if (location.hash === canonical) return;
   // Update STATE so subsequent route reads reflect the canonical form
-  STATE.profile.kind = "car";
-  STATE.profile.slug = entity.car_number;
-  // Rewrite history entry without firing hashchange
-  try {
-    history.replaceState(null, "", canonical);
-  } catch (_) { /* no-op if replaceState unavailable */ }
+  STATE.profile.kind = "driver";
+  STATE.profile.slug = drvSlug;
+  STATE.profile.resolvedCarNumber = entity.car_number;
+  STATE.profile.resolvedDriver = drv;
+  try { history.replaceState(null, "", canonical); } catch (_) {}
+  STATE.lastHash = canonical;
 }
 
 // Determine which season a car ran (needed for the career table once lazy-loaded).
@@ -5334,6 +5381,23 @@ function renderCareerContextStrip(driverSlug) {
     byYear[y.year].push(y);
   });
   const yearKeys = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+  // Determine the "most recent" context — most-recent year, then NCS > NOS
+  // > NTS within that year. This is what "← Today" jumps the user to.
+  const seriesPriority = { NCS: 0, NOS: 1, NTS: 2 };
+  let latest = null;
+  if (yearKeys.length) {
+    const latestYear = yearKeys[0];
+    const latestEntries = byYear[latestYear].slice().sort((a, b) =>
+      (seriesPriority[a.series] ?? 9) - (seriesPriority[b.series] ?? 9)
+    );
+    latest = latestEntries[0];
+  }
+  const onLatest = latest
+    && latest.year === STATE.season
+    && latest.series === STATE.series;
+  const todayBtn = (latest && !onLatest)
+    ? `<button class="ctx-today" data-ctx-year="${latest.year}" data-ctx-series="${latest.series}" title="Jump back to ${latest.year} ${latest.series}">← Today (${latest.year} ${latest.series})</button>`
+    : "";
   const chips = yearKeys.map(year => {
     return byYear[year].map(y => {
       const isActive = (y.year === STATE.season && y.series === STATE.series);
@@ -5350,6 +5414,7 @@ function renderCareerContextStrip(driverSlug) {
   }).join("");
   return `<div class="profile-context-strip">
     <div class="profile-context-label">Seasons</div>
+    ${todayBtn}
     <div class="profile-context-chips">${chips}</div>
   </div>`;
 }
@@ -6128,8 +6193,10 @@ function computeCareerTrackSplits(driverSlug, seriesFilter) {
       if (!block || !block.races) return;
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
-          if (d.ineligible) return;
-          if (slugify(d.driver || "") !== driverSlug) return;
+          // Don't filter ineligible — a cross-over appearance still counts as
+          // a real race for splits purposes. Skip rows missing a driver only.
+          if (!d.driver) return;
+          if (slugify(d.driver) !== driverSlug) return;
           const t = trackType(race.track_code);
           if (!t || !buckets[t]) return;
           // Normalize the per-race shape so it matches what entity.races
@@ -6249,7 +6316,7 @@ function paintProfileTeammates(entity) {
       const spark = tmSparkline(sparkSeries, c, "fin", m.car);
       return `<div class="profile-tm-row">
         <span class="tm-car" style="background:${c};color:${t}">${m.car}</span>
-        <span class="tm-name"><a class="profile-link" href="#/car/${m.car}">${escapeHTML(m.driver)}</a></span>
+        <span class="tm-name"><a class="profile-link" href="#/driver/${slugify(m.driver)}">${escapeHTML(m.driver)}</a></span>
         <span class="profile-tm-spark">${spark}</span>
         <span class="profile-tm-delta ${cls}">${sign}${m.avgDelta.toFixed(1)}</span>
         <span class="profile-tm-record">${m.beat}-${m.lost}${m.tied > 0 ? "-" + m.tied : ""}</span>
@@ -6319,8 +6386,12 @@ function paintProfileCareerHeatmap() {
         // Track the schedule length so the grid is wide enough even when
         // the target driver didn't run the late races.
         if (race.round > maxRound) maxRound = race.round;
+        // Match driver — DON'T filter out ineligible (cross-over) appearances.
+        // A Cup regular running a 1-off Xfinity race is flagged as ineligible
+        // (no championship points), but the race still happened and we want
+        // it on the heatmap.
         const hit = (race.results || []).find(d =>
-          !d.ineligible && slugify(d.driver || "") === driverSlug
+          slugify(d.driver || "") === driverSlug
         );
         if (hit) {
           driverDrove = true;
@@ -7097,7 +7168,7 @@ function renderBracket(rule) {
       const carHex = colorFor(STATE.series, drv.car_number);
       const txt = contrastTextFor(carHex);
       const lastName = lastNameOf(drv.primaryDriver || drv.driver || "");
-      return `<a class="bk-card ${cls}" href="#/car/${drv.car_number}" title="${escapeHTML(drv.displayLabel)} — ${drv.roundPts} pts in round">
+      return `<a class="bk-card ${cls}" href="#/driver/${slugify(drv.primaryDriver || drv.driver || '')}" title="${escapeHTML(drv.displayLabel)} — ${drv.roundPts} pts in round">
         <span class="bk-car" style="background:${carHex};color:${txt}">${drv.car_number}</span>
         <span class="bk-name">${escapeHTML(lastName)}</span>
         <span class="bk-pts">${drv.roundPts}</span>
@@ -7238,7 +7309,7 @@ function renderStandingsMini() {
       ? `<span class="std-mini-val back">−${cutoffPts - r.total}</span>`
       : `<span class="std-mini-val">${r.total}</span>`;
     const cutoffDivider = (cutoffPos != null && pos === cutoffPos) ? `<div class="std-mini-cutoff"><span class="std-mini-cutoff-label">${escapeHTML(cutoffLabel || "Cutoff")}</span></div>` : "";
-    return `<a class="std-mini-row profile-link${below ? " below" : ""}" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)}">
+    return `<a class="std-mini-row profile-link${below ? " below" : ""}" href="#/driver/${slugify(r.primaryDriver || r.driver || '')}" title="${escapeHTML(r.displayLabel)}">
       <span class="std-mini-rank">${pos}</span>
       <span class="std-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
       <span class="std-mini-name">${escapeHTML(lastName)}</span>
