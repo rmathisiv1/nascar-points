@@ -998,6 +998,25 @@ function wireUIControls() {
       // Repaint just the splits grid — no need to rebuild entire profile
       const entity = findEntityFromSlug();
       if (entity) paintProfileTrackSplits(entity);
+      // When entering Career mode, eagerly load every season we don't have
+      // yet so the strip fills out completely. Default lazy-load only does
+      // 8 years per pass; for a 25-year career that's 3-4 re-renders. This
+      // pulls them all in parallel and repaints once.
+      if (newMode === "career") {
+        const allYears = Object.keys(SEASON_CACHE).map(Number);
+        const missing = (STATE.seasonsAvailable || []).filter(y => !allYears.includes(y));
+        if (missing.length > 0) {
+          // Show a loading state in the title so the user knows it's working
+          if (titleEl) titleEl.textContent = `Career Track Splits  (loading ${missing.length} season${missing.length === 1 ? "" : "s"}…)`;
+          Promise.all(missing.map(y => loadSeasonIntoCache(y)))
+            .then(() => {
+              if (STATE.view !== "profile" || STATE.profile.splitsRange !== "career") return;
+              if (titleEl) titleEl.textContent = "Career Track Splits";
+              const e2 = findEntityFromSlug();
+              if (e2) paintProfileTrackSplits(e2);
+            });
+        }
+      }
     }
   });
 }
@@ -4936,7 +4955,14 @@ function renderProfile() {
     if (missingYears.length > 0) {
       Promise.all(missingYears.slice(0, 8).map(y => loadSeasonIntoCache(y)))
         .then(() => {
-          if (STATE.view === "profile") renderProfile();
+          if (STATE.view !== "profile") return;
+          // If user is sitting on Career splits, repaint just that panel
+          // instead of doing the full profile re-render — feels snappier.
+          if (STATE.profile && STATE.profile.splitsRange === "career") {
+            const e2 = findEntityFromSlug();
+            if (e2) paintProfileTrackSplits(e2);
+          }
+          renderProfile();   // also refresh career-context strip etc.
         });
     }
   }
