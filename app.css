@@ -1571,7 +1571,7 @@ code {
 /* Extra-tight phone breakpoint */
 @media (max-width: 480px) {
   .topbar { padding: 8px 10px; }
-  .brand-name { display: none; }     /* just logo on tiny screens */
+  .brand-name { font-size: 11px; }    /* shrink the wordmark on tiny screens, don't hide */
   .season-pill { font-size: 9px; padding: 2px 6px; }
   .main { padding: 12px 10px; }
   .view-head h1 { font-size: 16px; }
@@ -5325,9 +5325,10 @@ a.driver-cell.profile-link:hover .car-tag {
   border-bottom-color: currentColor;
 }
 
-/* Mobile/narrow topbar: hide the long wordmark, keep just the DC badge */
+/* Mobile/narrow topbar: keep the wordmark visible since the logo is gone.
+   Just shrink it slightly so it doesn't crowd the rest of the topbar. */
 @media (max-width: 767.98px) {
-  .brand-name { display: none; }
+  .brand-name { font-size: 12px; }
 }
 
 /* ============================================================
@@ -5348,12 +5349,9 @@ a.driver-cell.profile-link:hover .car-tag {
   font-weight: 700;
   color: #ffd166;
   cursor: help;
-  /* Force the championship pill onto its own row inside the hero meta
-     flex-wrap container. Without this it crowds the team / CC / bio
-     line and looks visually heavy next to other text. */
-  flex-basis: 100%;
-  margin-top: 2px;
-  align-self: flex-start;
+  /* Sits on its own row beneath the meta block. Slight top margin so it
+     visually separates from the team / age line above. */
+  margin-top: 8px;
   width: fit-content;
 }
 .profile-hero-champ .champ-trophy {

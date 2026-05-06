@@ -28,6 +28,10 @@ const STATE = {
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
   profile: { kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all" },
+  // Race takeover state: which round is being shown. null = "latest race
+  // in the loaded data" (the default — what the Race tab used to do).
+  // Set from the #/race/<round> URL when a user clicks into a specific race.
+  race: { round: null },
   standings: { sortKey: "total", sortDir: "desc" },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
@@ -1110,10 +1114,16 @@ function parseHash() {
     STATE.lastHash = location.hash;
     return;
   }
-  // Race / schedule routes — remember where we came from for back nav
+  // Race / schedule routes — remember where we came from for back nav.
+  // Race route can include a round number: #/race/<round>. Without it,
+  // renderRaceCenter falls back to the latest run race (legacy behavior).
   if (view === "race" || view === "schedule") {
     stashPrev(view);
     STATE.view = view;
+    if (view === "race") {
+      const roundN = h[1] != null ? parseInt(h[1], 10) : null;
+      STATE.race = { round: Number.isFinite(roundN) ? roundN : null };
+    }
     STATE.lastHash = location.hash;
     return;
   }
@@ -5779,10 +5789,10 @@ function renderProfile() {
         <div class="profile-hero-meta">
           ${renderTeamPill(teamCode, /*clickable=*/true)}
           <span class="profile-hero-team"><strong>${escapeHTML(mfr)}</strong> · <a href="#/team/${encodeURIComponent(teamCode)}" class="profile-team-link">${escapeHTML(teamName)}</a></span>
-          ${champLine}
           ${ccLine}
           ${bioLine}
         </div>
+        ${champLine}
       </div>
       <div class="profile-hero-rank">
         <div class="profile-rank-num" style="color:${carHex}">${rank}${rankSuffix(rank)}</div>
@@ -6272,8 +6282,15 @@ function paintProfileRaceTable(rows, kind) {
 
   tbody.innerHTML = rows.map(r => {
     const trackDisplay = escapeHTML(prettyTrack(r.track_code, r.track));
+    // Two distinct links:
+    //   - Track code (e.g. "PHO") → track history page #/track/<code>
+    //   - Track display name → race detail page #/race/<round> (shows the
+    //     full field for that single race). Without this, the only click
+    //     target on the row routed everyone to the same-track history,
+    //     which felt like "clicked any race, went to Phoenix" because the
+    //     track page is series-and-track scoped, not race-scoped.
     const trackLink = r.track_code
-      ? `<a class="rc-track-link" href="#/track/${escapeHTML(r.track_code)}"><strong>${escapeHTML(r.track_code)}</strong> · ${trackDisplay}</a>`
+      ? `<a class="rc-track-link" href="#/track/${escapeHTML(r.track_code)}" title="Track history" onclick="event.stopPropagation()"><strong>${escapeHTML(r.track_code)}</strong></a> · <a class="rc-race-link" href="#/race/${r.round}" title="Race results" onclick="event.stopPropagation()">${trackDisplay}</a>`
       : `<strong>${escapeHTML(r.track_code || '')}</strong> · ${trackDisplay}`;
     if (r.dns) {
       // 9 columns to span: Race, CC, Start, Finish, S1, S2, FL, Fin, Total
@@ -6294,10 +6311,17 @@ function paintProfileRaceTable(rows, kind) {
     const ccCell = ccName
       ? `<a class="profile-link" href="#/cc/${slugify(ccName)}">${escapeHTML(ccName)}</a>`
       : `<span class="muted">—</span>`;
+    // Race-name cell ALSO links to the race detail (clicking the race name
+    // is the most intuitive way to "see this race's results"). Track-code
+    // link stays as a separate target for track history. Use stopPropagation
+    // so nested anchors don't fight each other.
+    const raceNameCell = r.name
+      ? `<a class="rc-race-link" href="#/race/${r.round}" style="color:var(--muted);text-decoration:none;">${escapeHTML(r.name)}</a>`
+      : "";
     return `<tr>
-      <td class="rnd">R${r.round}</td>
+      <td class="rnd"><a class="rc-race-link" href="#/race/${r.round}">R${r.round}</a></td>
       <td class="track">${trackLink}${driverNote}</td>
-      <td style="color:var(--muted)">${escapeHTML(r.name || '')}</td>
+      <td>${raceNameCell}</td>
       <td>${ccCell}</td>
       <td class="num">${r.start ?? '—'}</td>
       <td class="num"><span class="finish-badge ${cls}">${r.finish ?? '—'}</span></td>
@@ -7785,35 +7809,57 @@ function renderRaceCenter() {
     return;
   }
 
-  // Resolve "next" race. Three cases:
-  //  1. Future scheduled race exists in data (results empty) → that's it.
-  //  2. All races in data are run → the next race is round (lastRound + 1)
-  //     within the season schedule length. We synthesize a placeholder so the
-  //     hero + schedule still highlight the upcoming round.
-  //  3. No data at all → fall back to first race.
+  // Resolve which race to show. Three cases:
+  //  A. URL specified a round (#/race/<N>) → look it up in allRaces. Show
+  //     the run race (with results) if completed; else the upcoming row.
+  //  B. No round in URL → legacy "Race Center" behavior: surface the next
+  //     scheduled race, or the latest run race if season is done.
+  const selectedRound = STATE.race && STATE.race.round;
   const runRaces = allRaces.filter(r => (r.results || []).length > 0);
   const lastRunIdx = runRaces.length - 1;
   const lastRunRace = lastRunIdx >= 0 ? runRaces[lastRunIdx] : null;
   const seasonLen = scheduleLengthForSeries(STATE.series);
 
-  let nextRace = allRaces.find(r => (r.results || []).length === 0);
-  let isUpcoming = !!nextRace;
-  if (!nextRace && lastRunRace && typeof seasonLen === "number" && lastRunRace.round < seasonLen) {
-    // Synthesize an upcoming-race placeholder for the next scheduled round.
-    nextRace = {
-      round: lastRunRace.round + 1,
-      track: "TBD",
-      track_code: "",
-      date: "",
-      results: [],
-      _synthetic: true,
-    };
-    isUpcoming = true;
-  }
-  if (!nextRace) {
-    // Fall back: season complete or empty
-    nextRace = lastRunRace || allRaces[0];
-    isUpcoming = false;
+  let nextRace = null;
+  let isUpcoming = false;
+  if (selectedRound != null) {
+    // User clicked a specific race — surface that one. Prefer the actual
+    // race row (which has results, track info, date, etc.) over a synth.
+    nextRace = allRaces.find(r => r.round === selectedRound) || null;
+    if (nextRace) {
+      isUpcoming = (nextRace.results || []).length === 0;
+    } else {
+      // Round out of range for this (year, series) — synth a placeholder
+      nextRace = {
+        round: selectedRound,
+        track: "TBD",
+        track_code: "",
+        date: "",
+        results: [],
+        _synthetic: true,
+      };
+      isUpcoming = true;
+    }
+  } else {
+    // Legacy fallback — pick the next upcoming, then synth one if season
+    // has unrun rounds left, then fall back to the last run race.
+    nextRace = allRaces.find(r => (r.results || []).length === 0);
+    isUpcoming = !!nextRace;
+    if (!nextRace && lastRunRace && typeof seasonLen === "number" && lastRunRace.round < seasonLen) {
+      nextRace = {
+        round: lastRunRace.round + 1,
+        track: "TBD",
+        track_code: "",
+        date: "",
+        results: [],
+        _synthetic: true,
+      };
+      isUpcoming = true;
+    }
+    if (!nextRace) {
+      nextRace = lastRunRace || allRaces[0];
+      isUpcoming = false;
+    }
   }
 
   // Background-load 4 prior years so track history can be computed across
