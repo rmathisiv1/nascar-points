@@ -1401,6 +1401,40 @@ function wireUIControls() {
     });
   });
 
+  // "Now" button — global escape hatch that resets to the most recent
+  // (season, race) and clears any time-cursor scroll-back. Also exits
+  // profile/team/cc/race takeovers by routing to the default landing view.
+  // Designed for the user who's drilled deep into history and just wants
+  // to get back to "what's happening today".
+  document.getElementById("topbar-now-btn")?.addEventListener("click", async () => {
+    const targetSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0])
+      || STATE.season;
+    const seasonChanged = targetSeason !== STATE.season;
+    STATE.season = targetSeason;
+    STATE.throughRound = null;          // clear time cursor
+    if (seasonChanged) {
+      await loadCurrentData();
+      resetRenderCache();
+      populateRacePicker();
+    }
+    renderTimeCursorBanner();
+    // Sync the season-picker UI to match
+    const sel = document.getElementById("season-picker");
+    if (sel) sel.value = String(targetSeason);
+    const mobileSel = document.getElementById("mobile-season-picker");
+    if (mobileSel) mobileSel.value = String(targetSeason);
+    // Exit any takeover view (profile/team/cc/race/track/schedule/playoffs)
+    // by routing to the default arc landing. Use location.hash so back-
+    // button navigation still works as expected.
+    const inTakeover = ["profile", "team", "cc", "race", "track", "schedule",
+      "playoffs"].includes(STATE.view);
+    if (inTakeover) {
+      location.hash = "#/arc";
+    } else {
+      render();
+    }
+  });
+
   // Form view toggles
   document.querySelectorAll("#view-form .toggle-group").forEach(g => {
     const group = g.dataset.group;

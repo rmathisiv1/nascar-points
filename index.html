@@ -18,6 +18,12 @@
     <button data-series="NOS">NOS</button>
     <button data-series="NTS">NTS</button>
   </div>
+  <button class="topbar-now-btn" id="topbar-now-btn" title="Jump to most recent year + race"
+    aria-label="Reset to current">Now</button>
+  <div class="topbar-search" id="topbar-search">
+    <input type="text" id="search-input" placeholder="Search drivers, teams, crew chiefs, races…  (press /)" autocomplete="off" spellcheck="false" aria-label="Search">
+    <div class="search-dropdown" id="search-dropdown" hidden></div>
+  </div>
   <div class="topbar-right">
     <select id="season-picker" class="season-select"></select>
     <select id="race-picker" class="season-select race-select" title="View season through a specific race"></select>
