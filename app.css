@@ -5028,13 +5028,16 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 .ph-grid {
   display: grid;
-  /* Width: row-label column + N race columns. Race columns are 22px each
-     (compact — fits ~38 cols at full width before scroll). Label is sticky. */
-  grid-template-columns: 70px repeat(var(--ph-cols, 36), 22px);
+  /* Width strategy: row-label column at fixed 70px, then race columns share
+     remaining space equally via 1fr. On desktop this lets cells stretch to
+     fill the panel — no awkward dead zone to the right of the last column.
+     On mobile, the @media block below switches to fixed-px columns so the
+     grid scrolls horizontally instead of cramming cells into 8-10px each. */
+  grid-template-columns: 70px repeat(var(--ph-cols, 36), minmax(20px, 1fr));
   gap: 2px;
   font-family: var(--mono);
   font-size: 10px;
-  min-width: max-content;
+  width: 100%;
 }
 .ph-row {
   display: contents;   /* let the parent grid lay out children directly */
@@ -5099,8 +5102,12 @@ a.driver-cell.profile-link:hover .car-tag {
 
 @media (max-width: 767.98px) {
   .ph-grid {
+    /* On mobile we want fixed cell widths so the grid stays readable;
+       overflow-x on the host scrolls horizontally for long schedules. */
     grid-template-columns: 56px repeat(var(--ph-cols, 36), 18px);
     font-size: 9px;
+    width: max-content;
+    min-width: 100%;
   }
   .ph-cell, .ph-cell-empty {
     height: 18px;
