@@ -605,6 +605,12 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   border-bottom: 1px solid var(--border);
 }
 .profile-takeover #view-profile,
+.profile-takeover #view-race,
+.profile-takeover #view-track,
+.profile-takeover #view-schedule,
+.profile-takeover #view-team,
+.profile-takeover #view-cc,
+.profile-takeover #view-playoffs,
 .profile-takeover #view-drivers,
 .profile-takeover #view-teams,
 .profile-takeover #view-crewchiefs {
@@ -617,6 +623,12 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   -ms-overflow-style: none;       /* IE/old Edge */
 }
 .profile-takeover #view-profile::-webkit-scrollbar,
+.profile-takeover #view-race::-webkit-scrollbar,
+.profile-takeover #view-track::-webkit-scrollbar,
+.profile-takeover #view-schedule::-webkit-scrollbar,
+.profile-takeover #view-team::-webkit-scrollbar,
+.profile-takeover #view-cc::-webkit-scrollbar,
+.profile-takeover #view-playoffs::-webkit-scrollbar,
 .profile-takeover #view-drivers::-webkit-scrollbar,
 .profile-takeover #view-teams::-webkit-scrollbar,
 .profile-takeover #view-crewchiefs::-webkit-scrollbar { display: none; }
