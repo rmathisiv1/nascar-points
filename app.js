@@ -7507,7 +7507,7 @@ function paintProfileTrackPicker(entity) {
     Object.entries(blocks).forEach(([sCode, block]) => {
       if (!block || !block.races) return;
       block.races.forEach(race => {
-        const tCode = (race.track_code || "").toUpperCase();
+        const tCode = canonicalTrackCode((race.track_code || "").toUpperCase());
         if (!tCode) return;
         (race.results || []).forEach(d => {
           if (!d.driver || d.ineligible) return;
@@ -7526,8 +7526,8 @@ function paintProfileTrackPicker(entity) {
             finish: d.finish_pos,
             start: d.start_pos,
             lapsLed: d.laps_led || 0,
-            stagePts: (d.stage1_pts || 0) + (d.stage2_pts || 0),
-            totalPts: d.total_pts || d.points || 0,
+            stagePts: (d.stage_1_pts || 0) + (d.stage_2_pts || 0),
+            totalPts: d.race_pts || 0,
             pole: d.start_pos === 1,
           });
         });
@@ -8217,7 +8217,7 @@ function renderTrackStats() {
     Object.values(blocks).forEach(block => {
       if (!block || !block.races) return;
       block.races.forEach(race => {
-        const tCode = (race.track_code || "").toUpperCase();
+        const tCode = canonicalTrackCode((race.track_code || "").toUpperCase());
         if (!tCode) return;
         if (!(race.results && race.results.length)) return;  // skip upcoming
         let entry = tracksMap.get(tCode);
@@ -8251,7 +8251,7 @@ function renderTrackStats() {
       if (!block || !block.races) return;
       if (seriesActive !== "all" && sCode !== seriesActive) return;
       block.races.forEach(race => {
-        if ((race.track_code || "").toUpperCase() !== ts.code) return;
+        if (canonicalTrackCode((race.track_code || "").toUpperCase()) !== ts.code) return;
         // Generation gate (only meaningful for NCS / All)
         if (showGenChips && ts.gens.size > 0) {
           const inGen = NASCAR_GENERATIONS.some(g =>
@@ -8271,8 +8271,8 @@ function renderTrackStats() {
             finish: d.finish_pos,
             start: d.start_pos,
             lapsLed: d.laps_led || 0,
-            stagePts: (d.stage1_pts || 0) + (d.stage2_pts || 0),
-            totalPts: d.total_pts || d.points || 0,
+            stagePts: (d.stage_1_pts || 0) + (d.stage_2_pts || 0),
+            totalPts: d.race_pts || 0,
             pole: d.start_pos === 1,
           });
         });
@@ -9979,6 +9979,23 @@ const TRACK_CODE_ALIASES_LOOKUP = {
   ECH: ["ECH", "ATL"],
   ATL: ["ATL", "ECH"],
 };
+// Map any track code to its canonical form so ECH ↔ ATL etc. don't
+// produce duplicate dropdown entries. We pick the FIRST entry in the
+// alias list as the canonical code (the alias list is keyed by an
+// arbitrary code but always lists the canonical code first when set up
+// that way). Falls back to the input if not in the alias map.
+function canonicalTrackCode(code) {
+  if (!code) return code;
+  const list = TRACK_CODE_ALIASES_LOOKUP[code];
+  if (!list || list.length === 0) return code;
+  // The convention in TRACK_CODE_ALIASES_LOOKUP is that each entry's first
+  // element is the canonical primary code. So for ECH: ["ECH", "ATL"] and
+  // ATL: ["ATL", "ECH"], normalizing both to "ATL" requires a stable rule.
+  // Use a sorted choice — pick whichever code in the alias group is
+  // alphabetically first. ECH/ATL → ATL. AUS/COTA → AUS. etc.
+  const all = new Set([code, ...list]);
+  return Array.from(all).sort()[0];
+}
 function trackCodesForLookup(canon) {
   return TRACK_CODE_ALIASES_LOOKUP[canon] || [canon];
 }
