@@ -60,6 +60,7 @@
   </div>
 
   <div class="mobile-nav-section">Pages</div>
+  <a href="#/home"       class="mobile-nav-link" data-view="home">Home</a>
   <a href="#/schedule"   class="mobile-nav-link" data-view="schedule">Schedule</a>
   <a href="#/form"       class="mobile-nav-link" data-view="form">Trending</a>
   <a href="#/arc"        class="mobile-nav-link" data-view="arc">Cumulative Season</a>
@@ -98,6 +99,7 @@
 
   <section class="col-center" id="col-center">
     <nav class="dash-tabs" id="dash-tabs">
+      <a href="#/home"       class="dash-tab" data-view="home">Home</a>
       <a href="#/schedule"   class="dash-tab" data-view="schedule">Schedule</a>
 
       <!-- Standings group: parent links to standings; hover reveals Playoffs subtab -->
@@ -285,6 +287,10 @@
     </div>
 
     <div class="tab-body" id="tab-body">
+
+      <section class="view tab-panel" id="view-home" hidden>
+        <div class="home-host scrollable" id="home-host"></div>
+      </section>
 
       <section class="view tab-panel" id="view-arc">
         <div class="toolbar-slim">

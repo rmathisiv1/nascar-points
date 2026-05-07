@@ -12,7 +12,7 @@ const STATE = {
   // user's preferred series when STATE temporarily wandered into a
   // historical context for a profile route.
   lastPresentSeries: "NCS",
-  view: "arc",
+  view: "home",
   // Site mode: "present" (default) locks the global season to the latest
   // available year; users can still switch series freely. "historical"
   // unlocks the season picker for full year-to-year browsing. Persisted
@@ -81,7 +81,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
+const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -1681,7 +1681,7 @@ function parseHash() {
     }
     if (wasProfile) STATE.profile.locked = false;
   }
-  STATE.view = VIEWS.includes(view) ? view : "standings";
+  STATE.view = VIEWS.includes(view) ? view : "home";
   STATE.lastHash = location.hash;
 }
 
@@ -2439,7 +2439,7 @@ function renderTimeCursorBanner() {
 // RENDER
 // ============================================================
 // Views that live as tabs inside the center panel.
-const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings"];
+const TAB_VIEWS = ["home", "arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings"];
 // Full-width takeovers — none currently. Reserved for future use.
 const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
@@ -2603,6 +2603,7 @@ function render() {
       // Render the active tab's content
       switch (activeTab) {
         case "arc":        renderArc(); break;
+        case "home":       renderHome(); break;
         case "form":       renderFormTable(); break;
         case "breakdown":  renderBreakdown(); break;
         case "trajectory": renderTrajectory(); break;
@@ -8206,6 +8207,599 @@ function paintCrewChiefCareerHeatmap() {
 // table. Filterable by series and generation. Hides gen chips when the
 // series filter is NOS or NTS (those didn't exist in early Cup eras).
 // ============================================================
+// ============================================================
+// HOME — landing page
+// ------------------------------------------------------------
+// Three-section hybrid:
+//   1. Hero row: countdown to next race + last-race recap
+//   2. Series mini-standings: top 5 in NCS / NOS / NTS
+//   3. Season-at-a-glance stat cards + auto-detected storylines
+//
+// Storylines are derived purely from data we already have. New ones
+// can be added by extending generateHomeStorylines() — each generator
+// returns at most one tile, and we cap the total surfaced tiles to
+// keep the page focused. See helpers below for what's available.
+// ============================================================
+function renderHome() {
+  const host = document.getElementById("home-host");
+  if (!host) return;
+  // Home is always anchored to the LATEST loaded year. Even in Historical
+  // mode, the home page should orient to the live season — Historical
+  // users can use Schedule/Standings to dig into older years instead.
+  const restoreCtx = sidePanelPresentContext();
+  const latestYear = STATE.season;
+  const series = STATE.series;
+
+  if (!STATE.data || !STATE.data.races) {
+    host.innerHTML = `<div class="muted" style="padding:40px;text-align:center;">Loading season data…</div>`;
+    restoreCtx();
+    return;
+  }
+
+  // ----- Section 1: hero row (next race + last race) -----
+  const heroHTML = renderHomeHero(latestYear, series);
+
+  // ----- Section 2: three-series mini standings -----
+  const standingsHTML = renderHomeStandingsTrio(latestYear);
+
+  // ----- Section 3: stat cards + storylines -----
+  const statsHTML = renderHomeStatCards(latestYear, series);
+  const storylinesHTML = renderHomeStorylines(latestYear, series);
+
+  host.innerHTML = `
+    <div class="home-grid">
+      ${heroHTML}
+      <div class="home-section-h">Standings · Top 5 each series</div>
+      <div class="home-standings-trio">${standingsHTML}</div>
+      <div class="home-section-h">Season at a glance · ${series}</div>
+      <div class="home-stat-row">${statsHTML}</div>
+      ${storylinesHTML ? `
+        <div class="home-section-h">Storylines</div>
+        <div class="home-storylines">${storylinesHTML}</div>
+      ` : ""}
+    </div>
+  `;
+
+  restoreCtx();
+}
+
+// Renders the hero row: a countdown card on the left for the next race,
+// and a recap card on the right for the most recent completed race.
+function renderHomeHero(year, series) {
+  const races = (STATE.data.races || []).slice().sort((a, b) => a.round - b.round);
+  // Determine next upcoming + last completed using the same heuristic as
+  // the metric bar — a race with no winner among results is upcoming.
+  const completed = races.filter(r => (r.results || []).some(d => d.finish_pos === 1));
+  const upcoming = races.filter(r => !(r.results || []).some(d => d.finish_pos === 1));
+
+  const nextRace = upcoming[0] || null;
+  const lastRace = completed[completed.length - 1] || null;
+
+  // ----- Countdown card -----
+  let countdownHTML = "";
+  if (nextRace) {
+    const dateStr = nextRace.date || "";
+    let countdownText = "";
+    let countdownNum = "";
+    let countdownUnit = "";
+    if (dateStr) {
+      const raceDate = new Date(dateStr + "T00:00:00");
+      const now = new Date();
+      const diffMs = raceDate.getTime() - now.getTime();
+      const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (days > 1) {
+        countdownNum = String(days);
+        countdownUnit = "days";
+        countdownText = `until R${nextRace.round}`;
+      } else if (days === 1) {
+        countdownNum = "1";
+        countdownUnit = "day";
+        countdownText = `until R${nextRace.round}`;
+      } else if (days === 0) {
+        countdownNum = "Race";
+        countdownUnit = "today";
+        countdownText = `R${nextRace.round}`;
+      } else {
+        // Race date is past but no winner yet — likely just-finished or postponed
+        countdownNum = "—";
+        countdownUnit = "";
+        countdownText = `R${nextRace.round}`;
+      }
+    } else {
+      countdownNum = "—";
+      countdownText = `R${nextRace.round}`;
+    }
+    const trackName = prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD";
+    const trackType = trackTypeFor(nextRace.track_code);
+    const typeLabel = trackType ? trackType.charAt(0).toUpperCase() + trackType.slice(1) : "";
+    // Last winner at this track (any year) for context
+    const lastWinnerHTML = computeLastWinnerAtTrack(nextRace.track_code, series);
+    // Driver with most wins at this track
+    const trackKingHTML = computeTrackKing(nextRace.track_code, series);
+    countdownHTML = `
+      <div class="home-card home-hero-card">
+        <div class="home-hero-countdown">
+          <div class="home-hero-countdown-num">${countdownNum}</div>
+          <div class="home-hero-countdown-unit">${countdownUnit ? countdownUnit + " " : ""}${countdownText}</div>
+        </div>
+        <div class="home-hero-info">
+          <div class="home-card-label">UPCOMING ${series}</div>
+          <a class="home-hero-track-name" href="#/track/${nextRace.track_code}">${escapeHTML(trackName)}</a>
+          <div class="home-hero-track-meta">${dateStr ? formatLongDate(dateStr) : ""}${typeLabel ? ` · ${typeLabel}` : ""}</div>
+          <div class="home-hero-track-row">
+            ${lastWinnerHTML ? `<div class="home-hero-track-fact"><span class="k">Last winner</span><span class="v">${lastWinnerHTML}</span></div>` : ""}
+            ${trackKingHTML ? `<div class="home-hero-track-fact"><span class="k">Track king</span><span class="v">${trackKingHTML}</span></div>` : ""}
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    countdownHTML = `
+      <div class="home-card home-hero-card">
+        <div class="home-hero-info">
+          <div class="home-card-label">SEASON COMPLETE</div>
+          <div class="home-hero-track-name">No upcoming races</div>
+          <div class="home-hero-track-meta">Check the schedule for next season's calendar.</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ----- Last race recap card -----
+  let lastRaceHTML = "";
+  if (lastRace) {
+    const trackName = prettyTrack(lastRace.track_code, lastRace.track) || lastRace.track || "—";
+    const podium = (lastRace.results || []).filter(d => d.finish_pos != null).sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 3);
+    const winner = podium[0];
+    const winnerLapsLed = winner ? (winner.laps_led || 0) : 0;
+    const podiumPills = podium.map(d => {
+      const carHex = colorFor(series, d.car_number);
+      const txt = contrastTextFor(carHex);
+      return `<a class="home-pod-pill profile-link" href="#/driver/${slugify(d.driver || '')}">
+        <div class="home-pod-pos">P${d.finish_pos}</div>
+        <div class="home-pod-driver"><span class="home-pod-car" style="background:${carHex};color:${txt}">${d.car_number}</span><span class="home-pod-name">${escapeHTML(lastNameOf(d.driver || ''))}</span></div>
+      </a>`;
+    }).join("");
+    lastRaceHTML = `
+      <div class="home-card home-last-race-card">
+        <div class="home-card-label">LAST RACE · R${lastRace.round} ${escapeHTML(trackName)}</div>
+        ${winner ? `
+          <a class="home-last-winner profile-link" href="#/driver/${slugify(winner.driver || '')}">
+            <span class="home-last-winner-name">${escapeHTML(winner.driver || '—')}</span>
+            ${winnerLapsLed > 0 ? `<span class="home-last-winner-meta">led ${winnerLapsLed}</span>` : ""}
+          </a>
+        ` : ""}
+        <div class="home-podium">${podiumPills}</div>
+        <a class="home-card-cta" href="#/race/${lastRace.round}">Race details →</a>
+      </div>
+    `;
+  } else {
+    lastRaceHTML = `
+      <div class="home-card home-last-race-card">
+        <div class="home-card-label">NO COMPLETED RACES YET</div>
+        <div class="muted" style="font-size:12px;padding:8px 0;">The season hasn't started.</div>
+      </div>
+    `;
+  }
+
+  return `<div class="home-hero-row">${countdownHTML}${lastRaceHTML}</div>`;
+}
+
+// Find the most recent winner at a given track (any year). Returns
+// HTML string (driver name + year) or null. Walks SEASON_CACHE so it
+// uses any historical year already loaded.
+function computeLastWinnerAtTrack(trackCode, series) {
+  if (!trackCode) return null;
+  const canon = canonicalTrackCode(trackCode.toUpperCase());
+  const codes = trackCodesForLookup(canon);
+  const candidates = [];
+  Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
+    if (!blocks) return;
+    const block = blocks[series];
+    if (!block || !block.races) return;
+    block.races.forEach(race => {
+      const rcCode = (race.track_code || "").toUpperCase();
+      if (!codes.includes(rcCode)) return;
+      const winner = (race.results || []).find(d => d.finish_pos === 1);
+      if (winner) candidates.push({ year: Number(year), winner: winner.driver });
+    });
+  });
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.year - a.year);
+  const top = candidates[0];
+  return `${escapeHTML(top.winner)} <span class="muted">${top.year}</span>`;
+}
+
+// Find the driver with the most wins at this track in this series
+// (across all loaded seasons). Returns HTML or null.
+function computeTrackKing(trackCode, series) {
+  if (!trackCode) return null;
+  const canon = canonicalTrackCode(trackCode.toUpperCase());
+  const codes = trackCodesForLookup(canon);
+  const winsByDriver = new Map();
+  Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
+    if (!blocks) return;
+    const block = blocks[series];
+    if (!block || !block.races) return;
+    block.races.forEach(race => {
+      const rcCode = (race.track_code || "").toUpperCase();
+      if (!codes.includes(rcCode)) return;
+      const winner = (race.results || []).find(d => d.finish_pos === 1);
+      if (winner) winsByDriver.set(winner.driver, (winsByDriver.get(winner.driver) || 0) + 1);
+    });
+  });
+  if (winsByDriver.size === 0) return null;
+  const sorted = Array.from(winsByDriver.entries()).sort((a, b) => b[1] - a[1]);
+  const [name, wins] = sorted[0];
+  if (wins < 2) return null;   // not a "king" with a single win
+  return `${escapeHTML(lastNameOf(name))} · ${wins}x`;
+}
+
+// Render top-5 standings cards for all three series, side-by-side.
+function renderHomeStandingsTrio(year) {
+  const yearBlock = SEASON_CACHE[year];
+  if (!yearBlock) return `<div class="muted" style="grid-column:1/-1;text-align:center;padding:24px;">Standings loading…</div>`;
+  return ["NCS", "NOS", "NTS"].map(s => {
+    const block = yearBlock[s];
+    if (!block || !block.races) {
+      return `<div class="home-card home-standings-card"><div class="home-standings-label">${s}</div><div class="muted" style="font-size:12px;padding:8px 0;">No data</div></div>`;
+    }
+    const top5 = computeStandingsForBlock(block).slice(0, 5);
+    if (top5.length === 0) {
+      return `<div class="home-card home-standings-card"><div class="home-standings-label">${s}</div><div class="muted" style="font-size:12px;padding:8px 0;">Season hasn't started</div></div>`;
+    }
+    const leader = top5[0];
+    const leaderTotal = leader.total;
+    const rows = top5.map((r, i) => {
+      const carHex = colorFor(s, r.car_number);
+      const txt = contrastTextFor(carHex);
+      const ptsCell = i === 0
+        ? `<span class="home-mini-pts">${leaderTotal}</span>`
+        : `<span class="home-mini-back">−${leaderTotal - r.total}</span>`;
+      return `<a class="home-mini-row profile-link" href="#/driver/${slugify(r.primaryDriver || r.driver || '')}">
+        <span class="home-mini-rank">${i + 1}</span>
+        <span class="home-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
+        <span class="home-mini-name">${escapeHTML(lastNameOf(r.primaryDriver || r.driver || ''))}</span>
+        ${ptsCell}
+      </a>`;
+    }).join("");
+    return `<div class="home-card home-standings-card">
+      <div class="home-standings-head">
+        <span class="home-standings-label">${s}</span>
+        <a class="home-standings-link" href="#/standings">Full →</a>
+      </div>
+      ${rows}
+    </div>`;
+  }).join("");
+}
+
+// Compute standings rows for an arbitrary series block (not necessarily
+// STATE.data). Mirrors rankingRowsFrom + computeSeasonTotals but works
+// off a passed-in block, since the home page wants three-series data
+// in one render pass without juggling STATE.
+function computeStandingsForBlock(block) {
+  if (!block || !block.entities || !block.races) return [];
+  const out = [];
+  block.entities.forEach(e => {
+    if (e.ineligible) return;
+    let total = 0;
+    let starts = 0;
+    (e.races || []).forEach(r => {
+      if (r.dns) return;
+      total += r.total || 0;
+      starts++;
+    });
+    out.push({
+      car_number: e.car_number,
+      driver: e.driver,
+      primaryDriver: e.primaryDriver || e.driver,
+      total, starts,
+    });
+  });
+  return out.sort((a, b) => b.total - a.total);
+}
+
+// Render a row of stat cards for "season at a glance".
+function renderHomeStatCards(year, series) {
+  const races = racesSorted();
+  const completed = races.filter(r => (r.results || []).some(d => d.finish_pos === 1));
+  const totalScheduled = races.length;
+  const racesRun = completed.length;
+
+  // Card 1: races run
+  const racesProgress = totalScheduled > 0 ? Math.round((racesRun / totalScheduled) * 100) : 0;
+  // Try to compute "races until playoffs" from the rule
+  const rule = resolvePlayoffRules(series, year);
+  const racesToPlayoffs = rule && rule.regSeasonEndRound != null
+    ? Math.max(0, rule.regSeasonEndRound - racesRun)
+    : null;
+  const card1 = `
+    <div class="home-stat-card">
+      <div class="home-stat-k">Races run</div>
+      <div class="home-stat-v">${racesRun}<span class="home-stat-v-suffix"> / ${totalScheduled}</span></div>
+      <div class="home-stat-annot">${racesProgress}% complete${racesToPlayoffs != null ? ` · ${racesToPlayoffs} to playoffs` : ""}</div>
+    </div>
+  `;
+
+  // Card 2: different winners YTD vs. same point last year
+  const winnersThisYear = new Set();
+  completed.forEach(r => {
+    const w = (r.results || []).find(d => d.finish_pos === 1);
+    if (w) winnersThisYear.add(slugify(w.driver));
+  });
+  let priorComparison = "";
+  const priorYear = year - 1;
+  const priorBlock = SEASON_CACHE[priorYear] && SEASON_CACHE[priorYear][series];
+  if (priorBlock && priorBlock.races) {
+    const priorWinners = new Set();
+    priorBlock.races.slice(0, racesRun).forEach(r => {
+      const w = (r.results || []).find(d => d.finish_pos === 1);
+      if (w) priorWinners.add(slugify(w.driver));
+    });
+    if (priorWinners.size > 0) {
+      const diff = winnersThisYear.size - priorWinners.size;
+      const sign = diff > 0 ? "+" : "";
+      priorComparison = `${sign}${diff} vs. ${priorYear} pace`;
+    }
+  }
+  const card2 = `
+    <div class="home-stat-card">
+      <div class="home-stat-k">Different winners</div>
+      <div class="home-stat-v">${winnersThisYear.size}</div>
+      <div class="home-stat-annot">${priorComparison || `from ${racesRun} races`}</div>
+    </div>
+  `;
+
+  // Card 3: tightest gap in playoff field (top N where N = rule.field, fallback 16)
+  const standings = computeStandingsForBlock(STATE.data);
+  const cutoff = (rule && rule.field) || 16;
+  let tightestGap = null;
+  let tightestPair = null;
+  if (standings.length >= 2) {
+    const top = standings.slice(0, cutoff + 1);   // include cutoff+1 to find gap into-cutoff
+    for (let i = 1; i < top.length; i++) {
+      const gap = top[i - 1].total - top[i].total;
+      if (tightestGap == null || gap < tightestGap) {
+        tightestGap = gap;
+        tightestPair = [top[i - 1], top[i]];
+      }
+    }
+  }
+  const card3 = tightestGap != null ? `
+    <div class="home-stat-card">
+      <div class="home-stat-k">Tightest gap (top ${cutoff})</div>
+      <div class="home-stat-v">${tightestGap}<span class="home-stat-v-suffix"> pts</span></div>
+      <div class="home-stat-annot">${escapeHTML(lastNameOf(tightestPair[0].primaryDriver || tightestPair[0].driver || ''))} · ${escapeHTML(lastNameOf(tightestPair[1].primaryDriver || tightestPair[1].driver || ''))}</div>
+    </div>
+  ` : `
+    <div class="home-stat-card">
+      <div class="home-stat-k">Tightest gap</div>
+      <div class="home-stat-v">—</div>
+      <div class="home-stat-annot">Not enough data</div>
+    </div>
+  `;
+
+  // Card 4: most dominant driver L4 (best avg finish over last 4 races)
+  let mostDominant = null;
+  if (completed.length >= 1 && STATE.data.entities) {
+    const recentRounds = completed.slice(-4).map(r => r.round);
+    if (recentRounds.length >= 1) {
+      let best = null;
+      STATE.data.entities.forEach(e => {
+        if (!isFullTime(e)) return;
+        const recentFinishes = (e.races || [])
+          .filter(r => recentRounds.includes(r.round) && !r.dns && r.finish != null)
+          .map(r => r.finish);
+        if (recentFinishes.length === 0) return;
+        const avg = recentFinishes.reduce((s, x) => s + x, 0) / recentFinishes.length;
+        if (best == null || avg < best.avg) best = { entity: e, avg, n: recentFinishes.length };
+      });
+      mostDominant = best;
+    }
+  }
+  const card4 = mostDominant ? `
+    <div class="home-stat-card">
+      <div class="home-stat-k">Hottest L${Math.min(4, completed.length)}</div>
+      <div class="home-stat-v home-stat-v-name">${escapeHTML(lastNameOf(mostDominant.entity.primaryDriver || mostDominant.entity.driver || ''))}</div>
+      <div class="home-stat-annot">avg fin ${mostDominant.avg.toFixed(1)}</div>
+    </div>
+  ` : `
+    <div class="home-stat-card">
+      <div class="home-stat-k">Hottest L4</div>
+      <div class="home-stat-v">—</div>
+      <div class="home-stat-annot">No data yet</div>
+    </div>
+  `;
+
+  return card1 + card2 + card3 + card4;
+}
+
+// Generate up to 5 storyline tiles from the data. Each generator
+// returns {tone, headline, body} or null. We render whatever survived
+// in priority order.
+function renderHomeStorylines(year, series) {
+  const tiles = generateHomeStorylines(year, series).slice(0, 5);
+  if (tiles.length === 0) return "";
+  return tiles.map(t => `
+    <div class="home-storyline ${t.tone || ''}">
+      <div class="home-storyline-h">${t.headline}</div>
+      <div class="home-storyline-b">${t.body}</div>
+    </div>
+  `).join("");
+}
+
+function generateHomeStorylines(year, series) {
+  const tiles = [];
+  const races = racesSorted();
+  const completed = races.filter(r => (r.results || []).some(d => d.finish_pos === 1));
+  if (completed.length === 0 || !STATE.data.entities) return tiles;
+
+  // 1. Longest active top-5 streak
+  const streaks = STATE.data.entities
+    .filter(isFullTime)
+    .map(e => {
+      let streak = 0;
+      const sortedRaces = (e.races || []).filter(r => !r.dns && r.finish != null).sort((a, b) => b.round - a.round);
+      for (const r of sortedRaces) {
+        if (r.finish <= 5) streak++;
+        else break;
+      }
+      return { e, streak };
+    })
+    .filter(s => s.streak >= 3)
+    .sort((a, b) => b.streak - a.streak);
+  if (streaks.length > 0 && streaks[0].streak >= 3) {
+    const top = streaks[0];
+    tiles.push({
+      tone: "success",
+      headline: `${escapeHTML(lastNameOf(top.e.primaryDriver || top.e.driver || ''))} on a ${top.streak}-race top-5 streak`,
+      body: `Hasn't finished outside the top 5 since R${completed[completed.length - top.streak].round}. Longest active in ${series}.`,
+    });
+  }
+
+  // 2. Team has won X of last Y
+  if (completed.length >= 4) {
+    const recent = completed.slice(-4);
+    const teamWins = new Map();
+    recent.forEach(r => {
+      const w = (r.results || []).find(d => d.finish_pos === 1);
+      if (!w) return;
+      const team = w.team_code || teamCodeFromName(w.team, SERIES_TO_KEY[series], w.car_number);
+      if (!team) return;
+      const grp = teamGroup(team, year) || team;
+      teamWins.set(grp, (teamWins.get(grp) || 0) + 1);
+    });
+    let topTeam = null;
+    teamWins.forEach((n, code) => {
+      if (n >= 2 && (!topTeam || n > topTeam.n)) topTeam = { code, n };
+    });
+    if (topTeam) {
+      const lbl = teamLabelForEra(topTeam.code, year).full || topTeam.code;
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lbl)} has won ${topTeam.n} of last ${recent.length}`,
+        body: `In the recent stretch covering rounds R${recent[0].round}–R${recent[recent.length - 1].round}.`,
+      });
+    }
+  }
+
+  // 3. Standings movement: who fell out of the playoff cutoff this race
+  const rule = resolvePlayoffRules(series, year);
+  if (rule && rule.field && completed.length >= 2) {
+    const cutoff = rule.field;
+    const lastRound = completed[completed.length - 1].round;
+    const prevRound = completed[completed.length - 2].round;
+    const currentMap = pointsMapThroughRound(lastRound);
+    const prevMap = pointsMapThroughRound(prevRound);
+    const currentRanked = Array.from(currentMap.values()).sort((a, b) => b.total - a.total);
+    const prevRanked = Array.from(prevMap.values()).sort((a, b) => b.total - a.total);
+    const currentRank = new Map(currentRanked.map((r, i) => [r.car_number, i + 1]));
+    const prevRank = new Map(prevRanked.map((r, i) => [r.car_number, i + 1]));
+    // Who was in top-cutoff before, now isn't
+    let droppedOut = null;
+    prevRank.forEach((r, car) => {
+      if (r <= cutoff && currentRank.get(car) > cutoff) {
+        const cur = currentRanked[currentRank.get(car) - 1];
+        if (!droppedOut || currentRank.get(car) < droppedOut.curRank) {
+          droppedOut = { car, curRank: currentRank.get(car), prevRank: r, entity: cur };
+        }
+      }
+    });
+    if (droppedOut) {
+      const cutoffPts = currentRanked[cutoff - 1] ? currentRanked[cutoff - 1].total : null;
+      const back = cutoffPts != null ? cutoffPts - droppedOut.entity.total : null;
+      tiles.push({
+        tone: "danger",
+        headline: `${escapeHTML(lastNameOf(droppedOut.entity.primaryDriver || droppedOut.entity.driver || ''))} fell out of top ${cutoff}`,
+        body: `Now P${droppedOut.curRank}${back != null ? `, ${back} points back` : ""}. Was P${droppedOut.prevRank} entering R${lastRound}.`,
+      });
+    }
+  }
+
+  // 4. Hot driver moved into the playoff cutoff
+  if (rule && rule.field && completed.length >= 2) {
+    const cutoff = rule.field;
+    const lastRound = completed[completed.length - 1].round;
+    const prevRound = completed[completed.length - 2].round;
+    const currentMap = pointsMapThroughRound(lastRound);
+    const prevMap = pointsMapThroughRound(prevRound);
+    const currentRanked = Array.from(currentMap.values()).sort((a, b) => b.total - a.total);
+    const prevRanked = Array.from(prevMap.values()).sort((a, b) => b.total - a.total);
+    const currentRank = new Map(currentRanked.map((r, i) => [r.car_number, i + 1]));
+    const prevRank = new Map(prevRanked.map((r, i) => [r.car_number, i + 1]));
+    let movedIn = null;
+    currentRank.forEach((r, car) => {
+      if (r <= cutoff && (prevRank.get(car) || 999) > cutoff) {
+        const cur = currentRanked[r - 1];
+        if (!movedIn || r < movedIn.curRank) {
+          movedIn = { car, curRank: r, prevRank: prevRank.get(car), entity: cur };
+        }
+      }
+    });
+    if (movedIn) {
+      tiles.push({
+        tone: "success",
+        headline: `${escapeHTML(lastNameOf(movedIn.entity.primaryDriver || movedIn.entity.driver || ''))} jumped into the top ${cutoff}`,
+        body: `Climbed from P${movedIn.prevRank} to P${movedIn.curRank} after R${completed[completed.length - 1].round}.`,
+      });
+    }
+  }
+
+  // 5. Driver-track combo: someone's track-type record (e.g. 0-for-N at intermediates)
+  // Only if next race exists and has a known track type.
+  const nextRace = (STATE.data.races || []).find(r => !(r.results || []).some(d => d.finish_pos === 1));
+  if (nextRace) {
+    const nextType = trackTypeFor(nextRace.track_code);
+    if (nextType) {
+      // Find a current-FT driver with a notable streak at this track type.
+      // Look for: longest 0-top-5 streak among top-15 standings drivers.
+      const top15 = homeTopStandings(15);
+      let worst = null;
+      top15.forEach(r => {
+        const e = STATE.data.entities.find(ent => ent.car_number === r.car_number);
+        if (!e) return;
+        // Walk this driver's recent races at the same track type
+        let starts = 0;
+        let top5s = 0;
+        (e.races || []).forEach(rc => {
+          if (rc.dns || rc.finish == null) return;
+          const raceObj = (STATE.data.races || []).find(rr => rr.round === rc.round);
+          if (!raceObj) return;
+          if (trackTypeFor(raceObj.track_code) === nextType) {
+            starts++;
+            if (rc.finish <= 5) top5s++;
+          }
+        });
+        if (starts >= 4 && top5s === 0) {
+          if (!worst || starts > worst.starts) worst = { entity: e, starts, type: nextType };
+        }
+      });
+      if (worst) {
+        tiles.push({
+          tone: "warning",
+          headline: `${escapeHTML(lastNameOf(worst.entity.primaryDriver || worst.entity.driver || ''))}: 0-for-${worst.starts} at ${trackTypeLabel(worst.type)}s`,
+          body: `No top-5 at any ${trackTypeLabel(worst.type)} this season. ${prettyTrack(nextRace.track_code, nextRace.track) || "Next race"} up next.`,
+        });
+      }
+    }
+  }
+
+  return tiles;
+}
+
+// Helper: top-N current standings rows, in standings order.
+function homeTopStandings(n) {
+  return computeStandingsForBlock(STATE.data).slice(0, n);
+}
+
+// Format a YYYY-MM-DD date as "Sunday, May 11"
+function formatLongDate(dateStr) {
+  try {
+    const d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  } catch (_) { return dateStr; }
+}
+
 function renderTrackStats() {
   const host = document.getElementById("trackstats-host");
   if (!host) return;
@@ -9980,10 +10574,7 @@ const TRACK_CODE_ALIASES_LOOKUP = {
   ATL: ["ATL", "ECH"],
 };
 // Map any track code to its canonical form so ECH ↔ ATL etc. don't
-// produce duplicate dropdown entries. We pick the FIRST entry in the
-// alias list as the canonical code (the alias list is keyed by an
-// arbitrary code but always lists the canonical code first when set up
-// that way). Falls back to the input if not in the alias map.
+// produce duplicate dropdown entries.
 function canonicalTrackCode(code) {
   if (!code) return code;
   const list = TRACK_CODE_ALIASES_LOOKUP[code];
@@ -12013,6 +12604,20 @@ const ALLTIME_STATE = {
   teams:      { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
   crewchiefs: { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
 };
+
+// NASCAR track-type taxonomy is defined earlier in the file (search
+// `const TRACK_TYPES`). Categories use short codes: super, short,
+// inter, road, dirt. trackTypeFor() returns the canonical category
+// for a given track code (alias-aware via canonicalTrackCode).
+function trackTypeFor(code) {
+  if (!code) return null;
+  const canon = canonicalTrackCode(code.toUpperCase());
+  return TRACK_TYPES[canon] || TRACK_TYPES[code.toUpperCase()] || null;
+}
+// Pretty label for a track type — used in storyline copy.
+function trackTypeLabel(t) {
+  return ({ super: "superspeedway", short: "short track", inter: "intermediate", road: "road course", dirt: "dirt" })[t] || t;
+}
 
 // NASCAR Cup generation eras. Used by the generation filter on
 // the all-time pages — toggle one or more pills to scope the table
