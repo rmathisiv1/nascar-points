@@ -904,6 +904,13 @@ async function boot() {
   });
   render();
   window.addEventListener("hashchange", async () => {
+    // Any URL change dismisses the race lightbox. Covers all navigation
+    // pathways — clicking an inner driver/team link, browser back/forward,
+    // search bar suggestion, etc. — without each call site needing to
+    // remember to close it.
+    if (STATE.lightbox && STATE.lightbox.open) {
+      closeRaceLightbox();
+    }
     parseHash();
     // Driver-centric route: resolve home (series, season) before rendering
     if (STATE.view === "profile" && STATE.profile && STATE.profile.kind === "driver") {
@@ -8606,15 +8613,8 @@ async function openRaceLightbox(year, series, round) {
     </div>
     ${resultsHTML}
   `;
-
-  // Driver / team links inside the lightbox should still navigate (those
-  // jump to profile pages, which is fine in Present mode — profiles are
-  // always career-to-date). We just intercept clicks so the lightbox
-  // closes before navigating, otherwise the hashchange would fire under
-  // a still-visible overlay and look weird.
-  body.querySelectorAll("a[href^='#/']").forEach(a => {
-    a.addEventListener("click", () => closeRaceLightbox());
-  });
+  // No need to wire inner links — the global hashchange listener
+  // automatically closes the lightbox when any navigation happens.
 }
 
 function closeRaceLightbox() {
@@ -8631,6 +8631,13 @@ let _lightboxWired = false;
 function wireRaceLightbox() {
   if (_lightboxWired) return;
   _lightboxWired = true;
+  // Hard-reset to closed state on every boot — defensive in case the page
+  // was reloaded with a stale `hidden` attr or class.
+  const host = document.getElementById("race-lightbox");
+  if (host) host.hidden = true;
+  document.body.classList.remove("lightbox-open");
+  STATE.lightbox = { open: false, year: null, series: null, round: null };
+
   document.getElementById("race-lightbox-close")?.addEventListener("click", closeRaceLightbox);
   document.getElementById("race-lightbox-backdrop")?.addEventListener("click", closeRaceLightbox);
   document.addEventListener("keydown", (e) => {
