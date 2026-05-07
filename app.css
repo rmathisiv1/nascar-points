@@ -1448,6 +1448,19 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .pts-delta.hot { color: var(--pos); }
 .pts-delta.cold { color: var(--neg); }
 
+/* Standalone delta cell — when only the delta is shown (no big number
+   above). Used by Trending L5/L10 Pts and Standings Last. Larger than
+   .pts-delta and bolder so it reads as the primary value. */
+.pts-delta-only {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.pts-delta-only.hot { color: var(--pos); }
+.pts-delta-only.cold { color: var(--neg); }
+
 .delta-pill {
   display: inline-block;
   padding: 1px 6px; border-radius: 3px;

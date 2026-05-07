@@ -3271,10 +3271,7 @@ function renderFormTable() {
       <td class="num">${
         d.windowPtsDelta == null
           ? `<span>${d.windowPts || 0}</span>`
-          : `<span class="pts-stack">
-              <span class="pts-big">${d.windowPts || 0}</span>
-              <span class="pts-delta ${d.windowPtsDelta > 1.5 ? "hot" : d.windowPtsDelta < -1.5 ? "cold" : ""}">${d.windowPtsDelta > 0 ? "+" : ""}${d.windowPtsDelta.toFixed(1)}</span>
-            </span>`
+          : `<span class="pts-delta-only ${d.windowPtsDelta > 1.5 ? "hot" : d.windowPtsDelta < -1.5 ? "cold" : ""}">${d.windowPtsDelta > 0 ? "+" : ""}${d.windowPtsDelta.toFixed(1)}</span>`
       }</td>
       <td class="num" style="color: var(--muted)">${d.totalPts}</td>
     </tr>`;
@@ -3291,7 +3288,7 @@ function renderFormTable() {
     ? `Form (Season)`
     : `Form (L${STATE.form.window})`;
 
-  const windowPtsLabel = STATE.form.window === "season" ? "Season Pts" : `L${STATE.form.window} Pts`;
+  const windowPtsLabel = STATE.form.window === "season" ? "Season Pts" : `L${STATE.form.window} Δ`;
   card.innerHTML = `
     <div class="table-scroll">
     <table class="data-table">
@@ -8116,12 +8113,9 @@ function renderStandings() {
       <td class="num">${r.top10}</td>
       <td class="num">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
       <td class="num">${
-        r.lastRacePts == null
+        r.lastRaceDelta == null
           ? `<span class="muted">—</span>`
-          : `<span class="pts-stack">
-              <span class="pts-big">${r.lastRacePts}</span>
-              <span class="pts-delta ${r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta < -1.5 ? "cold" : ""}">${r.lastRaceDelta != null ? (r.lastRaceDelta > 0 ? "+" : "") + r.lastRaceDelta.toFixed(1) : ""}</span>
-            </span>`
+          : `<span class="pts-delta-only ${r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta < -1.5 ? "cold" : ""}">${r.lastRaceDelta > 0 ? "+" : ""}${r.lastRaceDelta.toFixed(1)}</span>`
       }</td>
       ${stageEra ? `<td class="num">${r.sumS1}</td>
       <td class="num">${r.sumS2}</td>
@@ -8150,7 +8144,7 @@ function renderStandings() {
         ${th("top5", "T5", true)}
         ${th("top10", "T10", true)}
         ${th("avgFinish", "Avg Fin", true)}
-        ${th("lastRacePts", "Last", true)}
+        ${th("lastRaceDelta", "Last Δ", true)}
         ${stageEra ? `${th("sumS1", "S1", true)}
         ${th("sumS2", "S2", true)}
         ${th("sumFL", "FL", true)}` : ""}
