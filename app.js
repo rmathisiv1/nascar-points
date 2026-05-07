@@ -495,11 +495,31 @@ function ensureFullSearchData() {
     .catch(() => { SEARCH.fullDataLoading = false; });
 }
 
+// Tab dropdown groups — when the user clicks a tab/subitem within a
+// .dash-tab-group, the page navigates but :hover stays latched on the
+// just-clicked element until the cursor moves, leaving the submenu
+// stuck open over the destination view. We mark the group .just-clicked
+// to suppress the hover-open state, then clear the flag on mouseleave
+// so re-hovering re-opens normally.
+function wireTabDropdowns() {
+  document.querySelectorAll(".dash-tab-group").forEach(grp => {
+    // Click on parent tab OR any subitem → mark group, allow nav to proceed
+    grp.querySelectorAll(".dash-tab-parent, .dash-subitem").forEach(a => {
+      a.addEventListener("click", () => {
+        grp.classList.add("just-clicked");
+      });
+    });
+    // Cursor leaves the group → reset, so next hover behaves normally
+    grp.addEventListener("mouseleave", () => {
+      grp.classList.remove("just-clicked");
+    });
+  });
+}
+
 function wireSearch() {
   const input = document.getElementById("search-input");
   const drop = document.getElementById("search-dropdown");
   if (!input || !drop) return;
-
   // Debounced query handler — keystrokes are cheap but rebuilding the index
   // when years just landed isn't, so debounce ~120ms.
   let debounceTimer = null;
@@ -886,6 +906,7 @@ async function boot() {
   applyMobileLanding();
   wireSearch();
   wireRaceLightbox();
+  wireTabDropdowns();
   await loadColors();
   loadDriverBios();  // async, not awaited — profile will use it whenever it arrives
   await discoverSeasons();

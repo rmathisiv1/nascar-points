@@ -489,6 +489,13 @@ html, body {
 .dash-tab-group:focus-within .dash-submenu {
   display: flex;
 }
+/* When a click just navigated, suppress the hover-open state until
+   the cursor leaves the group. Otherwise the dropdown stays latched
+   open over the destination page. JS removes this class on mouseleave. */
+.dash-tab-group.just-clicked:hover .dash-submenu,
+.dash-tab-group.just-clicked:focus-within .dash-submenu {
+  display: none;
+}
 .dash-subitem {
   padding: 6px 10px;
   color: var(--muted);
