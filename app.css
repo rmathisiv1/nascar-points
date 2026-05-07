@@ -5325,9 +5325,97 @@ a.rc-sched-winner:hover {
   border-color: rgba(110, 168, 254, 0.55);
 }
 
-/* "Now" button — global escape hatch in the topbar. Sits between the
-   series switcher and the search bar. Clicked → reset to most recent
-   season + clear time cursor + bail from any takeover view. */
+/* ============================================================
+   RACE LIGHTBOX — Present-mode race viewer overlay
+   ============================================================ */
+.race-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vh 4vw;
+  overflow-y: auto;
+}
+.race-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: -1;
+  cursor: pointer;
+}
+.race-lightbox-panel {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: min(1100px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  padding: 18px 22px 24px 22px;
+  /* iOS smooth-scroll inside the panel */
+  -webkit-overflow-scrolling: touch;
+}
+.race-lightbox-close {
+  position: sticky;
+  top: 0;
+  margin-left: auto;
+  margin-bottom: 6px;
+  display: block;
+  width: 32px;
+  height: 32px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.race-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.race-lightbox-loading {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.race-lightbox-error {
+  padding: 40px 20px;
+  text-align: center;
+}
+.race-lightbox-error h2 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  color: var(--text);
+}
+/* Lock body scroll while lightbox is open so wheel events don't bleed
+   through to the underlying page. */
+body.lightbox-open {
+  overflow: hidden;
+}
+@media (max-width: 767.98px) {
+  .race-lightbox {
+    padding: 0;
+  }
+  .race-lightbox-panel {
+    border-radius: 0;
+    max-height: 100vh;
+    height: 100vh;
+    padding: 12px 14px 18px 14px;
+  }
+}
+
 /* Historical/Present mode selector. Two-option pill in the same visual
    family as .series-sw — both options visible at once so it's obvious
    what the alternative is. The active option uses a warm gold accent

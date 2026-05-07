@@ -364,6 +364,18 @@
   </section>
 </main>
 
+<!-- Race lightbox — opens over the page when a historical race link is
+     clicked in Present mode. Hidden by default; renderRaceLightbox()
+     toggles `hidden` and fills `#race-lightbox-body`. Clicking the
+     overlay backdrop or pressing Esc dismisses it. -->
+<div class="race-lightbox" id="race-lightbox" hidden role="dialog" aria-modal="true" aria-labelledby="race-lightbox-title">
+  <div class="race-lightbox-backdrop" id="race-lightbox-backdrop"></div>
+  <div class="race-lightbox-panel">
+    <button class="race-lightbox-close" id="race-lightbox-close" aria-label="Close race detail">×</button>
+    <div class="race-lightbox-body" id="race-lightbox-body"></div>
+  </div>
+</div>
+
 <footer class="footer">
   <span id="footer-updated">Updated —</span>
 </footer>

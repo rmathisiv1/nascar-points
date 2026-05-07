@@ -412,7 +412,22 @@ async function handleSearchRaceClick(rawHref) {
   const series = m[3];
   const drop = document.getElementById("search-dropdown");
   if (drop) drop.hidden = true;
-  // Switch context if needed
+  // Present mode: open the lightbox instead of changing global state.
+  // The user explicitly chose "always live" so a 2018 race click should
+  // not pull the rest of the site into 2018. In Historical mode we fall
+  // through to the original state-changing behavior.
+  if (STATE.mode === "present") {
+    // If the click is for the CURRENT (year, series) — i.e. a race in
+    // the season the user is already viewing — let it route normally
+    // so the URL hash reflects the race route. Lightbox only kicks in
+    // for cross-year/cross-series jumps.
+    const isCurrentContext = (year === STATE.season && series === STATE.series);
+    if (!isCurrentContext) {
+      await openRaceLightbox(year, series, round);
+      return true;
+    }
+  }
+  // Switch context if needed (Historical mode, or current-context click)
   if (STATE.series !== series || STATE.season !== year) {
     STATE.series = series;
     STATE.season = year;
@@ -850,6 +865,7 @@ async function boot() {
   wirePickerDrawers();
   applyMobileLanding();
   wireSearch();
+  wireRaceLightbox();
   await loadColors();
   loadDriverBios();  // async, not awaited — profile will use it whenever it arrives
   await discoverSeasons();
@@ -8514,6 +8530,116 @@ function renderPlayoffsMini() {
 // on-demand using the same SEASON_CACHE the Stage vs Finish view uses.
 // ============================================================
 
+// ============================================================
+// RACE LIGHTBOX — Present-mode read-only race viewer
+// ------------------------------------------------------------
+// Opens an overlay with the same race-results view as the full Race
+// Center, but pulled from SEASON_CACHE for an arbitrary (year, series,
+// round) WITHOUT touching STATE.season/series/data. Closing returns the
+// user to whatever they were doing — no state pollution, no navigation.
+//
+// Used only in Present mode; in Historical mode, historical race links
+// fall through to the existing handleSearchRaceClick which DOES change
+// global state.
+// ============================================================
+async function openRaceLightbox(year, series, round) {
+  const host = document.getElementById("race-lightbox");
+  const body = document.getElementById("race-lightbox-body");
+  if (!host || !body) return;
+
+  STATE.lightbox = { open: true, year, series, round };
+
+  // Show with a quick "loading" state in case the year isn't cached yet
+  body.innerHTML = `<div class="race-lightbox-loading">Loading ${series} ${year} R${round}…</div>`;
+  host.hidden = false;
+  // Lock body scroll so the overlay feels modal
+  document.body.classList.add("lightbox-open");
+
+  // Make sure the year is loaded
+  if (!SEASON_CACHE[year]) {
+    await loadSeasonIntoCache(year);
+  }
+  const block = SEASON_CACHE[year] && SEASON_CACHE[year][series];
+  if (!block) {
+    body.innerHTML = `
+      <div class="race-lightbox-error">
+        <h2>Couldn't load ${series} ${year}</h2>
+        <p class="muted">Data file may be missing or failed to fetch.</p>
+      </div>`;
+    return;
+  }
+
+  const races = block.races || [];
+  const race = races.find(r => r.round === round);
+  if (!race) {
+    body.innerHTML = `
+      <div class="race-lightbox-error">
+        <h2>${series} ${year} R${round} not found</h2>
+        <p class="muted">This race isn't in the loaded schedule.</p>
+      </div>`;
+    return;
+  }
+
+  const trackName = prettyTrack(race.track_code, race.track) || race.track || "?";
+  const dateStr = race.date
+    ? new Date(race.date + "T00:00:00").toLocaleDateString("en-US",
+        { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+    : "";
+  const completed = (race.results || []).length > 0;
+  const badge = completed ? "RACE RESULTS" : "UPCOMING";
+
+  // Re-use the existing results-table renderer with explicit context so
+  // it pulls (year, series, races) from the lightbox payload rather than
+  // global STATE.
+  const resultsHTML = completed
+    ? renderRaceResultsTable(race, { series, season: year, allRaces: races })
+    : `<div class="rc-empty">This race hasn't been run yet.</div>`;
+
+  body.innerHTML = `
+    <div class="rc-hero" style="border-left:4px solid var(--accent);">
+      <div class="rc-hero-badge">${badge}</div>
+      <h2 class="rc-hero-track" id="race-lightbox-title">R${race.round} · ${escapeHTML(trackName)}</h2>
+      <div class="rc-hero-meta">
+        ${dateStr ? escapeHTML(dateStr) + " · " : ""}${SERIES_LABELS[series] || series} · ${year}
+        ${race.race_name ? ` · <span class="muted">"${escapeHTML(race.race_name)}"</span>` : ""}
+      </div>
+    </div>
+    ${resultsHTML}
+  `;
+
+  // Driver / team links inside the lightbox should still navigate (those
+  // jump to profile pages, which is fine in Present mode — profiles are
+  // always career-to-date). We just intercept clicks so the lightbox
+  // closes before navigating, otherwise the hashchange would fire under
+  // a still-visible overlay and look weird.
+  body.querySelectorAll("a[href^='#/']").forEach(a => {
+    a.addEventListener("click", () => closeRaceLightbox());
+  });
+}
+
+function closeRaceLightbox() {
+  const host = document.getElementById("race-lightbox");
+  if (!host) return;
+  host.hidden = true;
+  document.body.classList.remove("lightbox-open");
+  STATE.lightbox = { open: false, year: null, series: null, round: null };
+}
+
+// One-time global wireup: backdrop click + close button + Esc key.
+// Idempotent — guarded by a flag so multiple calls don't stack listeners.
+let _lightboxWired = false;
+function wireRaceLightbox() {
+  if (_lightboxWired) return;
+  _lightboxWired = true;
+  document.getElementById("race-lightbox-close")?.addEventListener("click", closeRaceLightbox);
+  document.getElementById("race-lightbox-backdrop")?.addEventListener("click", closeRaceLightbox);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && STATE.lightbox && STATE.lightbox.open) {
+      closeRaceLightbox();
+    }
+  });
+}
+
 function renderRaceCenter() {
   const host = document.getElementById("race-host");
   const sub = document.getElementById("race-sub");
@@ -8671,20 +8797,28 @@ function renderRaceCenter() {
 // Build a finish-order results table for a single race. Every row links the
 // driver name to their profile and the car number tag uses the series color
 // palette. Stage points and FL columns are gated to stage-era seasons.
-function renderRaceResultsTable(race) {
+// Renders the finish-order table for a single race. Pass `ctx` to render
+// in a different (year, series) than the current STATE — the lightbox
+// uses this to display a historical race without touching global state.
+// `ctx.allRaces` is the list of races in that (year, series) so we can
+// compute season-to-date totals; defaults to STATE.data.races for the
+// in-page Race Center view.
+function renderRaceResultsTable(race, ctx) {
   if (!race || !(race.results || []).length) return "";
+  const series = (ctx && ctx.series) || STATE.series;
+  const season = (ctx && ctx.season) || STATE.season;
+  const allRaces = (ctx && ctx.allRaces) || (STATE.data?.races || []);
   const rows = (race.results || [])
     .filter(d => d.finish_pos != null)
     .sort((a, b) => a.finish_pos - b.finish_pos);
   if (!rows.length) return "";
-  const stageEra = isStageEra(STATE.series, STATE.season);
+  const stageEra = isStageEra(series, season);
 
   // Build a season-to-date points lookup: for each driver, sum up the
   // race_pts they've earned in races 1..race.round in the current season.
   // Used by the Total column so users can see "where this race left them
   // in the championship" at a glance.
   const seasonPtsToDate = new Map();
-  const allRaces = (STATE.data?.races || []);
   allRaces.forEach(r => {
     if ((r.round || 0) > race.round) return;
     (r.results || []).forEach(d => {
@@ -8703,7 +8837,7 @@ function renderRaceResultsTable(race) {
   const numOrBlank = (v) => (v == null || v === 0) ? "" : v;
 
   const trHTML = rows.map(d => {
-    const carHex = colorFor(STATE.series, d.car_number);
+    const carHex = colorFor(series, d.car_number);
     const carTxt = contrastTextFor(carHex);
     let finCls = "f-normal";
     if (d.finish_pos === 1) finCls = "f-win";
@@ -8715,7 +8849,7 @@ function renderRaceResultsTable(race) {
       ? `<a class="profile-link" href="#/driver/${drvSlug}">${escapeHTML(d.driver || "")}</a>`
       : escapeHTML(d.driver || "");
     const teamCode = d.team_code
-      || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number)
+      || teamCodeFromName(d.team, SERIES_TO_KEY[series], d.car_number)
       || "";
     const teamCell = teamCode
       ? `<a class="profile-link muted" href="#/team/${encodeURIComponent(teamCode)}">${escapeHTML(teamCode)}</a>`
