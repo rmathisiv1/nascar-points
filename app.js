@@ -5931,7 +5931,10 @@ function renderProfile() {
   const currentCC = currentCrewChiefForDriver(driverSlugForCC);
   if (currentCC) {
     // Compute tenure by walking SEASON_CACHE for this driver, year by year
-    // backwards, counting how many continuous seasons their CC was the same.
+    // backwards. For each year we find the DOMINANT CC (the one with the
+    // most races) and compare it to currentCC. This way a single
+    // relief-CC race in an otherwise-Stevens season doesn't break the
+    // tenure walk and incorrectly chop years off the "since YYYY" label.
     const ccSlug = slugify(currentCC);
     let tenureStartYear = STATE.season;
     const yrs = Object.keys(SEASON_CACHE).map(Number)
@@ -5939,7 +5942,8 @@ function renderProfile() {
     for (const y of yrs) {
       const blocks = SEASON_CACHE[y];
       if (!blocks) continue;
-      let foundDifferent = false, foundSame = false;
+      // Tally CC slugs across all of this driver's races this year.
+      const ccTally = new Map();   // ccSlug → race count
       ["NCS", "NOS", "NTS"].forEach(sCode => {
         const block = blocks[sCode];
         if (!block || !block.races) return;
@@ -5948,13 +5952,25 @@ function renderProfile() {
             if (d.ineligible) return;
             if (slugify(d.driver || "") !== driverSlugForCC) return;
             if (!d.crew_chief) return;
-            if (slugify(d.crew_chief) === ccSlug) foundSame = true;
-            else foundDifferent = true;
+            const sl = slugify(d.crew_chief);
+            ccTally.set(sl, (ccTally.get(sl) || 0) + 1);
           });
         });
       });
-      if (foundDifferent) break;       // found a year w/ different CC
-      if (foundSame) tenureStartYear = y;   // year confirmed same CC
+      if (ccTally.size === 0) continue;   // no data for driver this year — skip
+      // Pick dominant slug (most races); ties broken alphabetically for stability
+      let dominant = null, dominantCount = -1;
+      ccTally.forEach((cnt, sl) => {
+        if (cnt > dominantCount || (cnt === dominantCount && sl < dominant)) {
+          dominant = sl;
+          dominantCount = cnt;
+        }
+      });
+      if (dominant === ccSlug) {
+        tenureStartYear = y;       // tenure extends back to this year
+      } else {
+        break;                      // a different CC dominated this year — stop
+      }
     }
     const tenureSpan = (tenureStartYear < STATE.season)
       ? `<span class="muted">(since ${tenureStartYear})</span>`
