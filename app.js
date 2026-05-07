@@ -4973,12 +4973,16 @@ function renderTeammates() {
     return;
   }
 
-  // Which cars ran every scheduled race = full-time
+  // Which cars ran every scheduled race = full-time. We count the CAR's
+  // appearances regardless of whether the driver in it that week was
+  // points-eligible (substitutes who run while points-ineligible — e.g.
+  // a Trucks regular subbing into Cup — still count toward the car's
+  // attendance). Otherwise a car like the #48 with Bowman as the regular
+  // would lose its FT status whenever a substitute drove it.
   const carRaceCount = {};
   races.forEach(r => {
     const seen = new Set();
     (r.results || []).forEach(d => {
-      if (d.ineligible) return;
       if (seen.has(d.car_number)) return;
       seen.add(d.car_number);
       carRaceCount[d.car_number] = (carRaceCount[d.car_number] || 0) + 1;
@@ -4994,11 +4998,12 @@ function renderTeammates() {
   races.forEach(r => { trackByRound[r.round] = { code: r.track_code || "", name: r.track || "" }; });
 
   races.forEach(r => {
-    // Bucket this race's results by group
+    // Bucket this race's results by group. We DO include points-ineligible
+    // drivers here so substitutes show up in the car's series, but they
+    // don't qualify as "best FT teammate" benchmarks for delta calc.
     const groupAll = {};     // group -> [entry, ...]
-    const groupFt  = {};     // group -> [FT-only entries]
+    const groupFt  = {};     // group -> [FT-only entries used as benchmark]
     (r.results || []).forEach(d => {
-      if (d.ineligible) return;
       // Resolution: scraper field → owner parse (palette no longer stores team codes)
       const team = d.team_code
         || teamCodeFromName(d.team, SERIES_TO_KEY[STATE.series], d.car_number);
@@ -5008,9 +5013,13 @@ function renderTeammates() {
         car: d.car_number, driver: d.driver, team, grp,
         finish: d.finish_pos,
         total: d.race_pts || 0,
+        ineligible: !!d.ineligible,
       };
       (groupAll[grp] ||= []).push(rec);
-      if (fullTimeCars.has(d.car_number)) {
+      // Benchmark pool: FT car + driver eligible for points. Ineligible
+      // substitute weeks don't count as benchmark candidates because the
+      // car's points/finish isn't representative of the regular driver.
+      if (fullTimeCars.has(d.car_number) && !d.ineligible) {
         (groupFt[grp] ||= []).push(rec);
       }
     });
@@ -5028,7 +5037,7 @@ function renderTeammates() {
         const isFt = fullTimeCars.has(e.car);
         const deltaFin = (e.finish != null) ? (bestFinish - e.finish) : null;
         const deltaTot = e.total - bestTotal;
-        const tlFin = isFt && e.finish != null && e.finish === bestFinish;
+        const tlFin = isFt && !e.ineligible && e.finish != null && e.finish === bestFinish;
 
         let agg = carData.get(e.car);
         if (!agg) {
@@ -5042,7 +5051,11 @@ function renderTeammates() {
           };
           carData.set(e.car, agg);
         }
-        agg.drivers.set(e.driver, (agg.drivers.get(e.driver) || 0) + 1);
+        // Only count eligible-driver weeks toward the "primary driver"
+        // tally so substitute starts don't displace the regular driver.
+        if (!e.ineligible) {
+          agg.drivers.set(e.driver, (agg.drivers.get(e.driver) || 0) + 1);
+        }
         agg.series.push({
           round: r.round,
           driver: e.driver,
@@ -5051,6 +5064,7 @@ function renderTeammates() {
           delta_fin: deltaFin,
           delta_tot: deltaTot,
           tl_fin: tlFin,
+          ineligible: e.ineligible,
           track_code: trackByRound[r.round]?.code || "",
           track_name: trackByRound[r.round]?.name || "",
         });
@@ -5071,19 +5085,41 @@ function renderTeammates() {
   const cars = [];
   carData.forEach((agg, car) => {
     const driversRanked = [...agg.drivers.entries()].sort((a, b) => b[1] - a[1]);
-    const fins = agg.series.map(s => s.delta_fin).filter(x => x != null);
+    // Avg delta represents the regular (eligible) driver's performance vs
+    // the best FT teammate. Substitute starts (where the row is flagged
+    // ineligible — typically a driver from another series subbing in) are
+    // EXCLUDED from the average so a Trucks driver subbing in Cup doesn't
+    // skew the regular driver's stats. They're still kept in the per-race
+    // series for the sparkline and detail view.
+    const eligibleSeries = agg.series.filter(s => !s.ineligible);
+    const fins = eligibleSeries.map(s => s.delta_fin).filter(x => x != null);
     const avgFin = fins.length ? fins.reduce((s,x) => s+x, 0) / fins.length : 0;
-    const tots = agg.series.map(s => s.delta_tot);
+    const tots = eligibleSeries.map(s => s.delta_tot);
     const avgTot = tots.length ? tots.reduce((s,x) => s+x, 0) / tots.length : 0;
     const tl = agg.series.filter(s => s.tl_fin).length;
+    // Fallback for primary_driver: if every week was ineligible (rare, but
+    // happens with a one-off entry like a Trucks regular making a single
+    // Cup start), fall back to the most-frequent name in the raw series.
+    const primaryDriver = driversRanked.length
+      ? driversRanked[0][0]
+      : (agg.series[0]?.driver || "?");
+    const driverList = driversRanked.length
+      ? driversRanked.map(([n]) => n)
+      : Array.from(new Set(agg.series.map(s => s.driver)));
+    const driverCounts = driversRanked.length
+      ? driversRanked.map(([n, c]) => ({ name: n, races: c }))
+      : driverList.map(n => ({
+          name: n, races: agg.series.filter(s => s.driver === n).length
+        }));
     cars.push({
       car_number: car,
       team: agg.team,
       group: agg.group,
-      primary_driver: driversRanked[0][0],
-      drivers: driversRanked.map(([n]) => n),
-      driver_counts: driversRanked.map(([n, c]) => ({ name: n, races: c })),
+      primary_driver: primaryDriver,
+      drivers: driverList,
+      driver_counts: driverCounts,
       n_races: agg.series.length,
+      n_eligible_races: eligibleSeries.length,
       car_full_time: agg.car_full_time,
       season_points: seasonPts[car] || 0,
       avg_delta_fin: avgFin,
@@ -5161,7 +5197,7 @@ function renderTeammates() {
         </div>
         <div class="tm-spark">${svg}</div>
         <div class="tm-avg ${avgCls}">${avg >= 0 ? "+" : ""}${avg.toFixed(1)}</div>
-        <div class="tm-tl"><span class="big">${d.tl_races_fin}</span>/${d.n_races}</div>
+        <div class="tm-tl"><span class="big">${d.tl_races_fin}</span>/${d.n_eligible_races || d.n_races}</div>
       </div>`;
     }).join("");
 
