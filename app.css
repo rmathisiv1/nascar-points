@@ -110,6 +110,20 @@ html, body {
   background: var(--accent);
   color: #fff;
 }
+/* Series-specific accent colors when the button is active. Same palette
+   as the .series-tag chips elsewhere: NCS gold, NOS green, NTS red. */
+.series-sw button[data-series="NCS"].on {
+  background: #d4a017;
+  color: #1a1100;
+}
+.series-sw button[data-series="NOS"].on {
+  background: #2e7d32;
+  color: #061806;
+}
+.series-sw button[data-series="NTS"].on {
+  background: #c62828;
+  color: #1a0303;
+}
 .series-sw button:not(.on):hover { color: var(--text); }
 /* When a driver profile or team page is bound to a specific series/season we
    hide the topbar pickers entirely. Letting the user touch them would silently
@@ -5314,76 +5328,44 @@ a.rc-sched-winner:hover {
 /* "Now" button — global escape hatch in the topbar. Sits between the
    series switcher and the search bar. Clicked → reset to most recent
    season + clear time cursor + bail from any takeover view. */
-.topbar-now-btn {
-  background: rgba(110, 168, 254, 0.14);
-  border: 1px solid rgba(110, 168, 254, 0.35);
-  color: #6ea8fe;
-  border-radius: 4px;
-  padding: 5px 12px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-  transition: background 0.12s ease, border-color 0.12s ease;
-}
-.topbar-now-btn:hover {
-  background: rgba(110, 168, 254, 0.22);
-  border-color: rgba(110, 168, 254, 0.55);
-}
-.topbar-now-btn:active {
-  transform: translateY(1px);
-}
-@media (max-width: 767.98px) {
-  .topbar-now-btn {
-    padding: 4px 8px;
-    font-size: 10px;
-  }
-}
-
-/* Historical/Present mode toggle. In Present mode (the default) the
-   button is muted — the site is in its "natural" state. In Historical
-   mode the button shifts to a warmer accent so it's visually clear that
-   the user has unlocked time-travel browsing. */
-.topbar-mode-btn {
-  background: rgba(255, 255, 255, 0.04);
+/* Historical/Present mode selector. Two-option pill in the same visual
+   family as .series-sw — both options visible at once so it's obvious
+   what the alternative is. The active option uses a warm gold accent
+   when Historical is selected (signaling "you've unlocked time travel")
+   and a neutral accent when Present is active (the default state). */
+.topbar-mode-sw {
+  display: flex;
+  background: var(--card);
   border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 4px;
+  border-radius: 6px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.topbar-mode-sw button {
   padding: 5px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  letter-spacing: 0.05em;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  flex-shrink: 0;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-.topbar-mode-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
+.topbar-mode-sw button:not(.on):hover { color: var(--text); }
+.topbar-mode-sw button[data-mode="present"].on {
+  background: rgba(255, 255, 255, 0.10);
   color: var(--text);
 }
-.topbar-mode-btn:active {
-  transform: translateY(1px);
-}
-.topbar-mode-btn.is-historical {
-  background: rgba(212, 160, 23, 0.16);
-  border-color: rgba(212, 160, 23, 0.45);
+.topbar-mode-sw button[data-mode="historical"].on {
+  background: rgba(212, 160, 23, 0.22);
   color: #e0b94a;
 }
-.topbar-mode-btn.is-historical:hover {
-  background: rgba(212, 160, 23, 0.24);
-  border-color: rgba(212, 160, 23, 0.65);
-  color: #f0cb6a;
-}
 @media (max-width: 767.98px) {
-  .topbar-mode-btn {
+  .topbar-mode-sw button {
     padding: 4px 8px;
     font-size: 10px;
   }

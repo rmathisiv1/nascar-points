@@ -1708,8 +1708,8 @@ function hideError() {
 // PRESENT / HISTORICAL MODE HELPERS
 // ============================================================
 // In Present mode we hide the season pickers (desktop + mobile) and
-// label the toggle button so it's clear what state the site is in. Series
-// switcher, NOW button, R-cursor, and search all stay active in both modes.
+// update the toggle so it's clear what state the site is in. Series
+// switcher, R-cursor, and search all stay active in both modes.
 function applyModeToDom() {
   const isHistorical = STATE.mode === "historical";
   // Desktop season picker — hide entirely in Present mode (no semi-disabled
@@ -1722,17 +1722,10 @@ function applyModeToDom() {
     const wrap = mobileSeasonSel.closest("label");
     if (wrap) wrap.hidden = !isHistorical;
   }
-  // Toggle button label + state class so CSS can style it
-  const btn = document.getElementById("topbar-mode-btn");
-  if (btn) {
-    btn.classList.toggle("is-historical", isHistorical);
-    btn.classList.toggle("is-present", !isHistorical);
-    const lbl = btn.querySelector(".topbar-mode-label");
-    if (lbl) lbl.textContent = isHistorical ? "Historical" : "Present";
-    btn.title = isHistorical
-      ? "Historical mode — season picker unlocked. Click to return to Present."
-      : "Present mode — locked to current season. Click to enable Historical browsing.";
-  }
+  // Update the Present/Historical selector button "on" state
+  document.querySelectorAll("#topbar-mode-sw button").forEach(b => {
+    b.classList.toggle("on", b.dataset.mode === STATE.mode);
+  });
 }
 
 // Pull the persisted mode from localStorage on boot. Default to "present"
@@ -1770,15 +1763,15 @@ function wireUIControls() {
     });
   });
 
-  // "Now" button — global escape hatch that resets to the most recent
-  // (season, race) and clears any time-cursor scroll-back. Also exits
-  // profile/team/cc/race takeovers by routing to the default landing view.
-  // Designed for the user who's drilled deep into history and just wants
-  // to get back to "what's happening today".
-  document.getElementById("topbar-now-btn")?.addEventListener("click", async () => {
+  // Brand link — clicking "datacarracing" is the global escape hatch.
+  // Resets to the most recent (season, race), clears any time-cursor
+  // scroll-back, snaps to NCS, and routes to the default standings
+  // landing. Replaces the old "Now" button (which did the same thing).
+  document.getElementById("brand-link")?.addEventListener("click", async (e) => {
+    e.preventDefault();
     const targetSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0])
       || STATE.season;
-    const targetSeries = "NCS";   // Now always returns to the top series
+    const targetSeries = "NCS";   // Always returns to the top series
     const needsLoad = (targetSeason !== STATE.season) || (targetSeries !== STATE.series);
     STATE.season = targetSeason;
     STATE.series = targetSeries;
@@ -1798,10 +1791,8 @@ function wireUIControls() {
     if (sel) sel.value = String(targetSeason);
     const mobileSel = document.getElementById("mobile-season-picker");
     if (mobileSel) mobileSel.value = String(targetSeason);
-    // "Now" always brings the user back to the canonical landing — the
-    // current-season standings. This is the most useful "what's happening
-    // right now" view, so we route there regardless of where the user
-    // currently is (takeover or tab-view).
+    // Always brings the user back to the canonical landing — the
+    // current-season standings.
     if (location.hash !== "#/standings") {
       location.hash = "#/standings";
     } else {
@@ -1809,36 +1800,38 @@ function wireUIControls() {
     }
   });
 
-  // Historical mode toggle — flips STATE.mode between "present" and
-  // "historical" and re-applies the DOM lock/unlock. Persisted in
-  // localStorage so the choice survives reloads.
-  document.getElementById("topbar-mode-btn")?.addEventListener("click", async () => {
-    const newMode = STATE.mode === "historical" ? "present" : "historical";
-    STATE.mode = newMode;
-    try { localStorage.setItem("dc_mode", newMode); } catch (e) {}
-    // When entering Present mode, snap season + cursor back to current.
-    // Series stays where the user had it (it's freely switchable in both
-    // modes). When leaving Present mode, no state changes — just unlock
-    // the controls.
-    if (newMode === "present") {
-      const targetSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0])
-        || STATE.season;
-      if (targetSeason !== STATE.season) {
-        STATE.season = targetSeason;
-        STATE.throughRound = null;
-        await loadCurrentData();
-        resetRenderCache();
-        populateRacePicker();
-        renderTimeCursorBanner();
+  // Historical/Present mode selector — explicit two-option switch (so both
+  // states are visible at once and users don't have to guess what clicking
+  // does). Persisted in localStorage so the choice survives reloads.
+  document.querySelectorAll("#topbar-mode-sw button").forEach(b => {
+    b.addEventListener("click", async () => {
+      const newMode = b.dataset.mode;
+      if (!newMode || newMode === STATE.mode) return;
+      STATE.mode = newMode;
+      try { localStorage.setItem("dc_mode", newMode); } catch (e) {}
+      // When entering Present mode, snap season + cursor back to current.
+      // Series stays where the user had it (it's freely switchable in both
+      // modes). When leaving Present mode, no state changes — just unlock
+      // the controls.
+      if (newMode === "present") {
+        const targetSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0])
+          || STATE.season;
+        if (targetSeason !== STATE.season) {
+          STATE.season = targetSeason;
+          STATE.throughRound = null;
+          await loadCurrentData();
+          resetRenderCache();
+          populateRacePicker();
+          renderTimeCursorBanner();
+        }
+        const sel = document.getElementById("season-picker");
+        if (sel) sel.value = String(STATE.season);
+        const mobileSel = document.getElementById("mobile-season-picker");
+        if (mobileSel) mobileSel.value = String(STATE.season);
       }
-      // Sync season picker UI to current
-      const sel = document.getElementById("season-picker");
-      if (sel) sel.value = String(STATE.season);
-      const mobileSel = document.getElementById("mobile-season-picker");
-      if (mobileSel) mobileSel.value = String(STATE.season);
-    }
-    applyModeToDom();
-    render();
+      applyModeToDom();
+      render();
+    });
   });
 
   // Form view toggles
