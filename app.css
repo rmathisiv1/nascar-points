@@ -431,8 +431,9 @@ html, body {
      query below in favor of the bottom mobile-nav. */
   overflow: visible;
   flex-shrink: 0;
-  position: relative;   /* anchor for absolute submenus */
-  z-index: 5;            /* sit above tab-body content */
+  /* No z-index here — creating a stacking context traps the submenus
+     beneath sticky toolbars in tab-body. Submenus carry their own
+     high z-index (see below). */
 }
 .dash-tabs::-webkit-scrollbar { height: 0; }
 .dash-tab {
@@ -483,7 +484,9 @@ html, body {
   display: none;     /* shown via :hover on the group */
   flex-direction: column;
   gap: 2px;
-  z-index: 10;
+  /* Above sticky tab-body toolbars (z-index 50-60) but below the
+     mobile nav overlay (z-index 199+) and modal lightboxes. */
+  z-index: 100;
 }
 .dash-tab-group:hover .dash-submenu,
 .dash-tab-group:focus-within .dash-submenu {
