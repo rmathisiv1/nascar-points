@@ -93,6 +93,21 @@ if (-not $SkipPoints) {
         Write-Host "If you saw 403 errors above, racing-reference blocked the request." -ForegroundColor Red
     } else {
         $changedFiles += $outFile
+
+        # --- 2b. CC self-heal pass ---
+        # The inline CC fetch in scrape_points.py is best-effort: if a race's
+        # CC page 403s or parses empty during the main scrape, that race
+        # lands with crew_chief=null and never gets retried (subsequent runs
+        # skip races that already have results). Run the dedicated backfill
+        # script as a second pass -- idempotent, fetches only the gaps. On
+        # a healthy week it touches zero pages and exits in <1s.
+        Write-Host ""
+        Write-Host "=== CC self-heal ($Season) ===" -ForegroundColor Cyan
+        Write-Host ""
+        $ccExit = Invoke-Native $python "scripts\backfill_crew_chiefs.py" --year $Season --sleep 0.3
+        if ($ccExit -ne 0) {
+            Write-Host "CC backfill exited with code $ccExit -- non-fatal, points file already saved." -ForegroundColor Yellow
+        }
     }
 }
 
