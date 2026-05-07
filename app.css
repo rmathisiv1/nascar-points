@@ -5338,6 +5338,12 @@ a.rc-sched-winner:hover {
   padding: 4vh 4vw;
   overflow-y: auto;
 }
+/* `.race-lightbox` sets display:flex which overrides the browser's UA
+   stylesheet rule for [hidden]. We need to re-assert the hidden state
+   explicitly or `hidden` attribute toggling won't actually hide it. */
+.race-lightbox[hidden] {
+  display: none !important;
+}
 .race-lightbox-backdrop {
   position: fixed;
   inset: 0;
