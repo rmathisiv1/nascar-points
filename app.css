@@ -5190,6 +5190,14 @@ a.rc-sched-winner:hover {
   background: rgba(255,255,255,0.025);
 }
 .alltime-table tbody td .hot { color: var(--pos); font-weight: 600; }
+.alltime-trunc-note {
+  padding: 12px 16px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+  text-align: center;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
 /* Lives in the topbar between the series switcher and the topbar-right
    pickers. On desktop expands to fill available width. On mobile collapses
    to an icon-button (separate handling below). */
