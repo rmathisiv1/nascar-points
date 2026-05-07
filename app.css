@@ -11,9 +11,9 @@
   --border: #1e2230;
   --border-hi: #2a2f40;
   --text: #eef0f5;
-  --text-2: #c8ccd6;
-  --muted: #7a8091;
-  --dim: #444a58;
+  --text-2: #d4d8e2;     /* slightly brighter so secondary labels read clearly */
+  --muted: #9aa0b0;      /* used for less-emphasized prose (was #7a8091) */
+  --dim: #6b7180;        /* used for very-muted hints/helpers (was #444a58) */
 
   --pos: #3fd97a;
   --pos-bg: rgba(63, 217, 122, 0.08);
@@ -5677,4 +5677,93 @@ a.driver-cell.profile-link:hover .car-tag {
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 700;
+}
+
+/* ============================================================
+   CC profile — multi-series stat cards (mirrors driver "Career By Series")
+   ============================================================ */
+.cc-series-multi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.cc-series-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.cc-series-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+.cc-series-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+}
+.cc-series-yrs {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-2);
+}
+.cc-series-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.cc-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.cc-stat .k {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+}
+.cc-stat .v {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+.cc-stat .pct {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+@media (max-width: 767.98px) {
+  .cc-series-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .cc-stat .v { font-size: 13px; }
+}
+
+/* Team pill in the CC season-by-season table — small clickable code chip */
+.tm-history-table .team-pill {
+  display: inline-block;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  margin-right: 3px;
+  letter-spacing: 0.04em;
+}
+.tm-history-table .team-pill:hover {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.18);
 }

@@ -39,6 +39,8 @@ const STATE = {
 };
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
+// Human-readable series names for headings/labels (e.g. CC profile cards).
+const SERIES_LABELS = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" };
 const FALLBACK_COLOR = "#9ca3af";
 const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team", "cc"];
 
@@ -8138,12 +8140,26 @@ function trackTypeLabel(code) {
 // every race at that physical track regardless of which scrape touched it.
 // Same map used by lastWinnerAt() in the schedule renderer — keep them in
 // sync if you add more.
+// Some tracks have shifted track_code across years due to scraper drift OR
+// genuine sponsor renames. Map a canonical code to the set of historical
+// aliases so lookups find every race at that physical track regardless of
+// which scrape touched it. Same map used by lastWinnerAt() in the schedule
+// renderer — keep them in sync if you add more.
 const TRACK_CODE_ALIASES_LOOKUP = {
-  NSV: ["NSV", "NSH"],            // Nashville Superspeedway
-  NSH: ["NSV", "NSH"],            // (legacy code, same track)
-  FON: ["FON", "AUS", "CAL"],     // Fontana — pre-migration files use AUS or CAL
+  NSV: ["NSV", "NSH"],              // Nashville Superspeedway
+  NSH: ["NSV", "NSH"],              // (legacy code, same track)
+  FON: ["FON", "AUS", "CAL"],       // Fontana — pre-migration files use AUS or CAL
   CAL: ["FON", "AUS", "CAL"],
-  AUS: ["AUS", "COTA"],           // COTA — newer files may use COTA
+  // COTA is its own track. Some old scrapes used AUS for Auto Club AND
+  // COTA — we resolve that mess by pinning AUS to BOTH codes here so a
+  // user clicking COTA still sees every COTA race regardless of scrape vintage.
+  AUS: ["AUS", "COTA"],
+  COTA: ["COTA", "AUS"],
+  // Atlanta = ECH (EchoPark Speedway, modern sponsor name) AND ATL
+  // (legacy code). Same physical track. Without this, "data back to 2025"
+  // shows up on the track page because pre-2025 files use ATL.
+  ECH: ["ECH", "ATL"],
+  ATL: ["ATL", "ECH"],
 };
 function trackCodesForLookup(canon) {
   return TRACK_CODE_ALIASES_LOOKUP[canon] || [canon];
@@ -8541,7 +8557,11 @@ function renderTrackPage() {
 
   // Gather all races at this track across loaded years
   const history = collectTrackHistory(code, tSeries);
-  const trackName = history[0]?.track || code;
+  // Pull the raw track-name string from any history row — but prefer the
+  // pretty/canonical name from the TRACK_NAMES map so sponsor renames
+  // (EchoPark Speedway → Atlanta) read consistently across the app.
+  const rawName = history[0]?.track || code;
+  const trackName = prettyTrack(code, rawName) || rawName;
   const trackTypeStr = trackTypeLabel(history[0]?.track_code) || "";
 
   if (titleEl) titleEl.textContent = trackName;
@@ -9448,8 +9468,16 @@ function crewChiefStats(ccSlug) {
     championships: 0,
     finishes: [],
     drivers: new Map(),     // driver_slug → { name, starts, wins, years (Set) }
-    perYear: new Map(),     // year → { series_set, starts, wins, drivers (Set), best_rank }
+    perYear: new Map(),     // year → { series_set, starts, wins, drivers (Set), cars (Set), teams (Set), top5, top10 }
     seriesSet: new Set(),
+    // Per-series rollup so the CC profile can render NCS/NOS/NTS cards
+    // similar to a driver's "Career By Series" panel. Each entry holds
+    // a flat copy of the same stats but scoped to one series.
+    bySeries: {
+      NCS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set() },
+      NOS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set() },
+      NTS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set() },
+    },
   };
 
   const yrs = Object.keys(SEASON_CACHE).map(Number).sort((a, b) => a - b);
@@ -9474,6 +9502,18 @@ function crewChiefStats(ccSlug) {
           if (!result.name) result.name = d.crew_chief;
           result.starts++;
           result.seriesSet.add(sCode);
+          // Per-series accumulator
+          const sb = result.bySeries[sCode];
+          if (sb) {
+            sb.starts++;
+            sb.years.add(year);
+            if (d.finish_pos === 1) sb.wins++;
+            if (d.finish_pos != null) {
+              sb.finishes.push(d.finish_pos);
+              if (d.finish_pos <= 5) sb.top5++;
+              if (d.finish_pos <= 10) sb.top10++;
+            }
+          }
           if (d.finish_pos === 1) result.wins++;
           if (d.finish_pos != null) {
             result.finishes.push(d.finish_pos);
@@ -9491,16 +9531,24 @@ function crewChiefStats(ccSlug) {
           drv.starts++;
           drv.years.add(year);
           if (d.finish_pos === 1) drv.wins++;
-          // Per-year tracking
+          // Per-year tracking — also captures cars and team codes so the
+          // season-by-season table can render context columns.
           let yr = result.perYear.get(year);
           if (!yr) {
             yr = { series_set: new Set(), starts: 0, wins: 0,
-                   drivers: new Set(), top5: 0, top10: 0 };
+                   drivers: new Set(), top5: 0, top10: 0,
+                   cars: new Set(), teams: new Set() };
             result.perYear.set(year, yr);
           }
           yr.series_set.add(sCode);
           yr.starts++;
           yr.drivers.add(drvSlug);
+          if (d.car_number) yr.cars.add(d.car_number);
+          // Resolve team code: use the explicit field if present, else
+          // fall back to the team-name → code mapping for older data.
+          const tc = d.team_code
+            || teamCodeFromName(d.team, SERIES_TO_KEY[sCode], d.car_number);
+          if (tc) yr.teams.add(tc);
           if (d.finish_pos === 1) yr.wins++;
           if (d.finish_pos != null && d.finish_pos <= 5) yr.top5++;
           if (d.finish_pos != null && d.finish_pos <= 10) yr.top10++;
@@ -9515,6 +9563,14 @@ function crewChiefStats(ccSlug) {
     });
   });
 
+  // Compute avg/best per-series
+  ["NCS", "NOS", "NTS"].forEach(s => {
+    const sb = result.bySeries[s];
+    sb.avgFinish = sb.finishes.length
+      ? sb.finishes.reduce((acc, x) => acc + x, 0) / sb.finishes.length
+      : null;
+    sb.bestFinish = sb.finishes.length ? Math.min(...sb.finishes) : null;
+  });
   result.avgFinish = result.finishes.length
     ? result.finishes.reduce((s, x) => s + x, 0) / result.finishes.length
     : null;
@@ -9581,6 +9637,34 @@ function renderCrewChiefPage() {
       <div class="tm-stat"><span class="k">Best</span><span class="v">P${stats.bestFinish ?? '—'}</span></div>
     </div>`;
 
+  // Build per-series stat blocks — mirrors the driver profile's "Career By
+  // Series" layout so users can compare a CC's NCS vs NOS vs NTS work at
+  // a glance. Skip a series if the CC never worked it.
+  const perSeriesBlocks = ["NCS", "NOS", "NTS"]
+    .filter(s => stats.bySeries[s] && stats.bySeries[s].starts > 0)
+    .map(s => {
+      const sb = stats.bySeries[s];
+      const winPct = sb.starts > 0 ? ((sb.wins / sb.starts) * 100).toFixed(1) + "%" : "—";
+      const top5Pct = sb.starts > 0 ? ((sb.top5 / sb.starts) * 100).toFixed(1) + "%" : "—";
+      const top10Pct = sb.starts > 0 ? ((sb.top10 / sb.starts) * 100).toFixed(1) + "%" : "—";
+      const yrCount = sb.years.size;
+      return `<div class="cc-series-card">
+        <div class="cc-series-card-head">
+          <span class="series-tag series-${s.toLowerCase()}">${s}</span>
+          <span class="cc-series-name">${SERIES_LABELS[s] || s}</span>
+          <span class="cc-series-yrs">${yrCount} yr${yrCount === 1 ? "" : "s"}</span>
+        </div>
+        <div class="cc-series-grid">
+          <div class="cc-stat"><span class="k">Starts</span><span class="v">${sb.starts}</span></div>
+          <div class="cc-stat"><span class="k">Wins</span><span class="v">${sb.wins}</span><span class="pct">${winPct}</span></div>
+          <div class="cc-stat"><span class="k">Top 5</span><span class="v">${sb.top5}</span><span class="pct">${top5Pct}</span></div>
+          <div class="cc-stat"><span class="k">Top 10</span><span class="v">${sb.top10}</span><span class="pct">${top10Pct}</span></div>
+          <div class="cc-stat"><span class="k">Avg Finish</span><span class="v">${sb.avgFinish ? sb.avgFinish.toFixed(1) : '—'}</span></div>
+          <div class="cc-stat"><span class="k">Best</span><span class="v">P${sb.bestFinish ?? '—'}</span></div>
+        </div>
+      </div>`;
+    }).join("");
+
   // Drivers worked with — sorted by starts desc
   const driversList = Array.from(stats.drivers.values())
     .sort((a, b) => b.starts - a.starts);
@@ -9595,7 +9679,7 @@ function renderCrewChiefPage() {
     </tr>`;
   }).join("");
 
-  // Per-year breakdown — newest first
+  // Per-year breakdown — now includes car number + team for context.
   const yearsSorted = Array.from(stats.perYear.keys()).sort((a, b) => b - a);
   const yearRows = yearsSorted.map(year => {
     const y = stats.perYear.get(year);
@@ -9606,10 +9690,27 @@ function renderCrewChiefPage() {
       const d = stats.drivers.get(slug);
       return d ? d.name : slug;
     }).join(", ");
+    // Car numbers and teams for this year (from the perYear bucket)
+    const carNums = Array.from(y.cars || []).sort((a, b) =>
+      parseInt(a, 10) - parseInt(b, 10)
+    ).map(c => {
+      // Use series-aware car color when there's exactly one series this row
+      const seriesForColor = y.series_set.size === 1
+        ? Array.from(y.series_set)[0]
+        : STATE.series;
+      const hex = colorFor(seriesForColor, c);
+      const txt = contrastTextFor(hex);
+      return `<span class="car-tag" style="background:${hex};color:${txt}">${c}</span>`;
+    }).join(" ");
+    const teamCodes = Array.from(y.teams || []).sort().map(tc =>
+      `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(tc)}">${escapeHTML(tc)}</a>`
+    ).join(" ");
     return `<tr>
       <td><strong>${year}</strong></td>
       <td>${seriesTags}</td>
+      <td>${carNums || `<span class="muted">—</span>`}</td>
       <td>${escapeHTML(drvNames)}</td>
+      <td>${teamCodes || `<span class="muted">—</span>`}</td>
       <td class="num">${y.starts}</td>
       <td class="num">${y.wins}</td>
       <td class="num">${y.top5}</td>
@@ -9619,14 +9720,15 @@ function renderCrewChiefPage() {
 
   host.innerHTML = `
     <div class="rc-hero" style="border-left: 4px solid var(--accent);">
-      <div class="rc-hero-track">${escapeHTML(displayName)}</div>
       <div class="rc-hero-meta">
         Crew chief · ${stats.perYear.size} season${stats.perYear.size === 1 ? "" : "s"} ·
         ${stats.drivers.size} driver${stats.drivers.size === 1 ? "" : "s"} ·
         ${Array.from(stats.seriesSet).sort().join(", ")}
       </div>
     </div>
-    ${topStats}
+    ${perSeriesBlocks
+        ? `<div class="cc-series-multi">${perSeriesBlocks}</div>`
+        : topStats}
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-head">
         <span class="rc-card-title">Drivers</span>
@@ -9654,7 +9756,9 @@ function renderCrewChiefPage() {
           <thead><tr>
             <th>Year</th>
             <th>Series</th>
+            <th>Car</th>
             <th>Driver(s)</th>
+            <th>Team</th>
             <th class="num">Starts</th>
             <th class="num">Wins</th>
             <th class="num">T5</th>
