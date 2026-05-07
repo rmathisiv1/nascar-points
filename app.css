@@ -5145,6 +5145,18 @@ a.rc-sched-winner:hover {
   font-size: 10px;
   width: 100%;
 }
+/* CC heatmap rows carry an extra pill (driver AND team), so the label
+   column needs more room to keep long surnames like "Hornish, Jr." from
+   spilling into R1. Scoped to the CC heatmap host so the driver-profile
+   heatmap stays at its tighter 132px. */
+#cc-career-heatmap .ph-grid {
+  grid-template-columns: 200px repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
+}
+@media (max-width: 767.98px) {
+  #cc-career-heatmap .ph-grid {
+    grid-template-columns: 160px repeat(var(--ph-cols, 36), minmax(18px, 1fr)) 38px;
+  }
+}
 .ph-row {
   display: contents;   /* let the parent grid lay out children directly */
 }
@@ -5173,6 +5185,18 @@ a.rc-sched-winner:hover {
 .ph-row-label .series-tag {
   font-size: 8px;
   padding: 1px 4px;
+}
+/* CC heatmap pills can run long (full driver surnames + 3-char team
+   codes). Cap their width and let the label container handle overflow
+   with ellipsis so nothing leaks into the round columns. */
+#cc-career-heatmap .ph-row-label {
+  overflow: hidden;
+}
+#cc-career-heatmap .ph-row-label .ph-team-pill {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ph-head-cell {
   text-align: center;
