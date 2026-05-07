@@ -11373,19 +11373,15 @@ function renderAllTimeDrivers() {
   if (!host) return;
   const yearsLoaded = Object.keys(SEASON_CACHE).length;
   const yearsTotal = (STATE.seasonsAvailable || []).length;
-  const isFull = yearsLoaded >= yearsTotal;
-  if (sub) sub.textContent = isFull
-    ? `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`
-    : `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. Other years load lazily as you browse, or click "Load all" for everything now.`;
+  if (sub) sub.textContent = `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. More years load as you browse other pages.`;
   invalidateAllTimeIfStale();
   if (!ALLTIME_CACHE.drivers) ALLTIME_CACHE.drivers = computeAllTimeDrivers();
   host.innerHTML = renderAllTimeTable(
     ALLTIME_CACHE.drivers,
     r => `#/driver/${encodeURIComponent(r.slug)}`,
     "drivers"
-  ) + (isFull ? "" : `<div class="alltime-loadall"><button class="alltime-loadall-btn" id="alltime-loadall-drivers">Load all ${yearsTotal - yearsLoaded} missing seasons</button></div>`);
+  );
   wireAllTimeTable("drivers", renderAllTimeDrivers);
-  wireAllTimeLoadAll("drivers", renderAllTimeDrivers);
 }
 
 function renderAllTimeTeams() {
@@ -11394,19 +11390,15 @@ function renderAllTimeTeams() {
   if (!host) return;
   const yearsLoaded = Object.keys(SEASON_CACHE).length;
   const yearsTotal = (STATE.seasonsAvailable || []).length;
-  const isFull = yearsLoaded >= yearsTotal;
-  if (sub) sub.textContent = isFull
-    ? `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`
-    : `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. Click "Load all" for everything now.`;
+  if (sub) sub.textContent = `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. More years load as you browse other pages.`;
   invalidateAllTimeIfStale();
   if (!ALLTIME_CACHE.teams) ALLTIME_CACHE.teams = computeAllTimeTeams();
   host.innerHTML = renderAllTimeTable(
     ALLTIME_CACHE.teams,
     r => `#/team/${encodeURIComponent(r.code)}`,
     "teams"
-  ) + (isFull ? "" : `<div class="alltime-loadall"><button class="alltime-loadall-btn" id="alltime-loadall-teams">Load all ${yearsTotal - yearsLoaded} missing seasons</button></div>`);
+  );
   wireAllTimeTable("teams", renderAllTimeTeams);
-  wireAllTimeLoadAll("teams", renderAllTimeTeams);
 }
 
 function renderAllTimeCrewChiefs() {
@@ -11415,38 +11407,15 @@ function renderAllTimeCrewChiefs() {
   if (!host) return;
   const yearsLoaded = Object.keys(SEASON_CACHE).length;
   const yearsTotal = (STATE.seasonsAvailable || []).length;
-  const isFull = yearsLoaded >= yearsTotal;
-  if (sub) sub.textContent = isFull
-    ? `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`
-    : `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. Click "Load all" for everything now.`;
+  if (sub) sub.textContent = `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. More years load as you browse other pages.`;
   invalidateAllTimeIfStale();
   if (!ALLTIME_CACHE.crewchiefs) ALLTIME_CACHE.crewchiefs = computeAllTimeCrewChiefs();
   host.innerHTML = renderAllTimeTable(
     ALLTIME_CACHE.crewchiefs,
     r => `#/cc/${encodeURIComponent(r.slug)}`,
     "crewchiefs"
-  ) + (isFull ? "" : `<div class="alltime-loadall"><button class="alltime-loadall-btn" id="alltime-loadall-crewchiefs">Load all ${yearsTotal - yearsLoaded} missing seasons</button></div>`);
+  );
   wireAllTimeTable("crewchiefs", renderAllTimeCrewChiefs);
-  wireAllTimeLoadAll("crewchiefs", renderAllTimeCrewChiefs);
-}
-
-// Wire "Load all missing seasons" button. Uses the chunked loader so
-// the UI stays responsive. After load completes, runs rerender ONCE.
-function wireAllTimeLoadAll(stateKey, rerender) {
-  const btn = document.getElementById(`alltime-loadall-${stateKey}`);
-  if (!btn) return;
-  btn.addEventListener("click", async () => {
-    btn.disabled = true;
-    btn.textContent = "Loading…";
-    await ensureAllSeasonsCached();
-    // After load, only rerender if user is still on this page
-    const expectedView = stateKey === "crewchiefs" ? "crewchiefs" : stateKey;
-    if (STATE.view === expectedView) {
-      // Cache is now stale — the loaded years signature changed.
-      ALLTIME_CACHE[stateKey] = null;
-      rerender();
-    }
-  });
 }
 
 // Fetch every season in seasonsAvailable that isn't already cached.
