@@ -5352,7 +5352,8 @@ function renderTeammates() {
             car_number: e.car,
             team: e.team,          // real team code (e.g. WBR)
             group: e.grp,          // alliance group (e.g. PEN)
-            drivers: new Map(),    // driver name -> race count
+            drivers: new Map(),    // driver name -> race count (eligible only)
+            allDrivers: new Set(), // every driver who appeared, incl. ineligible subs
             series: [],
             car_full_time: isFt,
           };
@@ -5363,6 +5364,12 @@ function renderTeammates() {
         if (!e.ineligible) {
           agg.drivers.set(e.driver, (agg.drivers.get(e.driver) || 0) + 1);
         }
+        // Track EVERY driver who sat in the seat (including ineligible
+        // substitutes) so the shared-car "i" indicator surfaces even
+        // when subs are points-ineligible. The primary driver still
+        // resolves cleanly above; this just tells the reader "yep, this
+        // car had multiple butts in the seat this year".
+        if (e.driver) agg.allDrivers.add(e.driver);
         agg.series.push({
           round: r.round,
           driver: e.driver,
@@ -5410,14 +5417,28 @@ function renderTeammates() {
     const primaryDriver = driversRanked.length
       ? driversRanked[0][0]
       : (agg.series[0]?.driver || "?");
-    const driverList = driversRanked.length
-      ? driversRanked.map(([n]) => n)
-      : Array.from(new Set(agg.series.map(s => s.driver)));
-    const driverCounts = driversRanked.length
-      ? driversRanked.map(([n, c]) => ({ name: n, races: c }))
-      : driverList.map(n => ({
-          name: n, races: agg.series.filter(s => s.driver === n).length
-        }));
+    // Build a complete per-driver count including ineligible substitutes,
+    // so the shared-car popover lists everyone who actually drove the
+    // car this year. Eligible drivers come first (primary at top), then
+    // any subs who were ineligible.
+    const fullDriverCounts = new Map();
+    agg.series.forEach(s => {
+      if (!s.driver) return;
+      const cur = fullDriverCounts.get(s.driver) || { races: 0, anyEligible: false };
+      cur.races++;
+      if (!s.ineligible) cur.anyEligible = true;
+      fullDriverCounts.set(s.driver, cur);
+    });
+    // Sort: primary first (most eligible races), then other eligibles by
+    // race count desc, then ineligible-only subs by race count desc.
+    const driverCountsArr = Array.from(fullDriverCounts.entries())
+      .map(([name, v]) => ({ name, races: v.races, sub: !v.anyEligible }))
+      .sort((a, b) => {
+        if (a.sub !== b.sub) return a.sub ? 1 : -1;
+        return b.races - a.races;
+      });
+    const driverList = driverCountsArr.map(d => d.name);
+    const driverCounts = driverCountsArr;
     cars.push({
       car_number: car,
       team: agg.team,
@@ -5425,6 +5446,7 @@ function renderTeammates() {
       primary_driver: primaryDriver,
       drivers: driverList,
       driver_counts: driverCounts,
+      all_driver_count: agg.allDrivers ? agg.allDrivers.size : driverList.length,
       n_races: agg.series.length,
       n_eligible_races: eligibleSeries.length,
       car_full_time: agg.car_full_time,
@@ -5489,7 +5511,7 @@ function renderTeammates() {
       const avgCls = tmDeltaClass(metric, avg);
       const sparkPts = d.series.map(s => ({ v: s[deltaField], tl: s.tl_fin, round: s.round }));
       const svg = tmSparkline(sparkPts, carHex, metric, d.car_number);
-      const isShared = d.drivers.length > 1;
+      const isShared = (d.all_driver_count || d.drivers.length) > 1;
       const showWbrTag = (d.team !== d.group);
       const ptTag = d.car_full_time ? "" : ` <span class="tm-pt-tag">PT</span>`;
       const tmHref = `#/driver/${slugify(d.primary_driver)}`;
@@ -5497,7 +5519,7 @@ function renderTeammates() {
         <span class="tm-car" style="background:${carHex};color:${carTxt}">${d.car_number}</span>
         <div class="tm-name">
           <div class="tm-name-row">
-            <a class="tm-name-primary profile-link" href="${tmHref}">${escapeHTML(d.primary_driver)}</a>${ptTag}
+            <a class="tm-name-primary profile-link" href="${tmHref}" title="${escapeHTML(d.primary_driver)}">${escapeHTML(d.primary_driver)}</a>${ptTag}
             ${isShared ? `<span class="tm-shared" data-car="${d.car_number}" title="Shared car — hover for details">i</span>` : ""}
             ${showWbrTag ? `<span class="tm-true-team">${escapeHTML(d.team)}</span>` : ""}
           </div>
@@ -5634,8 +5656,9 @@ function renderTeammates() {
     const c = carMap.get(car);
     if (!c || !c.driver_counts || c.driver_counts.length < 2) return;
     const rows = c.driver_counts.map((dc, i) => {
-      const cls = i === 0 ? "primary" : "";
-      return `<div class="tm-sl-row ${cls}"><span>${escapeHTML(dc.name)}</span><span class="n">${dc.races} race${dc.races === 1 ? "" : "s"}</span></div>`;
+      const cls = dc.sub ? "sub" : (i === 0 ? "primary" : "");
+      const subTag = dc.sub ? ` <span class="tm-sl-subtag">sub</span>` : "";
+      return `<div class="tm-sl-row ${cls}"><span>${escapeHTML(dc.name)}${subTag}</span><span class="n">${dc.races} race${dc.races === 1 ? "" : "s"}</span></div>`;
     }).join("");
     const html = `<div class="tm-sl-hdr">Shared Car #${car} · ${c.n_races} races total</div>${rows}`;
     el.addEventListener("mouseenter", e => showTip(html, e, "tm-tip tm-sl"));
@@ -7642,8 +7665,10 @@ function paintCrewChiefCareerHeatmap() {
       <div class="ph-row-label">
         <span class="ph-yr">${r.year}</span>
         <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
-        ${driverPill}
-        ${teamPill}
+        <span class="ph-row-cluster">
+          ${driverPill}
+          ${teamPill}
+        </span>
       </div>
       ${cells.join("")}
       ${rankCell}

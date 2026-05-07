@@ -2122,6 +2122,22 @@ td.neg { color: #ff8a8a; }
 #metric-tooltip.tm-sl .tm-sl-row.primary {
   color: var(--accent-2); font-weight: 700;
 }
+#metric-tooltip.tm-sl .tm-sl-row.sub {
+  color: var(--muted);
+}
+#metric-tooltip.tm-sl .tm-sl-subtag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  vertical-align: middle;
+}
 #metric-tooltip.tm-sl .tm-sl-row .n {
   color: var(--muted); font-weight: 500;
 }
@@ -5200,27 +5216,35 @@ a.rc-sched-winner:hover {
   font-size: 8px;
   padding: 1px 4px;
 }
-/* CC heatmap pills can run long (full driver surnames + 3-char team
-   codes). Lay the row label out as a 4-column grid so each piece —
-   year, series, driver, team — gets a fixed slot. The team pill always
-   lands in the same column regardless of how long the driver name is. */
+/* CC heatmap row label: fixed-width slots so columns visually align
+   across rows. Year and Series get tight fixed widths matching their
+   widest content. Driver and Team form a centered cluster taking the
+   remaining horizontal space — cluster sits flush at the start of its
+   slot so the driver name doesn't drift far from the Series pill. */
 #cc-career-heatmap .ph-row-label {
   display: grid;
-  grid-template-columns: 36px 28px 1fr auto;
+  grid-template-columns: 36px 38px 1fr;
   align-items: center;
   gap: 6px;
   overflow: hidden;
 }
-/* Team codes are always 3 chars (PEN, JGR, HMS, WBR…) so they don't
-   need a max-width; just pin them to the right edge of the label. */
-#cc-career-heatmap .ph-row-label .ph-team-pill {
-  white-space: nowrap;
-  justify-self: end;
+/* Driver+Team cluster — second-to-last+last children share a flex container
+   via display:contents ancestor pattern won't work here; we instead wrap
+   them via the JS render. The cluster aligns left, gap-spaced, with the
+   team pill always sitting just to the right of the driver pill. */
+#cc-career-heatmap .ph-row-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
-/* The driver pill sits in the flex 1fr column — it can absorb extra
-   space and ellipsis-truncate, but doesn't shove the team pill around. */
-#cc-career-heatmap .ph-row-label > a:not(.ph-team-pill),
-#cc-career-heatmap .ph-row-label > .ph-team-pill-empty:not(:last-child) {
+#cc-career-heatmap .ph-row-cluster .ph-team-pill {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+#cc-career-heatmap .ph-row-cluster > a:not(.ph-team-pill),
+#cc-career-heatmap .ph-row-cluster > .ph-team-pill-empty {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
