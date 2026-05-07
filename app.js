@@ -6645,6 +6645,12 @@ function paintProfileCareerHeatmap() {
       const trackByRound = new Map();
       let driverDrove = false;
       let driverNameThisYear = null;
+      // Tally team_code occurrences across the season — drivers can switch
+      // teams mid-year (rare but happens, e.g. Kahne to Hendrick mid-2012).
+      // We pick the dominant team for the row label so it reflects "where
+      // they spent most of the year." Track car number too for the same reason.
+      const teamCounts = new Map();
+      const carCounts = new Map();
       block.races.forEach(race => {
         if (race.round == null) return;
         // Track the schedule length so the grid is wide enough even when
@@ -6662,9 +6668,21 @@ function paintProfileCareerHeatmap() {
           finishByRound.set(race.round, hit.finish_pos);
           trackByRound.set(race.round, race);
           driverNameThisYear = hit.driver;
+          // Resolve team code: explicit field if present, else fallback
+          // to the team-name → code mapping (older data without team_code).
+          const tc = hit.team_code
+            || teamCodeFromName(hit.team, SERIES_TO_KEY[sCode], hit.car_number);
+          if (tc) teamCounts.set(tc, (teamCounts.get(tc) || 0) + 1);
+          if (hit.car_number) carCounts.set(hit.car_number, (carCounts.get(hit.car_number) || 0) + 1);
         }
       });
       if (driverDrove) {
+        // Pick dominant team + car for this row's label. Tie-breaker: just
+        // takes whichever the Map iteration sees first (stable for our purpose).
+        let dominantTeam = null, maxTeam = 0;
+        teamCounts.forEach((v, k) => { if (v > maxTeam) { dominantTeam = k; maxTeam = v; } });
+        let dominantCar = null, maxCar = 0;
+        carCounts.forEach((v, k) => { if (v > maxCar) { dominantCar = k; maxCar = v; } });
         // Year-end standings rank for this driver in this series. Prefer
         // canonical final_standings (completed seasons); fall back to a
         // live rank derived from points totals for in-progress years.
@@ -6695,7 +6713,11 @@ function paintProfileCareerHeatmap() {
           const idx = ranked.findIndex(([k]) => k === targetNorm);
           if (idx >= 0) standingsRank = idx + 1;
         }
-        rows.push({ year, series: sCode, finishByRound, trackByRound, standingsRank });
+        rows.push({
+          year, series: sCode, finishByRound, trackByRound, standingsRank,
+          team: dominantTeam,
+          car: dominantCar,
+        });
       }
     });
   });
@@ -6780,10 +6802,18 @@ function paintProfileCareerHeatmap() {
     const rankCell = r.standingsRank != null
       ? `<div class="${rankCellClass(r.standingsRank)}" title="${r.year} ${r.series} year-end standings: P${r.standingsRank}">P${r.standingsRank}</div>`
       : `<div class="ph-rank ph-rank-empty">—</div>`;
+    // Team pill for this row — clickable to the team profile. Drivers
+    // sometimes span multiple teams in one season, so the pill reflects the
+    // dominant team. Falls back to a dim "—" when we couldn't resolve a
+    // team code (very old data).
+    const teamPill = r.team
+      ? `<a class="ph-team-pill" href="#/team/${encodeURIComponent(r.team)}" title="${escapeHTML(r.team)}${r.car ? " · #" + r.car : ""}" onclick="event.stopPropagation()">${escapeHTML(r.team)}</a>`
+      : `<span class="ph-team-pill ph-team-pill-empty" title="Team unknown">—</span>`;
     return `<div class="ph-row">
       <div class="ph-row-label">
         <span class="ph-yr">${r.year}</span>
         <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
+        ${teamPill}
       </div>
       ${cells.join("")}
       ${rankCell}

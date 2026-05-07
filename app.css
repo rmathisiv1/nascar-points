@@ -4143,6 +4143,11 @@ a.driver-cell.profile-link:hover .car-tag {
   gap: 6px;
   font-size: 11px;
   color: var(--muted);
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+.rc-sched-prior:hover {
+  color: var(--text);
 }
 .rc-sched-prior-yr {
   font-family: var(--mono);
@@ -4156,6 +4161,15 @@ a.driver-cell.profile-link:hover .car-tag {
   align-items: center;
   gap: 6px;
   color: var(--text);
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+/* When wrapping a winner pill in an anchor (driver-profile link), keep
+   the visible content reading as plain text — no underline, no link
+   color. The car-tag already provides the visual anchor. Hover just
+   nudges brightness as the affordance. */
+a.rc-sched-winner:hover {
+  color: var(--accent);
 }
 .rc-sched-next {
   display: inline-block;
@@ -5116,11 +5130,12 @@ a.driver-cell.profile-link:hover .car-tag {
 }
 .ph-grid {
   display: grid;
-  /* Width strategy: row-label column at fixed 70px, then race columns share
-     remaining space equally via 1fr, and a fixed 44px "Final" column at
-     the end for the year-end standings rank. Sticky-left on the row label
-     keeps the year visible while horizontal-scrolling on mobile. */
-  grid-template-columns: 70px repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
+  /* Width strategy: row-label column at fixed 132px (year + series tag +
+     team pill all in one row), then race columns share remaining space
+     equally via 1fr, and a fixed 44px "Final" column at the end for the
+     year-end standings rank. Sticky-left on the row label keeps the year
+     visible while horizontal-scrolling on mobile. */
+  grid-template-columns: 132px repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
   gap: 2px;
   font-family: var(--mono);
   font-size: 10px;
@@ -5232,7 +5247,7 @@ a.driver-cell.profile-link:hover .car-tag {
   .ph-grid {
     /* On mobile we want fixed cell widths so the grid stays readable;
        overflow-x on the host scrolls horizontally for long schedules. */
-    grid-template-columns: 56px repeat(var(--ph-cols, 36), 18px) 38px;
+    grid-template-columns: 110px repeat(var(--ph-cols, 36), 18px) 38px;
     font-size: 9px;
     width: max-content;
     min-width: 100%;
@@ -5766,4 +5781,41 @@ a.driver-cell.profile-link:hover .car-tag {
 .tm-history-table .team-pill:hover {
   background: rgba(255,255,255,0.10);
   border-color: rgba(255,255,255,0.18);
+}
+
+/* Team pill on the heatmap row label — clickable code chip, sits next to
+   the series tag. Compact monospace styling so it reads as a code/badge
+   rather than navigation text. */
+.ph-team-pill {
+  display: inline-block;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.ph-team-pill:hover {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.18);
+}
+.ph-team-pill-empty {
+  color: var(--dim);
+  cursor: default;
+}
+.ph-team-pill-empty:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: var(--border);
+}
+
+@media (max-width: 767.98px) {
+  .ph-team-pill {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
 }
