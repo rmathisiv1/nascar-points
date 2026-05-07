@@ -7,6 +7,11 @@
 const STATE = {
   series: "NCS",
   season: 2026,
+  // Tracks which series the user last picked in Present mode. Used by
+  // the side panels (standings/form/metric bar) to snap back to the
+  // user's preferred series when STATE temporarily wandered into a
+  // historical context for a profile route.
+  lastPresentSeries: "NCS",
   view: "arc",
   // Site mode: "present" (default) locks the global season to the latest
   // available year; users can still switch series freely. "historical"
@@ -2004,6 +2009,10 @@ function wireUIControls() {
       document.querySelectorAll("#series-sw button")
         .forEach(x => x.classList.toggle("on", x === b));
       STATE.series = b.dataset.series;
+      // In Present mode, remember which series the user picked so the
+      // side panels can snap back to it after a historical detour
+      // (e.g. visiting a 2020 driver profile then coming back).
+      if (STATE.mode === "present") STATE.lastPresentSeries = STATE.series;
       STATE.throughRound = null;  // cursor is series-specific, reset on series change
       STATE.arc.selected.clear();
       STATE.breakdown.drivers = [];
@@ -3011,7 +3020,12 @@ function contrastTextFor(hex) {
 // ============================================================
 function renderMetricBar() {
   const bar = document.getElementById("metricbar");
-  if (!bar || !STATE.data) { if (bar) bar.innerHTML = ""; return; }
+  if (!bar) return;
+  // Same context swap as the standings/form mini panels — in Present
+  // mode, this bar always shows the latest year's data even when the
+  // user has wandered into a historical driver profile.
+  const restoreCtx = sidePanelPresentContext();
+  if (!STATE.data) { bar.innerHTML = ""; restoreCtx(); return; }
   const races = racesSorted();
   const totals = computeSeasonTotals();
   const lastRace = races[races.length - 1];
@@ -3138,6 +3152,7 @@ function renderMetricBar() {
       });
     });
   }
+  restoreCtx();
 }
 
 function signed(n) {
@@ -6893,9 +6908,22 @@ function paintProfileChart(entity, rows) {
       gridY.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
       gridY.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
     }
-    const xLabels = pts.map((p, i) =>
-      `<text class="axis-label" x="${xScale(i)}" y="${H - 10}" text-anchor="middle">R${p.round}</text>`
-    ).join("");
+    // Adaptive x-axis: with 36 races and ~600px of chart width, drawing
+    // every label crams them together unreadably. Compute a label step
+    // such that each label has at least ~28px of horizontal room. Always
+    // include the first and last round so the user sees the boundaries.
+    const minLabelPx = 28;
+    const racesPerPx = pts.length / Math.max(1, innerW);
+    const labelStep = Math.max(1, Math.ceil(minLabelPx * racesPerPx));
+    const xLabels = pts.map((p, i) => {
+      const isFirst = i === 0;
+      const isLast = i === pts.length - 1;
+      const onStep = i % labelStep === 0;
+      // Skip the on-step label adjacent to "last" so they don't collide
+      const tooCloseToLast = !isLast && (pts.length - 1 - i) < labelStep;
+      if (!isFirst && !isLast && (!onStep || tooCloseToLast)) return "";
+      return `<text class="axis-label" x="${xScale(i)}" y="${H - 10}" text-anchor="middle">R${p.round}</text>`;
+    }).join("");
 
     const lineD = pts.map((p, i) => `${xScale(i)},${yScale(p.cum)}`).join(" ");
     const areaD = `M${xScale(0)},${pad.t + innerH} L${pts.map((p, i) => `${xScale(i)},${yScale(p.cum)}`).join(" L")} L${xScale(pts.length - 1)},${pad.t + innerH} Z`;
@@ -7056,10 +7084,26 @@ function paintProfileHeatStrip(rows) {
   }
   if (host._heatMove) host.removeEventListener("mousemove", host._heatMove);
   if (host._heatOut)  host.removeEventListener("mouseout",  host._heatOut);
+  if (host._heatClick) host.removeEventListener("click", host._heatClick);
   host._heatMove = showHeatTip;
   host._heatOut  = hideHeatTip;
+  // Click → open the race lightbox for that round in the season currently
+  // displayed on the profile (STATE.season + STATE.series). This works
+  // identically whether the user is on Present or Historical mode.
+  host._heatClick = (ev) => {
+    const cell = ev.target.closest(".profile-heat-cell");
+    if (!cell || !host.contains(cell)) return;
+    const round = parseInt(cell.getAttribute("data-round"), 10);
+    if (!round) return;
+    // Skip DNS cells — there's no race result to show
+    if (cell.getAttribute("data-dns") === "1") return;
+    openRaceLightbox(STATE.season, STATE.series, round);
+  };
   host.addEventListener("mousemove", host._heatMove);
   host.addEventListener("mouseout",  host._heatOut);
+  host.addEventListener("click",     host._heatClick);
+  // Style cells as clickable
+  host.style.cursor = "default";   // host itself isn't clickable
 }
 
 function paintProfileRaceTable(rows, kind) {
@@ -8653,7 +8697,14 @@ function renderStandingsMini() {
   const host = document.getElementById("standings-mini-host");
   const subEl = document.getElementById("standings-mini-sub");
   if (!host) return;
-  if (!STATE.data) { host.innerHTML = ""; return; }
+  // In Present mode, the side panels should always reflect the latest
+  // available season — not whatever STATE.data temporarily points at
+  // (e.g. a 2020 driver profile loaded by resolveDriverRoute). We swap
+  // STATE.data, STATE.season, STATE.series for the duration of this
+  // render, then restore. SEASON_CACHE has the latest year cached
+  // already from boot's idle warmer.
+  const restoreCtx = sidePanelPresentContext();
+  if (!STATE.data) { host.innerHTML = ""; restoreCtx(); return; }
 
   const races = racesSorted();
   const lastRound = races.length ? races[races.length - 1].round : 0;
@@ -8704,6 +8755,38 @@ function renderStandingsMini() {
   }).join("");
 
   host.innerHTML = html;
+  restoreCtx();
+}
+
+// In Present mode, the side panels should reflect the latest year/series
+// regardless of where the main view temporarily wandered. This helper
+// briefly swaps STATE to the canonical Present context and returns a
+// restore function the caller MUST invoke once it's done. In Historical
+// mode, it's a no-op — STATE already reflects the user's chosen year.
+function sidePanelPresentContext() {
+  if (STATE.mode !== "present") return () => {};
+  const latestYear = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
+  if (!latestYear) return () => {};
+  // The "Present" series is the one the topbar currently shows. In single-
+  // series products it's NCS; in multi-series it follows whatever the user
+  // had selected in Present mode before the route swap. We treat NCS as the
+  // canonical fallback if STATE is currently in a historical pocket.
+  const canonicalSeries = STATE.lastPresentSeries || "NCS";
+  const block = SEASON_CACHE[latestYear] && SEASON_CACHE[latestYear][canonicalSeries];
+  if (!block) return () => {};
+  // No swap needed if state is already correct
+  if (STATE.season === latestYear && STATE.series === canonicalSeries && STATE.data === block) {
+    return () => {};
+  }
+  const prev = { data: STATE.data, season: STATE.season, series: STATE.series };
+  STATE.data = block;
+  STATE.season = latestYear;
+  STATE.series = canonicalSeries;
+  return () => {
+    STATE.data = prev.data;
+    STATE.season = prev.season;
+    STATE.series = prev.series;
+  };
 }
 
 // ============================================================
@@ -8714,7 +8797,9 @@ function renderStandingsMini() {
 function renderFormMini() {
   const host = document.getElementById("form-mini-host");
   if (!host) return;
-  if (!STATE.data) { host.innerHTML = ""; return; }
+  // Same Present-mode context swap as renderStandingsMini
+  const restoreCtx = sidePanelPresentContext();
+  if (!STATE.data) { host.innerHTML = ""; restoreCtx(); return; }
 
   const entities = allEntities().filter(isFullTime);
   const rows = entities.map(d => {
@@ -8750,6 +8835,7 @@ function renderFormMini() {
       </div>
     </a>`;
   }).join("");
+  restoreCtx();
 }
 
 function renderPlayoffsMini() {

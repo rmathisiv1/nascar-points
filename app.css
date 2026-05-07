@@ -2550,12 +2550,13 @@ td.neg { color: #ff8a8a; }
   border-radius: 3px;
   font-family: var(--mono); font-size: 12px; font-weight: 700;
   font-variant-numeric: tabular-nums;
-  cursor: default;
+  cursor: pointer;
   min-height: 34px;
   display: flex; align-items: center; justify-content: center;
   flex-direction: column;
   gap: 1px;
 }
+.profile-heat-cell.heat-dns { cursor: default; }
 .profile-heat-cell .r { font-size: 8px; opacity: 0.6; font-weight: 500; }
 .profile-heat-cell:hover { outline: 1px solid rgba(255,255,255,0.3); }
 /* New tier scheme — wins are gold/celebratory, T5 bright green, T10 muted
