@@ -20,6 +20,10 @@ on:
         description: 'Series to refresh (NCS,NOS,NTS or subset)'
         required: false
         default: 'NCS,NOS,NTS'
+      skip_bios:
+        description: 'Skip driver bio scrape'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -38,7 +42,9 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: Run scraper
+      # --- 1. Main points scrape (results + inline CC fetch) ---
+      - name: Run points scraper
+        id: points
         env:
           SEASON: ${{ github.event.inputs.season || '2026' }}
           ONLY:   ${{ github.event.inputs.only   || 'NCS,NOS,NTS' }}
@@ -48,16 +54,45 @@ jobs:
             --only "$ONLY" \
             --out "data/points_${SEASON}.json"
 
+      # --- 2. CC self-heal — catches any CC pages the inline scrape missed.
+      # Idempotent: only fetches races where crew_chief is still null.
+      # Non-fatal — a hiccup here shouldn't block the commit of good points
+      # data from step 1.
+      - name: CC self-heal backfill
+        if: success()
+        continue-on-error: true
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+        run: |
+          python scripts/backfill_crew_chiefs.py --year "$SEASON" --sleep 0.3
+
+      # --- 3. Driver bios scrape (independent of points file) ---
+      - name: Scrape driver bios
+        if: github.event.inputs.skip_bios != 'true'
+        continue-on-error: true
+        run: |
+          python scripts/scrape_drivers.py \
+            --keys "data/driver_keys.json" \
+            --out  "data/drivers.json"
+
+      # --- 4. Commit & push whatever changed ---
       - name: Commit & push if changed
         env:
           SEASON: ${{ github.event.inputs.season || '2026' }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet "data/points_${SEASON}.json"; then
+
+          # Stage anything that may have changed across the three steps.
+          # `git add -A` on these specific paths handles new + modified.
+          git add "data/points_${SEASON}.json" data/drivers.json 2>/dev/null || true
+
+          # Use --cached so we detect staged changes including new files.
+          if git diff --cached --quiet; then
             echo "No changes."
             exit 0
           fi
-          git add "data/points_${SEASON}.json"
-          git commit -m "chore(data): refresh points_${SEASON}.json [skip ci]"
+
+          git diff --cached --stat
+          git commit -m "chore(data): weekly refresh ${SEASON} [skip ci]"
           git push
