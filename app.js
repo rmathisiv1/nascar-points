@@ -1830,7 +1830,7 @@ async function loadDriverBios() {
 
 async function discoverSeasons() {
   // Probe for `data/points_YYYY.json` for each plausible year. Lower bound is
-  // 2001 (earliest historical year we've backfilled). Upper bound is derived
+  // 1949 (NASCAR's first Strictly Stock / Cup season). Upper bound is derived
   // from the calendar so we don't generate spurious 404s for future years
   // that don't exist yet (the browser logs 404s at the network layer
   // regardless of catch()). +1 gives us a one-year lookahead in case a stub
@@ -1838,7 +1838,7 @@ async function discoverSeasons() {
   const currentYear = new Date().getFullYear();
   const upper = currentYear + 1;
   const years = [];
-  for (let y = 2001; y <= upper; y++) {
+  for (let y = 1949; y <= upper; y++) {
     const r = await fetch(`data/points_${y}.json`, { method: "HEAD" })
       .catch(() => null);
     if (r && r.ok) years.push(y);
