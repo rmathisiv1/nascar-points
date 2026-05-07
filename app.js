@@ -1600,6 +1600,7 @@ function parseHash() {
     STATE.track = {
       code: (h[1] || "").toUpperCase(),
       seriesView: STATE.series,
+      scopeView: "current",   // "current" = current FT drivers only; "all" = every driver historical
     };
     STATE.lastHash = location.hash;
     return;
@@ -3181,7 +3182,12 @@ function renderFormTable() {
     const deltaR = (formRating != null && seasonRating != null) ? formRating - seasonRating : null;
     const lastFinishes = d.races.slice(-shownRaces.length).map(r => r.finish);
     const totalPts = d.races.reduce((s, r) => s + r.total, 0);
-    return { ...d, formRating, seasonRating, deltaR, lastFinishes, totalPts, fullTime: isFullTime(d) };
+    // Points scored in just the displayed window (matches "L5"/"L10"
+    // toggle, or full season). Useful for spotting hot streaks at a glance.
+    const windowPts = d.races
+      .filter(r => shownRaces.some(sr => sr.round === r.round))
+      .reduce((s, r) => s + (r.total || 0), 0);
+    return { ...d, formRating, seasonRating, deltaR, lastFinishes, totalPts, windowPts, fullTime: isFullTime(d) };
   });
 
   if (STATE.form.ftOnly) decorated = decorated.filter(d => d.fullTime);
@@ -3234,6 +3240,7 @@ function renderFormTable() {
         </span>
       </td>
       <td class="num">${deltaPill(d.deltaR)}</td>
+      <td class="num">${d.windowPts || 0}</td>
       <td class="num" style="color: var(--muted)">${d.totalPts}</td>
     </tr>`;
   }).join("");
@@ -3249,6 +3256,7 @@ function renderFormTable() {
     ? `Form (Season)`
     : `Form (L${STATE.form.window})`;
 
+  const windowPtsLabel = STATE.form.window === "season" ? "Season Pts" : `L${STATE.form.window} Pts`;
   card.innerHTML = `
     <div class="table-scroll">
     <table class="data-table">
@@ -3260,7 +3268,8 @@ function renderFormTable() {
           <th>${formColLabel}</th>
           ${th("formRating", "Rating", true)}
           ${th("deltaR", "vs Season", true)}
-          ${th("totalPts", "Pts", true)}
+          ${th("windowPts", windowPtsLabel, true)}
+          ${th("totalPts", "Total Pts", true)}
         </tr>
       </thead>
       <tbody>${rows || `<tr><td colspan="99" class="muted" style="padding:40px;text-align:center">No drivers match.</td></tr>`}</tbody>
@@ -7977,6 +7986,12 @@ function renderStandings() {
   // championship-points gap to the leader.
   const hasCanonicalGap = rows.some(r => r.canonicalGap != null);
 
+  // Compute live points-back-from-leader (current points race, regardless
+  // of how the user has sorted the table). The leader is the row with the
+  // highest total. "Back" is just leader.total - this row's total — purely
+  // live data, independent of canonical Diff (which uses year-end gaps).
+  const leaderTotal = rows.reduce((max, r) => Math.max(max, r.total || 0), 0);
+
   const body = rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
@@ -8025,6 +8040,7 @@ function renderStandings() {
       <td class="num">${r.sumS2}</td>
       <td class="num">${r.sumFL}</td>` : ""}
       <td class="num total-col">${r.total}</td>
+      <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
       ${diffCell}
     </tr>`;
   }).join("");
@@ -8034,15 +8050,6 @@ function renderStandings() {
     const cls = `sortable ${numeric ? "num" : ""} ${active ? "sort-" + STATE.standings.sortDir : ""}`.trim();
     const arrow = active ? (STATE.standings.sortDir === "asc" ? "▲" : "▼") : "↕";
     return `<th class="${cls}" data-sort="${key}">${label}<span class="sort-arrow">${arrow}</span></th>`;
-  };
-  // Special header with a tooltip indicator for the FL column (data is incomplete)
-  const thFL = () => {
-    const key = "sumFL";
-    const active = STATE.standings.sortKey === key;
-    const cls = `sortable num has-info ${active ? "sort-" + STATE.standings.sortDir : ""}`.trim();
-    const arrow = active ? (STATE.standings.sortDir === "asc" ? "▲" : "▼") : "↕";
-    const tip = "FL data incomplete — being refined. The scraper's fastest-lap inference is imperfect and often can't uniquely identify the FL driver, so many races show 0 here even when a real FL bonus was awarded.";
-    return `<th class="${cls}" data-sort="${key}" title="${escapeHTML(tip)}">FL<span class="sort-arrow">${arrow}</span></th>`;
   };
 
   table.innerHTML = `
@@ -8058,9 +8065,10 @@ function renderStandings() {
         ${th("avgFinish", "Avg Fin", true)}
         ${stageEra ? `${th("sumS1", "S1", true)}
         ${th("sumS2", "S2", true)}
-        ${thFL()}` : ""}
+        ${th("sumFL", "FL", true)}` : ""}
         ${th("total", "Total", true)}
-        ${hasCanonicalGap ? `<th class="num" title="Points gap to season champion">Diff</th>` : ""}
+        <th class="num" title="Points back from current points leader (live)">Back</th>
+        ${hasCanonicalGap ? `<th class="num" title="Points gap to season champion (year-end canonical)">Diff</th>` : ""}
       </tr>
     </thead>
     <tbody>${body}</tbody>
@@ -9711,65 +9719,71 @@ function renderTrackPage() {
     currentDriverByCar[e.car_number] = e.primaryDriver || e.driver || "";
   });
 
-  // ---- Most wins (top 5) — filtered to current-FT drivers only.
-  // Historical legends (Earnhardt, Petty, etc.) won't appear because the
-  // user wants to see the win counts for drivers who could win this weekend.
+  // Track scope: "current" filters to drivers who are currently
+  // full-time (so legends like Earnhardt are excluded — only people who
+  // could win this weekend appear). "all" disables that filter so
+  // historical greats are surfaced.
+  const tScope = (STATE.track && STATE.track.scopeView) || "current";
+
+  // ---- Most wins — optionally filtered to current-FT drivers ----
   const winsByDriver = {};
   history.forEach(h => {
     const w = (h.results || []).find(d => d.finish_pos === 1);
     if (!w) return;
     const norm = normalizeDriverName(w.driver || "");
-    if (!currentFtDrivers.has(norm)) return;
+    if (tScope === "current" && !currentFtDrivers.has(norm)) return;
     if (!winsByDriver[norm]) {
       winsByDriver[norm] = { car: w.car_number, driver: w.driver, wins: 0, years: [] };
     }
     winsByDriver[norm].wins++;
     winsByDriver[norm].years.push(h.year);
   });
-  // Override car# + driver name with their current ride / canonical name
-  Object.keys(winsByDriver).forEach(key => {
-    const entity = currentFtEntities.find(
-      e => normalizeDriverName(e.primaryDriver || e.driver || "") === key
-    );
-    if (entity) {
-      winsByDriver[key].car = entity.car_number;
-      winsByDriver[key].driver = entity.primaryDriver || entity.driver || winsByDriver[key].driver;
-    }
-  });
+  // For current-scope rows, override car# + driver name with current ride
+  if (tScope === "current") {
+    Object.keys(winsByDriver).forEach(key => {
+      const entity = currentFtEntities.find(
+        e => normalizeDriverName(e.primaryDriver || e.driver || "") === key
+      );
+      if (entity) {
+        winsByDriver[key].car = entity.car_number;
+        winsByDriver[key].driver = entity.primaryDriver || entity.driver || winsByDriver[key].driver;
+      }
+    });
+  }
   const topWins = Object.values(winsByDriver).sort((a, b) => b.wins - a.wins).slice(0, 5);
 
-  // ---- Best avg finish among current-FT DRIVERS (not just car numbers) ----
-  // Filter by driver name so we don't accidentally count finishes by historical
-  // drivers of a current FT car number (e.g. Aric Almirola finishing well in
-  // the #43 doesn't mean Erik Jones — current #43 driver — is hot at this track).
+  // ---- Best avg finish — same scope filter ----
   const finsByDriver = {};
   history.forEach(h => {
     (h.results || []).forEach(d => {
       if (d.finish_pos == null) return;
       const norm = normalizeDriverName(d.driver || "");
-      if (!currentFtDrivers.has(norm)) return;
+      if (tScope === "current" && !currentFtDrivers.has(norm)) return;
       const key = norm;
       if (!finsByDriver[key]) {
         finsByDriver[key] = { car: d.car_number, driver: d.driver, fins: [] };
       }
       finsByDriver[key].fins.push(d.finish_pos);
-      // Update car# to the most recent year so the pill matches their current ride
       finsByDriver[key].car = d.car_number;
     });
   });
-  // Override car# with the CURRENT car# from the entity table so the pill is
-  // exactly correct, even if their last race in cached data had a different car.
-  Object.keys(finsByDriver).forEach(key => {
-    const entity = currentFtEntities.find(
-      e => normalizeDriverName(e.primaryDriver || e.driver || "") === key
-    );
-    if (entity) {
-      finsByDriver[key].car = entity.car_number;
-      finsByDriver[key].driver = entity.primaryDriver || entity.driver || finsByDriver[key].driver;
-    }
-  });
+  // In current-scope, point pills at the CURRENT ride
+  if (tScope === "current") {
+    Object.keys(finsByDriver).forEach(key => {
+      const entity = currentFtEntities.find(
+        e => normalizeDriverName(e.primaryDriver || e.driver || "") === key
+      );
+      if (entity) {
+        finsByDriver[key].car = entity.car_number;
+        finsByDriver[key].driver = entity.primaryDriver || entity.driver || finsByDriver[key].driver;
+      }
+    });
+  }
+  // Require a minimum of 3 starts when in all-time scope so a one-off
+  // P1 finish doesn't dominate the avg leaderboard
+  const minStarts = tScope === "current" ? 1 : 3;
   const topAvg = Object.values(finsByDriver)
-    .filter(c => c.fins.length >= 1)
+    .filter(c => c.fins.length >= minStarts)
     .map(c => ({ ...c, avg: c.fins.reduce((s, x) => s + x, 0) / c.fins.length, n: c.fins.length }))
     .sort((a, b) => a.avg - b.avg)
     .slice(0, 5);
@@ -9817,7 +9831,13 @@ function renderTrackPage() {
   // are grouped tightly together (a thin divider after Mfr separates them
   // from the Pole column) so it's clear those three attributes belong to
   // the winner, not the pole sitter.
-  const histTableHTML = history.length ? `
+  // Filter to completed races only — rows with no finishers are
+  // upcoming/scheduled (e.g. 2026 R17 at Pocono before it's run) and
+  // would render as a row of em-dashes that adds no info.
+  const completedHistory = history.filter(h =>
+    (h.results || []).some(d => d.finish_pos === 1)
+  );
+  const histTableHTML = completedHistory.length ? `
     <table class="rc-result-table tk-history-table">
       <colgroup>
         <col class="tk-col-yr"><col class="tk-col-rd">
@@ -9832,7 +9852,7 @@ function renderTrackPage() {
         <th class="tk-col-pole-head">Pole</th>
       </tr></thead>
       <tbody>
-        ${history.map(h => {
+        ${completedHistory.map(h => {
           const winner = (h.results || []).find(d => d.finish_pos === 1);
           const pole   = (h.results || []).find(d => d.start_pos === 1);
           // Resolve series for color mapping — each history row carries its
@@ -9880,19 +9900,25 @@ function renderTrackPage() {
       <div class="card rc-card">
         <div class="rc-card-head">
           <span class="rc-card-title">Most Wins Here</span>
-          <span class="rc-card-sub">${STATE.season} drivers only</span>
+          <div class="toggle-group mini" id="track-scope-toggle">
+            <button class="${tScope === "current" ? "on" : ""}" data-scope="current">${STATE.season}</button>
+            <button class="${tScope === "all" ? "on" : ""}" data-scope="all">All-time</button>
+          </div>
         </div>
         <div class="rc-card-body">${winsHTML}</div>
       </div>
       <div class="card rc-card">
         <div class="rc-card-head">
           <span class="rc-card-title">Best Avg Finish</span>
-          <span class="rc-card-sub">${STATE.season} drivers · all-time</span>
+          <span class="rc-card-sub">${tScope === "current" ? STATE.season + " drivers" : "all-time"}${tScope === "all" ? ` · ${minStarts}+ starts` : ""}</span>
         </div>
         <div class="rc-card-body">${avgHTML}</div>
       </div>
       <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Manufacturer Wins</span></div>
+        <div class="rc-card-head">
+          <span class="rc-card-title">Manufacturer Wins</span>
+          <span class="rc-card-sub">all-time</span>
+        </div>
         <div class="rc-card-body tk-manu-body">${manuHTML}</div>
       </div>
     </div>
@@ -9922,6 +9948,15 @@ function renderTrackPage() {
     const newSeries = btn.dataset.srs;
     if (!newSeries || newSeries === tSeries) return;
     STATE.track.seriesView = newSeries;
+    renderTrackPage();
+  });
+  // Wire the scope toggle (Most Wins / Best Avg Finish: current FT vs all-time)
+  document.getElementById("track-scope-toggle")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    const newScope = btn.dataset.scope;
+    if (!newScope || newScope === tScope) return;
+    STATE.track.scopeView = newScope;
     renderTrackPage();
   });
 }
@@ -11107,11 +11142,12 @@ function computeAllTimeDrivers() {
           const key = `${yr}|${sCode}`;
           let yt = agg.byYearSeries.get(key);
           if (!yt) {
-            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0, lapsLed: 0 };
             agg.byYearSeries.set(key, yt);
           }
           yt.starts++;
           yt.finishSum += d.finish_pos;
+          yt.lapsLed += (d.laps_led || 0);
           if (d.finish_pos === 1) yt.wins++;
           if (d.finish_pos <= 5) yt.top5++;
           if (d.finish_pos <= 10) yt.top10++;
@@ -11146,11 +11182,12 @@ function computeAllTimeTeams() {
           const key = `${yr}|${sCode}`;
           let yt = agg.byYearSeries.get(key);
           if (!yt) {
-            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0, lapsLed: 0 };
             agg.byYearSeries.set(key, yt);
           }
           yt.starts++;
           yt.finishSum += d.finish_pos;
+          yt.lapsLed += (d.laps_led || 0);
           if (d.finish_pos === 1) yt.wins++;
           if (d.finish_pos <= 5) yt.top5++;
           if (d.finish_pos <= 10) yt.top10++;
@@ -11187,11 +11224,12 @@ function computeAllTimeCrewChiefs() {
           const key = `${yr}|${sCode}`;
           let yt = agg.byYearSeries.get(key);
           if (!yt) {
-            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0, lapsLed: 0 };
             agg.byYearSeries.set(key, yt);
           }
           yt.starts++;
           yt.finishSum += d.finish_pos;
+          yt.lapsLed += (d.laps_led || 0);
           if (d.finish_pos === 1) yt.wins++;
           if (d.finish_pos <= 5) yt.top5++;
           if (d.finish_pos <= 10) yt.top10++;
@@ -11220,20 +11258,21 @@ function foldRecordByFilters(rec, scope, gens, seriesFilter, currentSeason) {
     filtered.push(stats);
   });
   if (filtered.length === 0) return null;
-  let starts = 0, wins = 0, top5 = 0, top10 = 0, finishSum = 0;
+  let starts = 0, wins = 0, top5 = 0, top10 = 0, finishSum = 0, lapsLed = 0;
   filtered.forEach(f => {
     starts += f.starts;
     wins += f.wins;
     top5 += f.top5;
     top10 += f.top10;
     finishSum += f.finishSum;
+    lapsLed += (f.lapsLed || 0);
   });
   const yrs = Array.from(new Set(filtered.map(f => f.year))).sort((a, b) => a - b);
   const yrLabel = yrs.length === 0 ? "—"
                 : yrs.length === 1 ? String(yrs[0])
                 : `${yrs[0]}–${yrs[yrs.length - 1]}`;
   return {
-    starts, wins, top5, top10,
+    starts, wins, top5, top10, lapsLed,
     avgFin: starts > 0 ? finishSum / starts : null,
     winPct: starts > 0 ? (wins / starts) * 100 : null,
     top5Pct: starts > 0 ? (top5 / starts) * 100 : null,
@@ -11337,6 +11376,7 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
     <th class="alltime-th num" data-sort="top5Pct">T5 %${sortAttr("top5Pct")}</th>
     <th class="alltime-th num" data-sort="top10">T10${sortAttr("top10")}</th>
     <th class="alltime-th num" data-sort="avgFin">Avg Fin${sortAttr("avgFin")}</th>
+    <th class="alltime-th num" data-sort="lapsLed">Laps Led${sortAttr("lapsLed")}</th>
     <th class="alltime-th num" data-sort="yearsCount">Years${sortAttr("yearsCount")}</th>
   </tr></thead>`;
 
@@ -11356,6 +11396,7 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
       <td class="num">${r.top5Pct != null ? r.top5Pct.toFixed(1) + "%" : "—"}</td>
       <td class="num">${r.top10 || 0}</td>
       <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
+      <td class="num">${(r.lapsLed || 0).toLocaleString()}</td>
       <td class="num"><span title="${r.yearsLabel}">${r.yearsCount}</span></td>
     </tr>`;
   }).join("")}</tbody>`;
@@ -11493,9 +11534,12 @@ function wireAllTimeTable(stateKey, rerender) {
       if (dir === "prev" && st.page > 0) st.page--;
       else if (dir === "next") st.page++;
       rerender();
-      // Scroll to top of table after page change so user sees the new rows
-      const wrap = document.querySelector(`.alltime-table[data-statekey="${stateKey}"]`);
-      if (wrap) wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Scroll the takeover view section to the top after page change
+      // so the user sees the new rows from the top of the list. Using
+      // scrollTop on the scrollable parent (not scrollIntoView, which
+      // can shift the page itself).
+      const viewEl = document.getElementById(`view-${stateKey}`);
+      if (viewEl) viewEl.scrollTop = 0;
     });
   });
 }
