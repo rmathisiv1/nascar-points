@@ -10760,8 +10760,8 @@ function renderCrewChiefPage() {
       return `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(tc)}"${styleAttr}>${escapeHTML(tc)}</a>`;
     }).join(" ");
     return `<tr${partial ? ' class="cc-partial-row"' : ""}>
-      <td><strong>${ys.year}</strong></td>
-      <td>${seriesTag}${partialTag}</td>
+      <td><strong>${ys.year}</strong>${partialTag}</td>
+      <td>${seriesTag}</td>
       <td>${carNums || `<span class="muted">—</span>`}</td>
       <td>${drvCellHTML || `<span class="muted">—</span>`}</td>
       <td>${teamCodes || `<span class="muted">—</span>`}</td>
@@ -10830,7 +10830,7 @@ function renderCrewChiefPage() {
       <div class="rc-card-head">
         <div>
           <span class="rc-card-title">Career Heatmap</span>
-          <span class="rc-card-sub" style="margin-left:8px;">finish position per race · color-coded</span>
+          <span class="rc-card-sub" style="margin-left:8px;">finish position per race</span>
         </div>
         <div class="toggle-group mini" id="cc-heatmap-series-toggle">
           <button class="${(STATE.cc && STATE.cc.heatmapSeries || "all") === "all" ? "on" : ""}" data-srs="all">All</button>

@@ -5160,15 +5160,15 @@ a.rc-sched-winner:hover {
   width: 100%;
 }
 /* CC heatmap rows carry an extra pill (driver AND team), so the label
-   column needs more room to keep long surnames like "Hornish, Jr." from
-   spilling into R1. Scoped to the CC heatmap host so the driver-profile
-   heatmap stays at its tighter 132px. */
+   column needs more room to keep long surnames like "DiBenedetto" or
+   "Hornish, Jr." readable. Scoped to the CC heatmap host so the
+   driver-profile heatmap stays at its tighter 132px. */
 #cc-career-heatmap .ph-grid {
-  grid-template-columns: 200px repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
+  grid-template-columns: 250px repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
 }
 @media (max-width: 767.98px) {
   #cc-career-heatmap .ph-grid {
-    grid-template-columns: 160px repeat(var(--ph-cols, 36), minmax(18px, 1fr)) 38px;
+    grid-template-columns: 200px repeat(var(--ph-cols, 36), minmax(18px, 1fr)) 38px;
   }
 }
 .ph-row {
@@ -5203,20 +5203,17 @@ a.rc-sched-winner:hover {
 /* CC heatmap pills can run long (full driver surnames + 3-char team
    codes). Lay the row label out as a 4-column grid so each piece —
    year, series, driver, team — gets a fixed slot. The team pill always
-   lands in the same column regardless of how long the driver name is.
-   Last column is `auto` so the team pill takes whatever it needs (max
-   capped below). */
+   lands in the same column regardless of how long the driver name is. */
 #cc-career-heatmap .ph-row-label {
   display: grid;
-  grid-template-columns: 38px 32px 1fr auto;
+  grid-template-columns: 36px 28px 1fr auto;
   align-items: center;
   gap: 6px;
   overflow: hidden;
 }
+/* Team codes are always 3 chars (PEN, JGR, HMS, WBR…) so they don't
+   need a max-width; just pin them to the right edge of the label. */
 #cc-career-heatmap .ph-row-label .ph-team-pill {
-  max-width: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   justify-self: end;
 }
@@ -6021,13 +6018,27 @@ body.lightbox-open {
 }
 
 /* Partial-season rows in the CC season-by-season table: dimmed text + a
-   small "partial" tag next to the series tag. The CC may have served as
-   relief or split a season; full-time counts in the headline are
-   unchanged, but the row is still visible so the table reflects the
-   complete career. */
+   small left-border accent + the year cell shows a "partial" hint. The
+   CC may have served as relief or split a season; full-time counts in
+   the headline are unchanged, but the row stays visible so the table
+   reflects the complete career. */
 .cc-partial-row td {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.015);
+}
+.cc-partial-row td:first-child {
+  position: relative;
+  padding-left: 14px;
+}
+.cc-partial-row td:first-child::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 1px;
 }
 .cc-partial-row .car-tag,
 .cc-partial-row .team-pill {
@@ -6036,20 +6047,23 @@ body.lightbox-open {
 .cc-partial-row .profile-link {
   color: var(--muted);
 }
+/* Tiny "partial" hint that sits inline with the year — small enough that
+   the Series column stays the same visual width as full-time rows. */
 .cc-partial-tag {
   display: inline-block;
   margin-left: 6px;
-  padding: 1px 6px;
+  padding: 0 4px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  border-radius: 2px;
   vertical-align: middle;
+  line-height: 1.5;
 }
 
 /* Track history table — column widths + a thin left-border divider on the
