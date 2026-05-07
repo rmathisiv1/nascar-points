@@ -49,8 +49,28 @@ const STATE = {
 };
 
 const SERIES_TO_KEY = { NCS: "W", NOS: "B", NTS: "C" };
-// Human-readable series names for headings/labels (e.g. CC profile cards).
+// Default human-readable series names — used when no season context is
+// available (e.g. cross-year aggregations). For season-specific labels
+// (e.g. "Xfinity" vs "O'Reilly" rename in 2026), call seriesLabel(code, year).
 const SERIES_LABELS = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" };
+
+// Era-aware series name. NASCAR's second-tier series sponsor changed
+// from Xfinity (2015-2025) to O'Reilly (2026+). The first tier is
+// canonically "Cup Series" across the modern era; trucks are "Truck
+// Series" with rotating title sponsors we don't surface in the UI.
+//
+// Pass a season to get the contemporaneous name; omit for the modern
+// default. Falls back to the raw series code for unknown values.
+function seriesLabel(seriesCode, season) {
+  if (seriesCode === "NCS") return "Cup Series";
+  if (seriesCode === "NTS") return "Truck Series";
+  if (seriesCode === "NOS") {
+    const yr = parseInt(season, 10);
+    if (Number.isFinite(yr) && yr >= 2026) return "O'Reilly Series";
+    return "Xfinity Series";
+  }
+  return seriesCode || "—";
+}
 const FALLBACK_COLOR = "#9ca3af";
 const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team", "cc"];
 
@@ -1426,6 +1446,20 @@ function syncMobileDropdowns() {
 function parseHash() {
   const h = location.hash.replace("#/", "").split("/");
   const view = h[0];
+  // Present mode invariant — STATE.season must always reflect the latest
+  // available year EXCEPT during the brief window where renderProfile
+  // needs a historical context (resolveDriverRoute runs AFTER parseHash
+  // and flips season as needed for the profile entity to render). Doing
+  // the snap-back here at the top means ANY navigation in Present mode —
+  // including takeover→takeover transitions like profile→schedule — gets
+  // STATE rebased before the route's handler runs.
+  if (STATE.mode === "present") {
+    const latest = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
+    if (latest && STATE.season !== latest) {
+      STATE.season = latest;
+      STATE.throughRound = null;
+    }
+  }
   // Helper: stash the full PREVIOUS hash before we change view, so back
   // buttons can restore parameterized routes (#/team/HMS, #/track/KAN, etc.)
   // verbatim instead of dropping the parameter.
@@ -6614,7 +6648,9 @@ function isPlausibleHometown(s) {
 // that the career stats belong to the primary driver of the car, not the car.
 function renderCareerTotalsPanel(career, carModeDriverName) {
   const SERIES_ORDER = ["NCS", "NOS", "NTS"];
-  const SERIES_NAMES = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" };
+  // Career stats span all years; use the modern label (no season context).
+  // The Xfinity → O'Reilly rename only kicks in when a specific season is
+  // passed to seriesLabel().
   const availableSeries = SERIES_ORDER.filter(s => career[s]);
   if (availableSeries.length === 0) {
     return `<div class="profile-panel full">
@@ -6635,7 +6671,7 @@ function renderCareerTotalsPanel(career, carModeDriverName) {
     return `<div class="career-card">
       <div class="career-card-head">
         <span class="career-series-code">${code}</span>
-        <span class="career-series-name">${SERIES_NAMES[code]}</span>
+        <span class="career-series-name">${seriesLabel(code)}</span>
         <span class="career-years">${c.years != null ? c.years + ' yrs' : ''}</span>
       </div>
       <div class="career-card-body">
@@ -8747,7 +8783,7 @@ async function openRaceLightbox(year, series, round) {
       <div class="rc-hero-badge">${badge}</div>
       <h2 class="rc-hero-track" id="race-lightbox-title">R${race.round} · ${escapeHTML(trackName)}</h2>
       <div class="rc-hero-meta">
-        ${dateStr ? escapeHTML(dateStr) + " · " : ""}${SERIES_LABELS[series] || series} · ${year}
+        ${dateStr ? escapeHTML(dateStr) + " · " : ""}${seriesLabel(series, year)} · ${year}
         ${race.race_name ? ` · <span class="muted">"${escapeHTML(race.race_name)}"</span>` : ""}
       </div>
     </div>
@@ -8878,7 +8914,7 @@ function renderRaceCenter() {
   // resolve back to their NASCAR-canon name ("Atlanta") via the TRACK_NAMES
   // map. Falls back to the raw track field if no canonical name is set.
   const trackStr = prettyTrack(nextRace.track_code, nextRace.track) || "—";
-  const seriesLabel = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" }[STATE.series] || STATE.series;
+  const seriesNameStr = seriesLabel(STATE.series, STATE.season);
   const trackTypeStr = trackTypeLabel(nextRace.track_code);
   // Hero badge depends on what we're showing:
   //   - User clicked a specific past race → "RACE RESULTS"
@@ -8892,7 +8928,7 @@ function renderRaceCenter() {
     heroBadge = isUpcoming ? "UPCOMING" : "MOST RECENT";
   }
 
-  if (sub) sub.textContent = `${STATE.season} ${seriesLabel} · ${trackStr} · ${dateStr}`;
+  if (sub) sub.textContent = `${STATE.season} ${seriesNameStr} · ${trackStr} · ${dateStr}`;
 
   // ---- Track history (last 5 winners + hot at track) — uses cached prior years
   const history = collectTrackHistory(nextRace.track_code, STATE.series);
@@ -8918,7 +8954,7 @@ function renderRaceCenter() {
       <div class="rc-hero-track">R${nextRace.round} · ${nextRace.track_code ? `<a class="rc-track-link" href="#/track/${escapeHTML(nextRace.track_code)}">${escapeHTML(trackStr)}</a>` : escapeHTML(trackStr)}</div>
       ${raceNameLine}
       <div class="rc-hero-meta">
-        ${dateStr}${timeTV ? " · " + escapeHTML(timeTV) : ""} · ${seriesLabel}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
+        ${dateStr}${timeTV ? " · " + escapeHTML(timeTV) : ""} · ${seriesNameStr}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
       </div>
     </div>
 
@@ -9437,7 +9473,7 @@ function renderSchedulePage() {
     if (typeof seasonLen === "number" && last < seasonLen) nextRound = last + 1;
   }
 
-  const seriesName = ({ NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" })[STATE.series] || STATE.series;
+  const seriesName = seriesLabel(STATE.series, STATE.season);
   if (sub) sub.textContent = `${STATE.season} ${seriesName} · ${runRaces.length} of ${allRaces.length} races run`;
 
   const scheduleHTML = renderSeasonSchedule(allRaces, nextRound, lastWinnerAt);
@@ -9931,14 +9967,7 @@ function renderTeamPage() {
   const allSeriesCurrentCars = computeAllSeriesCurrentCars(teamCode);
 
   host.innerHTML = `
-    <div class="rc-hero tm-hero" style="border-left: 4px solid ${orgHex};">
-      <div class="rc-hero-badge" style="background:${orgHex};color:${orgTxt}">${escapeHTML(era.abbr)}</div>
-      <div class="rc-hero-track">${escapeHTML(era.full || teamCode)}</div>
-      <div class="rc-hero-meta">
-        ${currentCars.length} car${currentCars.length === 1 ? "" : "s"} · ${STATE.season} ${STATE.series}
-      </div>
-      ${champLine}
-    </div>
+    ${champLine ? `<div class="tm-hero-champ-row">${champLine}</div>` : ""}
 
     <div class="tm-stats-multi">
       ${["NCS", "NOS", "NTS"].map(s => {
@@ -10659,7 +10688,7 @@ function renderCrewChiefPage() {
       return `<div class="cc-series-card">
         <div class="cc-series-card-head">
           <span class="series-tag series-${s.toLowerCase()}">${s}</span>
-          <span class="cc-series-name">${SERIES_LABELS[s] || s}</span>
+          <span class="cc-series-name">${seriesLabel(s, STATE.season)}</span>
           <span class="cc-series-yrs">${yrLabel}</span>
         </div>
         <div class="cc-series-grid">
