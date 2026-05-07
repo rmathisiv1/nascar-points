@@ -9268,20 +9268,23 @@ function renderTrackPage() {
   `).join("") : `<div class="rc-empty">No manufacturer data available.</div>`;
 
   // Full results history table — every race at this track in cached years.
-  // Columns: Year | Round | Winner (with team + mfr inline) | Pole. The
-  // team pill + mfr text live next to the winner's name so it's obvious
-  // they belong to the winner rather than the pole sitter.
+  // Columns: Year | Round | Winner | Team | Mfr | Pole. Winner / Team / Mfr
+  // are grouped tightly together (a thin divider after Mfr separates them
+  // from the Pole column) so it's clear those three attributes belong to
+  // the winner, not the pole sitter.
   const histTableHTML = history.length ? `
     <table class="rc-result-table tk-history-table">
       <colgroup>
         <col class="tk-col-yr"><col class="tk-col-rd">
-        <col><col class="tk-col-pole">
+        <col><col class="tk-col-team"><col class="tk-col-mfr"><col class="tk-col-pole">
       </colgroup>
       <thead><tr>
         <th>Year</th>
         <th class="num">Round</th>
         <th>Winner</th>
-        <th>Pole</th>
+        <th>Team</th>
+        <th class="tk-col-mfr-head">Mfr</th>
+        <th class="tk-col-pole-head">Pole</th>
       </tr></thead>
       <tbody>
         ${history.map(h => {
@@ -9292,29 +9295,21 @@ function renderTrackPage() {
           const seriesForRow = h.series || tSeries;
           const wDrvSlug = winner ? slugify(winner.driver || "") : "";
           const pDrvSlug = pole ? slugify(pole.driver || "") : "";
+          const wHTML = winner ? `
+            <a class="profile-link rc-result-name" href="#/driver/${wDrvSlug}">
+              <span class="car-tag" style="background:${colorFor(seriesForRow, winner.car_number)};color:${contrastTextFor(colorFor(seriesForRow, winner.car_number))}">${winner.car_number}</span>
+              <span>${escapeHTML(lastNameOf(winner.driver))}</span>
+            </a>` : `<span class="muted">—</span>`;
           // Winner's team — prefer explicit team_code; fall back to name lookup.
           const wTeamCode = winner
             ? (winner.team_code
               || teamCodeFromName(winner.team, SERIES_TO_KEY[seriesForRow], winner.car_number))
             : "";
+          const tHTML = wTeamCode
+            ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}">${escapeHTML(wTeamCode)}</a>`
+            : `<span class="muted">—</span>`;
           const wMfr = winner ? manufacturerName(winner.manufacturer) : "";
-          const winnerExtraHTML = winner
-            ? `<span class="tk-hist-extras">${
-                wTeamCode
-                  ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}">${escapeHTML(wTeamCode)}</a>`
-                  : ""
-              }${
-                wMfr ? `<span class="tk-hist-mfr">${escapeHTML(wMfr)}</span>` : ""
-              }</span>`
-            : "";
-          const wHTML = winner ? `
-            <span class="tk-hist-winner">
-              <a class="profile-link rc-result-name" href="#/driver/${wDrvSlug}">
-                <span class="car-tag" style="background:${colorFor(seriesForRow, winner.car_number)};color:${contrastTextFor(colorFor(seriesForRow, winner.car_number))}">${winner.car_number}</span>
-                <span>${escapeHTML(lastNameOf(winner.driver))}</span>
-              </a>
-              ${winnerExtraHTML}
-            </span>` : `<span class="muted">—</span>`;
+          const mHTML = wMfr ? escapeHTML(wMfr) : `<span class="muted">—</span>`;
           const pHTML = pole ? `
             <a class="profile-link rc-result-name" href="#/driver/${pDrvSlug}">
               <span class="car-tag" style="background:${colorFor(seriesForRow, pole.car_number)};color:${contrastTextFor(colorFor(seriesForRow, pole.car_number))}">${pole.car_number}</span>
@@ -9324,7 +9319,9 @@ function renderTrackPage() {
             <td>${h.year}</td>
             <td class="num">R${h.round}</td>
             <td>${wHTML}</td>
-            <td>${pHTML}</td>
+            <td>${tHTML}</td>
+            <td class="tk-col-mfr-cell">${mHTML}</td>
+            <td class="tk-col-pole-cell">${pHTML}</td>
           </tr>`;
         }).join("")}
       </tbody>

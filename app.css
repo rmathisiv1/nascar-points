@@ -4384,8 +4384,12 @@ a.rc-sched-winner:hover {
   .tk-this-card { padding: 14px 16px; }
   .tk-this-driver { font-size: 22px; }
   .tk-this-tag { font-size: 16px; padding: 5px 10px; }
-  .tk-history-table th:nth-child(4),
-  .tk-history-table td:nth-child(4) { display: none; }   /* hide Pole column on mobile */
+  /* Hide Mfr + Pole on mobile to keep Year / Round / Winner / Team
+     fitting in the viewport. Team still shows since it's short. */
+  .tk-history-table th:nth-child(5),
+  .tk-history-table td:nth-child(5),
+  .tk-history-table th:nth-child(6),
+  .tk-history-table td:nth-child(6) { display: none; }
   .tk-col-yr { width: 60px; }
   .tk-col-rd { width: 50px; }
 }
@@ -5886,25 +5890,32 @@ a.rc-sched-winner:hover {
   vertical-align: middle;
 }
 
-/* Track history table: Winner cell now contains the driver name + a
-   small team pill + manufacturer label, all stacked tightly so it's
-   obvious those attributes belong to the winner (not the pole sitter). */
-.tk-history-table .tk-hist-winner {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
+/* Track history table — column widths + a thin left-border divider on the
+   Pole column to visually separate the pole sitter from the winner cluster
+   (Winner / Team / Mfr) sitting to its left. Team + Mfr columns are kept
+   narrow and tight against Winner so it's obvious those attributes belong
+   to the race winner rather than the pole. */
+.tk-history-table .tk-col-team { width: 70px; }
+.tk-history-table .tk-col-mfr  { width: 90px; }
+.tk-history-table .tk-col-pole { width: 200px; }
+/* Tighten the right-padding of Winner + left-padding of Team so they read
+   as a cluster. Mfr keeps its slim padding. */
+.tk-history-table th:nth-child(3),
+.tk-history-table td:nth-child(3) { padding-right: 4px; }   /* Winner */
+.tk-history-table th:nth-child(4),
+.tk-history-table td:nth-child(4) { padding-left: 6px; padding-right: 4px; }   /* Team */
+.tk-history-table th:nth-child(5),
+.tk-history-table td:nth-child(5) { padding-left: 6px; }   /* Mfr */
+/* Divider between the winner cluster and the pole column */
+.tk-history-table .tk-col-mfr-head,
+.tk-history-table .tk-col-pole-head,
+.tk-history-table .tk-col-pole-cell {
+  /* nothing here — kept as hooks for future tweaks */
 }
-.tk-history-table .tk-hist-extras {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  font-family: var(--mono);
-  font-size: 10px;
-}
-.tk-history-table .tk-hist-mfr {
-  color: var(--muted);
-  letter-spacing: 0.02em;
+.tk-history-table th:nth-child(6),
+.tk-history-table td:nth-child(6) {
+  border-left: 1px solid var(--border);
+  padding-left: 14px;
 }
 .tk-history-table .team-pill {
   display: inline-block;
