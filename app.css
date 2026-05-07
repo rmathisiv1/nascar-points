@@ -5876,10 +5876,26 @@ a.rc-sched-winner:hover {
   vertical-align: middle;
 }
 
-/* Track history table: Team + Mfr columns. Both stay narrow since they're
-   short codes. Team uses the same .team-pill styling as elsewhere. */
-.tk-history-table .tk-col-team { width: 80px; }
-.tk-history-table .tk-col-mfr  { width: 100px; }
+/* Track history table: Winner cell now contains the driver name + a
+   small team pill + manufacturer label, all stacked tightly so it's
+   obvious those attributes belong to the winner (not the pole sitter). */
+.tk-history-table .tk-hist-winner {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tk-history-table .tk-hist-extras {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.tk-history-table .tk-hist-mfr {
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
 .tk-history-table .team-pill {
   display: inline-block;
   background: rgba(255,255,255,0.06);

@@ -562,6 +562,8 @@ function wireSearch() {
 //   dcDebug.findCC("mcaulay")          — search loaded years for CC name substring
 //   await dcDebug.ccAll("sam-mcaulay") — load ALL years, dump every (year, series) row
 //                                         for that CC slug; flags name variants + gaps
+//   dcDebug.car("48")                  — per-race breakdown of a car number this season
+//   dcDebug.driver("alex-bowman")      — per-race breakdown of a driver slug this season
 window.dcDebug = {
   cc(year) {
     const block = year != null
@@ -747,6 +749,84 @@ window.dcDebug = {
         }
       }
     }
+  },
+  // Per-race breakdown for a given car number in the CURRENT season + series.
+  // Surfaces every race result row, the team_code/team that resolved, and
+  // whether the row was flagged ineligible. Use this when a car looks like
+  // it should be full-time but isn't appearing in the Teammate FT view.
+  //
+  //   dcDebug.car("48")
+  car(carNum) {
+    if (!STATE.data) { console.log("No data loaded."); return; }
+    const target = String(carNum);
+    const races = STATE.data.races || [];
+    const completed = races.filter(r => (r.results || []).length > 0);
+    console.log(`%cdcDebug.car("${target}") — ${STATE.season} ${STATE.series}`,
+                "font-weight:bold;color:#d4a017");
+    console.log(`Completed races in season: ${completed.length}`);
+    const rows = [];
+    completed.forEach(r => {
+      const matches = (r.results || []).filter(d => String(d.car_number || "") === target);
+      if (matches.length === 0) {
+        rows.push({ round: r.round, track: r.track || "?", driver: "—",
+                    team: "—", team_code: "—", finish: "—",
+                    ineligible: "—", note: "no #" + target });
+      } else {
+        matches.forEach(d => {
+          rows.push({
+            round: r.round,
+            track: r.track || "?",
+            driver: d.driver || "?",
+            team: d.team || "?",
+            team_code: d.team_code || "(none)",
+            finish: d.finish_pos != null ? d.finish_pos : "—",
+            ineligible: d.ineligible ? "✓ INELIGIBLE" : "",
+            note: matches.length > 1 ? "multi-row race" : "",
+          });
+        });
+      }
+    });
+    console.table(rows);
+    // Quick FT check
+    const present = rows.filter(r => r.driver !== "—" && !r.ineligible).length;
+    console.log(`Eligible appearances: ${present}/${completed.length}` +
+                (present === completed.length ? "  → would qualify as full-time" : "  → NOT full-time"));
+  },
+  // Per-race breakdown for a driver slug. Useful when a driver has run for
+  // multiple cars (e.g., a substitute) — shows EVERY car# they appeared in.
+  //
+  //   dcDebug.driver("alex-bowman")
+  driver(slug) {
+    if (!STATE.data) { console.log("No data loaded."); return; }
+    const needle = (slug || "").toLowerCase();
+    const races = STATE.data.races || [];
+    const completed = races.filter(r => (r.results || []).length > 0);
+    console.log(`%cdcDebug.driver("${needle}") — ${STATE.season} ${STATE.series}`,
+                "font-weight:bold;color:#d4a017");
+    console.log(`Completed races in season: ${completed.length}`);
+    const rows = [];
+    completed.forEach(r => {
+      const matches = (r.results || []).filter(d => slugify(d.driver || "") === needle);
+      matches.forEach(d => {
+        rows.push({
+          round: r.round,
+          track: r.track || "?",
+          car: d.car_number || "?",
+          team: d.team || "?",
+          team_code: d.team_code || "(none)",
+          finish: d.finish_pos != null ? d.finish_pos : "—",
+          ineligible: d.ineligible ? "✓ INELIGIBLE" : "",
+        });
+      });
+    });
+    if (rows.length === 0) {
+      console.log(`No appearances for slug "${needle}" in current season ${STATE.series}.`);
+      return;
+    }
+    console.table(rows);
+    const carCounts = {};
+    rows.forEach(r => { if (!r.ineligible) carCounts[r.car] = (carCounts[r.car] || 0) + 1; });
+    console.log(`Car counts (eligible only):`, carCounts);
   },
 };
 
@@ -8903,21 +8983,19 @@ function renderTrackPage() {
   `).join("") : `<div class="rc-empty">No manufacturer data available.</div>`;
 
   // Full results history table — every race at this track in cached years.
-  // Columns: Year | Round | Winner | Team | Mfr | Pole. Team + Mfr are
-  // pulled from the winning row; "—" if missing. Driver names link to
-  // driver profiles, team codes to team profiles.
+  // Columns: Year | Round | Winner (with team + mfr inline) | Pole. The
+  // team pill + mfr text live next to the winner's name so it's obvious
+  // they belong to the winner rather than the pole sitter.
   const histTableHTML = history.length ? `
     <table class="rc-result-table tk-history-table">
       <colgroup>
         <col class="tk-col-yr"><col class="tk-col-rd">
-        <col><col class="tk-col-team"><col class="tk-col-mfr"><col class="tk-col-pole">
+        <col><col class="tk-col-pole">
       </colgroup>
       <thead><tr>
         <th>Year</th>
         <th class="num">Round</th>
         <th>Winner</th>
-        <th>Team</th>
-        <th>Mfr</th>
         <th>Pole</th>
       </tr></thead>
       <tbody>
@@ -8929,21 +9007,29 @@ function renderTrackPage() {
           const seriesForRow = h.series || tSeries;
           const wDrvSlug = winner ? slugify(winner.driver || "") : "";
           const pDrvSlug = pole ? slugify(pole.driver || "") : "";
-          const wHTML = winner ? `
-            <a class="profile-link rc-result-name" href="#/driver/${wDrvSlug}">
-              <span class="car-tag" style="background:${colorFor(seriesForRow, winner.car_number)};color:${contrastTextFor(colorFor(seriesForRow, winner.car_number))}">${winner.car_number}</span>
-              <span>${escapeHTML(lastNameOf(winner.driver))}</span>
-            </a>` : `<span class="muted">—</span>`;
           // Winner's team — prefer explicit team_code; fall back to name lookup.
           const wTeamCode = winner
             ? (winner.team_code
               || teamCodeFromName(winner.team, SERIES_TO_KEY[seriesForRow], winner.car_number))
             : "";
-          const tHTML = wTeamCode
-            ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}">${escapeHTML(wTeamCode)}</a>`
-            : `<span class="muted">—</span>`;
           const wMfr = winner ? manufacturerName(winner.manufacturer) : "";
-          const mHTML = wMfr ? escapeHTML(wMfr) : `<span class="muted">—</span>`;
+          const winnerExtraHTML = winner
+            ? `<span class="tk-hist-extras">${
+                wTeamCode
+                  ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}">${escapeHTML(wTeamCode)}</a>`
+                  : ""
+              }${
+                wMfr ? `<span class="tk-hist-mfr">${escapeHTML(wMfr)}</span>` : ""
+              }</span>`
+            : "";
+          const wHTML = winner ? `
+            <span class="tk-hist-winner">
+              <a class="profile-link rc-result-name" href="#/driver/${wDrvSlug}">
+                <span class="car-tag" style="background:${colorFor(seriesForRow, winner.car_number)};color:${contrastTextFor(colorFor(seriesForRow, winner.car_number))}">${winner.car_number}</span>
+                <span>${escapeHTML(lastNameOf(winner.driver))}</span>
+              </a>
+              ${winnerExtraHTML}
+            </span>` : `<span class="muted">—</span>`;
           const pHTML = pole ? `
             <a class="profile-link rc-result-name" href="#/driver/${pDrvSlug}">
               <span class="car-tag" style="background:${colorFor(seriesForRow, pole.car_number)};color:${contrastTextFor(colorFor(seriesForRow, pole.car_number))}">${pole.car_number}</span>
@@ -8953,8 +9039,6 @@ function renderTrackPage() {
             <td>${h.year}</td>
             <td class="num">R${h.round}</td>
             <td>${wHTML}</td>
-            <td>${tHTML}</td>
-            <td>${mHTML}</td>
             <td>${pHTML}</td>
           </tr>`;
         }).join("")}
@@ -8963,14 +9047,6 @@ function renderTrackPage() {
   ` : `<div class="rc-empty">No history at this track in loaded years.</div>`;
 
   host.innerHTML = `
-    <div class="rc-hero tk-hero">
-      <div class="rc-hero-badge">TRACK</div>
-      <div class="rc-hero-track">${escapeHTML(trackName)}</div>
-      <div class="rc-hero-meta">
-        ${trackTypeStr ? trackTypeStr + " · " : ""}${escapeHTML(dataRangeText)}
-      </div>
-    </div>
-
     ${renderTrackThisSeason(history)}
 
     <div class="rc-grid tk-grid-3">
