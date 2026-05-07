@@ -6564,3 +6564,317 @@ body.lightbox-open {
   background: rgba(255,255,255,0.10);
   border-color: rgba(255,255,255,0.18);
 }
+
+/* === PROFILE TRACK PICKER === */
+/* Per-driver track drilldown: pick any track this driver has raced
+   at and see their full history there. Aggregate stat tiles + race-
+   by-race table. */
+.profile-track-picker-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 4px 10px;
+}
+.profile-track-select {
+  flex: 1;
+  max-width: 360px;
+  min-width: 200px;
+  padding: 6px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+.profile-track-select:focus { outline: none; border-color: var(--accent); }
+.profile-track-srs-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.profile-track-srs-btn {
+  padding: 5px 10px;
+  background: var(--bg-2);
+  color: var(--muted);
+  border: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+}
+.profile-track-srs-btn:last-child { border-right: none; }
+.profile-track-srs-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.profile-track-srs-btn.active {
+  background: var(--accent-bg-hi);
+  color: var(--accent-2);
+}
+.profile-track-gens {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 4px 12px;
+}
+.profile-track-gens-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-right: 4px;
+}
+.profile-track-gen-chip {
+  padding: 4px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.profile-track-gen-chip:hover {
+  color: var(--text);
+  border-color: rgba(255,255,255,0.18);
+}
+.profile-track-gen-chip.active {
+  background: var(--accent-bg-hi);
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+/* Stat tiles — same general look as career stats grid */
+.profile-track-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+  gap: 6px;
+  padding: 8px 0;
+}
+.profile-track-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.profile-track-stat .k {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.profile-track-stat .v {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.profile-track-stat .v.hot { color: var(--pos); }
+/* Race-by-race table */
+.profile-track-races-wrap {
+  margin-top: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.profile-track-races-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.profile-track-races-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+  z-index: 1;
+}
+.profile-track-races-table thead th.num { text-align: right; }
+.profile-track-races-table tbody td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.profile-track-races-table tbody td.num {
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.profile-track-races-table tbody tr:nth-child(even) {
+  background: rgba(255,255,255,0.015);
+}
+.profile-track-races-table .fin-win  { color: var(--pos); font-weight: 600; }
+.profile-track-races-table .fin-t5   { color: var(--pos); }
+.profile-track-races-table .fin-t10  { color: var(--text); }
+.profile-track-races-table .fin-bad  { color: var(--neg); }
+
+/* === ANALYTICS → TRACK STATS === */
+/* All-time driver stats at a single track, filterable by series + gen.
+   Reuses some patterns from the all-time database pages. */
+.ts-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 4px;
+}
+.ts-track-select {
+  flex: 1;
+  max-width: 320px;
+  min-width: 200px;
+  padding: 6px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+.ts-search {
+  flex: 0 1 200px;
+  min-width: 140px;
+  padding: 6px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--sans);
+}
+.ts-search:focus, .ts-track-select:focus { outline: none; border-color: var(--accent); }
+.ts-srs-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ts-srs-btn {
+  padding: 5px 10px;
+  background: var(--bg-2);
+  color: var(--muted);
+  border: none;
+  border-right: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.ts-srs-btn:last-child { border-right: none; }
+.ts-srs-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.ts-srs-btn.active { background: var(--accent-bg-hi); color: var(--accent-2); }
+.ts-min-starts {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ts-min-starts select {
+  padding: 4px 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.ts-gens {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 4px 12px;
+}
+.ts-gens-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-right: 4px;
+}
+.ts-gen-chip {
+  padding: 4px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.ts-gen-chip:hover { color: var(--text); border-color: rgba(255,255,255,0.18); }
+.ts-gen-chip.active { background: var(--accent-bg-hi); border-color: var(--accent); color: var(--accent-2); }
+/* Reuse alltime-table styles by aliasing */
+.ts-table { width: 100%; font-size: 12px; }
+.ts-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  z-index: 1;
+  border-bottom: 1px solid var(--border);
+}
+.ts-th {
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.ts-th.num { text-align: right; }
+.ts-th-rank {
+  cursor: default;
+  text-align: right;
+  width: 36px;
+  padding-left: 12px;
+  padding-right: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.ts-th:hover { color: var(--text); }
+.ts-table tbody td {
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.ts-table tbody td.num {
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.ts-table tbody tr:nth-child(even) {
+  background: rgba(255,255,255,0.015);
+}
+.ts-table tbody tr:hover {
+  background: rgba(255,255,255,0.045);
+}
+.ts-table tbody td.hot { color: var(--pos); font-weight: 600; }

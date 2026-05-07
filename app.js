@@ -37,12 +37,16 @@ const STATE = {
   driverBios: null,
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
-  arc: { selected: new Set(), ftOnly: true, metric: "points" },
+  arc: { selected: new Set(), ftOnly: true, metric: "points", scoring: "raw" },
   breakdown: { drivers: [], ftOnly: true },
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
-  profile: { kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all" },
+  profile: { kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all", trackPicker: { code: null, series: "all", gens: new Set() } },
+  // Analytics → Track Stats: pick a track, see all-time driver stats there.
+  // sortKey/sortDir control the table; gens/series are filters; minStarts
+  // hides drivers with low samples (3+ default).
+  trackStats: { code: null, series: "all", gens: new Set(["g5", "g6", "g7"]), sortKey: "wins", sortDir: "desc", minStarts: 3, search: "" },
   // Race takeover state: which round is being shown. null = "latest race
   // in the loaded data" (the default — what the Race tab used to do).
   // Set from the #/race/<round> URL when a user clicks into a specific race.
@@ -77,7 +81,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
+const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -2215,6 +2219,27 @@ function wireUIControls() {
     totals.slice(0, 10).forEach(t => STATE.arc.selected.add(entityKey(t)));
     renderArc();
   });
+  document.getElementById("arc-all")?.addEventListener("click", () => {
+    // Select every full-time driver (or every entity, depending on ft toggle).
+    // Mirrors the Top 10 button — the FT filter that already governs the
+    // chart applies here too via applyTeamFilter / allEntities.
+    STATE.arc.selected.clear();
+    STATE.arc.userCleared = false;
+    const targets = STATE.arc.ftOnly
+      ? allEntities().filter(isFullTime)
+      : allEntities();
+    targets.forEach(e => STATE.arc.selected.add(entityKey(e)));
+    renderArc();
+  });
+  // Scoring toggle: raw cumulative vs playoff-aware (resets at playoffs)
+  document.querySelectorAll('[data-group="arc-scoring"] button').forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll('[data-group="arc-scoring"] button')
+        .forEach(x => x.classList.toggle("on", x === b));
+      STATE.arc.scoring = b.dataset.val;
+      renderArc();
+    });
+  });
 
   document.getElementById("traj-clear")?.addEventListener("click", () => {
     STATE.trajectory.selected.clear();
@@ -2409,7 +2434,7 @@ function renderTimeCursorBanner() {
 // RENDER
 // ============================================================
 // Views that live as tabs inside the center panel.
-const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
+const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings"];
 // Full-width takeovers — none currently. Reserved for future use.
 const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
@@ -2578,6 +2603,7 @@ function render() {
         case "trajectory": renderTrajectory(); break;
         case "teammates":  renderTeammates(); break;
         case "heatmap":    renderHeatmap(); break;
+        case "trackstats": renderTrackStats(); break;
         case "standings":  renderStandings(); break;
       }
     }
@@ -3269,9 +3295,9 @@ function renderFormTable() {
       </td>
       <td class="num">${deltaPill(d.deltaR)}</td>
       <td class="num">${
-        d.windowPtsDelta == null
-          ? `<span>${d.windowPts || 0}</span>`
-          : `<span class="pts-delta-only ${d.windowPtsDelta > 1.5 ? "hot" : d.windowPtsDelta < -1.5 ? "cold" : ""}">${d.windowPtsDelta > 0 ? "+" : ""}${d.windowPtsDelta.toFixed(1)}</span>`
+        (d.windowPts == null)
+          ? `<span class="muted">—</span>`
+          : `<span class="pts-delta-only ${d.windowPtsDelta != null && d.windowPtsDelta > 1.5 ? "hot" : d.windowPtsDelta != null && d.windowPtsDelta < -1.5 ? "cold" : ""}">+${d.windowPts}</span>`
       }</td>
       <td class="num" style="color: var(--muted)">${d.totalPts}</td>
     </tr>`;
@@ -3288,7 +3314,7 @@ function renderFormTable() {
     ? `Form (Season)`
     : `Form (L${STATE.form.window})`;
 
-  const windowPtsLabel = STATE.form.window === "season" ? "Season Pts" : `L${STATE.form.window} Δ`;
+  const windowPtsLabel = STATE.form.window === "season" ? "Season Pts" : `L${STATE.form.window} Pts`;
   card.innerHTML = `
     <div class="table-scroll">
     <table class="data-table">
@@ -3950,12 +3976,33 @@ function renderArc() {
   const entities = applyTeamFilter(allEntities(), "arc");
   const roundsPresent = races.map(r => r.round);
 
+  // Playoff-aware mode: figure out reg-season-end round + playoff field
+  // for the active series/season. If no playoff format exists for this
+  // year (e.g. early NCS years or 1995 NTS), fall back to raw mode so
+  // we don't break the chart for non-playoff seasons.
+  const playoffRule = resolvePlayoffRules(STATE.series, STATE.season);
+  const isPlayoffAware = STATE.arc.scoring === "playoff"
+    && playoffRule
+    && playoffRule.regSeasonEndRound != null
+    && (playoffRule.format === "elimination" || playoffRule.format === "chase-reseeded" || playoffRule.format === "chase" || playoffRule.format === "chase-wildcard");
+
+  // Effective rounds to plot: in playoff-aware mode we cut off at the
+  // regular-season-end round so the chart doesn't show the misleading
+  // post-reset linear extension. Drivers who made the playoffs got
+  // reseeded; drivers who didn't kept their reg-season total. Either
+  // way, the cumulative line past round 26 (Cup) doesn't represent
+  // championship standings anymore.
+  const cutoffRound = isPlayoffAware ? playoffRule.regSeasonEndRound : null;
+  const effectiveRounds = cutoffRound != null
+    ? roundsPresent.filter(rd => rd <= cutoffRound)
+    : roundsPresent;
+
   // Compute per-round cumulative points for every entity
   const cumByEntity = entities.map(d => {
     const byRound = {};
     d.races.forEach(r => { byRound[r.round] = r.total || 0; });
     let cum = 0;
-    const pts = roundsPresent.map(rd => {
+    const pts = effectiveRounds.map(rd => {
       if (byRound[rd] != null) cum += byRound[rd];
       return cum;
     });
@@ -3992,11 +4039,11 @@ function renderArc() {
     });
 
     // For each round index, rank everyone who has participated in at least one race by then
-    roundsPresent.forEach((_, i) => {
+    effectiveRounds.forEach((_, i) => {
       // Track whether each entity has raced yet by this round
       const hasRacedYet = cumByEntity.map(s => {
         for (let j = 0; j <= i; j++) {
-          if (participatedByEntity[s.key].has(roundsPresent[j])) return true;
+          if (participatedByEntity[s.key].has(effectiveRounds[j])) return true;
         }
         return false;
       });
@@ -4038,7 +4085,7 @@ function renderArc() {
     yMax = Math.max(1, ...seriesData.map(s => s.values[s.values.length - 1] || 0));
     yMin = 0;
   }
-  const nRaces = roundsPresent.length;
+  const nRaces = effectiveRounds.length;
 
   const xScale = (i) => pad.left + (i / Math.max(1, nRaces - 1)) * innerW;
   // For points: low values at bottom, high at top.
@@ -4065,9 +4112,20 @@ function renderArc() {
     gridlines.push(`<line class="gridline" x1="${pad.left}" x2="${W - pad.right}" y1="${y}" y2="${y}"/>`);
     gridlines.push(`<text x="${pad.left - 6}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-family="var(--mono)" font-size="10">${val}</text>`);
   }
-  const xLabels = roundsPresent.map((r, i) =>
-    `<text x="${xScale(i)}" y="${H - 8}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">R${r}</text>`
-  ).join("");
+  // Adaptive label density (same approach as profile chart): show every
+  // Nth round label with at least ~28px between them. Always include
+  // first and last so the boundaries are obvious.
+  const minLabelPx = 28;
+  const racesPerPx = effectiveRounds.length / Math.max(1, innerW);
+  const labelStep = Math.max(1, Math.ceil(minLabelPx * racesPerPx));
+  const xLabels = effectiveRounds.map((r, i) => {
+    const isFirst = i === 0;
+    const isLast = i === effectiveRounds.length - 1;
+    const onStep = i % labelStep === 0;
+    const tooCloseToLast = !isLast && (effectiveRounds.length - 1 - i) < labelStep;
+    if (!isFirst && !isLast && (!onStep || tooCloseToLast)) return "";
+    return `<text x="${xScale(i)}" y="${H - 8}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">R${r}</text>`;
+  }).join("");
 
   const active = seriesData
     .filter(s => STATE.arc.selected.has(s.key))
@@ -6696,6 +6754,16 @@ function renderProfile() {
 
       <div class="profile-panel full">
         <div class="profile-panel-head">
+          <span class="profile-panel-title">Career at a Track</span>
+          <span class="profile-panel-sub">Pick a track to see this driver's history there</span>
+        </div>
+        <div class="profile-panel-body">
+          <div id="profile-track-picker"></div>
+        </div>
+      </div>
+
+      <div class="profile-panel full">
+        <div class="profile-panel-head">
           <span class="profile-panel-title">${STATE.season} Race-by-Race</span>
           <span class="profile-panel-sub">${rows.filter(r => !r.dns).length} starts</span>
         </div>
@@ -6746,6 +6814,7 @@ function renderProfile() {
   paintProfileChart(entity, rows);
   paintProfileHeatStrip(rows);
   paintProfileTrackSplits(entity);
+  paintProfileTrackPicker(entity);
   paintProfileRaceTable(rows, kind);
   paintProfileCareerHeatmap();
   wireCoDriverBadges(host);
@@ -7396,6 +7465,249 @@ function paintProfileTeammates(entity) {
 // Series toggle in the panel head (All/NCS/NOS/NTS) filters rows.
 // All loaded seasons in SEASON_CACHE are scanned.
 // ============================================================
+// ============================================================
+// PROFILE — TRACK PICKER (per-driver track drilldown)
+// ------------------------------------------------------------
+// Lets the user pick any track this driver has raced at and see
+// their full history there: race-by-race table plus aggregate
+// stats (starts/wins/T5/T10/avg fin/avg start/laps led/poles).
+// Filterable by series and generation. Generation chips hidden
+// when NOS/NTS are selected since those series didn't exist in
+// older Cup eras and the chips would be misleading.
+// ============================================================
+function paintProfileTrackPicker(entity) {
+  const host = document.getElementById("profile-track-picker");
+  if (!host) return;
+
+  // Resolve the driver's canonical slug from STATE / entity
+  const slug = (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug)
+    ? STATE.profile.slug
+    : (entity && (entity.primaryDriver || entity.driver)
+        ? slugify(entity.primaryDriver || entity.driver)
+        : null);
+  if (!slug) { host.innerHTML = ""; return; }
+
+  // Walk SEASON_CACHE for every (year, series, race) where this
+  // driver appeared. Group by track_code → series → year so we can
+  // sum up stats per track and offer the picker.
+  const byTrack = new Map();   // code -> { code, name, races: [{year, series, finish, start, lapsLed, points, isWin, isT5, isT10}] }
+  Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
+    if (!blocks) return;
+    const yr = Number(year);
+    Object.entries(blocks).forEach(([sCode, block]) => {
+      if (!block || !block.races) return;
+      block.races.forEach(race => {
+        const tCode = (race.track_code || "").toUpperCase();
+        if (!tCode) return;
+        (race.results || []).forEach(d => {
+          if (!d.driver || d.ineligible) return;
+          if (slugify(d.driver) !== slug) return;
+          if (d.finish_pos == null) return;
+          let entry = byTrack.get(tCode);
+          if (!entry) {
+            entry = { code: tCode, name: prettyTrack(tCode, race.track) || tCode, races: [] };
+            byTrack.set(tCode, entry);
+          }
+          entry.races.push({
+            year: yr,
+            series: sCode,
+            round: race.round,
+            track: race.track,
+            finish: d.finish_pos,
+            start: d.start_pos,
+            lapsLed: d.laps_led || 0,
+            stagePts: (d.stage1_pts || 0) + (d.stage2_pts || 0),
+            totalPts: d.total_pts || d.points || 0,
+            pole: d.start_pos === 1,
+          });
+        });
+      });
+    });
+  });
+
+  if (byTrack.size === 0) {
+    host.innerHTML = `<div class="muted" style="padding:14px;font-size:12px;">No track data loaded yet for this driver.</div>`;
+    return;
+  }
+
+  // Sort tracks alphabetically by display name for the picker
+  const tracks = Array.from(byTrack.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Initialize selection: keep prior pick if it's still valid (driver
+  // changed, or new data invalidates it), else default to the most-raced
+  // track so first-time visitors see meaningful content immediately.
+  const tp = STATE.profile.trackPicker;
+  if (!tp.code || !byTrack.has(tp.code)) {
+    const mostRaced = tracks.slice().sort((a, b) => b.races.length - a.races.length)[0];
+    tp.code = mostRaced.code;
+  }
+
+  const selected = byTrack.get(tp.code);
+
+  // ---- Filter selected track's races by series + generation ----
+  const seriesActive = tp.series;   // "all" | "NCS" | "NOS" | "NTS"
+  const showGenChips = seriesActive === "all" || seriesActive === "NCS";
+
+  // Find which generations this driver actually raced (post-series filter)
+  // so we don't show chips for gens with zero races.
+  const racesForSeries = selected.races.filter(r =>
+    seriesActive === "all" || r.series === seriesActive
+  );
+  const gensWithRaces = new Set();
+  racesForSeries.forEach(r => {
+    NASCAR_GENERATIONS.forEach(g => {
+      if (r.year >= g.year_start && r.year <= g.year_end) gensWithRaces.add(g.id);
+    });
+  });
+  const availableGens = NASCAR_GENERATIONS.filter(g => gensWithRaces.has(g.id));
+
+  // Now apply gen filter
+  const genActive = tp.gens;
+  const filteredRaces = racesForSeries.filter(r => {
+    if (!showGenChips) return true;       // gen filter doesn't apply when NOS/NTS
+    if (genActive.size === 0) return true;  // no gens = "all"
+    return NASCAR_GENERATIONS.some(g =>
+      genActive.has(g.id) && r.year >= g.year_start && r.year <= g.year_end
+    );
+  });
+
+  // ---- Aggregate stats ----
+  const stats = aggregateTrackStats(filteredRaces);
+
+  // ---- Build UI ----
+  const trackOptions = tracks.map(t =>
+    `<option value="${t.code}" ${t.code === tp.code ? "selected" : ""}>${escapeHTML(t.name)} (${t.races.length})</option>`
+  ).join("");
+
+  const seriesPills = ["all", "NCS", "NOS", "NTS"].map(s =>
+    `<button class="profile-track-srs-btn ${tp.series === s ? "active" : ""}" data-srs="${s}">${s === "all" ? "All" : s}</button>`
+  ).join("");
+
+  // Gen chips (only when applicable + only show gens this driver actually raced in)
+  const genChipsHTML = showGenChips && availableGens.length > 0 ? `
+    <div class="profile-track-gens">
+      <span class="profile-track-gens-label">Gen:</span>
+      <button class="profile-track-gen-chip ${genActive.size === 0 ? "active" : ""}" data-gen="__all__">All</button>
+      ${availableGens.map(g => {
+        const label = g.year_end >= 9999 ? `${g.label} (${g.year_start}+)` : `${g.label} (${g.year_start}–${g.year_end})`;
+        return `<button class="profile-track-gen-chip ${genActive.has(g.id) ? "active" : ""}" data-gen="${g.id}">${label}</button>`;
+      }).join("")}
+    </div>` : "";
+
+  // Stat tiles
+  const statsHTML = filteredRaces.length === 0 ? `
+    <div class="muted" style="padding:14px;font-size:12px;">No races match current filters.</div>
+  ` : `
+    <div class="profile-track-stats-grid">
+      <div class="profile-track-stat"><span class="k">Starts</span><span class="v">${stats.starts}</span></div>
+      <div class="profile-track-stat"><span class="k">Wins</span><span class="v ${stats.wins > 0 ? "hot" : ""}">${stats.wins}</span></div>
+      <div class="profile-track-stat"><span class="k">Top 5</span><span class="v">${stats.top5}</span></div>
+      <div class="profile-track-stat"><span class="k">Top 10</span><span class="v">${stats.top10}</span></div>
+      <div class="profile-track-stat"><span class="k">Poles</span><span class="v">${stats.poles}</span></div>
+      <div class="profile-track-stat"><span class="k">Avg Start</span><span class="v">${stats.avgStart != null ? stats.avgStart.toFixed(1) : "—"}</span></div>
+      <div class="profile-track-stat"><span class="k">Avg Fin</span><span class="v">${stats.avgFin != null ? stats.avgFin.toFixed(1) : "—"}</span></div>
+      <div class="profile-track-stat"><span class="k">Laps Led</span><span class="v">${stats.lapsLed.toLocaleString()}</span></div>
+      <div class="profile-track-stat"><span class="k">Stage Pts</span><span class="v">${stats.stagePts}</span></div>
+      <div class="profile-track-stat"><span class="k">Total Pts</span><span class="v">${stats.totalPts}</span></div>
+    </div>
+  `;
+
+  // Race-by-race table
+  const sortedForTable = filteredRaces.slice().sort((a, b) => b.year - a.year || a.round - b.round);
+  const racesTableHTML = sortedForTable.length === 0 ? "" : `
+    <table class="profile-track-races-table">
+      <thead><tr>
+        <th class="num">Year</th>
+        <th>Series</th>
+        <th class="num">Rd</th>
+        <th class="num">Start</th>
+        <th class="num">Finish</th>
+        <th class="num">Laps Led</th>
+        <th class="num">Pts</th>
+      </tr></thead>
+      <tbody>
+        ${sortedForTable.map(r => {
+          const cls = r.finish === 1 ? "fin-win"
+                    : r.finish <= 5 ? "fin-t5"
+                    : r.finish <= 10 ? "fin-t10"
+                    : r.finish >= 31 ? "fin-bad"
+                    : "";
+          return `<tr>
+            <td class="num">${r.year}</td>
+            <td>${r.series}</td>
+            <td class="num"><a class="profile-link" href="#/race/${r.round}?_y=${r.year}&_s=${r.series}">${r.round}</a></td>
+            <td class="num">${r.start != null ? r.start : "—"}</td>
+            <td class="num ${cls}">${r.finish}</td>
+            <td class="num">${r.lapsLed || 0}</td>
+            <td class="num">${r.totalPts || 0}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  `;
+
+  host.innerHTML = `
+    <div class="profile-track-picker-toolbar">
+      <select class="profile-track-select" id="profile-track-select">${trackOptions}</select>
+      <div class="profile-track-srs-toggle">${seriesPills}</div>
+    </div>
+    ${genChipsHTML}
+    ${statsHTML}
+    <div class="profile-track-races-wrap">${racesTableHTML}</div>
+  `;
+
+  // ---- Wire ----
+  const sel = document.getElementById("profile-track-select");
+  if (sel) sel.addEventListener("change", () => {
+    tp.code = sel.value;
+    tp.gens.clear();   // reset gen filter when switching tracks
+    paintProfileTrackPicker(entity);
+  });
+  host.querySelectorAll(".profile-track-srs-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      tp.series = btn.getAttribute("data-srs");
+      // Switching to NOS/NTS resets gens since chips will be hidden anyway
+      if (tp.series !== "all" && tp.series !== "NCS") tp.gens.clear();
+      paintProfileTrackPicker(entity);
+    });
+  });
+  host.querySelectorAll(".profile-track-gen-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const gid = btn.getAttribute("data-gen");
+      if (gid === "__all__") tp.gens.clear();
+      else if (tp.gens.has(gid)) tp.gens.delete(gid);
+      else tp.gens.add(gid);
+      paintProfileTrackPicker(entity);
+    });
+  });
+}
+
+// Roll up an array of per-race entries (from paintProfileTrackPicker)
+// into a single stat block. Shared with the analytics track-stats page
+// since they want the same shape.
+function aggregateTrackStats(races) {
+  const out = {
+    starts: races.length, wins: 0, top5: 0, top10: 0, poles: 0,
+    lapsLed: 0, stagePts: 0, totalPts: 0,
+    avgFin: null, avgStart: null,
+  };
+  let finSum = 0, finCnt = 0, startSum = 0, startCnt = 0;
+  races.forEach(r => {
+    if (r.finish === 1) out.wins++;
+    if (r.finish <= 5) out.top5++;
+    if (r.finish <= 10) out.top10++;
+    if (r.pole) out.poles++;
+    out.lapsLed += r.lapsLed || 0;
+    out.stagePts += r.stagePts || 0;
+    out.totalPts += r.totalPts || 0;
+    if (r.finish != null) { finSum += r.finish; finCnt++; }
+    if (r.start != null)  { startSum += r.start; startCnt++; }
+  });
+  if (finCnt > 0) out.avgFin = finSum / finCnt;
+  if (startCnt > 0) out.avgStart = startSum / startCnt;
+  return out;
+}
+
 function paintProfileCareerHeatmap() {
   const host = document.getElementById("profile-career-heatmap");
   if (!host) return;
@@ -7877,6 +8189,261 @@ function paintCrewChiefCareerHeatmap() {
 }
 
 // ============================================================
+// TRACK STATS — All-time driver stats at a single track
+// ------------------------------------------------------------
+// Scopes to a user-picked track (alpha-sorted dropdown) and aggregates
+// every loaded season's data for that track into a sortable per-driver
+// table. Filterable by series and generation. Hides gen chips when the
+// series filter is NOS or NTS (those didn't exist in early Cup eras).
+// ============================================================
+function renderTrackStats() {
+  const host = document.getElementById("trackstats-host");
+  if (!host) return;
+
+  // ---- Build the list of tracks present in any loaded season ----
+  const tracksMap = new Map();   // code -> { code, name, raceCount }
+  Object.values(SEASON_CACHE).forEach(blocks => {
+    if (!blocks) return;
+    Object.values(blocks).forEach(block => {
+      if (!block || !block.races) return;
+      block.races.forEach(race => {
+        const tCode = (race.track_code || "").toUpperCase();
+        if (!tCode) return;
+        if (!(race.results && race.results.length)) return;  // skip upcoming
+        let entry = tracksMap.get(tCode);
+        if (!entry) {
+          entry = { code: tCode, name: prettyTrack(tCode, race.track) || tCode, raceCount: 0 };
+          tracksMap.set(tCode, entry);
+        }
+        entry.raceCount++;
+      });
+    });
+  });
+  const tracks = Array.from(tracksMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+  if (tracks.length === 0) {
+    host.innerHTML = `<div class="muted" style="padding:24px;text-align:center;">No track data loaded yet. Visit other tabs to lazy-load seasons, or wait for the background loader to finish.</div>`;
+    return;
+  }
+
+  const ts = STATE.trackStats;
+  if (!ts.code || !tracksMap.has(ts.code)) ts.code = tracks[0].code;
+
+  // ---- Walk all seasons and aggregate per-driver at chosen track ----
+  const seriesActive = ts.series;
+  const showGenChips = seriesActive === "all" || seriesActive === "NCS";
+  const byDrv = new Map();   // slug -> { slug, name, races: [...] }
+
+  Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
+    if (!blocks) return;
+    const yr = Number(year);
+    Object.entries(blocks).forEach(([sCode, block]) => {
+      if (!block || !block.races) return;
+      if (seriesActive !== "all" && sCode !== seriesActive) return;
+      block.races.forEach(race => {
+        if ((race.track_code || "").toUpperCase() !== ts.code) return;
+        // Generation gate (only meaningful for NCS / All)
+        if (showGenChips && ts.gens.size > 0) {
+          const inGen = NASCAR_GENERATIONS.some(g =>
+            ts.gens.has(g.id) && yr >= g.year_start && yr <= g.year_end
+          );
+          if (!inGen) return;
+        }
+        (race.results || []).forEach(d => {
+          if (!d.driver || d.ineligible) return;
+          if (d.finish_pos == null) return;
+          const slug = slugify(d.driver);
+          let agg = byDrv.get(slug);
+          if (!agg) { agg = { slug, name: d.driver, races: [] }; byDrv.set(slug, agg); }
+          agg.races.push({
+            year: yr,
+            series: sCode,
+            finish: d.finish_pos,
+            start: d.start_pos,
+            lapsLed: d.laps_led || 0,
+            stagePts: (d.stage1_pts || 0) + (d.stage2_pts || 0),
+            totalPts: d.total_pts || d.points || 0,
+            pole: d.start_pos === 1,
+          });
+        });
+      });
+    });
+  });
+
+  // Decorate with aggregate stats
+  let rows = Array.from(byDrv.values()).map(d => {
+    const s = aggregateTrackStats(d.races);
+    return {
+      slug: d.slug,
+      name: d.name,
+      ...s,
+      winPct: s.starts > 0 ? (s.wins / s.starts) * 100 : null,
+      top5Pct: s.starts > 0 ? (s.top5 / s.starts) * 100 : null,
+    };
+  }).filter(r => r.starts >= ts.minStarts);
+
+  // Search filter
+  if (ts.search) {
+    const q = ts.search.toLowerCase().trim();
+    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q));
+  }
+
+  // Sort
+  const dir = ts.sortDir === "asc" ? 1 : -1;
+  rows.sort((a, b) => {
+    const av = a[ts.sortKey], bv = b[ts.sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === "string") return dir * av.localeCompare(bv);
+    return dir * (av - bv);
+  });
+
+  // ---- UI ----
+  const trackOptions = tracks.map(t =>
+    `<option value="${t.code}" ${t.code === ts.code ? "selected" : ""}>${escapeHTML(t.name)}</option>`
+  ).join("");
+
+  const seriesPills = ["all", "NCS", "NOS", "NTS"].map(s =>
+    `<button class="ts-srs-btn ${ts.series === s ? "active" : ""}" data-srs="${s}">${s === "all" ? "All" : s}</button>`
+  ).join("");
+
+  // Gens
+  const yearsLoaded = Object.keys(SEASON_CACHE).map(Number).sort((a, b) => a - b);
+  const gensWithData = new Set();
+  yearsLoaded.forEach(yr => {
+    NASCAR_GENERATIONS.forEach(g => {
+      if (yr >= g.year_start && yr <= g.year_end) gensWithData.add(g.id);
+    });
+  });
+  const visibleGens = NASCAR_GENERATIONS.filter(g => gensWithData.has(g.id));
+
+  const genChipsHTML = showGenChips ? `
+    <div class="ts-gens">
+      <span class="ts-gens-label">Gen:</span>
+      <button class="ts-gen-chip ${ts.gens.size === 0 ? "active" : ""}" data-gen="__all__">All</button>
+      ${visibleGens.map(g => {
+        const label = g.year_end >= 9999 ? `${g.label} (${g.year_start}+)` : `${g.label} (${g.year_start}–${g.year_end})`;
+        return `<button class="ts-gen-chip ${ts.gens.has(g.id) ? "active" : ""}" data-gen="${g.id}">${label}</button>`;
+      }).join("")}
+    </div>` : "";
+
+  const sortAttr = (col) => {
+    if (col !== ts.sortKey) return "";
+    return ` <span class="alltime-sort">${ts.sortDir === "asc" ? "▲" : "▼"}</span>`;
+  };
+
+  const tableHTML = rows.length === 0 ? `
+    <div class="muted" style="padding:24px;text-align:center;">No drivers match — try lowering the min-starts threshold or clearing filters.</div>
+  ` : `
+    <table class="data-table ts-table">
+      <thead><tr>
+        <th class="ts-th-rank num">#</th>
+        <th class="ts-th" data-sort="name">Driver${sortAttr("name")}</th>
+        <th class="ts-th num" data-sort="starts">Starts${sortAttr("starts")}</th>
+        <th class="ts-th num" data-sort="wins">Wins${sortAttr("wins")}</th>
+        <th class="ts-th num" data-sort="winPct">Win %${sortAttr("winPct")}</th>
+        <th class="ts-th num" data-sort="top5">T5${sortAttr("top5")}</th>
+        <th class="ts-th num" data-sort="top5Pct">T5 %${sortAttr("top5Pct")}</th>
+        <th class="ts-th num" data-sort="top10">T10${sortAttr("top10")}</th>
+        <th class="ts-th num" data-sort="poles">Poles${sortAttr("poles")}</th>
+        <th class="ts-th num" data-sort="avgStart">Avg St${sortAttr("avgStart")}</th>
+        <th class="ts-th num" data-sort="avgFin">Avg Fin${sortAttr("avgFin")}</th>
+        <th class="ts-th num" data-sort="lapsLed">Laps Led${sortAttr("lapsLed")}</th>
+        <th class="ts-th num" data-sort="stagePts">Stage Pts${sortAttr("stagePts")}</th>
+        <th class="ts-th num" data-sort="totalPts">Total Pts${sortAttr("totalPts")}</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r, i) => `<tr>
+          <td class="num alltime-rank-cell">${i + 1}</td>
+          <td><a class="profile-link" href="#/driver/${encodeURIComponent(r.slug)}">${escapeHTML(r.name)}</a></td>
+          <td class="num">${r.starts}</td>
+          <td class="num ${r.wins > 0 ? "hot" : ""}">${r.wins}</td>
+          <td class="num">${r.winPct != null ? r.winPct.toFixed(1) + "%" : "—"}</td>
+          <td class="num">${r.top5}</td>
+          <td class="num">${r.top5Pct != null ? r.top5Pct.toFixed(1) + "%" : "—"}</td>
+          <td class="num">${r.top10}</td>
+          <td class="num">${r.poles}</td>
+          <td class="num">${r.avgStart != null ? r.avgStart.toFixed(1) : "—"}</td>
+          <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
+          <td class="num">${r.lapsLed.toLocaleString()}</td>
+          <td class="num">${r.stagePts}</td>
+          <td class="num">${r.totalPts}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  `;
+
+  host.innerHTML = `
+    <div class="ts-toolbar">
+      <select class="ts-track-select" id="ts-track-select">${trackOptions}</select>
+      <input type="search" class="ts-search" id="ts-search" placeholder="Search drivers…" value="${escapeHTML(ts.search || "")}">
+      <div class="ts-srs-toggle">${seriesPills}</div>
+      <label class="ts-min-starts">
+        Min starts:
+        <select id="ts-min-starts">
+          ${[1, 3, 5, 10, 20].map(n => `<option value="${n}" ${n === ts.minStarts ? "selected" : ""}>${n}</option>`).join("")}
+        </select>
+      </label>
+      <span class="alltime-count muted">${rows.length} drivers</span>
+    </div>
+    ${genChipsHTML}
+    <div class="card alltime-table-wrap" style="margin-top:8px;">${tableHTML}</div>
+  `;
+
+  // ---- Wire ----
+  const sel = document.getElementById("ts-track-select");
+  if (sel) sel.addEventListener("change", () => { ts.code = sel.value; renderTrackStats(); });
+  host.querySelectorAll(".ts-srs-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      ts.series = btn.getAttribute("data-srs");
+      if (ts.series !== "all" && ts.series !== "NCS") ts.gens.clear();
+      renderTrackStats();
+    });
+  });
+  host.querySelectorAll(".ts-gen-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const gid = btn.getAttribute("data-gen");
+      if (gid === "__all__") ts.gens.clear();
+      else if (ts.gens.has(gid)) ts.gens.delete(gid);
+      else ts.gens.add(gid);
+      renderTrackStats();
+    });
+  });
+  const minSel = document.getElementById("ts-min-starts");
+  if (minSel) minSel.addEventListener("change", () => {
+    ts.minStarts = Number(minSel.value);
+    renderTrackStats();
+  });
+  const searchInput = document.getElementById("ts-search");
+  if (searchInput) {
+    let dbnc = null;
+    searchInput.addEventListener("input", e => {
+      ts.search = e.target.value;
+      clearTimeout(dbnc);
+      dbnc = setTimeout(() => {
+        const sel = searchInput.selectionStart;
+        renderTrackStats();
+        const newInput = document.getElementById("ts-search");
+        if (newInput) {
+          newInput.focus();
+          try { newInput.setSelectionRange(sel, sel); } catch (_) {}
+        }
+      }, 150);
+    });
+  }
+  host.querySelectorAll(".ts-th").forEach(th => {
+    th.addEventListener("click", () => {
+      const col = th.getAttribute("data-sort");
+      if (!col) return;
+      if (ts.sortKey === col) ts.sortDir = ts.sortDir === "asc" ? "desc" : "asc";
+      else { ts.sortKey = col; ts.sortDir = col === "name" ? "asc" : "desc"; }
+      renderTrackStats();
+    });
+  });
+}
+
+// ============================================================
 // HEATMAP
 // ============================================================
 function renderHeatmap() {
@@ -8113,9 +8680,9 @@ function renderStandings() {
       <td class="num">${r.top10}</td>
       <td class="num">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
       <td class="num">${
-        r.lastRaceDelta == null
+        r.lastRacePts == null
           ? `<span class="muted">—</span>`
-          : `<span class="pts-delta-only ${r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta < -1.5 ? "cold" : ""}">${r.lastRaceDelta > 0 ? "+" : ""}${r.lastRaceDelta.toFixed(1)}</span>`
+          : `<span class="pts-delta-only ${r.lastRaceDelta != null && r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta != null && r.lastRaceDelta < -1.5 ? "cold" : ""}">+${r.lastRacePts}</span>`
       }</td>
       ${stageEra ? `<td class="num">${r.sumS1}</td>
       <td class="num">${r.sumS2}</td>
@@ -8144,7 +8711,7 @@ function renderStandings() {
         ${th("top5", "T5", true)}
         ${th("top10", "T10", true)}
         ${th("avgFinish", "Avg Fin", true)}
-        ${th("lastRaceDelta", "Last Δ", true)}
+        ${th("lastRacePts", "Last Pts", true)}
         ${stageEra ? `${th("sumS1", "S1", true)}
         ${th("sumS2", "S2", true)}
         ${th("sumFL", "FL", true)}` : ""}

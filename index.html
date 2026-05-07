@@ -67,6 +67,7 @@
   <a href="#/trajectory" class="mobile-nav-link" data-view="trajectory">Stage vs Finish</a>
   <a href="#/teammates"  class="mobile-nav-link" data-view="teammates">Teammate Delta</a>
   <a href="#/heatmap"    class="mobile-nav-link" data-view="heatmap">Heatmap</a>
+  <a href="#/trackstats" class="mobile-nav-link" data-view="trackstats">Track Stats</a>
   <a href="#/standings"  class="mobile-nav-link" data-view="standings">Standings</a>
   <a href="#/playoffs"   class="mobile-nav-link" data-view="playoffs">Playoffs</a>
   <a href="#/drivers"    class="mobile-nav-link" data-view="drivers">Drivers</a>
@@ -118,12 +119,13 @@
           <a href="#/teammates"  class="dash-subitem" data-view="teammates">Teammate</a>
           <a href="#/trajectory" class="dash-subitem" data-view="trajectory">Stage vs Finish</a>
           <a href="#/breakdown"  class="dash-subitem" data-view="breakdown">Points Breakdown</a>
+          <a href="#/trackstats" class="dash-subitem" data-view="trackstats">Track Stats</a>
         </div>
       </div>
 
-      <!-- More group: all-time database tabs -->
+      <!-- Records group: all-time database tabs -->
       <div class="dash-tab-group" data-group="more">
-        <a href="#/drivers" class="dash-tab dash-tab-parent" data-view="more" data-fallback-view="drivers">More <span class="dash-caret">▾</span></a>
+        <a href="#/drivers" class="dash-tab dash-tab-parent" data-view="more" data-fallback-view="drivers">Records <span class="dash-caret">▾</span></a>
         <div class="dash-submenu">
           <a href="#/drivers"     class="dash-subitem" data-view="drivers">Drivers</a>
           <a href="#/teams"       class="dash-subitem" data-view="teams">Teams</a>
@@ -287,6 +289,7 @@
       <section class="view tab-panel" id="view-arc">
         <div class="toolbar-slim">
           <button class="btn-ghost" id="arc-top10">Top 10</button>
+          <button class="btn-ghost" id="arc-all">All</button>
           <button class="btn-ghost" id="arc-clear">Clear</button>
           <div class="toggle-group" data-group="arc-ft">
             <button class="on" data-val="ft">Full-time</button>
@@ -295,6 +298,10 @@
           <div class="toggle-group" data-group="arc-metric">
             <button class="on" data-val="points">Points</button>
             <button data-val="position">Std. pos</button>
+          </div>
+          <div class="toggle-group" data-group="arc-scoring" id="arc-scoring-toggle">
+            <button class="on" data-val="raw">Raw</button>
+            <button data-val="playoff">Playoff-aware</button>
           </div>
         </div>
         <div class="team-filter" id="arc-team-filter"></div>
@@ -422,6 +429,12 @@
       <section class="view tab-panel" id="view-heatmap" hidden>
         <div class="card tab-chart-fill scrollable">
           <div id="heatmap-wrap" class="heatmap-wrap"></div>
+        </div>
+      </section>
+
+      <section class="view tab-panel" id="view-trackstats" hidden>
+        <div class="card tab-chart-fill scrollable">
+          <div id="trackstats-host"></div>
         </div>
       </section>
 
