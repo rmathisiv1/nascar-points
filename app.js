@@ -1845,6 +1845,12 @@ async function loadCurrentData() {
     return showError(`No data for series ${sCode} in season ${year}`);
   }
   STATE.data = seriesBlock;
+  // Mirror the full year payload into SEASON_CACHE so views that read
+  // from there (heatmap, all-time pages) see the current year without
+  // a separate fetch. Idempotent — overwrites are safe.
+  if (payload.series) {
+    SEASON_CACHE[year] = payload.series;
+  }
   renderSeasonPill();
   document.getElementById("footer-updated").textContent =
     `Updated ${(payload.generated_at || "").slice(0,10)}`;
@@ -11373,7 +11379,10 @@ function renderAllTimeDrivers() {
   if (!host) return;
   const yearsLoaded = Object.keys(SEASON_CACHE).length;
   const yearsTotal = (STATE.seasonsAvailable || []).length;
-  if (sub) sub.textContent = `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. More years load as you browse other pages.`;
+  const isFull = yearsLoaded >= yearsTotal;
+  if (sub) sub.textContent = isFull
+    ? `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`
+    : `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. Loading more in the background…`;
   invalidateAllTimeIfStale();
   if (!ALLTIME_CACHE.drivers) ALLTIME_CACHE.drivers = computeAllTimeDrivers();
   host.innerHTML = renderAllTimeTable(
@@ -11382,6 +11391,9 @@ function renderAllTimeDrivers() {
     "drivers"
   );
   wireAllTimeTable("drivers", renderAllTimeDrivers);
+  // Trigger the gentle background loader. Idempotent — no-op if already
+  // running. Re-renders once at the end if user is still on this page.
+  scheduleAllTimeBackgroundLoad("drivers", renderAllTimeDrivers);
 }
 
 function renderAllTimeTeams() {
@@ -11390,7 +11402,10 @@ function renderAllTimeTeams() {
   if (!host) return;
   const yearsLoaded = Object.keys(SEASON_CACHE).length;
   const yearsTotal = (STATE.seasonsAvailable || []).length;
-  if (sub) sub.textContent = `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. More years load as you browse other pages.`;
+  const isFull = yearsLoaded >= yearsTotal;
+  if (sub) sub.textContent = isFull
+    ? `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`
+    : `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. Loading more in the background…`;
   invalidateAllTimeIfStale();
   if (!ALLTIME_CACHE.teams) ALLTIME_CACHE.teams = computeAllTimeTeams();
   host.innerHTML = renderAllTimeTable(
@@ -11399,6 +11414,7 @@ function renderAllTimeTeams() {
     "teams"
   );
   wireAllTimeTable("teams", renderAllTimeTeams);
+  scheduleAllTimeBackgroundLoad("teams", renderAllTimeTeams);
 }
 
 function renderAllTimeCrewChiefs() {
@@ -11407,7 +11423,10 @@ function renderAllTimeCrewChiefs() {
   if (!host) return;
   const yearsLoaded = Object.keys(SEASON_CACHE).length;
   const yearsTotal = (STATE.seasonsAvailable || []).length;
-  if (sub) sub.textContent = `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. More years load as you browse other pages.`;
+  const isFull = yearsLoaded >= yearsTotal;
+  if (sub) sub.textContent = isFull
+    ? `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`
+    : `Career stats — ${yearsLoaded} of ${yearsTotal} seasons cached. Loading more in the background…`;
   invalidateAllTimeIfStale();
   if (!ALLTIME_CACHE.crewchiefs) ALLTIME_CACHE.crewchiefs = computeAllTimeCrewChiefs();
   host.innerHTML = renderAllTimeTable(
@@ -11416,6 +11435,40 @@ function renderAllTimeCrewChiefs() {
     "crewchiefs"
   );
   wireAllTimeTable("crewchiefs", renderAllTimeCrewChiefs);
+  scheduleAllTimeBackgroundLoad("crewchiefs", renderAllTimeCrewChiefs);
+}
+
+// Kick off a gentle background load of all uncached seasons — one
+// season at a time with a generous delay between fetches. This is
+// intentionally slow so it never competes with foreground rendering
+// or freezes the UI. The caller's rerender function fires after EACH
+// season loads, so the table fills in progressively.
+const BG_LOAD = { running: false, expectedView: null };
+function scheduleAllTimeBackgroundLoad(stateKey, rerender) {
+  // Track the page that initiated this load. If user navigates away,
+  // the per-fetch rerender will see STATE.view !== expected and skip.
+  BG_LOAD.expectedView = stateKey;
+  if (BG_LOAD.running) return;   // already running
+  const missing = (STATE.seasonsAvailable || []).filter(y => !SEASON_CACHE[y]);
+  if (missing.length === 0) return;
+  BG_LOAD.running = true;
+  // Walk the list one year at a time, with a 200ms delay between each
+  // so the network and main thread stay quiet. This is a tradeoff:
+  // ~5 seconds total for 25 missing years, but the page never freezes.
+  (async () => {
+    for (const y of missing) {
+      // Bail if user navigated away from any all-time page
+      if (!["drivers", "teams", "crewchiefs"].includes(STATE.view)) break;
+      await loadSeasonIntoCache(y).catch(() => null);
+      // Invalidate cached aggregate so the rerender picks up new data
+      ALLTIME_CACHE[stateKey] = null;
+      // Rerender ONLY if user is still on the page that initiated the load
+      if (STATE.view === BG_LOAD.expectedView) rerender();
+      // Yield + brief delay between fetches
+      await new Promise(r => setTimeout(r, 200));
+    }
+    BG_LOAD.running = false;
+  })().catch(() => { BG_LOAD.running = false; });
 }
 
 // Fetch every season in seasonsAvailable that isn't already cached.
