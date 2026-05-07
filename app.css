@@ -7214,3 +7214,84 @@ body.lightbox-open {
   color: var(--muted);
   margin-top: 3px;
 }
+
+/* === TRACK STATS — expandable row detail === */
+/* Click any driver row to expand it. The expanded TR shows that driver's
+   complete year-by-year history at the selected track. Same column count
+   as the main table (16) wrapped in a colspan TD. */
+.ts-row {
+  cursor: pointer;
+}
+.ts-row:hover {
+  background: rgba(255,255,255,0.045);
+}
+.ts-row.expanded {
+  background: rgba(70, 140, 255, 0.10);
+}
+.ts-row.expanded:hover {
+  background: rgba(70, 140, 255, 0.14);
+}
+.ts-expand-caret {
+  display: inline-block;
+  width: 12px;
+  color: var(--dim);
+  font-size: 10px;
+  font-family: var(--mono);
+  margin-right: 2px;
+}
+.ts-row.expanded .ts-expand-caret {
+  color: var(--accent-2);
+}
+.ts-row-name {
+  color: var(--text);
+}
+.ts-detail-row td {
+  background: var(--bg);
+  padding: 0 !important;
+  border-bottom: 2px solid var(--border) !important;
+}
+.ts-detail-wrap {
+  padding: 12px 16px;
+  background: var(--bg);
+}
+.ts-detail-head {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.ts-detail-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.ts-detail-table thead th {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--bg-2);
+}
+.ts-detail-table thead th.num { text-align: right; }
+.ts-detail-table tbody td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.ts-detail-table tbody td.num {
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.ts-detail-table tbody tr:nth-child(even) {
+  background: rgba(255,255,255,0.015);
+}
+.ts-detail-table .fin-win  { color: var(--pos); font-weight: 600; }
+.ts-detail-table .fin-t5   { color: var(--pos); }
+.ts-detail-table .fin-t10  { color: var(--text); }
+.ts-detail-table .fin-bad  { color: var(--neg); }

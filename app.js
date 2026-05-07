@@ -46,7 +46,7 @@ const STATE = {
   // Analytics → Track Stats: pick a track, see all-time driver stats there.
   // sortKey/sortDir control the table; gens/series are filters; minStarts
   // hides drivers with low samples (3+ default).
-  trackStats: { code: null, series: "all", gens: new Set(["g5", "g6", "g7"]), sortKey: "wins", sortDir: "desc", minStarts: 3, search: "" },
+  trackStats: { code: null, series: "all", gens: new Set(["g5", "g6", "g7"]), sortKey: "wins", sortDir: "desc", minStarts: 3, search: "", expandedSlug: null },
   // Race takeover state: which round is being shown. null = "latest race
   // in the loaded data" (the default — what the Race tab used to do).
   // Set from the #/race/<round> URL when a user clicks into a specific race.
@@ -8926,6 +8926,7 @@ function renderTrackStats() {
     return {
       slug: d.slug,
       name: d.name,
+      races: d.races,   // keep for the expand-row detail view
       ...s,
       winPct: s.starts > 0 ? (s.wins / s.starts) * 100 : null,
       top5Pct: s.starts > 0 ? (s.top5 / s.starts) * 100 : null,
@@ -9008,24 +9009,67 @@ function renderTrackStats() {
         <th class="ts-th num" data-sort="totalPts">Total Pts${sortAttr("totalPts")}</th>
       </tr></thead>
       <tbody>
-        ${rows.map((r, i) => `<tr>
-          <td class="num alltime-rank-cell">${i + 1}</td>
-          <td><a class="profile-link" href="#/driver/${encodeURIComponent(r.slug)}">${escapeHTML(r.name)}</a></td>
-          <td class="num">${r.starts}</td>
-          <td class="num ${r.wins > 0 ? "hot" : ""}">${r.wins}</td>
-          <td class="num">${r.winPct != null ? r.winPct.toFixed(1) + "%" : "—"}</td>
-          <td class="num">${r.top5}</td>
-          <td class="num">${r.top5Pct != null ? r.top5Pct.toFixed(1) + "%" : "—"}</td>
-          <td class="num">${r.top10}</td>
-          <td class="num">${r.top10Pct != null ? r.top10Pct.toFixed(1) + "%" : "—"}</td>
-          <td class="num">${r.poles}</td>
-          <td class="num">${r.avgStart != null ? r.avgStart.toFixed(1) : "—"}</td>
-          <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
-          <td class="num">${r.lapsLed.toLocaleString()}</td>
-          <td class="num">${r.stagePts}</td>
-          <td class="num">${r.avgPts != null ? r.avgPts.toFixed(1) : "—"}</td>
-          <td class="num">${r.totalPts}</td>
-        </tr>`).join("")}
+        ${rows.map((r, i) => {
+          const isExpanded = ts.expandedSlug === r.slug;
+          const mainRow = `<tr class="ts-row ${isExpanded ? "expanded" : ""}" data-slug="${escapeHTML(r.slug)}">
+            <td class="num alltime-rank-cell">${i + 1}</td>
+            <td><span class="ts-expand-caret">${isExpanded ? "▾" : "▸"}</span> <span class="ts-row-name">${escapeHTML(r.name)}</span></td>
+            <td class="num">${r.starts}</td>
+            <td class="num ${r.wins > 0 ? "hot" : ""}">${r.wins}</td>
+            <td class="num">${r.winPct != null ? r.winPct.toFixed(1) + "%" : "—"}</td>
+            <td class="num">${r.top5}</td>
+            <td class="num">${r.top5Pct != null ? r.top5Pct.toFixed(1) + "%" : "—"}</td>
+            <td class="num">${r.top10}</td>
+            <td class="num">${r.top10Pct != null ? r.top10Pct.toFixed(1) + "%" : "—"}</td>
+            <td class="num">${r.poles}</td>
+            <td class="num">${r.avgStart != null ? r.avgStart.toFixed(1) : "—"}</td>
+            <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
+            <td class="num">${r.lapsLed.toLocaleString()}</td>
+            <td class="num">${r.stagePts}</td>
+            <td class="num">${r.avgPts != null ? r.avgPts.toFixed(1) : "—"}</td>
+            <td class="num">${r.totalPts}</td>
+          </tr>`;
+          if (!isExpanded) return mainRow;
+          // Expanded detail row: every year/series this driver raced
+          // at this track, sorted newest first. Same column count (16)
+          // wrapped in a single TD via colspan.
+          const detail = r.races.slice().sort((a, b) => b.year - a.year || a.series.localeCompare(b.series));
+          const detailHTML = `<tr class="ts-detail-row"><td colspan="16">
+            <div class="ts-detail-wrap">
+              <div class="ts-detail-head">${escapeHTML(r.name)} · every race at ${escapeHTML(prettyTrack(ts.code, "") || ts.code)} (${detail.length})</div>
+              <table class="ts-detail-table">
+                <thead><tr>
+                  <th class="num">Year</th>
+                  <th>Series</th>
+                  <th class="num">Start</th>
+                  <th class="num">Finish</th>
+                  <th class="num">Laps Led</th>
+                  <th class="num">Stage Pts</th>
+                  <th class="num">Total Pts</th>
+                </tr></thead>
+                <tbody>
+                  ${detail.map(d => {
+                    const cls = d.finish === 1 ? "fin-win"
+                              : d.finish <= 5 ? "fin-t5"
+                              : d.finish <= 10 ? "fin-t10"
+                              : d.finish >= 31 ? "fin-bad"
+                              : "";
+                    return `<tr>
+                      <td class="num">${d.year}</td>
+                      <td>${d.series}</td>
+                      <td class="num">${d.start != null ? d.start : "—"}</td>
+                      <td class="num ${cls}">${d.finish}</td>
+                      <td class="num">${d.lapsLed || 0}</td>
+                      <td class="num">${d.stagePts || 0}</td>
+                      <td class="num">${d.totalPts || 0}</td>
+                    </tr>`;
+                  }).join("")}
+                </tbody>
+              </table>
+            </div>
+          </td></tr>`;
+          return mainRow + detailHTML;
+        }).join("")}
       </tbody>
     </table>
   `;
@@ -9049,11 +9093,12 @@ function renderTrackStats() {
 
   // ---- Wire ----
   const sel = document.getElementById("ts-track-select");
-  if (sel) sel.addEventListener("change", () => { ts.code = sel.value; renderTrackStats(); });
+  if (sel) sel.addEventListener("change", () => { ts.code = sel.value; ts.expandedSlug = null; renderTrackStats(); });
   host.querySelectorAll(".ts-srs-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       ts.series = btn.getAttribute("data-srs");
       if (ts.series !== "all" && ts.series !== "NCS") ts.gens.clear();
+      ts.expandedSlug = null;
       renderTrackStats();
     });
   });
@@ -9063,6 +9108,7 @@ function renderTrackStats() {
       if (gid === "__all__") ts.gens.clear();
       else if (ts.gens.has(gid)) ts.gens.delete(gid);
       else ts.gens.add(gid);
+      ts.expandedSlug = null;
       renderTrackStats();
     });
   });
@@ -9094,6 +9140,17 @@ function renderTrackStats() {
       if (!col) return;
       if (ts.sortKey === col) ts.sortDir = ts.sortDir === "asc" ? "desc" : "asc";
       else { ts.sortKey = col; ts.sortDir = col === "name" ? "asc" : "desc"; }
+      renderTrackStats();
+    });
+  });
+  // Row click — toggle the expanded detail. Same row click again closes it.
+  // Click is bound to the .ts-row tag, NOT individual cells, so any click in
+  // the row's body works. The expanded detail row itself doesn't get this
+  // class, so clicks inside the detail table don't trigger collapse.
+  host.querySelectorAll(".ts-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const slug = row.getAttribute("data-slug");
+      ts.expandedSlug = (ts.expandedSlug === slug) ? null : slug;
       renderTrackStats();
     });
   });
