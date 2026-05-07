@@ -2063,10 +2063,9 @@ function wireUIControls() {
     if (sel) sel.value = String(targetSeason);
     const mobileSel = document.getElementById("mobile-season-picker");
     if (mobileSel) mobileSel.value = String(targetSeason);
-    // Always brings the user back to the canonical landing — the
-    // current-season standings.
-    if (location.hash !== "#/standings") {
-      location.hash = "#/standings";
+    // Always brings the user back to the canonical landing — the home page.
+    if (location.hash !== "#/home") {
+      location.hash = "#/home";
     } else {
       render();
     }
