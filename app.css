@@ -4426,7 +4426,8 @@ a.driver-cell.profile-link:hover .car-tag {
 #race-takeover,
 #track-takeover,
 #schedule-takeover,
-#team-takeover {
+#team-takeover,
+#cc-takeover {
   /* Inherit profile-takeover sizing — flex:1 inside col-center, scroll-y */
   flex: 1;
   min-height: 0;
@@ -4440,12 +4441,14 @@ a.driver-cell.profile-link:hover .car-tag {
 #race-takeover[hidden],
 #track-takeover[hidden],
 #schedule-takeover[hidden],
-#team-takeover[hidden] { display: none !important; }
+#team-takeover[hidden],
+#cc-takeover[hidden] { display: none !important; }
 
 #race-takeover #view-race,
 #track-takeover #view-track,
 #schedule-takeover #view-schedule,
-#team-takeover #view-team {
+#team-takeover #view-team,
+#cc-takeover #view-cc {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -4456,13 +4459,15 @@ a.driver-cell.profile-link:hover .car-tag {
 #race-takeover #view-race::-webkit-scrollbar,
 #track-takeover #view-track::-webkit-scrollbar,
 #schedule-takeover #view-schedule::-webkit-scrollbar,
-#team-takeover #view-team::-webkit-scrollbar { display: none; }
+#team-takeover #view-team::-webkit-scrollbar,
+#cc-takeover #view-cc::-webkit-scrollbar { display: none; }
 
 /* All cards inside center takeovers must not overflow horizontally */
 #race-host .rc-card,
 #track-host .rc-card,
 #schedule-host .rc-card,
-#team-host .rc-card {
+#team-host .rc-card,
+#cc-host .rc-card {
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
@@ -4472,7 +4477,9 @@ a.driver-cell.profile-link:hover .car-tag {
    card and its body so the sticky positioning isn't silently clipped.
    .has-sticky-thead is added by JS where needed. */
 #team-host .rc-card.has-sticky-thead,
-#team-host .rc-card.has-sticky-thead .rc-card-body { overflow: visible; }
+#team-host .rc-card.has-sticky-thead .rc-card-body,
+#cc-host .rc-card.has-sticky-thead,
+#cc-host .rc-card.has-sticky-thead .rc-card-body { overflow: visible; }
 
 /* The 2-col stat grid (Last 5 Winners + Hot at Track) and 3-col Track
    stat grid both need min-width:0 on their cells to prevent flex/grid
