@@ -896,12 +896,25 @@ async function boot() {
   // current primary driver's slug and rewrite the URL. Falls through cleanly
   // if the car isn't in current data (renderProfile shows "not found").
   redirectLegacyCarRoute();
+  // If the user landed cold on a race deep-link (#/race/N?_y=YYYY&_s=NCS),
+  // route through the same handler the hashchange listener uses. In
+  // Present mode this opens the lightbox; in Historical mode it switches
+  // context to the linked year/series.
+  const bootDeepLink = await handleRaceDeepLink();
   document.getElementById("time-cursor-reset")?.addEventListener("click", () => {
     STATE.throughRound = null;
     populateRacePicker();   // refresh selected state
     renderTimeCursorBanner();
     render();
   });
+  // If the boot deep-link opened a lightbox, the underlying view should
+  // be neutral (standings is a safe default) so closing the lightbox
+  // doesn't leave the user on a half-loaded race takeover.
+  if (bootDeepLink === "lightbox") {
+    STATE.view = "standings";
+    STATE.race = { round: null };
+    history.replaceState(null, "", "#/standings");
+  }
   render();
   window.addEventListener("hashchange", async () => {
     // Any URL change dismisses the race lightbox. Covers all navigation
@@ -911,16 +924,18 @@ async function boot() {
     if (STATE.lightbox && STATE.lightbox.open) {
       closeRaceLightbox();
     }
-    // Snapshot pre-parse identity so we can detect if parseHash shifted
-    // STATE.season (which happens on profile entry/exit, mode-driven snap).
-    // When season DOES shift, the data file in STATE.data is stale and we
-    // need to reload before render() so the dashboard tab views read from
-    // the right season. Profile/team/cc takeovers don't strictly need this
-    // (they pull from SEASON_CACHE and entity state) but a stale STATE.data
-    // bleeds into the metricbar etc.
     const preSeason = STATE.season;
     const preSeries = STATE.series;
     parseHash();
+    // Race route with deep-link query params (#/race/N?_y=YYYY&_s=NCS).
+    const handled = await handleRaceDeepLink();
+    if (handled === "lightbox") {
+      // Lightbox flow took over — skip the rest of the render pipeline
+      // so the page underneath stays as it was.
+      markMobileNavActive();
+      closeMobileNav();
+      return;
+    }
     // Driver-centric route: resolve home (series, season) before rendering
     if (STATE.view === "profile" && STATE.profile && STATE.profile.kind === "driver") {
       await resolveDriverRoute();
@@ -936,6 +951,50 @@ async function boot() {
     markMobileNavActive();
     closeMobileNav();
   });
+}
+
+// Process a race route deep-link (the `?_y=YYYY&_s=NCS` suffix on
+// #/race/N URLs). In Present mode → open lightbox without changing
+// STATE. In Historical mode → switch context to the linked year/series
+// so the race takeover renders against that data. Returns:
+//   "lightbox" — handled via lightbox; caller should skip downstream render
+//   "switched" — STATE was changed; caller continues normal render
+//   null       — no deep-link present, nothing happened
+async function handleRaceDeepLink() {
+  if (STATE.view !== "race" || !STATE.race || !STATE.race.deepLinkYear) {
+    return null;
+  }
+  const y = STATE.race.deepLinkYear;
+  const s = STATE.race.deepLinkSeries;
+  const round = STATE.race.round;
+  // Clear markers so subsequent renders don't keep reacting
+  delete STATE.race.deepLinkYear;
+  delete STATE.race.deepLinkSeries;
+
+  if (STATE.mode === "present" && (y !== STATE.season || s !== STATE.series)) {
+    // Rewrite URL back to plain race route so reloading doesn't re-trigger
+    // and the back button has a stable history entry.
+    history.replaceState(null, "", `#/race/${round}`);
+    await openRaceLightbox(y, s, round);
+    return "lightbox";
+  }
+  if (STATE.mode === "historical" && (y !== STATE.season || s !== STATE.series)) {
+    STATE.season = y;
+    STATE.series = s;
+    STATE.throughRound = null;
+    await loadCurrentData();
+    resetRenderCache();
+    populateRacePicker();
+    renderTimeCursorBanner();
+    document.querySelectorAll("#series-sw button").forEach(b =>
+      b.classList.toggle("on", b.dataset.series === s)
+    );
+    const sel = document.getElementById("season-picker");
+    if (sel) sel.value = String(y);
+    history.replaceState(null, "", `#/race/${round}`);
+    return "switched";
+  }
+  return null;
 }
 
 // If the current route is #/car/<N>, look up the primary driver of that
@@ -1465,14 +1524,36 @@ function parseHash() {
     return;
   }
   // Race / schedule routes — remember where we came from for back nav.
-  // Race route can include a round number: #/race/<round>. Without it,
-  // renderRaceCenter falls back to the latest run race (legacy behavior).
+  // Race route can include a round number: #/race/<round>. It can ALSO
+  // include `?_y=YYYY&_s=NCS|NOS|NTS` query params — that format is what
+  // heatmap cells / search results emit when linking to a historical race.
+  // In Present mode the query params trigger a lightbox via the post-parse
+  // handler in the hashchange listener (so STATE doesn't drift). In
+  // Historical mode they silently switch STATE.season + STATE.series so
+  // the page renders against that year.
   if (view === "race" || view === "schedule") {
     stashPrev(view);
     STATE.view = view;
     if (view === "race") {
-      const roundN = h[1] != null ? parseInt(h[1], 10) : null;
+      // Pull the round from h[1], stripping any query string suffix.
+      const rawSeg = h[1] != null ? String(h[1]) : "";
+      const roundPart = rawSeg.split("?")[0];
+      const roundN = parseInt(roundPart, 10);
       STATE.race = { round: Number.isFinite(roundN) ? roundN : null };
+      // Detect deep-link year/series params (#/race/N?_y=YYYY&_s=NCS).
+      // We stash these on STATE.race so the post-parse logic in the
+      // hashchange listener can decide whether to open a lightbox or
+      // switch context based on STATE.mode.
+      const queryStr = rawSeg.includes("?") ? rawSeg.split("?")[1] : "";
+      if (queryStr) {
+        const params = new URLSearchParams(queryStr);
+        const y = parseInt(params.get("_y"), 10);
+        const s = params.get("_s");
+        if (Number.isFinite(y) && ["NCS", "NOS", "NTS"].includes(s)) {
+          STATE.race.deepLinkYear = y;
+          STATE.race.deepLinkSeries = s;
+        }
+      }
     }
     STATE.lastHash = location.hash;
     return;
