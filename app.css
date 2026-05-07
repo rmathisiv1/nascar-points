@@ -4089,11 +4089,11 @@ a.driver-cell.profile-link:hover .car-tag {
   grid-template-columns: 90px minmax(0, 1.4fr) 130px minmax(160px, 1fr);
   align-items: center;
   gap: 18px;
-  padding: 10px 24px;
+  padding: 4px 24px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
   cursor: pointer;
   transition: background 0.1s;
-  font-size: 12px;
+  font-size: 11px;
   border-left: 3px solid transparent;
   width: 100%;
   max-width: 1000px;
@@ -4932,18 +4932,55 @@ a.rc-sched-winner:hover {
   margin-left: 4px;
 }
 
-/* --- Team page: Crew Chiefs section --- */
+/* --- Team page: Crew Chiefs section ---
+   Multi-series: NCS / NOS / NTS each get their own pane. The card body
+   becomes a 1/2/3-column grid depending on how many series the team
+   participates in. Rows inside each pane are tighter than before so
+   more chiefs fit visible at once. */
 .tm-cc-body-wrap {
+  padding: 8px;
+  display: grid;
+  gap: 12px;
+}
+.tm-cc-body-wrap.tm-cc-single { grid-template-columns: 1fr; }
+.tm-cc-body-wrap.tm-cc-double { grid-template-columns: 1fr 1fr; }
+.tm-cc-body-wrap.tm-cc-triple { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 767.98px) {
+  .tm-cc-body-wrap.tm-cc-double,
+  .tm-cc-body-wrap.tm-cc-triple { grid-template-columns: 1fr; }
+}
+.tm-cc-pane {
+  background: rgba(255,255,255,0.015);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tm-cc-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.tm-cc-pane-count {
+  font-size: 9px;
+  color: var(--dim);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.tm-cc-pane-body {
   padding: 4px;
 }
 .tm-cc-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 6px 8px;
   text-decoration: none;
   color: var(--text);
-  border-radius: 6px;
+  border-radius: 4px;
   transition: background 0.12s ease;
 }
 .tm-cc-row:hover {
@@ -4951,10 +4988,10 @@ a.rc-sched-winner:hover {
 }
 .tm-cc-car {
   flex-shrink: 0;
-  width: 38px; height: 38px;
+  width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 6px;
-  font-family: var(--mono); font-weight: 700; font-size: 14px;
+  border-radius: 4px;
+  font-family: var(--mono); font-weight: 700; font-size: 11px;
 }
 .tm-cc-body {
   flex: 1;
@@ -4962,15 +4999,22 @@ a.rc-sched-winner:hover {
 }
 .tm-cc-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tm-cc-driver {
-  font-size: 11px;
-  margin-top: 2px;
+  font-size: 10px;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tm-cc-arrow {
   color: var(--dim);
   font-family: var(--mono);
+  font-size: 11px;
 }
 
 /* === SEARCH BAR === */
@@ -5216,39 +5260,31 @@ a.rc-sched-winner:hover {
   font-size: 8px;
   padding: 1px 4px;
 }
-/* CC heatmap row label: fixed-width slots so columns visually align
-   across rows. Year and Series get tight fixed widths matching their
-   widest content. Driver and Team form a centered cluster taking the
-   remaining horizontal space — cluster sits flush at the start of its
-   slot so the driver name doesn't drift far from the Series pill. */
+/* CC heatmap row label: 4 fixed-position slots — year, series, driver,
+   team. The team pill is right-aligned within its slot so it lands at
+   the same x-coordinate every row regardless of driver name length.
+   The driver pill is also right-aligned inside its 1fr slot for the
+   same reason — names cluster against the team pill rather than
+   floating arbitrarily. Long names ellipsis-truncate. */
 #cc-career-heatmap .ph-row-label {
   display: grid;
-  grid-template-columns: 36px 38px 1fr;
+  grid-template-columns: 36px 38px 1fr 50px;
   align-items: center;
   gap: 6px;
   overflow: hidden;
 }
-/* Driver+Team cluster — second-to-last+last children share a flex container
-   via display:contents ancestor pattern won't work here; we instead wrap
-   them via the JS render. The cluster aligns left, gap-spaced, with the
-   team pill always sitting just to the right of the driver pill. */
-#cc-career-heatmap .ph-row-cluster {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-}
-#cc-career-heatmap .ph-row-cluster .ph-team-pill {
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-#cc-career-heatmap .ph-row-cluster > a:not(.ph-team-pill),
-#cc-career-heatmap .ph-row-cluster > .ph-team-pill-empty {
+#cc-career-heatmap .ph-row-label > a:not(.ph-team-pill):not(:last-child),
+#cc-career-heatmap .ph-row-label > .ph-team-pill-empty:not(:last-child) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  justify-self: end;        /* driver pill hugs right edge of its slot */
+}
+#cc-career-heatmap .ph-row-label > .ph-team-pill:last-child,
+#cc-career-heatmap .ph-row-label > .ph-team-pill-empty:last-child {
+  white-space: nowrap;
+  justify-self: start;      /* team pill hugs left edge of its slot */
 }
 .ph-head-cell {
   text-align: center;

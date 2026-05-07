@@ -2463,6 +2463,8 @@ function render() {
       renderTeamPage();
     } else if (STATE.view === "cc") {
       renderCrewChiefPage();
+    } else if (STATE.view === "playoffs") {
+      renderPlayoffs();
     } else {
       // Render the active tab's content
       switch (activeTab) {
@@ -2477,7 +2479,6 @@ function render() {
     }
   } else {
     renderMetricBar();
-    if (STATE.view === "playoffs") renderPlayoffs();
   }
 
   // Mirror toggle-groups + team-filter pills into native <select>s for mobile.
@@ -7666,10 +7667,8 @@ function paintCrewChiefCareerHeatmap() {
       <div class="ph-row-label">
         <span class="ph-yr">${r.year}</span>
         <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
-        <span class="ph-row-cluster">
-          ${driverPill}
-          ${teamPill}
-        </span>
+        ${driverPill}
+        ${teamPill}
       </div>
       ${cells.join("")}
       ${rankCell}
@@ -8789,7 +8788,10 @@ async function openRaceLightbox(year, series, round) {
     return;
   }
 
-  const trackName = prettyTrack(race.track_code, race.track) || race.track || "?";
+  // Track resolution — if the data doesn't have track info at all, omit
+  // the "· ?" rather than rendering a dangling separator.
+  const trackName = prettyTrack(race.track_code, race.track) || race.track || "";
+  const trackFragment = trackName ? ` · ${escapeHTML(trackName)}` : "";
   const dateStr = race.date
     ? new Date(race.date + "T00:00:00").toLocaleDateString("en-US",
         { weekday: "short", month: "short", day: "numeric", year: "numeric" })
@@ -8807,7 +8809,7 @@ async function openRaceLightbox(year, series, round) {
   body.innerHTML = `
     <div class="rc-hero" style="border-left:4px solid var(--accent);">
       <div class="rc-hero-badge">${badge}</div>
-      <h2 class="rc-hero-track" id="race-lightbox-title">R${race.round} · ${escapeHTML(trackName)}</h2>
+      <h2 class="rc-hero-track" id="race-lightbox-title">R${race.round}${trackFragment}</h2>
       <div class="rc-hero-meta">
         ${dateStr ? escapeHTML(dateStr) + " · " : ""}${seriesLabel(series, year)} · ${year}
         ${race.race_name ? ` · <span class="muted">"${escapeHTML(race.race_name)}"</span>` : ""}
@@ -10174,37 +10176,79 @@ function renderAllSeriesCarCards(rows) {
   }).join("");
 }
 
-// Render the "Crew Chiefs" card on a team page. For each current car, finds
-// the current CC and links to their CC profile. Hidden if no CC data
-// available (pre-backfill state, or non-current series).
+// Render the "Crew Chiefs" card on a team page. Now multi-series — pulls
+// each car/driver/CC per series from SEASON_CACHE (NCS/NOS/NTS) so the
+// user sees the full org's crew-chief lineup at a glance, not just the
+// series they happen to be browsing.
+//
+// Each series gets its own column (NCS | NOS | NTS) so the layout
+// scales gracefully for one-series teams up to all-three orgs.
 function renderTeamCrewChiefsCard(currentCars) {
-  if (!currentCars || currentCars.length === 0) return "";
-  const rows = currentCars.map(e => {
-    const drvSlug = slugify(e.primaryDriver || e.driver || "");
-    const ccName = currentCrewChiefForDriver(drvSlug);
-    if (!ccName) return null;
-    const carHex = colorFor(STATE.series, e.car_number);
-    const carTxt = contrastTextFor(carHex);
-    const drvName = e.primaryDriver || e.driver;
-    return `<a class="tm-cc-row profile-link" href="#/cc/${slugify(ccName)}">
-      <div class="tm-cc-car" style="background:${carHex};color:${carTxt}">${e.car_number}</div>
-      <div class="tm-cc-body">
-        <div class="tm-cc-name">${escapeHTML(ccName)}</div>
-        <div class="tm-cc-driver muted">${escapeHTML(drvName)}</div>
-      </div>
-      <div class="tm-cc-arrow">→</div>
-    </a>`;
-  }).filter(Boolean);
+  const teamCode = STATE.team && STATE.team.code;
+  if (!teamCode) return "";
+  const year = STATE.season;
+  const blocks = SEASON_CACHE[year];
+  if (!blocks) return "";
 
-  if (rows.length === 0) return "";   // no CC data yet for any car
+  // Build per-series CC rows from SEASON_CACHE so we cover every series
+  // the team participates in (not just STATE.series).
+  const seriesOrder = ["NCS", "NOS", "NTS"];
+  const perSeries = seriesOrder.map(sCode => {
+    const block = blocks[sCode];
+    if (!block || !block.races) return { series: sCode, rows: [] };
+    const seriesEntities = entitiesFromRaces(block.races);
+    const teamCars = seriesEntities.filter(e => {
+      const code = e.team_code
+        || teamCodeFromName(e.team, SERIES_TO_KEY[sCode], e.car_number);
+      if (!code) return false;
+      return teamGroup(code, year) === teamCode || code === teamCode;
+    });
+    const rows = teamCars.map(e => {
+      const drvSlug = slugify(e.primaryDriver || e.driver || "");
+      const ccName = currentCrewChiefForDriverInBlock(drvSlug, block.races);
+      if (!ccName) return null;
+      const carHex = colorFor(sCode, e.car_number);
+      const carTxt = contrastTextFor(carHex);
+      const drvName = e.primaryDriver || e.driver;
+      return `<a class="tm-cc-row profile-link" href="#/cc/${slugify(ccName)}">
+        <div class="tm-cc-car" style="background:${carHex};color:${carTxt}">${e.car_number}</div>
+        <div class="tm-cc-body">
+          <div class="tm-cc-name">${escapeHTML(ccName)}</div>
+          <div class="tm-cc-driver muted">${escapeHTML(drvName)}</div>
+        </div>
+        <div class="tm-cc-arrow">→</div>
+      </a>`;
+    }).filter(Boolean);
+    return { series: sCode, rows };
+  }).filter(s => s.rows.length > 0);
+
+  if (perSeries.length === 0) return "";   // no CC data for any series
+
+  // Per-series panes — single full-width pane if only one series, or
+  // a 2/3-column grid if multi-series.
+  const paneCount = perSeries.length;
+  const gridClass = paneCount === 1 ? "tm-cc-single"
+                  : paneCount === 2 ? "tm-cc-double"
+                  : "tm-cc-triple";
+  const panesHTML = perSeries.map(s => {
+    return `<div class="tm-cc-pane">
+      <div class="tm-cc-pane-head">
+        <span class="series-tag series-${s.series.toLowerCase()}">${s.series}</span>
+        <span class="tm-cc-pane-count">${s.rows.length} ${s.rows.length === 1 ? "chief" : "chiefs"}</span>
+      </div>
+      <div class="tm-cc-pane-body">
+        ${s.rows.join("")}
+      </div>
+    </div>`;
+  }).join("");
 
   return `<div class="card rc-card rc-card-wide">
     <div class="rc-card-head">
       <span class="rc-card-title">Crew Chiefs</span>
-      <span class="rc-card-sub">click for career stats</span>
+      <span class="rc-card-sub">click for career stats · all series</span>
     </div>
-    <div class="rc-card-body tm-cc-body-wrap">
-      ${rows.join("")}
+    <div class="rc-card-body tm-cc-body-wrap ${gridClass}">
+      ${panesHTML}
     </div>
   </div>`;
 }
@@ -10414,6 +10458,22 @@ function currentCrewChiefForDriver(driverSlug) {
     .slice()
     .sort((a, b) => (b.round || 0) - (a.round || 0)); // newest first
   for (const race of races) {
+    for (const d of race.results || []) {
+      if (d.ineligible) continue;
+      if (slugify(d.driver || "") !== driverSlug) continue;
+      if (d.crew_chief) return d.crew_chief;
+    }
+  }
+  return null;
+}
+
+// Same as currentCrewChiefForDriver but reads from an explicit series
+// block (raw races array) rather than STATE.data. Used by the team
+// profile to surface CCs across NCS+NOS+NTS in a single render.
+function currentCrewChiefForDriverInBlock(driverSlug, races) {
+  if (!driverSlug || !races) return null;
+  const sorted = races.slice().sort((a, b) => (b.round || 0) - (a.round || 0));
+  for (const race of sorted) {
     for (const d of race.results || []) {
       if (d.ineligible) continue;
       if (slugify(d.driver || "") !== driverSlug) continue;
