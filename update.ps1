@@ -148,6 +148,59 @@ if (-not $cachedDiff) {
 }
 Write-Host $cachedDiff
 
+# --- 4b. Surface upcoming-race schedule changes ---
+# Walk the staged points file and report any upcoming-race fields (date,
+# time, tv, name, track_length, scheduled_laps) that differ from HEAD.
+# Helps you see when NASCAR moves a start time or rebrands an upcoming
+# race so you don't miss the update in the commit log.
+$pointsFile = "data\points_$Season.json"
+if ((-not $SkipPoints) -and (Test-Path $pointsFile)) {
+    Write-Host ""
+    Write-Host "=== Upcoming race schedule diff ===" -ForegroundColor Cyan
+    $diffScript = @"
+import json, sys, subprocess
+path = sys.argv[1]
+new = json.load(open(path, encoding='utf-8'))
+try:
+    old_raw = subprocess.check_output(['git', 'show', f'HEAD:{path.replace(chr(92), "/")}'], stderr=subprocess.DEVNULL)
+    old = json.loads(old_raw.decode('utf-8'))
+except subprocess.CalledProcessError:
+    print('(no prior version on HEAD — nothing to diff)')
+    sys.exit(0)
+fields = ['date', 'time', 'tv', 'name', 'track_length', 'scheduled_laps', 'surface', 'track']
+def by_round(payload, series_code):
+    s = (payload.get('series') or {}).get(series_code) or {}
+    return {r.get('round'): r for r in (s.get('races') or [])}
+changes = []
+for sCode in ['NCS', 'NOS', 'NTS']:
+    new_map = by_round(new, sCode)
+    old_map = by_round(old, sCode)
+    for rd, race in new_map.items():
+        # Only diff UPCOMING races — completed races change in lots of ways
+        # we don't care about here (results / points / etc.)
+        if (race.get('results') or []):
+            continue
+        prior = old_map.get(rd)
+        if not prior:
+            changes.append(f'  + [{sCode} R{rd}] new upcoming race: {race.get(\"track\",\"\")} {race.get(\"name\",\"\")}')
+            continue
+        for f in fields:
+            a = prior.get(f, '')
+            b = race.get(f, '')
+            if a != b:
+                changes.append(f'  ~ [{sCode} R{rd}] {f}: {a!r} -> {b!r}')
+if not changes:
+    print('  (no upcoming-race info changed)')
+else:
+    for c in changes:
+        print(c)
+"@
+    $tmpFile = New-TemporaryFile
+    Set-Content -Path $tmpFile -Value $diffScript -Encoding UTF8
+    & $python $tmpFile $pointsFile
+    Remove-Item $tmpFile -ErrorAction SilentlyContinue
+}
+
 if ($DryRun) {
     Write-Host ""
     Write-Host "DryRun: skipping commit + push. Run without -DryRun to publish." -ForegroundColor Yellow
