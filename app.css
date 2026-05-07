@@ -220,6 +220,13 @@ html, body {
 }
 .metric .v.hot { color: var(--pos); }
 .metric .v.cold { color: var(--neg); }
+.metric-pts {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 4px;
+  opacity: 0.9;
+}
 
 /* ========== APP / SIDEBAR / MAIN ========== */
 /* ========================================================
@@ -419,9 +426,13 @@ html, body {
   gap: 2px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  /* visible (not auto) so dropdown submenus aren't clipped by the
+     scroll container. Mobile hides this whole bar via the media
+     query below in favor of the bottom mobile-nav. */
+  overflow: visible;
   flex-shrink: 0;
+  position: relative;   /* anchor for absolute submenus */
+  z-index: 5;            /* sit above tab-body content */
 }
 .dash-tabs::-webkit-scrollbar { height: 0; }
 .dash-tab {
@@ -438,6 +449,65 @@ html, body {
 }
 .dash-tab:hover { color: var(--text); }
 .dash-tab.active {
+  background: var(--accent-bg-hi);
+  color: var(--accent-2);
+}
+
+/* Tab group: parent tab + submenu container. The submenu floats
+   below the parent and appears on hover. The parent itself remains
+   clickable as a fallback (default route inside the group). */
+.dash-tab-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.dash-tab-parent {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.dash-caret {
+  font-size: 8px;
+  opacity: 0.7;
+}
+.dash-submenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 160px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  display: none;     /* shown via :hover on the group */
+  flex-direction: column;
+  gap: 2px;
+  z-index: 10;
+}
+.dash-tab-group:hover .dash-submenu,
+.dash-tab-group:focus-within .dash-submenu {
+  display: flex;
+}
+.dash-subitem {
+  padding: 6px 10px;
+  color: var(--muted);
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 3px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  transition: background 0.1s, color 0.1s;
+}
+.dash-subitem:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.dash-subitem.active {
+  background: var(--accent-bg-hi);
+  color: var(--accent-2);
+}
+/* Highlight parent tab when one of its subitems is active */
+.dash-tab-group.has-active-child > .dash-tab-parent {
   background: var(--accent-bg-hi);
   color: var(--accent-2);
 }
@@ -534,7 +604,10 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   margin-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
-.profile-takeover #view-profile {
+.profile-takeover #view-profile,
+.profile-takeover #view-drivers,
+.profile-takeover #view-teams,
+.profile-takeover #view-crewchiefs {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -543,7 +616,10 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   scrollbar-width: none;          /* Firefox */
   -ms-overflow-style: none;       /* IE/old Edge */
 }
-.profile-takeover #view-profile::-webkit-scrollbar { display: none; }
+.profile-takeover #view-profile::-webkit-scrollbar,
+.profile-takeover #view-drivers::-webkit-scrollbar,
+.profile-takeover #view-teams::-webkit-scrollbar,
+.profile-takeover #view-crewchiefs::-webkit-scrollbar { display: none; }
 
 /* Slim toolbar variant for tabbed panels — no margin-bottom, tighter */
 .toolbar-slim {
@@ -5017,7 +5093,81 @@ a.rc-sched-winner:hover {
   font-size: 11px;
 }
 
-/* === SEARCH BAR === */
+/* === ALL-TIME DATABASE PAGES (Drivers / Teams / Crew Chiefs) === */
+/* Sortable career stats table with a search box. Lives inside the
+   center-pane takeover (alongside Race / Schedule / Track) so the
+   left/right side panels stay visible. */
+.alltime-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px 12px;
+}
+.alltime-search {
+  flex: 1;
+  max-width: 320px;
+  padding: 6px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--sans);
+}
+.alltime-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.alltime-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.alltime-table-wrap {
+  padding: 0;
+}
+.alltime-table {
+  width: 100%;
+  font-size: 12px;
+}
+.alltime-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  z-index: 1;
+  border-bottom: 1px solid var(--border);
+}
+.alltime-th {
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.alltime-th.num { text-align: right; }
+.alltime-th:hover { color: var(--text); }
+.alltime-sort {
+  color: var(--accent-2);
+  font-size: 8px;
+  margin-left: 2px;
+}
+.alltime-table tbody td {
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.alltime-table tbody td.num {
+  text-align: right;
+  font-family: var(--mono);
+}
+.alltime-table tbody tr:hover {
+  background: rgba(255,255,255,0.025);
+}
+.alltime-table tbody td .hot { color: var(--pos); font-weight: 600; }
 /* Lives in the topbar between the series switcher and the topbar-right
    pickers. On desktop expands to fill available width. On mobile collapses
    to an icon-button (separate handling below). */

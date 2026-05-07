@@ -69,6 +69,9 @@
   <a href="#/heatmap"    class="mobile-nav-link" data-view="heatmap">Heatmap</a>
   <a href="#/standings"  class="mobile-nav-link" data-view="standings">Standings</a>
   <a href="#/playoffs"   class="mobile-nav-link" data-view="playoffs">Playoffs</a>
+  <a href="#/drivers"    class="mobile-nav-link" data-view="drivers">All-Time Drivers</a>
+  <a href="#/teams"      class="mobile-nav-link" data-view="teams">All-Time Teams</a>
+  <a href="#/crewchiefs" class="mobile-nav-link" data-view="crewchiefs">All-Time Crew Chiefs</a>
 </nav>
 
 <div class="metricbar" id="metricbar"></div>
@@ -95,14 +98,39 @@
   <section class="col-center" id="col-center">
     <nav class="dash-tabs" id="dash-tabs">
       <a href="#/schedule"   class="dash-tab" data-view="schedule">Schedule</a>
-      <a href="#/arc"        class="dash-tab" data-view="arc">Cumulative Season</a>
+
+      <!-- Standings group: parent links to standings; hover reveals Playoffs subtab -->
+      <div class="dash-tab-group" data-group="standings">
+        <a href="#/standings" class="dash-tab dash-tab-parent" data-view="standings">Standings <span class="dash-caret">▾</span></a>
+        <div class="dash-submenu">
+          <a href="#/standings" class="dash-subitem" data-view="standings">Standings</a>
+          <a href="#/playoffs"  class="dash-subitem" data-view="playoffs">Playoffs</a>
+        </div>
+      </div>
+
       <a href="#/form"       class="dash-tab" data-view="form">Trending</a>
-      <a href="#/breakdown"  class="dash-tab" data-view="breakdown">Points Breakdown</a>
-      <a href="#/trajectory" class="dash-tab" data-view="trajectory">Stage vs Finish</a>
-      <a href="#/teammates"  class="dash-tab" data-view="teammates">Teammate</a>
-      <a href="#/heatmap"    class="dash-tab" data-view="heatmap">Heatmap</a>
-      <a href="#/standings"  class="dash-tab" data-view="standings">Standings</a>
-      <a href="#/playoffs"   class="dash-tab" data-view="playoffs">Playoffs</a>
+
+      <!-- Analytics group: container only (no own view); hover reveals analysis tabs -->
+      <div class="dash-tab-group" data-group="analytics">
+        <a href="#/arc" class="dash-tab dash-tab-parent" data-view="analytics" data-fallback-view="arc">Analytics <span class="dash-caret">▾</span></a>
+        <div class="dash-submenu">
+          <a href="#/arc"        class="dash-subitem" data-view="arc">Cumulative Season</a>
+          <a href="#/heatmap"    class="dash-subitem" data-view="heatmap">Heatmap</a>
+          <a href="#/teammates"  class="dash-subitem" data-view="teammates">Teammate</a>
+          <a href="#/trajectory" class="dash-subitem" data-view="trajectory">Stage vs Finish</a>
+          <a href="#/breakdown"  class="dash-subitem" data-view="breakdown">Points Breakdown</a>
+        </div>
+      </div>
+
+      <!-- More group: all-time database tabs -->
+      <div class="dash-tab-group" data-group="more">
+        <a href="#/drivers" class="dash-tab dash-tab-parent" data-view="more" data-fallback-view="drivers">More <span class="dash-caret">▾</span></a>
+        <div class="dash-submenu">
+          <a href="#/drivers"     class="dash-subitem" data-view="drivers">Drivers</a>
+          <a href="#/teams"       class="dash-subitem" data-view="teams">Teams</a>
+          <a href="#/crewchiefs"  class="dash-subitem" data-view="crewchiefs">Crew Chiefs</a>
+        </div>
+      </div>
     </nav>
 
     <!-- Center-pane takeovers (profile, race, track, schedule).
@@ -190,6 +218,49 @@
           <div class="view-sub" id="playoffs-sub">—</div>
         </div>
         <div id="playoffs-host"></div>
+      </section>
+    </div>
+
+    <!-- All-time database pages: Drivers / Teams / Crew Chiefs.
+         These pull from SEASON_CACHE across every loaded year and render
+         a single sortable career-stats table. They live in the "More"
+         dropdown of the tab bar. -->
+    <div class="profile-takeover" id="drivers-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="drivers-back">← Back</a>
+      </div>
+      <section class="view" id="view-drivers">
+        <div class="view-head">
+          <h1>All-Time Drivers</h1>
+          <div class="view-sub" id="drivers-sub">—</div>
+        </div>
+        <div id="drivers-host"></div>
+      </section>
+    </div>
+
+    <div class="profile-takeover" id="teams-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="teams-back">← Back</a>
+      </div>
+      <section class="view" id="view-teams">
+        <div class="view-head">
+          <h1>All-Time Teams</h1>
+          <div class="view-sub" id="teams-sub">—</div>
+        </div>
+        <div id="teams-host"></div>
+      </section>
+    </div>
+
+    <div class="profile-takeover" id="crewchiefs-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="crewchiefs-back">← Back</a>
+      </div>
+      <section class="view" id="view-crewchiefs">
+        <div class="view-head">
+          <h1>All-Time Crew Chiefs</h1>
+          <div class="view-sub" id="crewchiefs-sub">—</div>
+        </div>
+        <div id="crewchiefs-host"></div>
       </section>
     </div>
 

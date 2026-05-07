@@ -72,7 +72,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team", "cc"];
+const VIEWS = ["race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -1592,15 +1592,23 @@ function parseHash() {
     STATE.lastHash = location.hash;
     return;
   }
+  // All-time database pages: #/drivers, #/teams, #/crewchiefs.
+  // No parameters — these always render against the full SEASON_CACHE.
+  if (view === "drivers" || view === "teams" || view === "crewchiefs") {
+    stashPrev(view);
+    STATE.view = view;
+    STATE.lastHash = location.hash;
+    return;
+  }
   // Leaving a takeover (profile/team/cc/track/race) → restore the previous
   // (series, season) we stashed before entering. In Present mode we go a
   // step further: hard-snap to the latest available season regardless of
   // what was stashed, since the user opted into "always live" — even the
   // original entry point may have been historical.
   const wasProfile = STATE.view === "profile" && STATE.profile && STATE.profile.locked;
-  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs"].includes(STATE.view);
+  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs"].includes(STATE.view);
   const leavingTakeover = wasProfile || wasOtherTakeover;
-  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs"].includes(view);
+  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs"].includes(view);
   if (leavingTakeover && enteringNonTakeover) {
     if (STATE.mode === "present") {
       const latest = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
@@ -2113,7 +2121,8 @@ function wireUIControls() {
     location.hash = `#/${prev}`;
   });
   // Race / Track / Schedule / Team back: same logic as profile-back.
-  ["race-back", "track-back", "schedule-back", "team-back", "cc-back"].forEach(id => {
+  ["race-back", "track-back", "schedule-back", "team-back", "cc-back",
+   "drivers-back", "teams-back", "crewchiefs-back"].forEach(id => {
     document.getElementById(id)?.addEventListener("click", (e) => {
       e.preventDefault();
       if (STATE.prevHash && STATE.prevHash !== location.hash) {
@@ -2342,7 +2351,7 @@ const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatm
 const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
 // alongside left (standings) and right (form) panels.
-const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs"];
+const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs", "drivers", "teams", "crewchiefs"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -2378,6 +2387,9 @@ function render() {
       profile: "Driver Profile",
       team: "Team",
       cc: "Crew Chief",
+      drivers: "All-Time Drivers",
+      teams: "All-Time Teams",
+      crewchiefs: "All-Time Crew Chiefs",
     };
     pageTitleEl.textContent = titleMap[STATE.view] || "NASCAR Points";
   }
@@ -2411,6 +2423,9 @@ function render() {
   const teamTakeover    = document.getElementById("team-takeover");
   const ccTakeover      = document.getElementById("cc-takeover");
   const playoffsTakeover = document.getElementById("playoffs-takeover");
+  const driversTakeover = document.getElementById("drivers-takeover");
+  const teamsTakeover   = document.getElementById("teams-takeover");
+  const ccsTakeover     = document.getElementById("crewchiefs-takeover");
   const tabBody         = document.getElementById("tab-body");
   if (profileTakeover) profileTakeover.hidden = (STATE.view !== "profile");
   if (raceTakeover)    raceTakeover.hidden    = (STATE.view !== "race");
@@ -2419,6 +2434,9 @@ function render() {
   if (teamTakeover)    teamTakeover.hidden    = (STATE.view !== "team");
   if (ccTakeover)      ccTakeover.hidden      = (STATE.view !== "cc");
   if (playoffsTakeover) playoffsTakeover.hidden = (STATE.view !== "playoffs");
+  if (driversTakeover) driversTakeover.hidden = (STATE.view !== "drivers");
+  if (teamsTakeover)   teamsTakeover.hidden   = (STATE.view !== "teams");
+  if (ccsTakeover)     ccsTakeover.hidden     = (STATE.view !== "crewchiefs");
   // The view-playoffs section inside its takeover wrapper has its own
   // hidden attribute — keep it in sync so renderPlayoffs paints into it.
   const pElem = document.getElementById("view-playoffs");
@@ -2436,13 +2454,30 @@ function render() {
   // Tab button active-state — match the current view directly. The "Race"
   // and "Schedule" tabs are special: they're center-pane takeovers, not
   // tab-body panels, but they still highlight when their route is active.
-  document.querySelectorAll(".dash-tab").forEach(a => {
-    const v = a.dataset.view;
+  // Tab + subitem active-state. Center-pane takeovers (race, track,
+  // schedule, etc.) ALSO drive their tabs' active state — the tab
+  // strip should always reflect "where you are". Subitems mark themselves
+  // active when their data-view matches STATE.view; their parent tab
+  // group also lights up so the user sees which group is open.
+  const v = STATE.view;
+  // Top-level dash-tab links (those NOT inside .dash-tab-group)
+  document.querySelectorAll(".dash-tabs > .dash-tab").forEach(a => {
+    const tv = a.dataset.view;
     let active = false;
-    if (v === "race")          active = (STATE.view === "race");
-    else if (v === "schedule") active = (STATE.view === "schedule");
-    else                       active = (!inCenterTakeover && v === activeTab);
+    if (tv === "race")          active = (v === "race");
+    else if (tv === "schedule") active = (v === "schedule");
+    else                        active = (!inCenterTakeover && tv === activeTab);
     a.classList.toggle("active", active);
+  });
+  // Subitems inside dropdown groups
+  document.querySelectorAll(".dash-subitem").forEach(a => {
+    const tv = a.dataset.view;
+    a.classList.toggle("active", tv === v);
+  });
+  // Parent tab groups: highlight when any child subitem is active
+  document.querySelectorAll(".dash-tab-group").forEach(grp => {
+    const anyActive = !!grp.querySelector(".dash-subitem.active");
+    grp.classList.toggle("has-active-child", anyActive);
   });
 
   // ---- Always-on dashboard side panels (when not in full-page takeover) ----
@@ -2465,6 +2500,12 @@ function render() {
       renderCrewChiefPage();
     } else if (STATE.view === "playoffs") {
       renderPlayoffs();
+    } else if (STATE.view === "drivers") {
+      renderAllTimeDrivers();
+    } else if (STATE.view === "teams") {
+      renderAllTimeTeams();
+    } else if (STATE.view === "crewchiefs") {
+      renderAllTimeCrewChiefs();
     } else {
       // Render the active tab's content
       switch (activeTab) {
@@ -2922,15 +2963,27 @@ function renderMetricBar() {
   const lastRace = races[races.length - 1];
   const leader = totals[0];
 
-  const deltas = allEntities().filter(isFullTime).map(d => {
-    const f = formRatingFor(d.races, "5");
-    const s = formRatingFor(d.races, "season");
-    return { entity: d, delta: (f != null && s != null) ? f - s : null };
-  }).filter(d => d.delta != null);
-  const hottest = deltas.slice().sort((a,b) => b.delta - a.delta)[0];
-  const coldest = deltas.slice().sort((a,b) => a.delta - b.delta)[0];
+  // Hottest/Coldest: total points scored in the last 5 completed races
+  // (current series). Limited to full-time drivers so a one-off ringer
+  // who scored 47 in a single race doesn't dominate. Each entity's
+  // races[] is keyed by round; we sum `total` across the 5 most-recent
+  // run rounds. Ties are rare with 5-race sums; sort puts highest first.
+  const lastRunRounds = races
+    .map(r => r.round)
+    .filter(rd => rd != null)
+    .sort((a, b) => b - a)
+    .slice(0, 5);
+  const last5 = allEntities().filter(isFullTime).map(d => {
+    const sum = (d.races || [])
+      .filter(r => lastRunRounds.includes(r.round))
+      .reduce((acc, r) => acc + (r.total || 0), 0);
+    return { entity: d, points: sum };
+  }).filter(d => d.points > 0 || lastRunRounds.length === 0);
+  const hottest = last5.slice().sort((a, b) => b.points - a.points)[0];
+  const coldest = last5.slice().sort((a, b) => a.points - b.points)[0];
 
-  const hotColdTip = "Rating delta: last-5-race form rating minus full-season rating. +17.4 means this driver's recent finishes are about 8\u20139 positions better than their season average. \u221213.0 means the opposite \u2014 about 6\u20137 positions worse recently.";
+  const winLen = lastRunRounds.length;
+  const hotColdTip = `Total points scored in the last ${winLen} race${winLen === 1 ? "" : "s"} (full-time drivers only). Resets each week as new races run.`;
   const leaderTip = "Points leader through the last completed race.";
   const raceTip = "Most recent race in the dataset, with the top 3 finishers.";
   const upcomingTip = "Next scheduled race.";
@@ -2979,9 +3032,9 @@ function renderMetricBar() {
     <div class="metric" data-tip="${escapeHTML(leaderTip)}"><span class="k">Leader</span>
       <span class="v">${leader ? `${driverLink(leader)} \u00b7 ${leader.total}` : "\u2014"}</span></div>
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Hottest</span>
-      <span class="v hot">${hottest ? `${driverLink(hottest.entity)} ${signed(hottest.delta.toFixed(1))}` : "\u2014"}</span></div>
+      <span class="v hot">${hottest ? `${driverLink(hottest.entity)} <span class="metric-pts">${hottest.points}pts</span>` : "\u2014"}</span></div>
     <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Coldest</span>
-      <span class="v cold">${coldest ? `${driverLink(coldest.entity)} ${signed(coldest.delta.toFixed(1))}` : "\u2014"}</span></div>
+      <span class="v cold">${coldest ? `${driverLink(coldest.entity)} <span class="metric-pts">${coldest.points}pts</span>` : "\u2014"}</span></div>
     <div class="metric metric-lastrace" data-tip="${escapeHTML(raceTip)}"><span class="k">${STATE.throughRound != null ? "As Of" : "Last Race"}</span>
       <div class="metric-lastrace-row">
         <span class="v">${lastRace ? `<a class="metric-name-link" href="#/race/${lastRace.round}">R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}</a>` : "\u2014"}</span>
@@ -10945,6 +10998,396 @@ function renderCrewChiefPage() {
   }
 }
 
+
+// ============================================================
+// ALL-TIME DATABASE PAGES
+// ------------------------------------------------------------
+// Drivers / Teams / Crew Chiefs aggregated across every loaded season
+// in SEASON_CACHE. Each page is a single sortable career-stats table.
+// They iterate every (year, series) block once, fold per-driver / per-
+// team / per-CC stats, then render a sortable table. A small note
+// surfaces if not all years are loaded yet (the heatmap lazy-load
+// already covers most of the cache by the time anyone visits these).
+// ============================================================
+
+// Build per-driver career aggregates from SEASON_CACHE. Returns array
+// of { slug, name, starts, wins, top5, top10, finishes, years (Set), bySeries (Map) }
+function computeAllTimeDrivers() {
+  const byDrv = new Map();
+  Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
+    if (!blocks) return;
+    Object.entries(blocks).forEach(([sCode, block]) => {
+      if (!block || !block.races) return;
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (!d.driver || d.ineligible) return;
+          const slug = slugify(d.driver);
+          let agg = byDrv.get(slug);
+          if (!agg) {
+            agg = {
+              slug, name: d.driver,
+              starts: 0, wins: 0, top5: 0, top10: 0,
+              finishSum: 0, finishCount: 0,
+              years: new Set(),
+              bySeries: { NCS: 0, NOS: 0, NTS: 0 },
+            };
+            byDrv.set(slug, agg);
+          }
+          if (d.finish_pos != null) {
+            agg.starts++;
+            agg.finishSum += d.finish_pos;
+            agg.finishCount++;
+            if (d.finish_pos === 1) agg.wins++;
+            if (d.finish_pos <= 5) agg.top5++;
+            if (d.finish_pos <= 10) agg.top10++;
+            agg.years.add(Number(year));
+            if (agg.bySeries[sCode] != null) agg.bySeries[sCode]++;
+          }
+        });
+      });
+    });
+  });
+  // Compute derived: avg finish + year range
+  const out = Array.from(byDrv.values()).map(d => {
+    const yrs = Array.from(d.years).sort((a, b) => a - b);
+    const yrLabel = yrs.length === 0 ? "—"
+                  : yrs.length === 1 ? String(yrs[0])
+                  : `${yrs[0]}–${yrs[yrs.length - 1]}`;
+    return {
+      slug: d.slug,
+      name: d.name,
+      starts: d.starts,
+      wins: d.wins,
+      top5: d.top5,
+      top10: d.top10,
+      avgFin: d.finishCount > 0 ? d.finishSum / d.finishCount : null,
+      yearsCount: yrs.length,
+      yearsLabel: yrLabel,
+      bySeries: d.bySeries,
+    };
+  });
+  return out;
+}
+
+// Build per-team career aggregates from SEASON_CACHE. Keyed by team_code.
+// Sums wins/top5/top10 across every entry in the team for every season.
+function computeAllTimeTeams() {
+  const byTeam = new Map();
+  Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
+    if (!blocks) return;
+    Object.entries(blocks).forEach(([sCode, block]) => {
+      if (!block || !block.races) return;
+      const yr = Number(year);
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          const code = d.team_code
+            || teamCodeFromName(d.team, SERIES_TO_KEY[sCode], d.car_number);
+          if (!code) return;
+          // Bucket alliances (WBR→PEN era-aware)
+          const grp = teamGroup(code, yr) || code;
+          let agg = byTeam.get(grp);
+          if (!agg) {
+            agg = {
+              code: grp,
+              starts: 0, wins: 0, top5: 0, top10: 0,
+              finishSum: 0, finishCount: 0,
+              years: new Set(),
+            };
+            byTeam.set(grp, agg);
+          }
+          if (d.finish_pos != null) {
+            agg.starts++;
+            agg.finishSum += d.finish_pos;
+            agg.finishCount++;
+            if (d.finish_pos === 1) agg.wins++;
+            if (d.finish_pos <= 5) agg.top5++;
+            if (d.finish_pos <= 10) agg.top10++;
+            agg.years.add(yr);
+          }
+        });
+      });
+    });
+  });
+  return Array.from(byTeam.values()).map(t => {
+    const yrs = Array.from(t.years).sort((a, b) => a - b);
+    const yrLabel = yrs.length === 0 ? "—"
+                  : yrs.length === 1 ? String(yrs[0])
+                  : `${yrs[0]}–${yrs[yrs.length - 1]}`;
+    return {
+      code: t.code,
+      name: teamLabelForEra(t.code, yrs[yrs.length - 1] || STATE.season).full || t.code,
+      starts: t.starts,
+      wins: t.wins,
+      top5: t.top5,
+      top10: t.top10,
+      avgFin: t.finishCount > 0 ? t.finishSum / t.finishCount : null,
+      yearsCount: yrs.length,
+      yearsLabel: yrLabel,
+    };
+  });
+}
+
+// Build per-CC career aggregates from SEASON_CACHE. Keyed by CC slug.
+// Each driver-race with a populated crew_chief field counts as one start
+// for that CC. Wins/top5/top10 follow the driver's finish.
+function computeAllTimeCrewChiefs() {
+  const byCC = new Map();
+  Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
+    if (!blocks) return;
+    Object.entries(blocks).forEach(([sCode, block]) => {
+      if (!block || !block.races) return;
+      const yr = Number(year);
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          if (!d.crew_chief) return;
+          const slug = slugify(d.crew_chief);
+          let agg = byCC.get(slug);
+          if (!agg) {
+            agg = {
+              slug, name: d.crew_chief,
+              starts: 0, wins: 0, top5: 0, top10: 0,
+              finishSum: 0, finishCount: 0,
+              years: new Set(),
+            };
+            byCC.set(slug, agg);
+          }
+          if (d.finish_pos != null) {
+            agg.starts++;
+            agg.finishSum += d.finish_pos;
+            agg.finishCount++;
+            if (d.finish_pos === 1) agg.wins++;
+            if (d.finish_pos <= 5) agg.top5++;
+            if (d.finish_pos <= 10) agg.top10++;
+            agg.years.add(yr);
+          }
+        });
+      });
+    });
+  });
+  return Array.from(byCC.values()).map(c => {
+    const yrs = Array.from(c.years).sort((a, b) => a - b);
+    const yrLabel = yrs.length === 0 ? "—"
+                  : yrs.length === 1 ? String(yrs[0])
+                  : `${yrs[0]}–${yrs[yrs.length - 1]}`;
+    return {
+      slug: c.slug,
+      name: c.name,
+      starts: c.starts,
+      wins: c.wins,
+      top5: c.top5,
+      top10: c.top10,
+      avgFin: c.finishCount > 0 ? c.finishSum / c.finishCount : null,
+      yearsCount: yrs.length,
+      yearsLabel: yrLabel,
+    };
+  });
+}
+
+// Track per-page sort + filter state. Single object shared by all three
+// all-time pages — they don't co-exist on screen, so the simplification
+// is fine.
+const ALLTIME_STATE = {
+  drivers:    { sortKey: "starts", sortDir: "desc", search: "" },
+  teams:      { sortKey: "starts", sortDir: "desc", search: "" },
+  crewchiefs: { sortKey: "starts", sortDir: "desc", search: "" },
+};
+
+// Generic sortable table renderer for all-time pages. Pass:
+//   rows       — array of { name, starts, wins, top5, top10, avgFin, yearsLabel, ... }
+//   linkBuilder— (row) => href to that entity's profile, or null for no link
+//   stateKey   — "drivers" | "teams" | "crewchiefs"
+function renderAllTimeTable(rows, linkBuilder, stateKey) {
+  const st = ALLTIME_STATE[stateKey];
+  const search = (st.search || "").trim().toLowerCase();
+  let visible = rows;
+  if (search) {
+    visible = rows.filter(r =>
+      r.name.toLowerCase().includes(search) ||
+      (r.code && r.code.toLowerCase().includes(search))
+    );
+  }
+  // Sort
+  const dir = st.sortDir === "asc" ? 1 : -1;
+  const k = st.sortKey;
+  visible = visible.slice().sort((a, b) => {
+    const av = a[k]; const bv = b[k];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === "string") return dir * av.localeCompare(bv);
+    return dir * (av - bv);
+  });
+
+  const sortAttr = (col) => {
+    if (col !== k) return "";
+    return ` <span class="alltime-sort">${st.sortDir === "asc" ? "▲" : "▼"}</span>`;
+  };
+
+  const header = `<thead><tr>
+    <th class="alltime-th" data-sort="name">Name${sortAttr("name")}</th>
+    <th class="alltime-th num" data-sort="starts">Starts${sortAttr("starts")}</th>
+    <th class="alltime-th num" data-sort="wins">Wins${sortAttr("wins")}</th>
+    <th class="alltime-th num" data-sort="top5">T5${sortAttr("top5")}</th>
+    <th class="alltime-th num" data-sort="top10">T10${sortAttr("top10")}</th>
+    <th class="alltime-th num" data-sort="avgFin">Avg Fin${sortAttr("avgFin")}</th>
+    <th class="alltime-th num" data-sort="yearsCount">Years${sortAttr("yearsCount")}</th>
+  </tr></thead>`;
+
+  const body = `<tbody>${visible.map(r => {
+    const href = linkBuilder ? linkBuilder(r) : null;
+    const nameCell = href
+      ? `<a class="profile-link" href="${href}">${escapeHTML(r.name)}</a>`
+      : escapeHTML(r.name);
+    return `<tr>
+      <td>${nameCell}</td>
+      <td class="num">${r.starts || 0}</td>
+      <td class="num ${r.wins > 0 ? "hot" : ""}">${r.wins || 0}</td>
+      <td class="num">${r.top5 || 0}</td>
+      <td class="num">${r.top10 || 0}</td>
+      <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
+      <td class="num"><span title="${r.yearsLabel}">${r.yearsCount}</span></td>
+    </tr>`;
+  }).join("")}</tbody>`;
+
+  return `
+    <div class="alltime-toolbar">
+      <input type="search" class="alltime-search" id="alltime-search-${stateKey}"
+             placeholder="Search by name…" value="${escapeHTML(st.search || "")}">
+      <span class="alltime-count muted">${visible.length} of ${rows.length}</span>
+    </div>
+    <div class="card alltime-table-wrap">
+      <table class="data-table alltime-table" data-statekey="${stateKey}">
+        ${header}
+        ${body}
+      </table>
+    </div>
+  `;
+}
+
+// Wire toolbar controls (search input + click-to-sort headers) for an
+// all-time page. Re-runs the appropriate render function on input/click.
+function wireAllTimeTable(stateKey, rerender) {
+  const input = document.getElementById(`alltime-search-${stateKey}`);
+  if (input) {
+    input.addEventListener("input", e => {
+      ALLTIME_STATE[stateKey].search = e.target.value;
+      // Preserve cursor on re-render — store sel before rerender
+      const sel = input.selectionStart;
+      rerender();
+      const newInput = document.getElementById(`alltime-search-${stateKey}`);
+      if (newInput) {
+        newInput.focus();
+        try { newInput.setSelectionRange(sel, sel); } catch (_) {}
+      }
+    });
+  }
+  document.querySelectorAll(`.alltime-table[data-statekey="${stateKey}"] .alltime-th`).forEach(th => {
+    th.addEventListener("click", () => {
+      const col = th.getAttribute("data-sort");
+      if (!col) return;
+      const st = ALLTIME_STATE[stateKey];
+      if (st.sortKey === col) {
+        st.sortDir = st.sortDir === "asc" ? "desc" : "asc";
+      } else {
+        st.sortKey = col;
+        st.sortDir = col === "name" ? "asc" : "desc";
+      }
+      rerender();
+    });
+  });
+}
+
+function renderAllTimeDrivers() {
+  const host = document.getElementById("drivers-host");
+  const sub = document.getElementById("drivers-sub");
+  if (!host) return;
+  const yearsLoaded = Object.keys(SEASON_CACHE).length;
+  const yearsTotal = (STATE.seasonsAvailable || []).length;
+  if (sub) sub.textContent = yearsLoaded < yearsTotal
+    ? `Career stats — loading… (${yearsLoaded} of ${yearsTotal} seasons cached)`
+    : `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`;
+  const rows = computeAllTimeDrivers();
+  host.innerHTML = renderAllTimeTable(
+    rows,
+    r => `#/driver/${encodeURIComponent(r.slug)}`,
+    "drivers"
+  );
+  wireAllTimeTable("drivers", renderAllTimeDrivers);
+  // Background-load any missing seasons, then re-render once on completion
+  ensureAllSeasonsCached(() => {
+    if (STATE.view === "drivers") renderAllTimeDrivers();
+  });
+}
+
+function renderAllTimeTeams() {
+  const host = document.getElementById("teams-host");
+  const sub = document.getElementById("teams-sub");
+  if (!host) return;
+  const yearsLoaded = Object.keys(SEASON_CACHE).length;
+  const yearsTotal = (STATE.seasonsAvailable || []).length;
+  if (sub) sub.textContent = yearsLoaded < yearsTotal
+    ? `Career stats — loading… (${yearsLoaded} of ${yearsTotal} seasons cached)`
+    : `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`;
+  const rows = computeAllTimeTeams();
+  host.innerHTML = renderAllTimeTable(
+    rows,
+    r => `#/team/${encodeURIComponent(r.code)}`,
+    "teams"
+  );
+  wireAllTimeTable("teams", renderAllTimeTeams);
+  ensureAllSeasonsCached(() => {
+    if (STATE.view === "teams") renderAllTimeTeams();
+  });
+}
+
+function renderAllTimeCrewChiefs() {
+  const host = document.getElementById("crewchiefs-host");
+  const sub = document.getElementById("crewchiefs-sub");
+  if (!host) return;
+  const yearsLoaded = Object.keys(SEASON_CACHE).length;
+  const yearsTotal = (STATE.seasonsAvailable || []).length;
+  if (sub) sub.textContent = yearsLoaded < yearsTotal
+    ? `Career stats — loading… (${yearsLoaded} of ${yearsTotal} seasons cached)`
+    : `Career stats across ${yearsLoaded} season${yearsLoaded === 1 ? "" : "s"} of data`;
+  const rows = computeAllTimeCrewChiefs();
+  host.innerHTML = renderAllTimeTable(
+    rows,
+    r => `#/cc/${encodeURIComponent(r.slug)}`,
+    "crewchiefs"
+  );
+  wireAllTimeTable("crewchiefs", renderAllTimeCrewChiefs);
+  ensureAllSeasonsCached(() => {
+    if (STATE.view === "crewchiefs") renderAllTimeCrewChiefs();
+  });
+}
+
+// Fetch every season in seasonsAvailable that isn't already cached.
+// Calls done() once when all loads finish (or settle). Idempotent —
+// safe to call repeatedly; subsequent calls return immediately if
+// nothing's outstanding.
+const ALLSEASONS_LOAD = { inflight: false };
+async function ensureAllSeasonsCached(done) {
+  const missing = (STATE.seasonsAvailable || []).filter(y => !SEASON_CACHE[y]);
+  if (missing.length === 0) {
+    if (done) done();
+    return;
+  }
+  if (ALLSEASONS_LOAD.inflight) return;   // another caller is already running it
+  ALLSEASONS_LOAD.inflight = true;
+  try {
+    // Limit parallelism to 6 at a time so we don't slam the server
+    const chunkSize = 6;
+    for (let i = 0; i < missing.length; i += chunkSize) {
+      const slice = missing.slice(i, i + chunkSize);
+      await Promise.all(slice.map(y => loadSeasonIntoCache(y).catch(() => null)));
+    }
+  } finally {
+    ALLSEASONS_LOAD.inflight = false;
+  }
+  if (done) done();
+}
 
 function renderPlayoffs() {
   const host = document.getElementById("playoffs-host");
