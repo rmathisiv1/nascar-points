@@ -556,9 +556,12 @@ function wireSearch() {
 
 // Dev/debug helper exposed on `window.dcDebug` so the user can inspect
 // data presence from the browser console. Run any of:
-//   dcDebug.cc()              — summary of CC data in current season
-//   dcDebug.cc(2024)          — same but for a specific year (must be loaded)
-//   dcDebug.field("crew_chief") — counts how many rows have this field
+//   dcDebug.cc()                       — summary of CC data in current season
+//   dcDebug.cc(2024)                   — same but for a specific year (must be loaded)
+//   dcDebug.field("crew_chief")        — counts how many rows have this field
+//   dcDebug.findCC("mcaulay")          — search loaded years for CC name substring
+//   await dcDebug.ccAll("sam-mcaulay") — load ALL years, dump every (year, series) row
+//                                         for that CC slug; flags name variants + gaps
 window.dcDebug = {
   cc(year) {
     const block = year != null
@@ -639,6 +642,111 @@ window.dcDebug = {
     Array.from(byYS.values()).sort((a, b) => b.year - a.year || a.series.localeCompare(b.series)).forEach(v => {
       console.log(`  ${v.year} ${v.series}: ${v.count} races · drivers: ${Array.from(v.drivers).join(", ")}`);
     });
+  },
+  // Heavy-duty diagnostic: load EVERY available season, then dump every
+  // (year, series) row where the given slug appears. Also surfaces the
+  // exact spelling(s) found, so name-variant bugs (e.g., "Samuel McAulay"
+  // vs "Sam McAulay") become obvious. Returns a Promise.
+  //
+  // Usage:
+  //   await dcDebug.ccAll("sam-mcaulay")       // canonical CC slug
+  //   await dcDebug.ccAll("mcaulay", true)     // substring mode (slug includes)
+  async ccAll(slugOrSub, substringMode = false) {
+    if (!slugOrSub) { console.log("Usage: dcDebug.ccAll('sam-mcaulay')"); return; }
+    const needle = slugOrSub.toLowerCase();
+    const allYears = (STATE.seasonsAvailable || []).slice().sort((a, b) => a - b);
+    const missing = allYears.filter(y => !SEASON_CACHE[y]);
+    if (missing.length) {
+      console.log(`Loading ${missing.length} missing season(s)…`);
+      // Load in batches of 4 to avoid hammering Pages
+      for (let i = 0; i < missing.length; i += 4) {
+        await Promise.all(missing.slice(i, i + 4).map(y => loadSeasonIntoCache(y)));
+      }
+    }
+    // Walk every cached year, every series
+    const rows = [];      // {year, series, slug, name, count, drivers:Set, totalInSeason}
+    const spellings = new Map();   // slug → Set(exact spellings)
+    Object.keys(SEASON_CACHE).map(Number).sort((a, b) => a - b).forEach(year => {
+      const blocks = SEASON_CACHE[year];
+      if (!blocks) return;
+      ["NCS", "NOS", "NTS"].forEach(s => {
+        const b = blocks[s];
+        if (!b || !b.races) return;
+        const totalInSeason = (b.races || []).filter(r => (r.results || []).length > 0).length;
+        const ysAgg = new Map();   // ccSlug → {name, count, drivers:Set}
+        b.races.forEach(r => {
+          (r.results || []).forEach(d => {
+            if (!d.crew_chief) return;
+            const ccSlug = slugify(d.crew_chief);
+            const matches = substringMode
+              ? ccSlug.includes(needle)
+              : ccSlug === needle;
+            if (!matches) return;
+            if (!ysAgg.has(ccSlug)) ysAgg.set(ccSlug, { name: d.crew_chief, count: 0, drivers: new Set() });
+            const v = ysAgg.get(ccSlug);
+            v.count++;
+            if (d.driver) v.drivers.add(d.driver);
+            if (!spellings.has(ccSlug)) spellings.set(ccSlug, new Set());
+            spellings.get(ccSlug).add(d.crew_chief);
+          });
+        });
+        ysAgg.forEach((v, ccSlug) => {
+          rows.push({ year, series: s, slug: ccSlug, name: v.name,
+                      count: v.count, totalInSeason,
+                      ratio: totalInSeason ? v.count / totalInSeason : 0,
+                      drivers: Array.from(v.drivers) });
+        });
+      });
+    });
+    if (!rows.length) {
+      console.log(`No matches for "${slugOrSub}" across ${Object.keys(SEASON_CACHE).length} loaded year(s).`);
+      console.log("Try substring mode: dcDebug.ccAll('mcaulay', true)");
+      return;
+    }
+    console.log(`%cccAll("${slugOrSub}") — ${rows.length} (year, series) row(s)`,
+                "font-weight:bold;color:#d4a017");
+    console.log("Spellings encountered:");
+    spellings.forEach((set, ccSlug) => {
+      console.log(`  slug "${ccSlug}":`, Array.from(set).join(" | "));
+    });
+    console.table(rows.map(r => ({
+      year: r.year,
+      series: r.series,
+      slug: r.slug,
+      starts: r.count,
+      total: r.totalInSeason,
+      ratio: r.ratio.toFixed(2),
+      ft: r.ratio >= 0.80 ? "✓" : "",
+      drivers: r.drivers.join(", "),
+    })));
+    // Highlight any year that's covered for multiple slugs (likely name variant)
+    const yearsBySlug = new Map();
+    rows.forEach(r => {
+      if (!yearsBySlug.has(r.slug)) yearsBySlug.set(r.slug, new Set());
+      yearsBySlug.get(r.slug).add(r.year);
+    });
+    if (yearsBySlug.size > 1) {
+      console.log(`%c⚠️  Multiple slugs matched — possible name variant.`,
+                  "color:#ff7070;font-weight:bold");
+      yearsBySlug.forEach((yrs, sl) => {
+        console.log(`  "${sl}" appears in: ${Array.from(yrs).sort().join(", ")}`);
+      });
+    }
+    // Show gaps in years for the canonical slug (if exact mode)
+    if (!substringMode) {
+      const yrs = Array.from(yearsBySlug.get(needle) || []).sort();
+      if (yrs.length >= 2) {
+        const gaps = [];
+        for (let i = 1; i < yrs.length; i++) {
+          for (let y = yrs[i - 1] + 1; y < yrs[i]; y++) gaps.push(y);
+        }
+        if (gaps.length) {
+          console.log(`%cYears with no rows for "${needle}": ${gaps.join(", ")}`,
+                      "color:#ff9966");
+          console.log(`(Confirms the gap is in the data, not the UI filter.)`);
+        }
+      }
+    }
   },
 };
 
@@ -9834,17 +9942,24 @@ function renderCrewChiefPage() {
     </tr>`;
   }).join("");
 
-  // Season-by-season — one row per (year, series) the CC ran FULL-TIME.
-  // Sorted newest year first, NCS before NOS before NTS within a year.
+  // Season-by-season — one row per (year, series) the CC ran. Full-time
+  // rows render normally; partial-season rows (sub-80%) get dimmed styling
+  // and a "partial" tag so the table reflects the CC's complete career
+  // without overstating it. Sorted newest year first, NCS before NOS
+  // before NTS within a year.
   const SERIES_RANK = { NCS: 0, NOS: 1, NTS: 2 };
-  const ftRows = Array.from(stats.perYearSeries.values())
-    .filter(ys => ys.isFullTime)
+  const allYsRows = Array.from(stats.perYearSeries.values())
     .sort((a, b) => {
       if (b.year !== a.year) return b.year - a.year;
       return (SERIES_RANK[a.series] || 9) - (SERIES_RANK[b.series] || 9);
     });
-  const yearRows = ftRows.map(ys => {
+  const ftRows = allYsRows.filter(ys => ys.isFullTime);
+  const yearRows = allYsRows.map(ys => {
+    const partial = !ys.isFullTime;
     const seriesTag = `<span class="series-tag series-${ys.series.toLowerCase()}">${ys.series}</span>`;
+    const partialTag = partial
+      ? ` <span class="cc-partial-tag" title="Partial season — ${ys.starts} of ${ys.totalInSeason} races (${Math.round(ys.ratio * 100)}%)">partial</span>`
+      : "";
     // Driver names — each links to its own profile. Multiple drivers in a
     // year (rare for full-time CCs but possible if the team did mid-season
     // driver swaps) get comma-separated.
@@ -9863,9 +9978,9 @@ function renderCrewChiefPage() {
     const teamCodes = Array.from(ys.teams || []).sort().map(tc =>
       `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(tc)}">${escapeHTML(tc)}</a>`
     ).join(" ");
-    return `<tr>
+    return `<tr${partial ? ' class="cc-partial-row"' : ""}>
       <td><strong>${ys.year}</strong></td>
-      <td>${seriesTag}</td>
+      <td>${seriesTag}${partialTag}</td>
       <td>${carNums || `<span class="muted">—</span>`}</td>
       <td>${drvCellHTML || `<span class="muted">—</span>`}</td>
       <td>${teamCodes || `<span class="muted">—</span>`}</td>
@@ -9876,6 +9991,7 @@ function renderCrewChiefPage() {
     </tr>`;
   }).join("");
   const ftSeasonCount = ftRows.length;
+  const partialCount = allYsRows.length - ftSeasonCount;
 
   host.innerHTML = `
     <div class="rc-hero cc-hero" style="border-left: 4px solid var(--accent);">
@@ -9910,7 +10026,7 @@ function renderCrewChiefPage() {
     <div class="card rc-card rc-card-wide has-sticky-thead">
       <div class="rc-card-head">
         <span class="rc-card-title">Season-by-season</span>
-        <span class="rc-card-sub">${ftSeasonCount} full-time season${ftSeasonCount === 1 ? "" : "s"}</span>
+        <span class="rc-card-sub">${ftSeasonCount} full-time season${ftSeasonCount === 1 ? "" : "s"}${partialCount > 0 ? ` · ${partialCount} partial` : ""}</span>
       </div>
       <div class="rc-card-body" style="padding:0;">
         <table class="data-table tm-history-table">
