@@ -1549,6 +1549,10 @@ function parseHash() {
       splitsRange: STATE.profile.splitsRange || "season",
       splitsSeries: STATE.profile.splitsSeries || "all",
       heatmapSeries: STATE.profile.heatmapSeries || "all",
+      // Reset track picker to defaults on each driver navigation so a
+      // selection made on Driver A doesn't bleed into Driver B (where the
+      // picked track might not exist in their cache).
+      trackPicker: { code: null, series: "all", gens: new Set() },
       locked: true,
     };
     STATE.lastHash = location.hash;
@@ -1592,6 +1596,7 @@ function parseHash() {
       splitsRange: STATE.profile.splitsRange || "season",
       splitsSeries: STATE.profile.splitsSeries || "all",
       heatmapSeries: STATE.profile.heatmapSeries || "all",
+      trackPicker: { code: null, series: "all", gens: new Set() },
       locked: true,
     };
     STATE.lastHash = location.hash;
@@ -7478,6 +7483,11 @@ function paintProfileTeammates(entity) {
 function paintProfileTrackPicker(entity) {
   const host = document.getElementById("profile-track-picker");
   if (!host) return;
+  // Defensive: if some route or refactor wiped trackPicker off STATE.profile,
+  // re-seed it here so we don't crash and take down the painters that follow.
+  if (!STATE.profile.trackPicker) {
+    STATE.profile.trackPicker = { code: null, series: "all", gens: new Set() };
+  }
 
   // Resolve the driver's canonical slug from STATE / entity
   const slug = (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug)
