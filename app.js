@@ -911,10 +911,25 @@ async function boot() {
     if (STATE.lightbox && STATE.lightbox.open) {
       closeRaceLightbox();
     }
+    // Snapshot pre-parse identity so we can detect if parseHash shifted
+    // STATE.season (which happens on profile entry/exit, mode-driven snap).
+    // When season DOES shift, the data file in STATE.data is stale and we
+    // need to reload before render() so the dashboard tab views read from
+    // the right season. Profile/team/cc takeovers don't strictly need this
+    // (they pull from SEASON_CACHE and entity state) but a stale STATE.data
+    // bleeds into the metricbar etc.
+    const preSeason = STATE.season;
+    const preSeries = STATE.series;
     parseHash();
     // Driver-centric route: resolve home (series, season) before rendering
     if (STATE.view === "profile" && STATE.profile && STATE.profile.kind === "driver") {
       await resolveDriverRoute();
+    }
+    if (STATE.season !== preSeason || STATE.series !== preSeries) {
+      await loadCurrentData();
+      resetRenderCache();
+      populateRacePicker();
+      renderTimeCursorBanner();
     }
     redirectLegacyCarRoute();
     render();
@@ -1462,11 +1477,24 @@ function parseHash() {
     STATE.lastHash = location.hash;
     return;
   }
-  // Leaving profile — restore pre-lock series/season if we set them
-  if (STATE.view === "profile" && STATE.profile && STATE.profile.locked) {
-    if (STATE.profile.preLockSeries) STATE.series = STATE.profile.preLockSeries;
-    if (STATE.profile.preLockSeason) STATE.season = STATE.profile.preLockSeason;
-    STATE.profile.locked = false;
+  // Leaving a takeover (profile/team/cc/track/race) → restore the previous
+  // (series, season) we stashed before entering. In Present mode we go a
+  // step further: hard-snap to the latest available season regardless of
+  // what was stashed, since the user opted into "always live" — even the
+  // original entry point may have been historical.
+  const wasProfile = STATE.view === "profile" && STATE.profile && STATE.profile.locked;
+  const wasOtherTakeover = ["team", "cc", "track", "race"].includes(STATE.view);
+  const leavingTakeover = wasProfile || wasOtherTakeover;
+  const enteringNonTakeover = !["profile", "team", "cc", "track", "race"].includes(view);
+  if (leavingTakeover && enteringNonTakeover) {
+    if (STATE.mode === "present") {
+      const latest = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
+      if (latest) STATE.season = latest;
+    } else if (wasProfile) {
+      if (STATE.profile.preLockSeries) STATE.series = STATE.profile.preLockSeries;
+      if (STATE.profile.preLockSeason) STATE.season = STATE.profile.preLockSeason;
+    }
+    if (wasProfile) STATE.profile.locked = false;
   }
   STATE.view = VIEWS.includes(view) ? view : "standings";
   STATE.lastHash = location.hash;
@@ -1673,14 +1701,40 @@ async function loadCurrentData() {
     return showError(`No data for series ${sCode} in season ${year}`);
   }
   STATE.data = seriesBlock;
-  const races = seriesBlock.races || [];
-  const runRaces = races.filter(r => (r.results || []).length > 0);
-  const totalRaces = scheduleLengthForSeries(sCode);
-  document.getElementById("season-pill").textContent =
-    `${year} · ${sCode} · R${runRaces.length} / ${totalRaces}`;
+  renderSeasonPill();
   document.getElementById("footer-updated").textContent =
     `Updated ${(payload.generated_at || "").slice(0,10)}`;
   hideError();
+}
+
+// Topbar season pill — shows year, series, and "R{run} / {total}" progress.
+// In Present mode, the pill is locked to display the latest available
+// season's progress regardless of where STATE temporarily wandered (e.g.
+// while resolving a historical driver's profile, STATE.season might
+// briefly be 2020). The user explicitly opted into "always live" so the
+// indicator must stay anchored to today's season.
+function renderSeasonPill() {
+  const el = document.getElementById("season-pill");
+  if (!el) return;
+  let displayYear, displaySeries, runCount, totalRaces;
+  if (STATE.mode === "present") {
+    // Anchor to latest available season + whatever series is in topbar
+    displayYear = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]) || STATE.season;
+    displaySeries = STATE.series;
+    // Pull progress from cache if available; fall back to STATE.data
+    const block = SEASON_CACHE[displayYear] && SEASON_CACHE[displayYear][displaySeries];
+    const races = block ? (block.races || []) : (STATE.data && STATE.data.races || []);
+    runCount = races.filter(r => (r.results || []).length > 0).length;
+    totalRaces = scheduleLengthForSeries(displaySeries);
+  } else {
+    // Historical mode — pill reflects whatever STATE actually is
+    displayYear = STATE.season;
+    displaySeries = STATE.series;
+    const races = (STATE.data && STATE.data.races) || [];
+    runCount = races.filter(r => (r.results || []).length > 0).length;
+    totalRaces = scheduleLengthForSeries(displaySeries);
+  }
+  el.textContent = `${displayYear} · ${displaySeries} · R${runCount} / ${totalRaces}`;
 }
 
 function scheduleLengthForSeries(series) {
@@ -2181,6 +2235,11 @@ function render() {
   // allEntities() / racesSorted() / computeSeasonTotals() across the dozens
   // of callers each tab triggers.
   resetRenderCache();
+  // Refresh the topbar season pill on every render — STATE may have shifted
+  // (e.g. when entering a historical driver profile), but in Present mode
+  // the pill should still display the live anchor. renderSeasonPill is
+  // mode-aware and handles both cases.
+  renderSeasonPill();
   const dashboard = document.getElementById("dashboard");
   const takeover = document.getElementById("takeover");
   const inTakeover = TAKEOVER_VIEWS.includes(STATE.view);
