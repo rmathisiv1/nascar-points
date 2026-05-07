@@ -5201,16 +5201,33 @@ a.rc-sched-winner:hover {
   padding: 1px 4px;
 }
 /* CC heatmap pills can run long (full driver surnames + 3-char team
-   codes). Cap their width and let the label container handle overflow
-   with ellipsis so nothing leaks into the round columns. */
+   codes). Lay the row label out as a 4-column grid so each piece —
+   year, series, driver, team — gets a fixed slot. The team pill always
+   lands in the same column regardless of how long the driver name is.
+   Last column is `auto` so the team pill takes whatever it needs (max
+   capped below). */
 #cc-career-heatmap .ph-row-label {
+  display: grid;
+  grid-template-columns: 38px 32px 1fr auto;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
 }
 #cc-career-heatmap .ph-row-label .ph-team-pill {
-  max-width: 90px;
+  max-width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  justify-self: end;
+}
+/* The driver pill sits in the flex 1fr column — it can absorb extra
+   space and ellipsis-truncate, but doesn't shove the team pill around. */
+#cc-career-heatmap .ph-row-label > a:not(.ph-team-pill),
+#cc-career-heatmap .ph-row-label > .ph-team-pill-empty:not(:last-child) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .ph-head-cell {
   text-align: center;
