@@ -1198,9 +1198,14 @@ function parseHash() {
   if (view === "track") {
     stashPrev("track");
     STATE.view = "track";
+    // seriesView always resets to STATE.series when entering a new track
+    // page. Previously we persisted it across track visits, which led to
+    // a track opening in (e.g.) NTS when the user was actually browsing
+    // NCS. The per-page toggle (in the track view itself) still lets the
+    // user override locally during their visit.
     STATE.track = {
       code: (h[1] || "").toUpperCase(),
-      seriesView: (STATE.track && STATE.track.seriesView) || STATE.series,
+      seriesView: STATE.series,
     };
     STATE.lastHash = location.hash;
     return;
@@ -2182,10 +2187,20 @@ function lastNameOf(name) {
 // CHE/FOR are legacy codes from older snapshots that we still see in cached data.
 const MFR_DISPLAY = {
   TYT: "Toyota",
+  TOY: "Toyota",
   CHV: "Chevrolet",
   CHE: "Chevrolet",
+  CHR: "Chevrolet",
   FRD: "Ford",
   FOR: "Ford",
+  DOD: "Dodge",     // active in Cup through 2012
+  PON: "Pontiac",   // active in Cup through 2003
+  PNT: "Pontiac",
+  BUI: "Buick",     // older Cup years
+  OLD: "Oldsmobile",
+  PLY: "Plymouth",
+  MER: "Mercury",
+  AMC: "AMC",
 };
 function manufacturerName(code) {
   if (!code) return "";
@@ -5902,20 +5917,10 @@ function renderProfile() {
 
     ${careerPanelHTML}
 
-    ${(() => {
-      // Career-context strip — renders the year-by-year/series chips that
-      // let a user jump across a driver's career. Works for any profile
-      // route: explicit driver slug from #/driver/<slug>, or derived from
-      // the entity's primary driver for car-routed profiles. Without this
-      // fallback, car-routed profiles (the default for many in-app links)
-      // would never show the strip.
-      const slug = (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug)
-        ? STATE.profile.slug
-        : (entity && (entity.primaryDriver || entity.driver)
-            ? slugify(entity.primaryDriver || entity.driver)
-            : null);
-      return slug ? renderCareerContextStrip(slug) : "";
-    })()}
+    ${/* Career-context chip strip removed by user request — driver profiles
+       now show only current-year stats inline. Cross-year browsing is
+       available via the Heatmap tab (every year visible at once) or the
+       topbar season picker. */ ""}
 
     <div class="profile-section-label">${STATE.season} Season</div>
     <div class="profile-stats">
@@ -8239,19 +8244,29 @@ function collectTrackHistory(trackCode, series) {
   if (!trackCode) return [];
   const codesToCheck = trackCodesForLookup(trackCode);
   const out = [];
-  // Current season first
-  const curRaces = (STATE.data?.races || []).filter(r => codesToCheck.includes(r.track_code));
-  curRaces.forEach(r => out.push({ year: STATE.season, ...r }));
-  // Then prior cached seasons, newest-first
+  // Walk EVERY cached year, including the current season. Earlier versions
+  // pulled the current year from STATE.data (which holds whatever series
+  // the topbar is on) — that produced cross-series leakage when the user
+  // was viewing NOS but the track page asked for NCS history. Going through
+  // SEASON_CACHE[year][series] every time guarantees series isolation.
   const years = Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a);
   years.forEach(y => {
-    if (y === STATE.season) return;
     const block = SEASON_CACHE[y] && SEASON_CACHE[y][series];
     if (!block || !block.races) return;
     block.races.filter(r => codesToCheck.includes(r.track_code)).forEach(r => {
-      out.push({ year: y, ...r });
+      // Tag the row with its series so downstream renderers (winner pill
+      // colors, manufacturer columns, etc.) can be series-correct on a page
+      // that mixes years across the same series.
+      out.push({ year: y, series, ...r });
     });
   });
+  // Also include the current STATE.data block IF it matches the requested
+  // series AND isn't already in SEASON_CACHE. Current-season race data may
+  // have updates not yet cached.
+  if (STATE.series === series && STATE.data && !SEASON_CACHE[STATE.season]) {
+    const curRaces = (STATE.data.races || []).filter(r => codesToCheck.includes(r.track_code));
+    curRaces.forEach(r => out.push({ year: STATE.season, series, ...r }));
+  }
   // Sort newest first by (year, round)
   out.sort((a, b) => (b.year - a.year) || (b.round - a.round));
   return out;
@@ -8763,34 +8778,59 @@ function renderTrackPage() {
     </div>
   `).join("") : `<div class="rc-empty">No manufacturer data available.</div>`;
 
-  // Full results history table — every race at this track in cached years
+  // Full results history table — every race at this track in cached years.
+  // Columns: Year | Round | Winner | Team | Mfr | Pole. Team + Mfr are
+  // pulled from the winning row; "—" if missing. Driver names link to
+  // driver profiles, team codes to team profiles.
   const histTableHTML = history.length ? `
     <table class="rc-result-table tk-history-table">
-      <colgroup><col class="tk-col-yr"><col class="tk-col-rd"><col><col class="tk-col-pole"></colgroup>
+      <colgroup>
+        <col class="tk-col-yr"><col class="tk-col-rd">
+        <col><col class="tk-col-team"><col class="tk-col-mfr"><col class="tk-col-pole">
+      </colgroup>
       <thead><tr>
         <th>Year</th>
         <th class="num">Round</th>
         <th>Winner</th>
+        <th>Team</th>
+        <th>Mfr</th>
         <th>Pole</th>
       </tr></thead>
       <tbody>
         ${history.map(h => {
           const winner = (h.results || []).find(d => d.finish_pos === 1);
           const pole   = (h.results || []).find(d => d.start_pos === 1);
+          // Resolve series for color mapping — each history row carries its
+          // own series since the track page can be toggled per-series.
+          const seriesForRow = h.series || tSeries;
+          const wDrvSlug = winner ? slugify(winner.driver || "") : "";
+          const pDrvSlug = pole ? slugify(pole.driver || "") : "";
           const wHTML = winner ? `
-            <a class="profile-link rc-result-name" href="#/car/${winner.car_number}">
-              <span class="car-tag" style="background:${colorFor(STATE.series, winner.car_number)};color:${contrastTextFor(colorFor(STATE.series, winner.car_number))}">${winner.car_number}</span>
+            <a class="profile-link rc-result-name" href="#/driver/${wDrvSlug}">
+              <span class="car-tag" style="background:${colorFor(seriesForRow, winner.car_number)};color:${contrastTextFor(colorFor(seriesForRow, winner.car_number))}">${winner.car_number}</span>
               <span>${escapeHTML(lastNameOf(winner.driver))}</span>
             </a>` : `<span class="muted">—</span>`;
+          // Winner's team — prefer explicit team_code; fall back to name lookup.
+          const wTeamCode = winner
+            ? (winner.team_code
+              || teamCodeFromName(winner.team, SERIES_TO_KEY[seriesForRow], winner.car_number))
+            : "";
+          const tHTML = wTeamCode
+            ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}">${escapeHTML(wTeamCode)}</a>`
+            : `<span class="muted">—</span>`;
+          const wMfr = winner ? manufacturerName(winner.manufacturer) : "";
+          const mHTML = wMfr ? escapeHTML(wMfr) : `<span class="muted">—</span>`;
           const pHTML = pole ? `
-            <a class="profile-link rc-result-name" href="#/car/${pole.car_number}">
-              <span class="car-tag" style="background:${colorFor(STATE.series, pole.car_number)};color:${contrastTextFor(colorFor(STATE.series, pole.car_number))}">${pole.car_number}</span>
+            <a class="profile-link rc-result-name" href="#/driver/${pDrvSlug}">
+              <span class="car-tag" style="background:${colorFor(seriesForRow, pole.car_number)};color:${contrastTextFor(colorFor(seriesForRow, pole.car_number))}">${pole.car_number}</span>
               <span>${escapeHTML(lastNameOf(pole.driver))}</span>
             </a>` : `<span class="muted">—</span>`;
           return `<tr>
             <td>${h.year}</td>
             <td class="num">R${h.round}</td>
             <td>${wHTML}</td>
+            <td>${tHTML}</td>
+            <td>${mHTML}</td>
             <td>${pHTML}</td>
           </tr>`;
         }).join("")}

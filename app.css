@@ -5843,3 +5843,25 @@ a.rc-sched-winner:hover {
 @media (max-width: 767.98px) {
   .cc-hero-name { font-size: 19px; }
 }
+
+/* Track history table: Team + Mfr columns. Both stay narrow since they're
+   short codes. Team uses the same .team-pill styling as elsewhere. */
+.tk-history-table .tk-col-team { width: 80px; }
+.tk-history-table .tk-col-mfr  { width: 100px; }
+.tk-history-table .team-pill {
+  display: inline-block;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.tk-history-table .team-pill:hover {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.18);
+}
