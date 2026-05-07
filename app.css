@@ -5819,3 +5819,27 @@ a.rc-sched-winner:hover {
     padding: 1px 4px;
   }
 }
+
+/* CC hero — name + summary live INSIDE the blue-bordered hero card.
+   Mirror the typography of the driver hero (.profile-hero-name) so the
+   pages feel consistent. */
+.cc-hero {
+  padding: 16px 18px;
+}
+.cc-hero-name {
+  margin: 0 0 6px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.cc-hero .rc-hero-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+}
+@media (max-width: 767.98px) {
+  .cc-hero-name { font-size: 19px; }
+}

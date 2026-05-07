@@ -600,6 +600,46 @@ window.dcDebug = {
     });
     console.log(`Field "${fieldName}": ${present}/${total} rows populated`);
   },
+  // Search every loaded year for crew chief names containing the substring.
+  // Useful for finding missing CCs ("does Sam McAulay show up in 2025?").
+  // Pass case-insensitive substring; prints (year, series, round, driver, cc).
+  findCC(substring) {
+    if (!substring) { console.log("Usage: dcDebug.findCC('mcaulay')"); return; }
+    const needle = substring.toLowerCase();
+    const hits = [];
+    Object.keys(SEASON_CACHE).map(Number).sort().forEach(year => {
+      const blocks = SEASON_CACHE[year];
+      if (!blocks) return;
+      ["NCS", "NOS", "NTS"].forEach(s => {
+        const b = blocks[s];
+        if (!b || !b.races) return;
+        b.races.forEach(r => {
+          (r.results || []).forEach(d => {
+            if (d.crew_chief && d.crew_chief.toLowerCase().includes(needle)) {
+              hits.push({ year, series: s, round: r.round, driver: d.driver, cc: d.crew_chief });
+            }
+          });
+        });
+      });
+    });
+    if (!hits.length) {
+      console.log(`No matches for "${substring}" in loaded data.`);
+      return;
+    }
+    // Aggregate by (year, series) to summarize coverage
+    const byYS = new Map();
+    hits.forEach(h => {
+      const k = `${h.year}-${h.series}`;
+      if (!byYS.has(k)) byYS.set(k, { year: h.year, series: h.series, count: 0, drivers: new Set() });
+      const v = byYS.get(k);
+      v.count++;
+      v.drivers.add(h.driver);
+    });
+    console.log(`Found ${hits.length} rows matching "${substring}":`);
+    Array.from(byYS.values()).sort((a, b) => b.year - a.year || a.series.localeCompare(b.series)).forEach(v => {
+      console.log(`  ${v.year} ${v.series}: ${v.count} races · drivers: ${Array.from(v.drivers).join(", ")}`);
+    });
+  },
 };
 
 async function boot() {
@@ -9492,21 +9532,26 @@ function crewChiefHistoryForDriver(driverSlug) {
 //   - drivers worked with (slug → { name, starts, wins, years })
 //   - per-year breakdown (year → { series, starts, wins, partner_drivers })
 function crewChiefStats(ccSlug) {
+  // Threshold for "full-time" classification: a CC counts as full-time in
+  // a given (year, series) if they served as crew chief for at least 80%
+  // of that series' completed races. Below that, they're a partial/relief
+  // CC and we don't count it as a "season" toward the headline stats.
+  // Same threshold used for filtering the season-by-season table and the
+  // per-driver "Years" column.
+  const FT_THRESHOLD = 0.80;
+
   const result = {
     name: null, slug: ccSlug,
     starts: 0, wins: 0, top5: 0, top10: 0,
     championships: 0,
     finishes: [],
-    drivers: new Map(),     // driver_slug → { name, starts, wins, years (Set) }
-    perYear: new Map(),     // year → { series_set, starts, wins, drivers (Set), cars (Set), teams (Set), top5, top10 }
+    drivers: new Map(),     // driver_slug → { name, starts, wins, years (Set), ftYears (Set) }
+    perYearSeries: new Map(),  // `${year}-${series}` → { year, series, starts, totalInSeason, ratio, isFullTime, drivers, cars, teams, wins, top5, top10 }
     seriesSet: new Set(),
-    // Per-series rollup so the CC profile can render NCS/NOS/NTS cards
-    // similar to a driver's "Career By Series" panel. Each entry holds
-    // a flat copy of the same stats but scoped to one series.
     bySeries: {
-      NCS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set() },
-      NOS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set() },
-      NTS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set() },
+      NCS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set(), ftYears: new Set() },
+      NOS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set(), ftYears: new Set() },
+      NTS: { starts: 0, wins: 0, top5: 0, top10: 0, finishes: [], years: new Set(), ftYears: new Set() },
     },
   };
 
@@ -9517,6 +9562,12 @@ function crewChiefStats(ccSlug) {
     ["NCS", "NOS", "NTS"].forEach(sCode => {
       const block = blocks[sCode];
       if (!block || !block.races) return;
+      // Total races for the series in this year — used as the denominator
+      // for the full-time ratio. Count only races that have results (skip
+      // upcoming/empty so we don't penalize current-season chiefs).
+      const totalInSeason = (block.races || []).filter(r => (r.results || []).length > 0).length;
+      if (totalInSeason === 0) return;
+
       // For championship counting: year-end #1 driver from canonical standings
       const finalStandings = block.final_standings || [];
       const championDriverNorm = finalStandings.length
@@ -9524,6 +9575,7 @@ function crewChiefStats(ccSlug) {
         : null;
       let championPartneredWithThisCC = false;
 
+      const ysKey = `${year}-${sCode}`;
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
           if (d.ineligible) return;
@@ -9532,7 +9584,7 @@ function crewChiefStats(ccSlug) {
           if (!result.name) result.name = d.crew_chief;
           result.starts++;
           result.seriesSet.add(sCode);
-          // Per-series accumulator
+          // Per-series accumulator (totals — independent of full-time gate)
           const sb = result.bySeries[sCode];
           if (sb) {
             sb.starts++;
@@ -9555,33 +9607,34 @@ function crewChiefStats(ccSlug) {
           let drv = result.drivers.get(drvSlug);
           if (!drv) {
             drv = { name: d.driver, slug: drvSlug,
-                    starts: 0, wins: 0, years: new Set() };
+                    starts: 0, wins: 0, years: new Set(), ftYears: new Set() };
             result.drivers.set(drvSlug, drv);
           }
           drv.starts++;
           drv.years.add(year);
           if (d.finish_pos === 1) drv.wins++;
-          // Per-year tracking — also captures cars and team codes so the
-          // season-by-season table can render context columns.
-          let yr = result.perYear.get(year);
-          if (!yr) {
-            yr = { series_set: new Set(), starts: 0, wins: 0,
-                   drivers: new Set(), top5: 0, top10: 0,
-                   cars: new Set(), teams: new Set() };
-            result.perYear.set(year, yr);
+          // Per-(year, series) tracking — composite key so we can distinguish
+          // a CC who ran NCS R1-30 in 2024 from one who did NOS for the same
+          // year. Each row carries enough context to compute the full-time
+          // ratio AFTER the walk completes.
+          let ys = result.perYearSeries.get(ysKey);
+          if (!ys) {
+            ys = { year, series: sCode, starts: 0, totalInSeason,
+                   wins: 0, top5: 0, top10: 0,
+                   drivers: new Set(), cars: new Set(), teams: new Set() };
+            result.perYearSeries.set(ysKey, ys);
           }
-          yr.series_set.add(sCode);
-          yr.starts++;
-          yr.drivers.add(drvSlug);
-          if (d.car_number) yr.cars.add(d.car_number);
+          ys.starts++;
+          ys.drivers.add(drvSlug);
+          if (d.car_number) ys.cars.add(d.car_number);
           // Resolve team code: use the explicit field if present, else
           // fall back to the team-name → code mapping for older data.
           const tc = d.team_code
             || teamCodeFromName(d.team, SERIES_TO_KEY[sCode], d.car_number);
-          if (tc) yr.teams.add(tc);
-          if (d.finish_pos === 1) yr.wins++;
-          if (d.finish_pos != null && d.finish_pos <= 5) yr.top5++;
-          if (d.finish_pos != null && d.finish_pos <= 10) yr.top10++;
+          if (tc) ys.teams.add(tc);
+          if (d.finish_pos === 1) ys.wins++;
+          if (d.finish_pos != null && d.finish_pos <= 5) ys.top5++;
+          if (d.finish_pos != null && d.finish_pos <= 10) ys.top10++;
           // Championship check: did THIS CC's driver win the title?
           if (championDriverNorm) {
             const drvNorm = (d.driver || "").toLowerCase().replace(/[^a-z]/g, "");
@@ -9593,7 +9646,22 @@ function crewChiefStats(ccSlug) {
     });
   });
 
-  // Compute avg/best per-series
+  // Compute per-(year,series) full-time ratio + flag, and update the
+  // by-series ftYears set + drivers.ftYears so downstream can filter.
+  result.perYearSeries.forEach(ys => {
+    ys.ratio = ys.totalInSeason > 0 ? ys.starts / ys.totalInSeason : 0;
+    ys.isFullTime = ys.ratio >= FT_THRESHOLD;
+    if (ys.isFullTime) {
+      const sb = result.bySeries[ys.series];
+      if (sb) sb.ftYears.add(ys.year);
+      ys.drivers.forEach(drvSlug => {
+        const drv = result.drivers.get(drvSlug);
+        if (drv) drv.ftYears.add(ys.year);
+      });
+    }
+  });
+
+  // Compute avg/best per-series + overall
   ["NCS", "NOS", "NTS"].forEach(s => {
     const sb = result.bySeries[s];
     sb.avgFinish = sb.finishes.length
@@ -9605,6 +9673,13 @@ function crewChiefStats(ccSlug) {
     ? result.finishes.reduce((s, x) => s + x, 0) / result.finishes.length
     : null;
   result.bestFinish = result.finishes.length ? Math.min(...result.finishes) : null;
+
+  // Total full-time seasons count across all series
+  result.fullTimeSeasonCount = 0;
+  result.perYearSeries.forEach(ys => {
+    if (ys.isFullTime) result.fullTimeSeasonCount++;
+  });
+
   return result;
 }
 
@@ -9626,10 +9701,10 @@ function renderCrewChiefPage() {
   const displayName = stats.name || ccSlug.split("-").map(s =>
     s.charAt(0).toUpperCase() + s.slice(1)
   ).join(" ");
-  if (titleEl) titleEl.textContent = displayName;
-  if (subEl) subEl.textContent = stats.starts > 0
-    ? `${stats.starts} starts · ${stats.seriesSet.size} series · ${stats.perYear.size} seasons`
-    : "loading career data…";
+  // The hero card now carries the name + summary directly. We blank the
+  // takeover-head title/sub so it's not duplicated above the hero.
+  if (titleEl) titleEl.textContent = "";
+  if (subEl) subEl.textContent = "";
 
   if (stats.starts === 0) {
     host.innerHTML = `
@@ -9669,7 +9744,9 @@ function renderCrewChiefPage() {
 
   // Build per-series stat blocks — mirrors the driver profile's "Career By
   // Series" layout so users can compare a CC's NCS vs NOS vs NTS work at
-  // a glance. Skip a series if the CC never worked it.
+  // a glance. Skip a series if the CC never worked it. "X yrs" subtitle
+  // counts only FULL-TIME years (≥80% of races) so part-time fill-in stints
+  // don't inflate a chief's apparent tenure.
   const perSeriesBlocks = ["NCS", "NOS", "NTS"]
     .filter(s => stats.bySeries[s] && stats.bySeries[s].starts > 0)
     .map(s => {
@@ -9677,12 +9754,16 @@ function renderCrewChiefPage() {
       const winPct = sb.starts > 0 ? ((sb.wins / sb.starts) * 100).toFixed(1) + "%" : "—";
       const top5Pct = sb.starts > 0 ? ((sb.top5 / sb.starts) * 100).toFixed(1) + "%" : "—";
       const top10Pct = sb.starts > 0 ? ((sb.top10 / sb.starts) * 100).toFixed(1) + "%" : "—";
-      const yrCount = sb.years.size;
+      const yrCount = sb.ftYears.size;
+      const totYrs = sb.years.size;
+      const yrLabel = yrCount === totYrs
+        ? `${yrCount} yr${yrCount === 1 ? "" : "s"}`
+        : `${yrCount} FT · ${totYrs} total`;
       return `<div class="cc-series-card">
         <div class="cc-series-card-head">
           <span class="series-tag series-${s.toLowerCase()}">${s}</span>
           <span class="cc-series-name">${SERIES_LABELS[s] || s}</span>
-          <span class="cc-series-yrs">${yrCount} yr${yrCount === 1 ? "" : "s"}</span>
+          <span class="cc-series-yrs">${yrLabel}</span>
         </div>
         <div class="cc-series-grid">
           <div class="cc-stat"><span class="k">Starts</span><span class="v">${sb.starts}</span></div>
@@ -9695,12 +9776,16 @@ function renderCrewChiefPage() {
       </div>`;
     }).join("");
 
-  // Drivers worked with — sorted by starts desc
+  // Drivers worked with — sorted by starts desc. "Years" column shows the
+  // span of full-time seasons (or all years if zero full-time, so a CC who
+  // only relief-stints with one driver still gets context).
   const driversList = Array.from(stats.drivers.values())
     .sort((a, b) => b.starts - a.starts);
   const driversBody = driversList.map(d => {
-    const yrs = Array.from(d.years).sort((a, b) => a - b);
-    const yrSpan = yrs.length === 1 ? `${yrs[0]}` : `${yrs[0]}-${yrs[yrs.length - 1]}`;
+    const ftYrs = Array.from(d.ftYears).sort((a, b) => a - b);
+    const allYrs = Array.from(d.years).sort((a, b) => a - b);
+    const yrSrc = ftYrs.length ? ftYrs : allYrs;
+    const yrSpan = yrSrc.length === 1 ? `${yrSrc[0]}` : `${yrSrc[0]}-${yrSrc[yrSrc.length - 1]}`;
     return `<tr>
       <td><a class="profile-link" href="#/driver/${d.slug}">${escapeHTML(d.name)}</a></td>
       <td class="num">${d.starts}</td>
@@ -9709,49 +9794,55 @@ function renderCrewChiefPage() {
     </tr>`;
   }).join("");
 
-  // Per-year breakdown — now includes car number + team for context.
-  const yearsSorted = Array.from(stats.perYear.keys()).sort((a, b) => b - a);
-  const yearRows = yearsSorted.map(year => {
-    const y = stats.perYear.get(year);
-    const seriesTags = Array.from(y.series_set).sort().map(s =>
-      `<span class="series-tag series-${s.toLowerCase()}">${s}</span>`
-    ).join(" ");
-    const drvNames = Array.from(y.drivers).map(slug => {
-      const d = stats.drivers.get(slug);
-      return d ? d.name : slug;
+  // Season-by-season — one row per (year, series) the CC ran FULL-TIME.
+  // Sorted newest year first, NCS before NOS before NTS within a year.
+  const SERIES_RANK = { NCS: 0, NOS: 1, NTS: 2 };
+  const ftRows = Array.from(stats.perYearSeries.values())
+    .filter(ys => ys.isFullTime)
+    .sort((a, b) => {
+      if (b.year !== a.year) return b.year - a.year;
+      return (SERIES_RANK[a.series] || 9) - (SERIES_RANK[b.series] || 9);
+    });
+  const yearRows = ftRows.map(ys => {
+    const seriesTag = `<span class="series-tag series-${ys.series.toLowerCase()}">${ys.series}</span>`;
+    // Driver names — each links to its own profile. Multiple drivers in a
+    // year (rare for full-time CCs but possible if the team did mid-season
+    // driver swaps) get comma-separated.
+    const drvCellHTML = Array.from(ys.drivers).map(drvSlug => {
+      const drv = stats.drivers.get(drvSlug);
+      const name = drv?.name || drvSlug;
+      return `<a class="profile-link" href="#/driver/${drvSlug}">${escapeHTML(name)}</a>`;
     }).join(", ");
-    // Car numbers and teams for this year (from the perYear bucket)
-    const carNums = Array.from(y.cars || []).sort((a, b) =>
+    const carNums = Array.from(ys.cars || []).sort((a, b) =>
       parseInt(a, 10) - parseInt(b, 10)
     ).map(c => {
-      // Use series-aware car color when there's exactly one series this row
-      const seriesForColor = y.series_set.size === 1
-        ? Array.from(y.series_set)[0]
-        : STATE.series;
-      const hex = colorFor(seriesForColor, c);
+      const hex = colorFor(ys.series, c);
       const txt = contrastTextFor(hex);
       return `<span class="car-tag" style="background:${hex};color:${txt}">${c}</span>`;
     }).join(" ");
-    const teamCodes = Array.from(y.teams || []).sort().map(tc =>
+    const teamCodes = Array.from(ys.teams || []).sort().map(tc =>
       `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(tc)}">${escapeHTML(tc)}</a>`
     ).join(" ");
     return `<tr>
-      <td><strong>${year}</strong></td>
-      <td>${seriesTags}</td>
+      <td><strong>${ys.year}</strong></td>
+      <td>${seriesTag}</td>
       <td>${carNums || `<span class="muted">—</span>`}</td>
-      <td>${escapeHTML(drvNames)}</td>
+      <td>${drvCellHTML || `<span class="muted">—</span>`}</td>
       <td>${teamCodes || `<span class="muted">—</span>`}</td>
-      <td class="num">${y.starts}</td>
-      <td class="num">${y.wins}</td>
-      <td class="num">${y.top5}</td>
-      <td class="num">${y.top10}</td>
+      <td class="num">${ys.starts}</td>
+      <td class="num">${ys.wins}</td>
+      <td class="num">${ys.top5}</td>
+      <td class="num">${ys.top10}</td>
     </tr>`;
   }).join("");
+  const ftSeasonCount = ftRows.length;
 
   host.innerHTML = `
-    <div class="rc-hero" style="border-left: 4px solid var(--accent);">
+    <div class="rc-hero cc-hero" style="border-left: 4px solid var(--accent);">
+      <h1 class="cc-hero-name">${escapeHTML(displayName)}</h1>
       <div class="rc-hero-meta">
-        Crew chief · ${stats.perYear.size} season${stats.perYear.size === 1 ? "" : "s"} ·
+        Crew chief · ${stats.starts} start${stats.starts === 1 ? "" : "s"} ·
+        ${stats.fullTimeSeasonCount} full-time season${stats.fullTimeSeasonCount === 1 ? "" : "s"} ·
         ${stats.drivers.size} driver${stats.drivers.size === 1 ? "" : "s"} ·
         ${Array.from(stats.seriesSet).sort().join(", ")}
       </div>
@@ -9779,7 +9870,7 @@ function renderCrewChiefPage() {
     <div class="card rc-card rc-card-wide has-sticky-thead">
       <div class="rc-card-head">
         <span class="rc-card-title">Season-by-season</span>
-        <span class="rc-card-sub">${yearsSorted.length} season${yearsSorted.length === 1 ? "" : "s"}</span>
+        <span class="rc-card-sub">${ftSeasonCount} full-time season${ftSeasonCount === 1 ? "" : "s"}</span>
       </div>
       <div class="rc-card-body" style="padding:0;">
         <table class="data-table tm-history-table">
