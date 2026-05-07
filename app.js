@@ -7941,7 +7941,10 @@ function renderRaceCenter() {
 
   // ---- Hero
   const dateStr = nextRace.date ? formatRaceDate(nextRace.date) : "Date TBD";
-  const trackStr = nextRace.track || "—";
+  // Use prettyTrack so sponsor-renamed tracks (e.g., "EchoPark Speedway")
+  // resolve back to their NASCAR-canon name ("Atlanta") via the TRACK_NAMES
+  // map. Falls back to the raw track field if no canonical name is set.
+  const trackStr = prettyTrack(nextRace.track_code, nextRace.track) || "—";
   const seriesLabel = { NCS: "Cup Series", NOS: "Xfinity Series", NTS: "Truck Series" }[STATE.series] || STATE.series;
   const trackTypeStr = trackTypeLabel(nextRace.track_code);
   // Hero badge depends on what we're showing:
@@ -7960,7 +7963,7 @@ function renderRaceCenter() {
 
   // ---- Track history (last 5 winners + hot at track) — uses cached prior years
   const history = collectTrackHistory(nextRace.track_code, STATE.series);
-  const winnersHTML = renderTrackWinners(history);
+  const winnersHTML = renderTrackWinners(history, nextRace);
   const hotHTML = renderHotAtTrack(history);
 
   // Build the time/TV line from scraper-provided metadata
@@ -8015,11 +8018,33 @@ function renderRaceResultsTable(race) {
     .sort((a, b) => a.finish_pos - b.finish_pos);
   if (!rows.length) return "";
   const stageEra = isStageEra(STATE.series, STATE.season);
+
+  // Build a season-to-date points lookup: for each driver, sum up the
+  // race_pts they've earned in races 1..race.round in the current season.
+  // Used by the Total column so users can see "where this race left them
+  // in the championship" at a glance.
+  const seasonPtsToDate = new Map();
+  const allRaces = (STATE.data?.races || []);
+  allRaces.forEach(r => {
+    if ((r.round || 0) > race.round) return;
+    (r.results || []).forEach(d => {
+      if (!d.driver) return;
+      // Skip ineligible (cross-over) appearances — they don't count toward standings
+      if (d.ineligible) return;
+      const key = slugify(d.driver);
+      seasonPtsToDate.set(key, (seasonPtsToDate.get(key) || 0) + (d.race_pts || 0));
+    });
+  });
+
+  // Helper: render a number cell, blank if null/zero in stage columns.
+  // Stage-era columns (S1/S2/FL) and pre-stage races: these are 0 for
+  // most drivers, and rendering "—" makes the table feel sparse. Empty
+  // cells visually compress and let the eye focus on actual values.
+  const numOrBlank = (v) => (v == null || v === 0) ? "" : v;
+
   const trHTML = rows.map(d => {
     const carHex = colorFor(STATE.series, d.car_number);
     const carTxt = contrastTextFor(carHex);
-    // Finish-position color tier — same scheme as the heatmap so wins
-    // pop gold, T5 green, etc.
     let finCls = "f-normal";
     if (d.finish_pos === 1) finCls = "f-win";
     else if (d.finish_pos <= 5) finCls = "f-t5";
@@ -8036,19 +8061,20 @@ function renderRaceResultsTable(race) {
       ? `<a class="profile-link muted" href="#/team/${encodeURIComponent(teamCode)}">${escapeHTML(teamCode)}</a>`
       : `<span class="muted">—</span>`;
     const stageCells = stageEra
-      ? `<td class="num">${d.stage_1_pts || "—"}</td>
-         <td class="num">${d.stage_2_pts || "—"}</td>
-         <td class="num">${d.fastest_laps_pts || "—"}</td>`
+      ? `<td class="num">${numOrBlank(d.stage_1_pts)}</td>
+         <td class="num">${numOrBlank(d.stage_2_pts)}</td>
+         <td class="num">${numOrBlank(d.fastest_lap_pt)}</td>`
       : "";
+    const seasonTotal = seasonPtsToDate.get(drvSlug);
     return `<tr>
       <td class="num"><span class="finish-badge ${finCls}">${d.finish_pos}</span></td>
-      <td class="num">${d.start_pos ?? "—"}</td>
+      <td class="num">${d.start_pos ?? ""}</td>
       <td><span class="car-tag" style="background:${carHex};color:${carTxt}">${d.car_number}</span></td>
       <td>${driverCell}</td>
       <td>${teamCell}</td>
       ${stageCells}
-      <td class="num">${d.race_pts ?? "—"}</td>
-      <td class="num" style="font-weight:700">${d.total_pts ?? "—"}</td>
+      <td class="num">${d.race_pts ?? ""}</td>
+      <td class="num" style="font-weight:700">${seasonTotal != null ? seasonTotal : ""}</td>
     </tr>`;
   }).join("");
 
@@ -8072,7 +8098,7 @@ function renderRaceResultsTable(race) {
             <th>Team</th>
             ${stageHeaders}
             <th class="num">Race pts</th>
-            <th class="num">Total</th>
+            <th class="num">Season pts</th>
           </tr></thead>
           <tbody>${trHTML}</tbody>
         </table>
@@ -8146,23 +8172,37 @@ function collectTrackHistory(trackCode, series) {
 }
 
 // Render last 5 winners at this track. Each row links to the winning car's profile.
-function renderTrackWinners(history) {
+function renderTrackWinners(history, currentRace) {
   if (!history.length) {
     return `<div class="rc-empty">No prior history at this track in cached years.</div>`;
   }
-  const last5 = history.slice(0, 5).map(h => {
-    // Winner = finish_pos === 1 in the results
+  // Exclude the race we're currently looking at — "Last 5 winners HERE" is
+  // about historical context, not "the race in front of you." Match by
+  // (year, round) which uniquely identifies a race.
+  const filtered = currentRace
+    ? history.filter(h => !(h.year === STATE.season && h.round === currentRace.round))
+    : history;
+  // Find rows that actually have a recorded winner. Some old rain-shortened
+  // races have no finish_pos === 1 row; we skip those rather than render a
+  // blank row.
+  const withWinner = filtered.map(h => {
     const winner = (h.results || []).find(d => d.finish_pos === 1);
-    if (!winner) return null;
+    return winner ? { h, winner } : null;
+  }).filter(Boolean);
+  if (!withWinner.length) {
+    return `<div class="rc-empty">No prior winners on file.</div>`;
+  }
+  const last5 = withWinner.slice(0, 5).map(({ h, winner }) => {
     const carHex = colorFor(STATE.series, winner.car_number);
     const txt = contrastTextFor(carHex);
-    return `<a class="rc-winner-row profile-link" href="#/car/${winner.car_number}">
+    const drvSlug = slugify(winner.driver || "");
+    return `<a class="rc-winner-row profile-link" href="#/driver/${drvSlug}">
       <span class="rc-winner-year">${h.year}</span>
       <span class="car-tag" style="background:${carHex};color:${txt}">${winner.car_number}</span>
       <span class="rc-winner-name">${escapeHTML(lastNameOf(winner.driver))}</span>
     </a>`;
-  }).filter(Boolean).join("");
-  return last5 || `<div class="rc-empty">No winner data found.</div>`;
+  }).join("");
+  return last5;
 }
 
 // Top-5 cars by avg finish at this track over last 5 visits (cross-year).
@@ -8287,10 +8327,14 @@ function renderSeasonSchedule(allRaces, currentRound, lastWinnerAt) {
       if (winner) {
         const carHex = colorFor(STATE.series, winner.car_number);
         const txt = contrastTextFor(carHex);
-        resultBit = `<span class="rc-sched-winner">
+        const drvSlug = slugify(winner.driver || "");
+        // Wrap the entire winner block in an anchor → driver profile.
+        // stopPropagation on click so the row-level click handler
+        // (which navigates to the race) doesn't also fire.
+        resultBit = `<a class="rc-sched-winner" href="#/driver/${drvSlug}" onclick="event.stopPropagation()">
           <span class="car-tag" style="background:${carHex};color:${txt}">${winner.car_number}</span>
           ${escapeHTML(lastNameOf(winner.driver))}
-        </span>`;
+        </a>`;
       }
     } else {
       // Upcoming row. Show prior winner if we have one (and a lookup fn).
@@ -8302,18 +8346,20 @@ function renderSeasonSchedule(allRaces, currentRound, lastWinnerAt) {
       if (priorWinner) {
         const carHex = colorFor(STATE.series, priorWinner.car_number);
         const txt = contrastTextFor(carHex);
-        priorHTML = `<span class="rc-sched-prior">
+        const drvSlug = slugify(priorWinner.driver || "");
+        priorHTML = `<a class="rc-sched-prior" href="#/driver/${drvSlug}" onclick="event.stopPropagation()">
           <span class="rc-sched-prior-yr">${priorWinner.year}</span>
           <span class="car-tag" style="background:${carHex};color:${txt}">${priorWinner.car_number}</span>
           ${escapeHTML(lastNameOf(priorWinner.driver))}
-        </span>`;
+        </a>`;
       }
       resultBit = priorHTML;
     }
 
+    const trackDisplay = prettyTrack(r.track_code, r.track) || "—";
     const trackLink = r.track_code
-      ? `<a class="rc-sched-track-link" href="#/track/${escapeHTML(r.track_code)}" onclick="event.stopPropagation()">${escapeHTML(r.track || "—")}</a>`
-      : `<span>${escapeHTML(r.track || "—")}</span>`;
+      ? `<a class="rc-sched-track-link" href="#/track/${escapeHTML(r.track_code)}" onclick="event.stopPropagation()">${escapeHTML(trackDisplay)}</a>`
+      : `<span>${escapeHTML(trackDisplay)}</span>`;
     const raceNameHTML = r.name
       ? `<span class="rc-sched-name">${escapeHTML(r.name)}</span>`
       : "";
@@ -8437,14 +8483,24 @@ function renderSchedulePage() {
     </div>
   `;
 
-  // Schedule row click — set throughRound cursor + jump to Cumulative Season.
+  // Schedule row click. Two cases:
+  //   - Completed race (has results)  → open the race results page
+  //   - Upcoming/synthetic race       → set the cumulative-season time
+  //     cursor to that round and jump to Cumulative Season (legacy "what
+  //     would standings look like at this point?" behavior). For upcoming
+  //     races there's no result table to show, so this is the useful fallback.
   host.querySelectorAll(".rc-sched-row[data-round]").forEach(row => {
     row.addEventListener("click", (e) => {
-      if (e.target.closest("a")) return;   // let track links propagate
+      if (e.target.closest("a")) return;   // let track / winner links propagate
       const round = parseInt(row.dataset.round, 10);
       if (!Number.isFinite(round)) return;
-      STATE.throughRound = round;
-      window.location.hash = "#/arc";
+      const isCompleted = row.classList.contains("run");
+      if (isCompleted) {
+        window.location.hash = `#/race/${round}`;
+      } else {
+        STATE.throughRound = round;
+        window.location.hash = "#/arc";
+      }
     });
   });
 }

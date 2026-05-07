@@ -4925,24 +4925,6 @@ a.driver-cell.profile-link:hover .car-tag {
   font-family: var(--mono);
 }
 
-/* --- Crew chief takeover layout (mirrors team-takeover) --- */
-#cc-takeover {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: var(--bg);
-  z-index: 10;
-  overflow-y: auto;
-  padding: 18px;
-}
-#cc-host .rc-card {
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  min-width: 0;
-}
-#cc-host .rc-card.has-sticky-thead,
-#cc-host .rc-card.has-sticky-thead .rc-card-body { overflow: visible; }
-
 /* === SEARCH BAR === */
 /* Lives in the topbar between the series switcher and the topbar-right
    pickers. On desktop expands to fill available width. On mobile collapses
