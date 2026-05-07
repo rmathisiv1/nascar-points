@@ -154,6 +154,9 @@ class Race:
     name: str
     time: str = ""        # "3:00 PM" — race start time, schedule-only
     tv: str = ""          # "FOX", "NBC" etc — schedule-only
+    track_length: float = 0.0   # miles, e.g. 2.5 for Daytona, 0.526 for Martinsville
+    scheduled_laps: int = 0     # for upcoming races; completed races get this from results
+    surface: str = ""           # "P" (paved), "R" (road), "D" (dirt)
     stages: int = 2
     fastest_lap_driver: Optional[str] = None
     source_url: str = ""
@@ -767,6 +770,31 @@ def discover_races(series_code: str, season: int) -> list[dict]:
                         race_tv = tv_match.group(1)
                     break
 
+        # Track length, surface code, and lap count — racing-reference's
+        # schedule grid has columns matching <div class="len">, "sfc", "laps".
+        # These appear on completed-race rows with concrete values; on upcoming
+        # rows they're often blank but sometimes filled in (track length is
+        # known regardless of whether the race has run). We parse generously
+        # and treat empties as 0 / "".
+        track_length = 0.0
+        scheduled_laps = 0
+        surface = ""
+        len_cell = row.find("div", class_=re.compile(r"\blen\b"))
+        if len_cell:
+            try:
+                track_length = float(len_cell.get_text(strip=True))
+            except (ValueError, TypeError):
+                pass
+        sfc_cell = row.find("div", class_=re.compile(r"\bsfc\b"))
+        if sfc_cell:
+            surface = sfc_cell.get_text(strip=True).upper()
+        laps_cell = row.find("div", class_=re.compile(r"^\s*laps\b"))
+        if laps_cell:
+            try:
+                scheduled_laps = int(laps_cell.get_text(strip=True))
+            except (ValueError, TypeError):
+                pass
+
         # If completed, the race-number link gives us the race-results URL +
         # an authoritative race name from its title attribute.
         race_url = ""
@@ -789,6 +817,9 @@ def discover_races(series_code: str, season: int) -> list[dict]:
             "track": track_name,
             "time": race_time,
             "tv": race_tv,
+            "track_length": track_length,
+            "scheduled_laps": scheduled_laps,
+            "surface": surface,
             "has_run": has_run,
         })
 
@@ -943,6 +974,9 @@ def build_series(series_code: str, season: int) -> dict:
                 name=r.get("name", ""),
                 time=r.get("time", ""),
                 tv=r.get("tv", ""),
+                track_length=r.get("track_length", 0.0),
+                scheduled_laps=r.get("scheduled_laps", 0),
+                surface=r.get("surface", ""),
                 source_url="",
             )
             out_races.append(asdict(stub))
@@ -953,6 +987,18 @@ def build_series(series_code: str, season: int) -> dict:
         if race is None:
             print("    ! parse failed, skipping", file=sys.stderr)
             continue
+        # Enrich with schedule-level metadata that the per-race page
+        # doesn't carry: time/TV (always blank for completed races on
+        # racing-reference) and track length / scheduled laps / surface
+        # (present in the schedule grid even for completed races).
+        race.time = r.get("time", "") or race.time
+        race.tv = r.get("tv", "") or race.tv
+        if r.get("track_length", 0):
+            race.track_length = r["track_length"]
+        if r.get("scheduled_laps", 0):
+            race.scheduled_laps = r["scheduled_laps"]
+        if r.get("surface"):
+            race.surface = r["surface"]
         out_races.append(asdict(race))
         fl = race.fastest_lap_driver or "—"
         print(f"    ok · {len(race.results)} drivers · FL bonus: {fl}",

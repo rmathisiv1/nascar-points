@@ -6760,16 +6760,6 @@ function renderProfile() {
 
       <div class="profile-panel full">
         <div class="profile-panel-head">
-          <span class="profile-panel-title">Career at a Track</span>
-          <span class="profile-panel-sub">Pick a track to see this driver's history there</span>
-        </div>
-        <div class="profile-panel-body">
-          <div id="profile-track-picker"></div>
-        </div>
-      </div>
-
-      <div class="profile-panel full">
-        <div class="profile-panel-head">
           <span class="profile-panel-title">${STATE.season} Race-by-Race</span>
           <span class="profile-panel-sub">${rows.filter(r => !r.dns).length} starts</span>
         </div>
@@ -6820,7 +6810,6 @@ function renderProfile() {
   paintProfileChart(entity, rows);
   paintProfileHeatStrip(rows);
   paintProfileTrackSplits(entity);
-  paintProfileTrackPicker(entity);
   paintProfileRaceTable(rows, kind);
   paintProfileCareerHeatmap();
   wireCoDriverBadges(host);
@@ -7519,6 +7508,10 @@ function paintProfileTrackPicker(entity) {
             entry = { code: tCode, name: prettyTrack(tCode, race.track) || tCode, races: [] };
             byTrack.set(tCode, entry);
           }
+          const pts = d.race_pts != null ? d.race_pts
+                    : d.points != null   ? d.points
+                    : d.total != null    ? d.total
+                    : 0;
           entry.races.push({
             year: yr,
             series: sCode,
@@ -7528,7 +7521,7 @@ function paintProfileTrackPicker(entity) {
             start: d.start_pos,
             lapsLed: d.laps_led || 0,
             stagePts: (d.stage_1_pts || 0) + (d.stage_2_pts || 0),
-            totalPts: d.race_pts || 0,
+            totalPts: pts,
             pole: d.start_pos === 1,
           });
         });
@@ -7769,11 +7762,10 @@ function paintProfileCareerHeatmap() {
       // they spent most of the year." Track car number too for the same reason.
       const teamCounts = new Map();
       const carCounts = new Map();
+      let scheduleMaxThisYear = 0;
       block.races.forEach(race => {
         if (race.round == null) return;
-        // Track the schedule length so the grid is wide enough even when
-        // the target driver didn't run the late races.
-        if (race.round > maxRound) maxRound = race.round;
+        if (race.round > scheduleMaxThisYear) scheduleMaxThisYear = race.round;
         // Match driver — DON'T filter out ineligible (cross-over) appearances.
         // A Cup regular running a 1-off Xfinity race is flagged as ineligible
         // (no championship points), but the race still happened and we want
@@ -7836,6 +7828,10 @@ function paintProfileCareerHeatmap() {
           team: dominantTeam,
           car: dominantCar,
         });
+        // Driver drove this year — its schedule length contributes to the
+        // grid width. This caps the grid at the longest schedule the driver
+        // actually participated in (e.g. 36 for modern era, 62 for 1965).
+        if (scheduleMaxThisYear > maxRound) maxRound = scheduleMaxThisYear;
       }
     });
   });
@@ -8008,9 +8004,10 @@ function paintCrewChiefCareerHeatmap() {
       const driverNames  = new Map();   // slug -> display name
       const teamCounts = new Map();
       const carCounts = new Map();
+      let scheduleMaxThisYear = 0;
       block.races.forEach(race => {
         if (race.round == null) return;
-        if (race.round > maxRound) maxRound = race.round;
+        if (race.round > scheduleMaxThisYear) scheduleMaxThisYear = race.round;
         // Find the row(s) this CC was on for this race. Could be more than
         // one if a CC swapped cars mid-race (rare); we just take the first.
         const hit = (race.results || []).find(d =>
@@ -8081,6 +8078,7 @@ function paintCrewChiefCareerHeatmap() {
           driverName: dominantDriverName,
           multiDriver,
         });
+        if (scheduleMaxThisYear > maxRound) maxRound = scheduleMaxThisYear;
       }
     });
   });
@@ -8311,7 +8309,23 @@ function renderHomeHero(year, series) {
     }
     const trackName = prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD";
     const trackType = trackTypeFor(nextRace.track_code);
-    const typeLabel = trackType ? trackType.charAt(0).toUpperCase() + trackType.slice(1) : "";
+    const typeLabel = trackType ? trackTypeLabel(trackType).charAt(0).toUpperCase() + trackTypeLabel(trackType).slice(1) : "";
+    // Schedule metadata pulled from the scraper (time + TV for upcoming
+    // races; track length + scheduled laps when the schedule grid populates
+    // them). Older scrapes may not have these — we render what's there.
+    const startTimeBits = [];
+    if (nextRace.time) startTimeBits.push(nextRace.time);
+    if (nextRace.tv) startTimeBits.push(nextRace.tv);
+    const startTimeStr = startTimeBits.join(" · ");
+    const trackBits = [];
+    if (nextRace.scheduled_laps) trackBits.push(`${nextRace.scheduled_laps} laps`);
+    if (nextRace.track_length) {
+      const totalMiles = nextRace.scheduled_laps && nextRace.track_length
+        ? (nextRace.scheduled_laps * nextRace.track_length).toFixed(1)
+        : null;
+      trackBits.push(totalMiles ? `${totalMiles} mi` : `${nextRace.track_length} mi/lap`);
+    }
+    const trackInfoStr = trackBits.join(" · ");
     // Last winner at this track (any year) for context
     const lastWinnerHTML = computeLastWinnerAtTrack(nextRace.track_code, series);
     // Driver with most wins at this track
@@ -8325,7 +8339,9 @@ function renderHomeHero(year, series) {
         <div class="home-hero-info">
           <div class="home-card-label">UPCOMING ${series}</div>
           <a class="home-hero-track-name" href="#/track/${nextRace.track_code}">${escapeHTML(trackName)}</a>
-          <div class="home-hero-track-meta">${dateStr ? formatLongDate(dateStr) : ""}${typeLabel ? ` · ${typeLabel}` : ""}</div>
+          <div class="home-hero-track-meta">
+            ${dateStr ? formatLongDate(dateStr) : ""}${startTimeStr ? ` · ${escapeHTML(startTimeStr)}` : ""}${typeLabel ? ` · ${typeLabel}` : ""}${trackInfoStr ? ` · ${escapeHTML(trackInfoStr)}` : ""}
+          </div>
           <div class="home-hero-track-row">
             ${lastWinnerHTML ? `<div class="home-hero-track-fact"><span class="k">Last winner</span><span class="v">${lastWinnerHTML}</span></div>` : ""}
             ${trackKingHTML ? `<div class="home-hero-track-fact"><span class="k">Track king</span><span class="v">${trackKingHTML}</span></div>` : ""}
@@ -8474,27 +8490,50 @@ function renderHomeStandingsTrio(year) {
 }
 
 // Compute standings rows for an arbitrary series block (not necessarily
-// STATE.data). Mirrors rankingRowsFrom + computeSeasonTotals but works
-// off a passed-in block, since the home page wants three-series data
-// in one render pass without juggling STATE.
+// STATE.data). Walks block.races[].results[] and aggregates per car_number
+// since that's the canonical key used everywhere else. Mirrors what
+// allEntities() + computeSeasonTotals do but is self-contained — needed
+// because the home page renders three series in one pass without going
+// through STATE swaps.
 function computeStandingsForBlock(block) {
-  if (!block || !block.entities || !block.races) return [];
-  const out = [];
-  block.entities.forEach(e => {
-    if (e.ineligible) return;
-    let total = 0;
-    let starts = 0;
-    (e.races || []).forEach(r => {
-      if (r.dns) return;
-      total += r.total || 0;
-      starts++;
+  if (!block || !block.races) return [];
+  // Aggregate per car_number → { driver, total, starts }
+  const byCar = new Map();
+  block.races.forEach(race => {
+    (race.results || []).forEach(d => {
+      if (!d.car_number) return;
+      if (d.ineligible) return;
+      let agg = byCar.get(d.car_number);
+      if (!agg) {
+        agg = {
+          car_number: d.car_number,
+          driver: d.driver,
+          primaryDriver: d.driver,
+          driverStarts: {},
+          total: 0,
+          starts: 0,
+        };
+        byCar.set(d.car_number, agg);
+      }
+      // Track driver who drove this car most often → that's the "primary"
+      agg.driverStarts[d.driver] = (agg.driverStarts[d.driver] || 0) + 1;
+      // Sum points (multi-field fallback for older data)
+      const pts = d.race_pts != null ? d.race_pts
+                : d.points != null   ? d.points
+                : d.total != null    ? d.total
+                : 0;
+      agg.total += pts;
+      if (d.finish_pos != null) agg.starts++;
     });
-    out.push({
-      car_number: e.car_number,
-      driver: e.driver,
-      primaryDriver: e.primaryDriver || e.driver,
-      total, starts,
-    });
+  });
+  // Resolve primaryDriver from the most-frequent driver per car
+  const out = Array.from(byCar.values()).map(a => {
+    const sorted = Object.entries(a.driverStarts).sort((p, q) => q[1] - p[1]);
+    if (sorted.length > 0) {
+      a.primaryDriver = sorted[0][0];
+      a.driver = sorted[0][0];
+    }
+    return a;
   });
   return out.sort((a, b) => b.total - a.total);
 }
@@ -8581,11 +8620,12 @@ function renderHomeStatCards(year, series) {
 
   // Card 4: most dominant driver L4 (best avg finish over last 4 races)
   let mostDominant = null;
-  if (completed.length >= 1 && STATE.data.entities) {
+  const homeEntities = allEntities();
+  if (completed.length >= 1 && homeEntities.length > 0) {
     const recentRounds = completed.slice(-4).map(r => r.round);
     if (recentRounds.length >= 1) {
       let best = null;
-      STATE.data.entities.forEach(e => {
+      homeEntities.forEach(e => {
         if (!isFullTime(e)) return;
         const recentFinishes = (e.races || [])
           .filter(r => recentRounds.includes(r.round) && !r.dns && r.finish != null)
@@ -8632,10 +8672,11 @@ function generateHomeStorylines(year, series) {
   const tiles = [];
   const races = racesSorted();
   const completed = races.filter(r => (r.results || []).some(d => d.finish_pos === 1));
-  if (completed.length === 0 || !STATE.data.entities) return tiles;
+  const homeEntities = allEntities();
+  if (completed.length === 0 || homeEntities.length === 0) return tiles;
 
   // 1. Longest active top-5 streak
-  const streaks = STATE.data.entities
+  const streaks = homeEntities
     .filter(isFullTime)
     .map(e => {
       let streak = 0;
@@ -8756,7 +8797,7 @@ function generateHomeStorylines(year, series) {
       const top15 = homeTopStandings(15);
       let worst = null;
       top15.forEach(r => {
-        const e = STATE.data.entities.find(ent => ent.car_number === r.car_number);
+        const e = homeEntities.find(ent => ent.car_number === r.car_number);
         if (!e) return;
         // Walk this driver's recent races at the same track type
         let starts = 0;
@@ -8859,6 +8900,12 @@ function renderTrackStats() {
           const slug = slugify(d.driver);
           let agg = byDrv.get(slug);
           if (!agg) { agg = { slug, name: d.driver, races: [] }; byDrv.set(slug, agg); }
+          // Read points with fallbacks. Modern scraper uses race_pts;
+          // older scrapes used `points` or `total`. We sum what's there.
+          const pts = d.race_pts != null ? d.race_pts
+                    : d.points != null   ? d.points
+                    : d.total != null    ? d.total
+                    : 0;
           agg.races.push({
             year: yr,
             series: sCode,
@@ -8866,7 +8913,7 @@ function renderTrackStats() {
             start: d.start_pos,
             lapsLed: d.laps_led || 0,
             stagePts: (d.stage_1_pts || 0) + (d.stage_2_pts || 0),
-            totalPts: d.race_pts || 0,
+            totalPts: pts,
             pole: d.start_pos === 1,
           });
         });
@@ -8883,6 +8930,8 @@ function renderTrackStats() {
       ...s,
       winPct: s.starts > 0 ? (s.wins / s.starts) * 100 : null,
       top5Pct: s.starts > 0 ? (s.top5 / s.starts) * 100 : null,
+      top10Pct: s.starts > 0 ? (s.top10 / s.starts) * 100 : null,
+      avgPts: s.starts > 0 ? s.totalPts / s.starts : null,
     };
   }).filter(r => r.starts >= ts.minStarts);
 
@@ -8950,11 +8999,13 @@ function renderTrackStats() {
         <th class="ts-th num" data-sort="top5">T5${sortAttr("top5")}</th>
         <th class="ts-th num" data-sort="top5Pct">T5 %${sortAttr("top5Pct")}</th>
         <th class="ts-th num" data-sort="top10">T10${sortAttr("top10")}</th>
+        <th class="ts-th num" data-sort="top10Pct">T10 %${sortAttr("top10Pct")}</th>
         <th class="ts-th num" data-sort="poles">Poles${sortAttr("poles")}</th>
         <th class="ts-th num" data-sort="avgStart">Avg St${sortAttr("avgStart")}</th>
         <th class="ts-th num" data-sort="avgFin">Avg Fin${sortAttr("avgFin")}</th>
         <th class="ts-th num" data-sort="lapsLed">Laps Led${sortAttr("lapsLed")}</th>
         <th class="ts-th num" data-sort="stagePts">Stage Pts${sortAttr("stagePts")}</th>
+        <th class="ts-th num" data-sort="avgPts">Avg Pts${sortAttr("avgPts")}</th>
         <th class="ts-th num" data-sort="totalPts">Total Pts${sortAttr("totalPts")}</th>
       </tr></thead>
       <tbody>
@@ -8967,11 +9018,13 @@ function renderTrackStats() {
           <td class="num">${r.top5}</td>
           <td class="num">${r.top5Pct != null ? r.top5Pct.toFixed(1) + "%" : "—"}</td>
           <td class="num">${r.top10}</td>
+          <td class="num">${r.top10Pct != null ? r.top10Pct.toFixed(1) + "%" : "—"}</td>
           <td class="num">${r.poles}</td>
           <td class="num">${r.avgStart != null ? r.avgStart.toFixed(1) : "—"}</td>
           <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
           <td class="num">${r.lapsLed.toLocaleString()}</td>
           <td class="num">${r.stagePts}</td>
+          <td class="num">${r.avgPts != null ? r.avgPts.toFixed(1) : "—"}</td>
           <td class="num">${r.totalPts}</td>
         </tr>`).join("")}
       </tbody>
