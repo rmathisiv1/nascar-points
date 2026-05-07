@@ -94,7 +94,7 @@
 
   <section class="col-center" id="col-center">
     <nav class="dash-tabs" id="dash-tabs">
-      <a href="#/schedule"   class="dash-tab dash-tab-race" data-view="schedule">Schedule</a>
+      <a href="#/schedule"   class="dash-tab" data-view="schedule">Schedule</a>
       <a href="#/arc"        class="dash-tab" data-view="arc">Cumulative Season</a>
       <a href="#/form"       class="dash-tab" data-view="form">Trending</a>
       <a href="#/breakdown"  class="dash-tab" data-view="breakdown">Points Breakdown</a>
@@ -177,6 +177,19 @@
           <div class="view-sub" id="cc-sub">—</div>
         </div>
         <div id="cc-host"></div>
+      </section>
+    </div>
+
+    <div class="profile-takeover" id="playoffs-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="playoffs-back">← Back</a>
+      </div>
+      <section class="view" id="view-playoffs" hidden>
+        <div class="view-head">
+          <h1>Playoff Picture</h1>
+          <div class="view-sub" id="playoffs-sub">—</div>
+        </div>
+        <div id="playoffs-host"></div>
       </section>
     </div>
 
@@ -342,27 +355,15 @@
 
 </main>
 
-<main class="takeover" id="takeover" hidden>
-  <div class="takeover-head">
-    <a href="#" class="takeover-back" id="playoffs-back">← Back to dashboard</a>
+<!-- Error fallback — shown via showError() when data load fails. Lives
+     outside the main dashboard so it can take the full viewport. -->
+<section class="view" id="view-error" hidden style="padding: 40px 24px;">
+  <div class="view-head"><h1>Can't load data</h1></div>
+  <div class="card" style="padding: 20px;">
+    <p id="error-msg" class="muted"></p>
+    <p class="muted small">Serve via local server: <code>python -m http.server 8000</code></p>
   </div>
-
-  <section class="view" id="view-playoffs" hidden>
-    <div class="view-head">
-      <h1>Playoff Picture</h1>
-      <div class="view-sub" id="playoffs-sub">—</div>
-    </div>
-    <div id="playoffs-host"></div>
-  </section>
-
-  <section class="view" id="view-error" hidden>
-    <div class="view-head"><h1>Can't load data</h1></div>
-    <div class="card" style="padding: 20px;">
-      <p id="error-msg" class="muted"></p>
-      <p class="muted small">Serve via local server: <code>python -m http.server 8000</code></p>
-    </div>
-  </section>
-</main>
+</section>
 
 <!-- Race lightbox — opens over the page when a historical race link is
      clicked in Present mode. Hidden by default; renderRaceLightbox()

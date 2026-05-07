@@ -1598,9 +1598,9 @@ function parseHash() {
   // what was stashed, since the user opted into "always live" — even the
   // original entry point may have been historical.
   const wasProfile = STATE.view === "profile" && STATE.profile && STATE.profile.locked;
-  const wasOtherTakeover = ["team", "cc", "track", "race"].includes(STATE.view);
+  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs"].includes(STATE.view);
   const leavingTakeover = wasProfile || wasOtherTakeover;
-  const enteringNonTakeover = !["profile", "team", "cc", "track", "race"].includes(view);
+  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs"].includes(view);
   if (leavingTakeover && enteringNonTakeover) {
     if (STATE.mode === "present") {
       const latest = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
@@ -2338,12 +2338,11 @@ function renderTimeCursorBanner() {
 // ============================================================
 // Views that live as tabs inside the center panel.
 const TAB_VIEWS = ["arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "standings"];
-// Views that take over the whole page (hide dashboard). Only playoffs now —
-// Full-width takeovers — these hide the entire dashboard layout.
-const TAKEOVER_VIEWS = ["playoffs"];
+// Full-width takeovers — none currently. Reserved for future use.
+const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
 // alongside left (standings) and right (form) panels.
-const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc"];
+const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -2404,10 +2403,6 @@ function render() {
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
 
-  // Full-width takeover (playoffs only)
-  const pElem = document.getElementById("view-playoffs");
-  if (pElem) pElem.hidden = (STATE.view !== "playoffs");
-
   // Center-column takeovers — sit inside col-center, hide tab-body when active
   const profileTakeover = document.getElementById("profile-takeover");
   const raceTakeover    = document.getElementById("race-takeover");
@@ -2415,6 +2410,7 @@ function render() {
   const schedTakeover   = document.getElementById("schedule-takeover");
   const teamTakeover    = document.getElementById("team-takeover");
   const ccTakeover      = document.getElementById("cc-takeover");
+  const playoffsTakeover = document.getElementById("playoffs-takeover");
   const tabBody         = document.getElementById("tab-body");
   if (profileTakeover) profileTakeover.hidden = (STATE.view !== "profile");
   if (raceTakeover)    raceTakeover.hidden    = (STATE.view !== "race");
@@ -2422,6 +2418,11 @@ function render() {
   if (schedTakeover)   schedTakeover.hidden   = (STATE.view !== "schedule");
   if (teamTakeover)    teamTakeover.hidden    = (STATE.view !== "team");
   if (ccTakeover)      ccTakeover.hidden      = (STATE.view !== "cc");
+  if (playoffsTakeover) playoffsTakeover.hidden = (STATE.view !== "playoffs");
+  // The view-playoffs section inside its takeover wrapper has its own
+  // hidden attribute — keep it in sync so renderPlayoffs paints into it.
+  const pElem = document.getElementById("view-playoffs");
+  if (pElem) pElem.hidden = (STATE.view !== "playoffs");
   if (tabBody)         tabBody.hidden         = inCenterTakeover;
 
   // Tab-panel visibility. Default to "arc" when the URL doesn't point to a
