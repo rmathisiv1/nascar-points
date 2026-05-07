@@ -965,6 +965,24 @@ async function boot() {
     history.replaceState(null, "", "#/standings");
   }
   render();
+  // Warm SEASON_CACHE during browser idle time so the all-time pages
+  // and search bar feel instant when users click into them. We use
+  // requestIdleCallback if available; otherwise a setTimeout fallback.
+  // Loads in small batches so we don't compete with main-thread paint.
+  const warmCache = async () => {
+    const missing = (STATE.seasonsAvailable || []).filter(y => !SEASON_CACHE[y]);
+    if (missing.length === 0) return;
+    for (let i = 0; i < missing.length; i += 3) {
+      const batch = missing.slice(i, i + 3);
+      await Promise.all(batch.map(y => loadSeasonIntoCache(y).catch(() => null)));
+      await new Promise(r => setTimeout(r, 60));
+    }
+  };
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(() => { warmCache(); }, { timeout: 3000 });
+  } else {
+    setTimeout(warmCache, 1500);
+  }
   window.addEventListener("hashchange", async () => {
     // Any URL change dismisses the race lightbox. Covers all navigation
     // pathways — clicking an inner driver/team link, browser back/forward,
@@ -11066,9 +11084,9 @@ function invalidateAllTimeIfStale() {
 }
 
 // Build per-driver career aggregates from SEASON_CACHE. Returns array
-// of records with a per-year breakdown so callers can filter by
-// scope (e.g. just 2026) or by generation (e.g. only Gen 7) without
-// re-walking the raw cache.
+// of records with a per-(year,series) breakdown so callers can filter
+// by scope (e.g. just 2026), series (e.g. just NCS), or generation
+// (e.g. only Gen 7) without re-walking the raw cache.
 function computeAllTimeDrivers() {
   const byDrv = new Map();
   Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
@@ -11083,13 +11101,14 @@ function computeAllTimeDrivers() {
           const slug = slugify(d.driver);
           let agg = byDrv.get(slug);
           if (!agg) {
-            agg = { slug, name: d.driver, byYear: new Map() };
+            agg = { slug, name: d.driver, byYearSeries: new Map() };
             byDrv.set(slug, agg);
           }
-          let yt = agg.byYear.get(yr);
+          const key = `${yr}|${sCode}`;
+          let yt = agg.byYearSeries.get(key);
           if (!yt) {
-            yt = { starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
-            agg.byYear.set(yr, yt);
+            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            agg.byYearSeries.set(key, yt);
           }
           yt.starts++;
           yt.finishSum += d.finish_pos;
@@ -11121,13 +11140,14 @@ function computeAllTimeTeams() {
           const grp = teamGroup(code, yr) || code;
           let agg = byTeam.get(grp);
           if (!agg) {
-            agg = { code: grp, name: null, byYear: new Map() };
+            agg = { code: grp, name: null, byYearSeries: new Map() };
             byTeam.set(grp, agg);
           }
-          let yt = agg.byYear.get(yr);
+          const key = `${yr}|${sCode}`;
+          let yt = agg.byYearSeries.get(key);
           if (!yt) {
-            yt = { starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
-            agg.byYear.set(yr, yt);
+            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            agg.byYearSeries.set(key, yt);
           }
           yt.starts++;
           yt.finishSum += d.finish_pos;
@@ -11138,9 +11158,8 @@ function computeAllTimeTeams() {
       });
     });
   });
-  // Resolve display name from the latest year the team appears in
   return Array.from(byTeam.values()).map(t => {
-    const yrs = Array.from(t.byYear.keys()).sort((a, b) => b - a);
+    const yrs = Array.from(new Set(Array.from(t.byYearSeries.values()).map(v => v.year))).sort((a, b) => b - a);
     t.name = teamLabelForEra(t.code, yrs[0] || STATE.season).full || t.code;
     return t;
   });
@@ -11162,13 +11181,14 @@ function computeAllTimeCrewChiefs() {
           const slug = slugify(d.crew_chief);
           let agg = byCC.get(slug);
           if (!agg) {
-            agg = { slug, name: d.crew_chief, byYear: new Map() };
+            agg = { slug, name: d.crew_chief, byYearSeries: new Map() };
             byCC.set(slug, agg);
           }
-          let yt = agg.byYear.get(yr);
+          const key = `${yr}|${sCode}`;
+          let yt = agg.byYearSeries.get(key);
           if (!yt) {
-            yt = { starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
-            agg.byYear.set(yr, yt);
+            yt = { year: yr, series: sCode, starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            agg.byYearSeries.set(key, yt);
           }
           yt.starts++;
           yt.finishSum += d.finish_pos;
@@ -11182,22 +11202,22 @@ function computeAllTimeCrewChiefs() {
   return Array.from(byCC.values());
 }
 
-// Fold a record's per-year breakdown into a single stat block based on
-// the active scope + generation filters. Returns null if no years match
-// (caller should drop the row). The returned object has the shape the
-// table expects: { starts, wins, top5, top10, avgFin, yearsCount, yearsLabel,
-// winPct, top5Pct }.
-function foldRecordByFilters(rec, scope, gens, currentSeason) {
+// Fold a record's per-(year,series) breakdown into a single stat block
+// based on active scope + generation + series filters. Returns null if
+// no entries match (caller should drop the row). The returned object
+// has the shape the table expects.
+function foldRecordByFilters(rec, scope, gens, seriesFilter, currentSeason) {
   const filtered = [];
-  rec.byYear.forEach((stats, year) => {
-    if (scope === "current" && year !== currentSeason) return;
+  rec.byYearSeries.forEach((stats) => {
+    if (scope === "current" && stats.year !== currentSeason) return;
+    if (seriesFilter && seriesFilter !== "all" && stats.series !== seriesFilter) return;
     if (gens && gens.size > 0) {
       const inGen = NASCAR_GENERATIONS.some(g =>
-        gens.has(g.id) && year >= g.year_start && year <= g.year_end
+        gens.has(g.id) && stats.year >= g.year_start && stats.year <= g.year_end
       );
       if (!inGen) return;
     }
-    filtered.push({ year, ...stats });
+    filtered.push(stats);
   });
   if (filtered.length === 0) return null;
   let starts = 0, wins = 0, top5 = 0, top10 = 0, finishSum = 0;
@@ -11208,7 +11228,7 @@ function foldRecordByFilters(rec, scope, gens, currentSeason) {
     top10 += f.top10;
     finishSum += f.finishSum;
   });
-  const yrs = filtered.map(f => f.year).sort((a, b) => a - b);
+  const yrs = Array.from(new Set(filtered.map(f => f.year))).sort((a, b) => a - b);
   const yrLabel = yrs.length === 0 ? "—"
                 : yrs.length === 1 ? String(yrs[0])
                 : `${yrs[0]}–${yrs[yrs.length - 1]}`;
@@ -11223,13 +11243,18 @@ function foldRecordByFilters(rec, scope, gens, currentSeason) {
 }
 
 // Track per-page state: sort key, sort dir, search, page index, scope
-// (current season vs all-time), and active generation filters. Single
-// object shared by all three all-time pages — they don't co-exist on
-// screen, so the simplification is fine.
+// (current season vs all-time), active generation filters, and series
+// filter. Single object shared by all three all-time pages — they
+// don't co-exist on screen, so the simplification is fine.
+//
+// Default gens cover the modern era (Gen 5/6/7 = 2007+) so the table
+// surfaces drivers active during the user's lifetime. Toggle the "All"
+// chip to see every era at once.
+const ALLTIME_DEFAULT_GENS = ["g5", "g6", "g7"];
 const ALLTIME_STATE = {
-  drivers:    { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set() },
-  teams:      { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set() },
-  crewchiefs: { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set() },
+  drivers:    { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
+  teams:      { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
+  crewchiefs: { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
 };
 
 // NASCAR Cup generation eras. Used by the generation filter on
@@ -11262,7 +11287,7 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
 
   // Fold each record by active filters; drop those with no matching years
   let visible = rawRecs.map(rec => {
-    const folded = foldRecordByFilters(rec, st.scope, st.gens, currentSeason);
+    const folded = foldRecordByFilters(rec, st.scope, st.gens, st.series, currentSeason);
     if (!folded) return null;
     return {
       slug: rec.slug,
@@ -11292,7 +11317,6 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
 
   const totalCount = visible.length;
   const pageCount = Math.max(1, Math.ceil(totalCount / ALLTIME_PAGE_SIZE));
-  // Clamp current page if filters narrowed below it
   if (st.page >= pageCount) st.page = pageCount - 1;
   if (st.page < 0) st.page = 0;
   const startIdx = st.page * ALLTIME_PAGE_SIZE;
@@ -11336,36 +11360,48 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
     </tr>`;
   }).join("")}</tbody>`;
 
-  // Generation chips — built from NASCAR_GENERATIONS, multi-select
+  // "All" gen chip — active when no specific gens are selected (i.e.
+  // every generation appears unfiltered). Clicking it clears the set.
+  const allGensActive = !st.gens || st.gens.size === 0;
+  const allGensChip = `<button class="alltime-gen-chip ${allGensActive ? "active" : ""}" data-gen="__all__">All</button>`;
   const genChips = NASCAR_GENERATIONS.map(g => {
-    const active = st.gens && st.gens.has(g.id);
+    const active = !allGensActive && st.gens.has(g.id);
     const label = g.year_end >= 9999 ? `${g.label} (${g.year_start}+)` : `${g.label} (${g.year_start}–${g.year_end})`;
     return `<button class="alltime-gen-chip ${active ? "active" : ""}" data-gen="${g.id}">${label}</button>`;
   }).join("");
 
-  const scopeLabel = st.scope === "current" ? `${currentSeason} season` : "All-time";
-
-  // Pagination controls
-  const pagBtns = `
-    <button class="alltime-pag-btn" data-pag="prev" ${st.page === 0 ? "disabled" : ""}>← Prev</button>
+  // Pagination controls (used both at top and bottom)
+  const pagBtns = (suffix) => `
+    <button class="alltime-pag-btn" data-pag="prev" data-suffix="${suffix}" ${st.page === 0 ? "disabled" : ""}>← Prev</button>
     <span class="alltime-pag-status">Page ${st.page + 1} of ${pageCount}</span>
-    <button class="alltime-pag-btn" data-pag="next" ${st.page >= pageCount - 1 ? "disabled" : ""}>Next →</button>
+    <button class="alltime-pag-btn" data-pag="next" data-suffix="${suffix}" ${st.page >= pageCount - 1 ? "disabled" : ""}>Next →</button>
   `;
 
   return `
     <div class="alltime-toolbar">
       <input type="search" class="alltime-search" id="alltime-search-${stateKey}"
              placeholder="Search ${pageLabel.toLowerCase()}…" value="${escapeHTML(st.search || "")}">
-      <div class="alltime-scope-toggle">
-        <button class="alltime-scope-btn ${st.scope === "all" ? "active" : ""}" data-scope="all">All-time</button>
-        <button class="alltime-scope-btn ${st.scope === "current" ? "active" : ""}" data-scope="current">${currentSeason}</button>
+      <div class="alltime-toggle-group">
+        <span class="alltime-toggle-label">Scope</span>
+        <button class="alltime-toggle-btn ${st.scope === "all" ? "active" : ""}" data-scope="all">All-time</button>
+        <button class="alltime-toggle-btn ${st.scope === "current" ? "active" : ""}" data-scope="current">${currentSeason}</button>
+      </div>
+      <div class="alltime-toggle-group">
+        <span class="alltime-toggle-label">Series</span>
+        <button class="alltime-series-btn ${st.series === "all" ? "active" : ""}" data-series="all">All</button>
+        <button class="alltime-series-btn ${st.series === "NCS" ? "active" : ""}" data-series="NCS">NCS</button>
+        <button class="alltime-series-btn ${st.series === "NOS" ? "active" : ""}" data-series="NOS">NOS</button>
+        <button class="alltime-series-btn ${st.series === "NTS" ? "active" : ""}" data-series="NTS">NTS</button>
       </div>
       <span class="alltime-count muted">${totalCount} ${pageLabel.toLowerCase()}</span>
     </div>
     <div class="alltime-gens">
-      <span class="alltime-gens-label">Gen filter:</span>
+      <span class="alltime-gens-label">Generation:</span>
+      ${allGensChip}
       ${genChips}
-      ${st.gens && st.gens.size > 0 ? `<button class="alltime-gen-chip alltime-gen-clear" data-gen="__clear__">Clear</button>` : ""}
+    </div>
+    <div class="alltime-pag alltime-pag-top">
+      ${pagBtns("top")}
     </div>
     <div class="card alltime-table-wrap">
       <table class="data-table alltime-table" data-statekey="${stateKey}">
@@ -11373,8 +11409,8 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
         ${body}
       </table>
     </div>
-    <div class="alltime-pag">
-      ${pagBtns}
+    <div class="alltime-pag alltime-pag-bottom">
+      ${pagBtns("bot")}
     </div>
   `;
 }
@@ -11390,7 +11426,7 @@ function wireAllTimeTable(stateKey, rerender) {
     let debounce = null;
     input.addEventListener("input", e => {
       st.search = e.target.value;
-      st.page = 0;   // reset to first page on search
+      st.page = 0;
       clearTimeout(debounce);
       debounce = setTimeout(() => {
         const sel = input.selectionStart;
@@ -11419,18 +11455,28 @@ function wireAllTimeTable(stateKey, rerender) {
     });
   });
   // Scope toggle (All-time vs current season)
-  document.querySelectorAll(`.alltime-scope-btn`).forEach(btn => {
+  document.querySelectorAll(`.alltime-toggle-btn`).forEach(btn => {
     btn.addEventListener("click", () => {
       st.scope = btn.getAttribute("data-scope");
       st.page = 0;
       rerender();
     });
   });
-  // Generation chips (multi-select)
+  // Series toggle (All / NCS / NOS / NTS)
+  document.querySelectorAll(`.alltime-series-btn`).forEach(btn => {
+    btn.addEventListener("click", () => {
+      st.series = btn.getAttribute("data-series");
+      st.page = 0;
+      rerender();
+    });
+  });
+  // Generation chips. "All" wipes the set; specific chips toggle. If
+  // user clicks a specific chip when "All" was active, that chip
+  // becomes the only one selected (de-implies All).
   document.querySelectorAll(`.alltime-gen-chip`).forEach(btn => {
     btn.addEventListener("click", () => {
       const gid = btn.getAttribute("data-gen");
-      if (gid === "__clear__") {
+      if (gid === "__all__") {
         st.gens.clear();
       } else {
         if (st.gens.has(gid)) st.gens.delete(gid);
@@ -11440,14 +11486,14 @@ function wireAllTimeTable(stateKey, rerender) {
       rerender();
     });
   });
-  // Pagination
+  // Pagination — wired to both top + bottom controls
   document.querySelectorAll(`.alltime-pag-btn`).forEach(btn => {
     btn.addEventListener("click", () => {
       const dir = btn.getAttribute("data-pag");
       if (dir === "prev" && st.page > 0) st.page--;
       else if (dir === "next") st.page++;
       rerender();
-      // Scroll to top of table after page change
+      // Scroll to top of table after page change so user sees the new rows
       const wrap = document.querySelector(`.alltime-table[data-statekey="${stateKey}"]`);
       if (wrap) wrap.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -11520,34 +11566,28 @@ function renderAllTimeCrewChiefs() {
   scheduleAllTimeBackgroundLoad("crewchiefs", renderAllTimeCrewChiefs);
 }
 
-// Kick off a gentle background load of all uncached seasons — one
-// season at a time with a generous delay between fetches. This is
-// intentionally slow so it never competes with foreground rendering
-// or freezes the UI. The caller's rerender function fires after EACH
-// season loads, so the table fills in progressively.
+// Kick off a gentle background load of all uncached seasons. When the
+// user is actively on an all-time page they care about loading speed,
+// so we use a small concurrency (3 at a time) with a short delay
+// between batches. Aggregates re-fold and re-render after each batch.
 const BG_LOAD = { running: false, expectedView: null };
 function scheduleAllTimeBackgroundLoad(stateKey, rerender) {
-  // Track the page that initiated this load. If user navigates away,
-  // the per-fetch rerender will see STATE.view !== expected and skip.
   BG_LOAD.expectedView = stateKey;
-  if (BG_LOAD.running) return;   // already running
+  if (BG_LOAD.running) return;
   const missing = (STATE.seasonsAvailable || []).filter(y => !SEASON_CACHE[y]);
   if (missing.length === 0) return;
   BG_LOAD.running = true;
-  // Walk the list one year at a time, with a 200ms delay between each
-  // so the network and main thread stay quiet. This is a tradeoff:
-  // ~5 seconds total for 25 missing years, but the page never freezes.
   (async () => {
-    for (const y of missing) {
-      // Bail if user navigated away from any all-time page
+    const batchSize = 3;
+    for (let i = 0; i < missing.length; i += batchSize) {
+      // Bail if user navigated away
       if (!["drivers", "teams", "crewchiefs"].includes(STATE.view)) break;
-      await loadSeasonIntoCache(y).catch(() => null);
-      // Invalidate cached aggregate so the rerender picks up new data
+      const batch = missing.slice(i, i + batchSize);
+      await Promise.all(batch.map(y => loadSeasonIntoCache(y).catch(() => null)));
       ALLTIME_CACHE[stateKey] = null;
-      // Rerender ONLY if user is still on the page that initiated the load
       if (STATE.view === BG_LOAD.expectedView) rerender();
-      // Yield + brief delay between fetches
-      await new Promise(r => setTimeout(r, 200));
+      // Short delay between batches so the main thread can paint
+      await new Promise(r => setTimeout(r, 80));
     }
     BG_LOAD.running = false;
   })().catch(() => { BG_LOAD.running = false; });

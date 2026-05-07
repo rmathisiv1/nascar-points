@@ -619,6 +619,9 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   padding-bottom: 6px;
   margin-bottom: 6px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .profile-takeover #view-profile,
 .profile-takeover #view-race,
@@ -5122,9 +5125,9 @@ a.rc-sched-winner:hover {
 }
 
 /* === ALL-TIME DATABASE PAGES (Drivers / Teams / Crew Chiefs) === */
-/* Sortable career stats table with search, scope toggle, generation
-   filter, and pagination. Lives inside the center-pane takeover so
-   the side panels stay visible. */
+/* Sortable career stats table with search, scope toggle, series filter,
+   generation filter, and pagination. Lives inside the center-pane
+   takeover so the side panels stay visible. */
 .alltime-toolbar {
   display: flex;
   align-items: center;
@@ -5154,30 +5157,44 @@ a.rc-sched-winner:hover {
   letter-spacing: 0.05em;
   margin-left: auto;
 }
-/* Scope toggle: All-time vs current-season pill pair */
-.alltime-scope-toggle {
+/* Toggle group: label + pills (used for both Scope and Series). */
+.alltime-toggle-group {
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.alltime-toggle-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.alltime-toggle-btn,
+.alltime-series-btn {
+  padding: 5px 10px;
+  background: var(--bg-2);
+  color: var(--muted);
   border: 1px solid var(--border);
   border-radius: 4px;
-  overflow: hidden;
-}
-.alltime-scope-btn {
-  padding: 5px 10px;
-  background: transparent;
-  color: var(--muted);
-  border: none;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.04em;
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
-.alltime-scope-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
-.alltime-scope-btn.active {
+.alltime-toggle-btn:hover,
+.alltime-series-btn:hover {
+  color: var(--text);
+  border-color: rgba(255,255,255,0.18);
+}
+.alltime-toggle-btn.active,
+.alltime-series-btn.active {
   background: var(--accent-bg-hi);
   color: var(--accent-2);
+  border-color: var(--accent);
 }
-/* Generation chips — multi-select */
+/* Generation chips — multi-select. Bigger text now per user feedback. */
 .alltime-gens {
   display: flex;
   align-items: center;
@@ -5187,21 +5204,21 @@ a.rc-sched-winner:hover {
 }
 .alltime-gens-label {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--dim);
   margin-right: 4px;
 }
 .alltime-gen-chip {
-  padding: 3px 8px;
+  padding: 4px 10px;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 12px;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  letter-spacing: 0.03em;
   cursor: pointer;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
@@ -5213,10 +5230,6 @@ a.rc-sched-winner:hover {
   background: var(--accent-bg-hi);
   border-color: var(--accent);
   color: var(--accent-2);
-}
-.alltime-gen-clear {
-  border-color: rgba(255,255,255,0.06);
-  color: var(--dim);
 }
 /* Table wrapper */
 .alltime-table-wrap {
@@ -5284,12 +5297,20 @@ a.rc-sched-winner:hover {
 }
 .alltime-table tbody td .hot { color: var(--pos); font-weight: 600; }
 
-/* Pagination footer */
+/* Pagination — appears at TOP and bottom of the table */
 .alltime-pag {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 16px;
+  padding: 12px 8px;
+}
+.alltime-pag-top {
+  border-top: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding: 8px 8px;
+}
+.alltime-pag-bottom {
   padding: 14px 8px 8px;
 }
 .alltime-pag-btn {
@@ -5317,6 +5338,36 @@ a.rc-sched-winner:hover {
   font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.04em;
+}
+
+/* Sibling tab pills inside takeover head — appear next to "← Back"
+   so users can hop between Drivers/Teams/Crew Chiefs (or Standings/
+   Playoffs) without going back to the tab bar. */
+.takeover-siblings {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 16px;
+}
+.takeover-sibling {
+  padding: 4px 10px;
+  color: var(--muted);
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+.takeover-sibling:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.03);
+}
+.takeover-sibling.active {
+  background: var(--accent-bg-hi);
+  color: var(--accent-2);
 }
 /* Lives in the topbar between the series switcher and the topbar-right
    pickers. On desktop expands to fill available width. On mobile collapses
