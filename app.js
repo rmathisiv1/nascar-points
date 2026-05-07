@@ -8263,7 +8263,11 @@ function renderHome() {
 // Renders the hero row: a countdown card on the left for the next race,
 // and a recap card on the right for the most recent completed race.
 function renderHomeHero(year, series) {
-  const races = (STATE.data.races || []).slice().sort((a, b) => a.round - b.round);
+  // Use allRacesSorted because racesSorted filters OUT upcoming races —
+  // and we need upcoming races to compute the next-race countdown. The
+  // distinction is: completed races have non-empty results, upcoming
+  // races are stubs from the schedule scraper with no results yet.
+  const races = allRacesSorted();
   // Determine next upcoming + last completed using the same heuristic as
   // the metric bar — a race with no winner among results is upcoming.
   const completed = races.filter(r => (r.results || []).some(d => d.finish_pos === 1));
@@ -8540,8 +8544,9 @@ function computeStandingsForBlock(block) {
 // Render a row of stat cards for "season at a glance".
 function renderHomeStatCards(year, series) {
   const races = racesSorted();
+  const allRaces = allRacesSorted();
   const completed = races.filter(r => (r.results || []).some(d => d.finish_pos === 1));
-  const totalScheduled = races.length;
+  const totalScheduled = allRaces.length;
   const racesRun = completed.length;
 
   // Card 1: races run
@@ -8657,7 +8662,7 @@ function renderHomeStatCards(year, series) {
 // returns {tone, headline, body} or null. We render whatever survived
 // in priority order.
 function renderHomeStorylines(year, series) {
-  const tiles = generateHomeStorylines(year, series).slice(0, 5);
+  const tiles = generateHomeStorylines(year, series).slice(0, 8);
   if (tiles.length === 0) return "";
   return tiles.map(t => `
     <div class="home-storyline ${t.tone || ''}">
@@ -8824,6 +8829,145 @@ function generateHomeStorylines(year, series) {
     }
   }
 
+  // 6. Most wins this season — leader of the wins race
+  const winsByDriver = new Map();
+  completed.forEach(r => {
+    const w = (r.results || []).find(d => d.finish_pos === 1);
+    if (!w) return;
+    const k = slugify(w.driver);
+    winsByDriver.set(k, { name: w.driver, n: (winsByDriver.get(k)?.n || 0) + 1 });
+  });
+  const winsLeaders = Array.from(winsByDriver.values()).sort((a, b) => b.n - a.n);
+  if (winsLeaders.length > 0 && winsLeaders[0].n >= 2) {
+    const top = winsLeaders[0];
+    const tiedWith = winsLeaders.filter(w => w.n === top.n).slice(1).map(w => w.name);
+    const tiedTxt = tiedWith.length > 0 ? ` Tied with ${tiedWith.map(escapeHTML).map(lastNameOf).join(", ")}.` : "";
+    tiles.push({
+      tone: "success",
+      headline: `${escapeHTML(lastNameOf(top.name))} leads the wins race · ${top.n}`,
+      body: `Most ${series} wins this season through ${completed.length} races.${tiedTxt}`,
+    });
+  }
+
+  // 7. Most poles
+  const polesByDriver = new Map();
+  completed.forEach(r => {
+    const polePos = (r.results || []).find(d => d.start_pos === 1);
+    if (!polePos) return;
+    const k = slugify(polePos.driver);
+    polesByDriver.set(k, { name: polePos.driver, n: (polesByDriver.get(k)?.n || 0) + 1 });
+  });
+  const poleLeaders = Array.from(polesByDriver.values()).sort((a, b) => b.n - a.n);
+  if (poleLeaders.length > 0 && poleLeaders[0].n >= 2) {
+    const top = poleLeaders[0];
+    tiles.push({
+      tone: "",
+      headline: `${escapeHTML(lastNameOf(top.name))} owns the qualifying lap · ${top.n} poles`,
+      body: `Most poles this ${series} season.`,
+    });
+  }
+
+  // 8. Most laps led — the dominant pacesetter, even if no wins
+  const lapsLedByDriver = new Map();
+  completed.forEach(r => {
+    (r.results || []).forEach(d => {
+      if (!d.driver || d.ineligible) return;
+      if (!d.laps_led) return;
+      const k = slugify(d.driver);
+      const cur = lapsLedByDriver.get(k) || { name: d.driver, n: 0 };
+      cur.n += d.laps_led;
+      lapsLedByDriver.set(k, cur);
+    });
+  });
+  const lapsLedLeaders = Array.from(lapsLedByDriver.values()).sort((a, b) => b.n - a.n);
+  if (lapsLedLeaders.length > 0) {
+    const top = lapsLedLeaders[0];
+    const winsK = winsByDriver.get(slugify(top.name))?.n || 0;
+    if (winsK <= 1) {  // surface this only when it's interesting (not the dominant winner)
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(top.name))} has led ${top.n.toLocaleString()} laps`,
+        body: `Most ${series} laps led this season${winsK === 0 ? " — but still searching for win #1" : ""}.`,
+      });
+    }
+  }
+
+  // 9. Average finish leader — most consistent driver this season
+  // We compute this only when at least 5 races have run for stability.
+  if (completed.length >= 5) {
+    const avgByCar = new Map();   // car -> { n, sum, name }
+    completed.forEach(r => {
+      (r.results || []).forEach(d => {
+        if (!d.driver || d.ineligible || d.finish_pos == null) return;
+        const k = d.car_number;
+        const cur = avgByCar.get(k) || { n: 0, sum: 0, name: d.driver, car: k };
+        cur.sum += d.finish_pos;
+        cur.n += 1;
+        cur.name = d.driver;
+        avgByCar.set(k, cur);
+      });
+    });
+    const avgLeaders = Array.from(avgByCar.values())
+      .filter(a => a.n >= Math.max(3, completed.length - 1))   // ran nearly every race
+      .map(a => ({ ...a, avg: a.sum / a.n }))
+      .sort((a, b) => a.avg - b.avg);
+    if (avgLeaders.length > 0) {
+      const top = avgLeaders[0];
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(top.name))} is Mr. Consistent · ${top.avg.toFixed(1)} avg finish`,
+        body: `Best ${series} season-long average through ${completed.length} races.`,
+      });
+    }
+  }
+
+  // 10. Cross-series storylines — peek at NOS / NTS to round out the page
+  // when NCS storylines run thin. Only fires for the live latest year.
+  ["NOS", "NTS"].forEach(otherSeries => {
+    if (otherSeries === series) return;
+    const otherBlock = SEASON_CACHE[year] && SEASON_CACHE[year][otherSeries];
+    if (!otherBlock || !otherBlock.races) return;
+    const otherCompleted = otherBlock.races.filter(r => (r.results || []).some(d => d.finish_pos === 1));
+    if (otherCompleted.length === 0) return;
+    // Wins leader for this series
+    const wm = new Map();
+    otherCompleted.forEach(r => {
+      const w = (r.results || []).find(d => d.finish_pos === 1);
+      if (!w) return;
+      const k = slugify(w.driver);
+      wm.set(k, { name: w.driver, n: (wm.get(k)?.n || 0) + 1 });
+    });
+    const wlist = Array.from(wm.values()).sort((a, b) => b.n - a.n);
+    if (wlist.length > 0 && wlist[0].n >= 2) {
+      tiles.push({
+        tone: "",
+        headline: `${otherSeries}: ${escapeHTML(lastNameOf(wlist[0].name))} has ${wlist[0].n} wins`,
+        body: `Leads the ${otherSeries} wins race through ${otherCompleted.length} races.`,
+      });
+    }
+    // Closest standings gap in cutoff
+    const otherRule = resolvePlayoffRules(otherSeries, year);
+    if (otherRule && otherRule.field) {
+      const oStandings = computeStandingsForBlock(otherBlock).slice(0, otherRule.field + 1);
+      if (oStandings.length >= 2) {
+        let tightest = null;
+        for (let i = 1; i < oStandings.length; i++) {
+          const gap = oStandings[i - 1].total - oStandings[i].total;
+          if (tightest == null || gap < tightest.gap) {
+            tightest = { gap, p1: oStandings[i - 1], p2: oStandings[i] };
+          }
+        }
+        if (tightest && tightest.gap <= 5) {
+          tiles.push({
+            tone: "warning",
+            headline: `${otherSeries}: ${tightest.gap}-point fight in the playoff bubble`,
+            body: `${escapeHTML(lastNameOf(tightest.p1.primaryDriver || tightest.p1.driver || ''))} vs ${escapeHTML(lastNameOf(tightest.p2.primaryDriver || tightest.p2.driver || ''))}`,
+          });
+        }
+      }
+    }
+  });
+
   return tiles;
 }
 
@@ -8989,6 +9133,7 @@ function renderTrackStats() {
   const tableHTML = rows.length === 0 ? `
     <div class="muted" style="padding:24px;text-align:center;">No drivers match — try lowering the min-starts threshold or clearing filters.</div>
   ` : `
+    <div class="ts-table-wrap">
     <table class="data-table ts-table">
       <thead><tr>
         <th class="ts-th-rank num">#</th>
@@ -9072,6 +9217,7 @@ function renderTrackStats() {
         }).join("")}
       </tbody>
     </table>
+    </div>
   `;
 
   host.innerHTML = `

@@ -5277,6 +5277,8 @@ a.rc-sched-winner:hover {
 /* Table wrapper */
 .alltime-table-wrap {
   padding: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .alltime-table {
   width: 100%;
@@ -6884,72 +6886,72 @@ body.lightbox-open {
    row + storyline tiles. Lives inside the standard tab panel so it
    inherits the column-center scroll. */
 .home-host {
-  padding: 12px 14px 24px;
+  padding: 16px 20px 28px;
 }
 .home-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 .home-card {
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 14px 16px;
+  padding: 18px 22px;
 }
 .home-card-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--dim);
-  text-transform: uppercase;
-  margin-bottom: 6px;
-}
-.home-section-h {
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.07em;
   color: var(--dim);
   text-transform: uppercase;
-  margin: 8px 4px 2px;
+  margin-bottom: 8px;
+}
+.home-section-h {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin: 12px 4px 4px;
 }
 
 /* Hero row */
 .home-hero-row {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
-  gap: 12px;
+  gap: 16px;
 }
 @media (max-width: 720px) {
   .home-hero-row { grid-template-columns: 1fr; }
 }
 .home-hero-card {
   display: flex;
-  gap: 16px;
+  gap: 22px;
   align-items: stretch;
 }
 .home-hero-countdown {
-  flex: 0 0 110px;
-  padding-right: 14px;
+  flex: 0 0 130px;
+  padding-right: 18px;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 .home-hero-countdown-num {
-  font-size: 38px;
-  font-weight: 600;
+  font-size: 56px;
+  font-weight: 700;
   line-height: 1;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 .home-hero-countdown-unit {
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.05em;
+  font-size: 12px;
+  letter-spacing: 0.06em;
   color: var(--dim);
   text-transform: uppercase;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 .home-hero-info {
   flex: 1;
@@ -6958,21 +6960,22 @@ body.lightbox-open {
   justify-content: center;
 }
 .home-hero-track-name {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 700;
   color: var(--text);
   text-decoration: none;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  line-height: 1.15;
 }
 .home-hero-track-name:hover { color: var(--accent-2); }
 .home-hero-track-meta {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .home-hero-track-row {
   display: flex;
-  gap: 16px;
-  margin-top: 12px;
+  gap: 22px;
+  margin-top: 16px;
   flex-wrap: wrap;
 }
 .home-hero-track-fact {
@@ -6981,15 +6984,15 @@ body.lightbox-open {
 }
 .home-hero-track-fact .k {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   color: var(--dim);
   text-transform: uppercase;
 }
 .home-hero-track-fact .v {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 /* Last-race recap */
@@ -7000,36 +7003,36 @@ body.lightbox-open {
 .home-last-winner {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
   text-decoration: none;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 .home-last-winner-name {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--text);
 }
 .home-last-winner:hover .home-last-winner-name { color: var(--accent-2); }
 .home-last-winner-meta {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   font-family: var(--mono);
 }
 .home-podium {
   display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 .home-pod-pill {
   flex: 1;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   text-decoration: none;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   transition: background 0.1s, border-color 0.1s;
 }
 .home-pod-pill:hover {
@@ -7038,29 +7041,29 @@ body.lightbox-open {
 }
 .home-pod-pos {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   color: var(--dim);
 }
 .home-pod-driver {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .home-pod-car {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 1px 5px;
+  padding: 2px 6px;
   border-radius: 3px;
 }
 .home-pod-name {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
 }
 .home-card-cta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--accent-2);
   font-family: var(--mono);
   letter-spacing: 0.04em;
@@ -7074,28 +7077,28 @@ body.lightbox-open {
 .home-standings-trio {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 16px;
 }
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .home-standings-trio { grid-template-columns: 1fr; }
 }
-.home-standings-card { padding: 10px 12px; }
+.home-standings-card { padding: 14px 18px; }
 .home-standings-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 .home-standings-label {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.07em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   color: var(--dim);
   text-transform: uppercase;
 }
 .home-standings-link {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   color: var(--accent-2);
   text-decoration: none;
@@ -7103,9 +7106,9 @@ body.lightbox-open {
 .home-standings-link:hover { text-decoration: underline; }
 .home-mini-row {
   display: grid;
-  grid-template-columns: 18px 22px 1fr auto;
-  gap: 6px;
-  padding: 4px 0;
+  grid-template-columns: 22px 28px 1fr auto;
+  gap: 8px;
+  padding: 6px 0;
   align-items: center;
   text-decoration: none;
   border-bottom: 1px solid rgba(255,255,255,0.03);
@@ -7114,30 +7117,30 @@ body.lightbox-open {
 .home-mini-row:hover { background: rgba(255,255,255,0.025); }
 .home-mini-rank {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
 }
 .home-mini-car {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 1px 4px;
+  padding: 2px 6px;
   border-radius: 3px;
   text-align: center;
 }
 .home-mini-name {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text);
 }
 .home-mini-pts {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text);
   text-align: right;
 }
 .home-mini-back {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   text-align: right;
 }
@@ -7146,57 +7149,60 @@ body.lightbox-open {
 .home-stat-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: 12px;
 }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .home-stat-row { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 480px) {
+@media (max-width: 520px) {
   .home-stat-row { grid-template-columns: 1fr; }
 }
 .home-stat-card {
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 10px 12px;
+  padding: 14px 18px;
 }
 .home-stat-k {
   font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.05em;
+  font-size: 10px;
+  letter-spacing: 0.06em;
   color: var(--dim);
   text-transform: uppercase;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .home-stat-v {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 30px;
+  font-weight: 700;
   color: var(--text);
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 .home-stat-v-suffix {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--dim);
   font-weight: 400;
 }
 .home-stat-v-name {
-  font-size: 18px;
+  font-size: 22px;
 }
 .home-stat-annot {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
-  margin-top: 3px;
+  margin-top: 5px;
 }
 
-/* Storylines */
+/* Storylines — two columns on wide screens to use horizontal space */
 .home-storylines {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (max-width: 900px) {
+  .home-storylines { grid-template-columns: 1fr; }
 }
 .home-storyline {
-  padding: 9px 12px;
+  padding: 12px 16px;
   background: var(--bg-2);
   border-left: 3px solid var(--accent);
   border-radius: 0 4px 4px 0;
@@ -7205,14 +7211,82 @@ body.lightbox-open {
 .home-storyline.warning { border-left-color: #d4a443; }
 .home-storyline.danger { border-left-color: var(--neg); }
 .home-storyline-h {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
 }
 .home-storyline-b {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
-  margin-top: 3px;
+  margin-top: 5px;
+}
+
+/* Mobile: scale down home page so it fits a phone screen without
+   horizontal scroll. The dashboard collapses to a single column on
+   mobile already, so the home grid inherits that single-column width
+   and we just need to bring font sizes back to readable scale. */
+@media (max-width: 767.98px) {
+  .home-host { padding: 12px 12px 24px; }
+  .home-grid { gap: 12px; }
+  .home-card { padding: 12px 14px; }
+  .home-section-h { font-size: 11px; margin: 6px 2px 2px; }
+
+  /* Hero card stacks countdown on top, info below */
+  .home-hero-card {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .home-hero-countdown {
+    flex: 0 0 auto;
+    padding-right: 0;
+    padding-bottom: 12px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .home-hero-countdown-num { font-size: 38px; }
+  .home-hero-countdown-unit { margin-top: 0; }
+
+  .home-hero-track-name { font-size: 19px; }
+  .home-hero-track-meta { font-size: 12px; }
+  .home-hero-track-row { gap: 14px; margin-top: 10px; }
+  .home-hero-track-fact .v { font-size: 12px; }
+
+  /* Last-race card */
+  .home-last-winner-name { font-size: 18px; }
+  .home-pod-name { font-size: 12px; }
+  .home-pod-car { font-size: 10px; padding: 1px 4px; }
+
+  /* Standings trio: 3 columns on 2-up rows? No — single column on phones,
+     but we keep the labels/values readable. */
+  .home-standings-card { padding: 10px 12px; }
+  .home-mini-name { font-size: 13px; }
+  .home-mini-pts, .home-mini-back { font-size: 12px; }
+
+  /* Stat cards — already 2-up at 1100px; on phones we go single-column */
+  .home-stat-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .home-stat-card { padding: 10px 12px; }
+  .home-stat-v { font-size: 22px; }
+  .home-stat-v-name { font-size: 16px; }
+  .home-stat-v-suffix { font-size: 13px; }
+  .home-stat-annot { font-size: 11px; }
+  .home-stat-k { font-size: 9px; }
+
+  /* Storylines collapse to single column on mobile */
+  .home-storylines { grid-template-columns: 1fr; gap: 6px; }
+  .home-storyline { padding: 10px 12px; }
+  .home-storyline-h { font-size: 13px; }
+  .home-storyline-b { font-size: 12px; }
+}
+
+/* Track Stats expandable detail row — on mobile, the inner table can
+   overflow horizontally. Allow scroll on the wrap so it stays usable. */
+@media (max-width: 767.98px) {
+  .ts-detail-wrap { padding: 10px 12px; overflow-x: auto; }
+  .ts-detail-table { min-width: 480px; }
+  .ts-detail-head { font-size: 10px; }
 }
 
 /* === TRACK STATS — expandable row detail === */
@@ -7295,3 +7369,21 @@ body.lightbox-open {
 .ts-detail-table .fin-t5   { color: var(--pos); }
 .ts-detail-table .fin-t10  { color: var(--text); }
 .ts-detail-table .fin-bad  { color: var(--neg); }
+
+/* Track stats — horizontal scroll for the 16-column table on narrow screens */
+.ts-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 767.98px) {
+  .ts-table { min-width: 900px; font-size: 11px; }
+  .ts-table thead th { padding: 6px 8px; }
+  .ts-table tbody td { padding: 4px 8px; }
+}
+
+/* All-time tables — preserve column readability on phones with horizontal scroll */
+@media (max-width: 767.98px) {
+  .alltime-table { min-width: 700px; font-size: 11px; }
+  .alltime-table thead th { padding: 6px 8px; }
+  .alltime-table tbody td { padding: 4px 8px; }
+}
