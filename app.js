@@ -11219,6 +11219,12 @@ const ALLTIME_STATE = {
 //   rows       — array of { name, starts, wins, top5, top10, avgFin, yearsLabel, ... }
 //   linkBuilder— (row) => href to that entity's profile, or null for no link
 //   stateKey   — "drivers" | "teams" | "crewchiefs"
+//
+// Caps visible rows to keep the DOM lean. With 26+ seasons cached the
+// drivers table can hit 3000+ entries — rendering all at once locks
+// the main thread for ~1s on slower machines. Search narrows below
+// the cap, so a filtered query always shows complete results.
+const ALLTIME_RENDER_CAP = 250;
 function renderAllTimeTable(rows, linkBuilder, stateKey) {
   const st = ALLTIME_STATE[stateKey];
   const search = (st.search || "").trim().toLowerCase();
@@ -11240,6 +11246,12 @@ function renderAllTimeTable(rows, linkBuilder, stateKey) {
     if (typeof av === "string") return dir * av.localeCompare(bv);
     return dir * (av - bv);
   });
+
+  // Cap unfiltered results to keep render fast. With a search query
+  // active we trust the user has narrowed it enough to render in full.
+  const totalAfterFilter = visible.length;
+  const truncated = !search && visible.length > ALLTIME_RENDER_CAP;
+  if (truncated) visible = visible.slice(0, ALLTIME_RENDER_CAP);
 
   const sortAttr = (col) => {
     if (col !== k) return "";
@@ -11272,36 +11284,51 @@ function renderAllTimeTable(rows, linkBuilder, stateKey) {
     </tr>`;
   }).join("")}</tbody>`;
 
+  const truncNote = truncated
+    ? `<div class="alltime-trunc-note">Showing top ${ALLTIME_RENDER_CAP} of ${rows.length}. Use search to find others.</div>`
+    : "";
+
   return `
     <div class="alltime-toolbar">
       <input type="search" class="alltime-search" id="alltime-search-${stateKey}"
              placeholder="Search by name…" value="${escapeHTML(st.search || "")}">
-      <span class="alltime-count muted">${visible.length} of ${rows.length}</span>
+      <span class="alltime-count muted">${
+        truncated
+          ? `top ${visible.length} of ${rows.length}`
+          : `${visible.length} of ${rows.length}`
+      }</span>
     </div>
     <div class="card alltime-table-wrap">
       <table class="data-table alltime-table" data-statekey="${stateKey}">
         ${header}
         ${body}
       </table>
+      ${truncNote}
     </div>
   `;
 }
 
 // Wire toolbar controls (search input + click-to-sort headers) for an
 // all-time page. Re-runs the appropriate render function on input/click.
+// Search input is debounced 150ms so each keystroke doesn't rebuild
+// the entire table — at 3000+ rows that's a 50-100ms hit per keystroke.
 function wireAllTimeTable(stateKey, rerender) {
   const input = document.getElementById(`alltime-search-${stateKey}`);
   if (input) {
+    let debounce = null;
     input.addEventListener("input", e => {
       ALLTIME_STATE[stateKey].search = e.target.value;
-      // Preserve cursor on re-render — store sel before rerender
-      const sel = input.selectionStart;
-      rerender();
-      const newInput = document.getElementById(`alltime-search-${stateKey}`);
-      if (newInput) {
-        newInput.focus();
-        try { newInput.setSelectionRange(sel, sel); } catch (_) {}
-      }
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        // Preserve cursor on re-render — store sel before rerender
+        const sel = input.selectionStart;
+        rerender();
+        const newInput = document.getElementById(`alltime-search-${stateKey}`);
+        if (newInput) {
+          newInput.focus();
+          try { newInput.setSelectionRange(sel, sel); } catch (_) {}
+        }
+      }, 150);
     });
   }
   document.querySelectorAll(`.alltime-table[data-statekey="${stateKey}"] .alltime-th`).forEach(th => {
@@ -11385,29 +11412,43 @@ function renderAllTimeCrewChiefs() {
 }
 
 // Fetch every season in seasonsAvailable that isn't already cached.
-// Calls done() once when all loads finish (or settle). Idempotent —
-// safe to call repeatedly; subsequent calls return immediately if
-// nothing's outstanding.
-const ALLSEASONS_LOAD = { inflight: false };
+// Calls done() once when all loads finish. Idempotent — repeated calls
+// while a load is in flight no-op. Cancellable via the returned token
+// so navigating away from an all-time page abandons in-flight work
+// instead of triggering an expensive re-render after the user has
+// already left the page.
+const ALLSEASONS_LOAD = { inflight: false, generation: 0 };
 async function ensureAllSeasonsCached(done) {
   const missing = (STATE.seasonsAvailable || []).filter(y => !SEASON_CACHE[y]);
   if (missing.length === 0) {
     if (done) done();
     return;
   }
-  if (ALLSEASONS_LOAD.inflight) return;   // another caller is already running it
+  // Bump generation so any prior in-flight loader knows it's stale
+  // and shouldn't fire its callback when it finishes.
+  const myGen = ++ALLSEASONS_LOAD.generation;
+  if (ALLSEASONS_LOAD.inflight) return;
   ALLSEASONS_LOAD.inflight = true;
   try {
-    // Limit parallelism to 6 at a time so we don't slam the server
-    const chunkSize = 6;
+    // Smaller chunks (3 at a time) and a tiny yield between chunks
+    // so the main thread can paint / handle clicks during the load.
+    const chunkSize = 3;
     for (let i = 0; i < missing.length; i += chunkSize) {
+      // If a newer caller has bumped the generation, abandon the loop.
+      // The newer caller already has its own loader running.
+      if (myGen !== ALLSEASONS_LOAD.generation) break;
       const slice = missing.slice(i, i + chunkSize);
       await Promise.all(slice.map(y => loadSeasonIntoCache(y).catch(() => null)));
+      // Yield — give the browser a frame to repaint and respond to input
+      await new Promise(r => setTimeout(r, 0));
     }
   } finally {
     ALLSEASONS_LOAD.inflight = false;
   }
-  if (done) done();
+  // Only fire callback if we're still the active generation — prevents
+  // a stale all-time-Drivers callback from re-rendering after the user
+  // has navigated to All-Time-Teams.
+  if (myGen === ALLSEASONS_LOAD.generation && done) done();
 }
 
 function renderPlayoffs() {
