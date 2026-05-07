@@ -5344,6 +5344,51 @@ a.rc-sched-winner:hover {
   }
 }
 
+/* Historical/Present mode toggle. In Present mode (the default) the
+   button is muted — the site is in its "natural" state. In Historical
+   mode the button shifts to a warmer accent so it's visually clear that
+   the user has unlocked time-travel browsing. */
+.topbar-mode-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.topbar-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+}
+.topbar-mode-btn:active {
+  transform: translateY(1px);
+}
+.topbar-mode-btn.is-historical {
+  background: rgba(212, 160, 23, 0.16);
+  border-color: rgba(212, 160, 23, 0.45);
+  color: #e0b94a;
+}
+.topbar-mode-btn.is-historical:hover {
+  background: rgba(212, 160, 23, 0.24);
+  border-color: rgba(212, 160, 23, 0.65);
+  color: #f0cb6a;
+}
+@media (max-width: 767.98px) {
+  .topbar-mode-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+}
+
 /* Clickable driver names in the metric bar (Leader / Hottest / Coldest).
    Inherit color from the parent .v / .v.hot / .v.cold so the visual
    styling stays the same — but show as a link affordance on hover. */
