@@ -1354,7 +1354,10 @@ function parseHash() {
   if (view === "cc") {
     stashPrev("cc");
     STATE.view = "cc";
-    STATE.cc = { slug: h[1] || null };
+    STATE.cc = {
+      slug: h[1] || null,
+      heatmapSeries: (STATE.cc && STATE.cc.heatmapSeries) || "all",
+    };
     STATE.lastHash = location.hash;
     return;
   }
@@ -1955,6 +1958,19 @@ function wireUIControls() {
         b.classList.toggle("on", b === heatBtn)
       );
       paintProfileCareerHeatmap();
+    }
+    // CC career-heatmap series filter — same UX as the driver heatmap but
+    // lives on the crew chief profile and updates STATE.cc.heatmapSeries.
+    const ccHeatBtn = e.target.closest("#cc-heatmap-series-toggle button");
+    if (ccHeatBtn) {
+      e.preventDefault();
+      const newSeries = ccHeatBtn.dataset.srs;
+      if (!newSeries || !STATE.cc || newSeries === STATE.cc.heatmapSeries) return;
+      STATE.cc.heatmapSeries = newSeries;
+      ccHeatBtn.parentElement.querySelectorAll("button").forEach(b =>
+        b.classList.toggle("on", b === ccHeatBtn)
+      );
+      paintCrewChiefCareerHeatmap();
     }
   });
 }
@@ -7134,6 +7150,239 @@ function paintProfileCareerHeatmap() {
 }
 
 // ============================================================
+// CC CAREER HEATMAP — same visual model as the driver heatmap,
+// but each cell is the FINISH POSITION of whichever driver this
+// crew chief was paired with that race. Multiple-driver years
+// (mid-season swap, relief CC pairing) just show whoever finished.
+// ============================================================
+function paintCrewChiefCareerHeatmap() {
+  const host = document.getElementById("cc-career-heatmap");
+  if (!host) return;
+
+  const ccSlug = STATE.cc && STATE.cc.slug;
+  if (!ccSlug) {
+    host.innerHTML = `<div class="muted" style="padding:10px;font-size:11px;">No crew chief in URL.</div>`;
+    return;
+  }
+
+  const seriesFilter = (STATE.cc && STATE.cc.heatmapSeries) || "all";
+
+  // Walk SEASON_CACHE — for each (year, series) where this CC appears,
+  // build a finishByRound map from the driver(s) the CC was paired with
+  // that race. Track dominant driver/team/car for the row label and
+  // standings rank from final_standings (or live points fallback).
+  const rows = [];
+  let maxRound = 0;
+  Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    const seriesToWalk = (seriesFilter === "all")
+      ? ["NCS", "NOS", "NTS"]
+      : [seriesFilter];
+    seriesToWalk.forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block || !block.races) return;
+      const finishByRound = new Map();
+      const trackByRound = new Map();
+      const driverByRound = new Map();
+      let ccDrove = false;
+      // Tally driver / team / car so the row label uses the dominant pairing.
+      const driverCounts = new Map();   // slug -> count
+      const driverNames  = new Map();   // slug -> display name
+      const teamCounts = new Map();
+      const carCounts = new Map();
+      block.races.forEach(race => {
+        if (race.round == null) return;
+        if (race.round > maxRound) maxRound = race.round;
+        // Find the row(s) this CC was on for this race. Could be more than
+        // one if a CC swapped cars mid-race (rare); we just take the first.
+        const hit = (race.results || []).find(d =>
+          !d.ineligible && d.crew_chief && slugify(d.crew_chief) === ccSlug
+        );
+        if (hit) {
+          ccDrove = true;
+          finishByRound.set(race.round, hit.finish_pos);
+          trackByRound.set(race.round, race);
+          const drvSlug = slugify(hit.driver || "");
+          if (drvSlug) {
+            driverByRound.set(race.round, hit.driver);
+            driverCounts.set(drvSlug, (driverCounts.get(drvSlug) || 0) + 1);
+            driverNames.set(drvSlug, hit.driver);
+          }
+          const tc = hit.team_code
+            || teamCodeFromName(hit.team, SERIES_TO_KEY[sCode], hit.car_number);
+          if (tc) teamCounts.set(tc, (teamCounts.get(tc) || 0) + 1);
+          if (hit.car_number) carCounts.set(hit.car_number, (carCounts.get(hit.car_number) || 0) + 1);
+        }
+      });
+      if (ccDrove) {
+        // Dominant pairings for the row label
+        let dominantDriverSlug = null, maxDrv = 0;
+        driverCounts.forEach((v, k) => { if (v > maxDrv) { dominantDriverSlug = k; maxDrv = v; } });
+        let dominantTeam = null, maxTeam = 0;
+        teamCounts.forEach((v, k) => { if (v > maxTeam) { dominantTeam = k; maxTeam = v; } });
+        let dominantCar = null, maxCar = 0;
+        carCounts.forEach((v, k) => { if (v > maxCar) { dominantCar = k; maxCar = v; } });
+        // Year-end standings rank for the dominant driver. CCs don't have
+        // their own standings; the rank reflects the team's championship
+        // result with this CC.
+        let standingsRank = null;
+        const dominantDriverName = driverNames.get(dominantDriverSlug);
+        const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+        const targetNorm = normalize(dominantDriverName || "");
+        if (block.final_standings && block.final_standings.length) {
+          const finalHit = block.final_standings.find(s =>
+            normalize(s.driver) === targetNorm
+          );
+          if (finalHit) standingsRank = finalHit.rank;
+        }
+        if (standingsRank == null && targetNorm) {
+          // Live rank fallback for in-progress seasons
+          const ptsByDriver = new Map();
+          block.races.forEach(race => {
+            (race.results || []).forEach(d => {
+              if (d.ineligible) return;
+              if (!d.driver) return;
+              const key = normalize(d.driver);
+              ptsByDriver.set(key, (ptsByDriver.get(key) || 0) + (d.race_pts || 0));
+            });
+          });
+          const ranked = Array.from(ptsByDriver.entries())
+            .sort((a, b) => b[1] - a[1]);
+          const idx = ranked.findIndex(([k]) => k === targetNorm);
+          if (idx >= 0) standingsRank = idx + 1;
+        }
+        // Did this CC have multiple drivers in the year? Used for label pill.
+        const multiDriver = driverCounts.size > 1;
+        rows.push({
+          year, series: sCode,
+          finishByRound, trackByRound, driverByRound,
+          standingsRank,
+          team: dominantTeam,
+          car: dominantCar,
+          driverSlug: dominantDriverSlug,
+          driverName: dominantDriverName,
+          multiDriver,
+        });
+      }
+    });
+  });
+
+  if (rows.length === 0) {
+    host.innerHTML = `<div class="muted" style="padding:10px;font-size:11px;">
+      No races${seriesFilter === "all" ? "" : ` in ${seriesFilter}`} yet for this crew chief.
+    </div>`;
+    return;
+  }
+
+  // Same finish-tier color scheme as driver heatmap.
+  const cellClass = (fin) => {
+    if (fin == null) return "ph-cell-empty";
+    if (fin === 1) return "ph-cell ph-win";
+    if (fin <= 5) return "ph-cell ph-t5";
+    if (fin <= 10) return "ph-cell ph-t10";
+    if (fin <= 20) return "ph-cell ph-mid";
+    if (fin <= 30) return "ph-cell ph-down";
+    return "ph-cell ph-bot";
+  };
+  const rankCellClass = (rank) => {
+    if (rank == null) return "ph-rank ph-rank-empty";
+    if (rank === 1) return "ph-rank ph-win";
+    if (rank <= 5) return "ph-rank ph-t5";
+    if (rank <= 10) return "ph-rank ph-t10";
+    if (rank <= 20) return "ph-rank ph-mid";
+    if (rank <= 30) return "ph-rank ph-down";
+    return "ph-rank ph-bot";
+  };
+
+  const headCols = [];
+  for (let i = 1; i <= maxRound; i++) {
+    headCols.push(`<div class="ph-head-cell">${i}</div>`);
+  }
+  const headHTML = `<div class="ph-row ph-header">
+    <div class="ph-row-label ph-row-label-head">Year</div>
+    ${headCols.join("")}
+    <div class="ph-head-cell ph-rank-head">Final</div>
+  </div>`;
+
+  const bodyHTML = rows.map(r => {
+    const cells = [];
+    for (let i = 1; i <= maxRound; i++) {
+      const fin = r.finishByRound.get(i);
+      const race = r.trackByRound.get(i);
+      const drvForCell = r.driverByRound.get(i);
+      const trackTip = race ? prettyTrack(race.track_code, race.track) : "";
+      const titleAttr = fin != null
+        ? `${r.year} ${r.series} R${i}${trackTip ? " · " + trackTip : ""} · ${drvForCell || "?"} · P${fin}`
+        : "";
+      if (fin != null && race) {
+        cells.push(
+          `<a class="${cellClass(fin)} ph-cell-link"
+            href="#/race/${i}?_y=${r.year}&_s=${r.series}"
+            data-ph-race="1"
+            title="${escapeHTML(titleAttr)}">${fin}</a>`
+        );
+      } else {
+        cells.push(
+          `<div class="${cellClass(fin)}"${titleAttr ? ` title="${escapeHTML(titleAttr)}"` : ""}>${fin != null ? fin : ""}</div>`
+        );
+      }
+    }
+    const rankCell = r.standingsRank != null
+      ? `<div class="${rankCellClass(r.standingsRank)}" title="${r.year} ${r.series} year-end standings: P${r.standingsRank}">P${r.standingsRank}</div>`
+      : `<div class="ph-rank ph-rank-empty">—</div>`;
+    // Driver pill — links to that driver's profile. If the CC swapped
+    // drivers in this year, append a small "+" badge so the user sees
+    // there were others (the per-cell tooltip identifies the actual
+    // driver of that race).
+    const driverPill = r.driverSlug
+      ? `<a class="ph-team-pill" href="#/driver/${encodeURIComponent(r.driverSlug)}" title="${escapeHTML(r.driverName || r.driverSlug)}${r.car ? " · #" + r.car : ""}${r.multiDriver ? " (and others — hover cells for per-race driver)" : ""}" onclick="event.stopPropagation()">${escapeHTML(lastNameOf(r.driverName || r.driverSlug))}${r.multiDriver ? " <span class=\"ph-multi\">+</span>" : ""}</a>`
+      : `<span class="ph-team-pill ph-team-pill-empty" title="Driver unknown">—</span>`;
+    // Team pill — colored using the team's org color when available
+    const teamHex = r.team ? orgColorForTeam(r.team) : null;
+    const teamTxt = teamHex ? contrastTextFor(teamHex) : null;
+    const teamStyle = teamHex ? ` style="background:${teamHex};color:${teamTxt};border-color:transparent"` : "";
+    const teamPill = r.team
+      ? `<a class="ph-team-pill" href="#/team/${encodeURIComponent(r.team)}"${teamStyle} title="${escapeHTML(r.team)}" onclick="event.stopPropagation()">${escapeHTML(r.team)}</a>`
+      : "";
+    return `<div class="ph-row">
+      <div class="ph-row-label">
+        <span class="ph-yr">${r.year}</span>
+        <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
+        ${driverPill}
+        ${teamPill}
+      </div>
+      ${cells.join("")}
+      ${rankCell}
+    </div>`;
+  }).join("");
+
+  host.innerHTML = `<div class="ph-grid" style="--ph-cols: ${maxRound};">
+    ${headHTML}
+    ${bodyHTML}
+  </div>`;
+
+  // Wire heatmap cell clicks for race navigation (year/series context-switch)
+  host.querySelectorAll(".ph-cell-link").forEach(a => {
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const href = a.getAttribute("href");
+      if (href) await handleSearchRaceClick(href);
+    });
+  });
+
+  // Lazy-load missing seasons + repaint
+  const allYears = Object.keys(SEASON_CACHE).map(Number);
+  const missing = (STATE.seasonsAvailable || []).filter(y => !allYears.includes(y));
+  if (missing.length > 0) {
+    Promise.all(missing.slice(0, 8).map(y => loadSeasonIntoCache(y)))
+      .then(() => {
+        if (STATE.view === "cc") paintCrewChiefCareerHeatmap();
+      });
+  }
+}
+
+// ============================================================
 // HEATMAP
 // ============================================================
 function renderHeatmap() {
@@ -10103,9 +10352,12 @@ function renderCrewChiefPage() {
       const txt = contrastTextFor(hex);
       return `<span class="car-tag" style="background:${hex};color:${txt}">${c}</span>`;
     }).join(" ");
-    const teamCodes = Array.from(ys.teams || []).sort().map(tc =>
-      `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(tc)}">${escapeHTML(tc)}</a>`
-    ).join(" ");
+    const teamCodes = Array.from(ys.teams || []).sort().map(tc => {
+      const hex = orgColorForTeam(tc);
+      const txt = hex ? contrastTextFor(hex) : null;
+      const styleAttr = hex ? ` style="background:${hex};color:${txt};border-color:transparent"` : "";
+      return `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(tc)}"${styleAttr}>${escapeHTML(tc)}</a>`;
+    }).join(" ");
     return `<tr${partial ? ' class="cc-partial-row"' : ""}>
       <td><strong>${ys.year}</strong></td>
       <td>${seriesTag}${partialTag}</td>
@@ -10173,7 +10425,27 @@ function renderCrewChiefPage() {
         </table>
       </div>
     </div>
+    <div class="card rc-card rc-card-wide">
+      <div class="rc-card-head">
+        <div>
+          <span class="rc-card-title">Career Heatmap</span>
+          <span class="rc-card-sub" style="margin-left:8px;">finish position per race · color-coded</span>
+        </div>
+        <div class="toggle-group mini" id="cc-heatmap-series-toggle">
+          <button class="${(STATE.cc && STATE.cc.heatmapSeries || "all") === "all" ? "on" : ""}" data-srs="all">All</button>
+          <button class="${(STATE.cc && STATE.cc.heatmapSeries) === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
+          <button class="${(STATE.cc && STATE.cc.heatmapSeries) === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
+          <button class="${(STATE.cc && STATE.cc.heatmapSeries) === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
+        </div>
+      </div>
+      <div class="rc-card-body" style="padding:0;">
+        <div id="cc-career-heatmap"></div>
+      </div>
+    </div>
   `;
+
+  // Paint the heatmap into the freshly-built host
+  paintCrewChiefCareerHeatmap();
 
   // Lazy-load any missing seasons + re-render when done
   const allYears = Object.keys(SEASON_CACHE).map(Number);

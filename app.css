@@ -5812,6 +5812,16 @@ a.rc-sched-winner:hover {
   background: rgba(255,255,255,0.06);
   border-color: var(--border);
 }
+/* Small "+" badge appended to a driver pill on a CC heatmap row when the
+   CC was paired with multiple drivers in that year. The per-cell tooltip
+   reveals which driver each individual race was. */
+.ph-team-pill .ph-multi {
+  display: inline-block;
+  margin-left: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0.6;
+}
 
 @media (max-width: 767.98px) {
   .ph-team-pill {
@@ -5853,10 +5863,10 @@ a.rc-sched-winner:hover {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.015);
 }
-.cc-partial-row .car-tag {
+.cc-partial-row .car-tag,
+.cc-partial-row .team-pill {
   opacity: 0.75;
 }
-.cc-partial-row .team-pill,
 .cc-partial-row .profile-link {
   color: var(--muted);
 }
