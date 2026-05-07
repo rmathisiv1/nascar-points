@@ -5198,6 +5198,29 @@ a.rc-sched-winner:hover {
   text-align: center;
   border-top: 1px solid rgba(255,255,255,0.04);
 }
+.alltime-loadall {
+  padding: 16px;
+  text-align: center;
+}
+.alltime-loadall-btn {
+  padding: 8px 16px;
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.alltime-loadall-btn:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: var(--accent);
+}
+.alltime-loadall-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 /* Lives in the topbar between the series switcher and the topbar-right
    pickers. On desktop expands to fill available width. On mobile collapses
    to an icon-button (separate handling below). */
