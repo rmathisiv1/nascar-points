@@ -3187,7 +3187,20 @@ function renderFormTable() {
     const windowPts = d.races
       .filter(r => shownRaces.some(sr => sr.round === r.round))
       .reduce((s, r) => s + (r.total || 0), 0);
-    return { ...d, formRating, seasonRating, deltaR, lastFinishes, totalPts, windowPts, fullTime: isFullTime(d) };
+    // Delta vs season pace — what they "should have" scored in the window
+    // if they raced at their season-average pace. Positive = hot streak,
+    // negative = slump. Skip when window is the full season (delta would
+    // always be 0 by definition) and when driver has zero races.
+    let windowPtsDelta = null;
+    if (STATE.form.window !== "season" && d.races.length > 0 && shownRaces.length > 0) {
+      const seasonAvgPerRace = totalPts / d.races.length;
+      const racesInWindow = d.races.filter(r => shownRaces.some(sr => sr.round === r.round)).length;
+      if (racesInWindow > 0) {
+        const expectedPts = seasonAvgPerRace * racesInWindow;
+        windowPtsDelta = windowPts - expectedPts;
+      }
+    }
+    return { ...d, formRating, seasonRating, deltaR, lastFinishes, totalPts, windowPts, windowPtsDelta, fullTime: isFullTime(d) };
   });
 
   if (STATE.form.ftOnly) decorated = decorated.filter(d => d.fullTime);
@@ -3240,7 +3253,14 @@ function renderFormTable() {
         </span>
       </td>
       <td class="num">${deltaPill(d.deltaR)}</td>
-      <td class="num">${d.windowPts || 0}</td>
+      <td class="num">${
+        d.windowPtsDelta == null
+          ? `<span>${d.windowPts || 0}</span>`
+          : `<span class="pts-stack">
+              <span class="pts-big">${d.windowPts || 0}</span>
+              <span class="pts-delta ${d.windowPtsDelta > 1.5 ? "hot" : d.windowPtsDelta < -1.5 ? "cold" : ""}">${d.windowPtsDelta > 0 ? "+" : ""}${d.windowPtsDelta.toFixed(1)}</span>
+            </span>`
+      }</td>
       <td class="num" style="color: var(--muted)">${d.totalPts}</td>
     </tr>`;
   }).join("");
@@ -7959,7 +7979,22 @@ function renderStandings() {
     const currRank = i + 1;
     const prevRank = previousRank.has(r.key) ? previousRank.get(r.key) : null;
     const posChange = prevRank != null ? (prevRank - currRank) : null;
-    return { ...r, currRank, rank: currRank, prevRank, posChange };
+    // Points scored in the most recent race = current total minus
+    // previous total. If no previous race exists (round 1), there's
+    // no "last race" to delta against, so we'll show "—".
+    const prevTotal = previousMap.has(r.key) ? previousMap.get(r.key).total : null;
+    const lastRacePts = (prevTotal != null && lastRaceRound != null && previousCutoff >= 1)
+      ? r.total - prevTotal
+      : null;
+    // Delta vs season-average per-race pace. Positive = above pace,
+    // negative = below. Avg uses starts (not lastRaceRound) so partial-
+    // schedule drivers' deltas reflect THEIR pace, not the field's.
+    let lastRaceDelta = null;
+    if (lastRacePts != null && r.starts > 0) {
+      const seasonAvg = r.total / r.starts;
+      lastRaceDelta = lastRacePts - seasonAvg;
+    }
+    return { ...r, currRank, rank: currRank, prevRank, posChange, lastRacePts, lastRaceDelta };
   });
 
   const sk = STATE.standings.sortKey;
@@ -8036,6 +8071,14 @@ function renderStandings() {
       <td class="num">${r.top5}</td>
       <td class="num">${r.top10}</td>
       <td class="num">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
+      <td class="num">${
+        r.lastRacePts == null
+          ? `<span class="muted">—</span>`
+          : `<span class="pts-stack">
+              <span class="pts-big">${r.lastRacePts}</span>
+              <span class="pts-delta ${r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta < -1.5 ? "cold" : ""}">${r.lastRaceDelta != null ? (r.lastRaceDelta > 0 ? "+" : "") + r.lastRaceDelta.toFixed(1) : ""}</span>
+            </span>`
+      }</td>
       ${stageEra ? `<td class="num">${r.sumS1}</td>
       <td class="num">${r.sumS2}</td>
       <td class="num">${r.sumFL}</td>` : ""}
@@ -8063,6 +8106,7 @@ function renderStandings() {
         ${th("top5", "T5", true)}
         ${th("top10", "T10", true)}
         ${th("avgFinish", "Avg Fin", true)}
+        ${th("lastRacePts", "Last", true)}
         ${stageEra ? `${th("sumS1", "S1", true)}
         ${th("sumS2", "S2", true)}
         ${th("sumFL", "FL", true)}` : ""}

@@ -1425,6 +1425,29 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-size: 9px; color: var(--muted);
 }
 
+/* Points-with-delta stack — used in Trending L5 Pts and Standings Last
+   columns. Big number on top is the actual points; small delta below
+   is points scored vs the driver's season-average pace. Green = above
+   pace, red = below, neutral muted in the middle. */
+.pts-stack {
+  display: inline-flex; flex-direction: column; align-items: flex-end;
+  line-height: 1.15;
+}
+.pts-big {
+  font-family: var(--mono);
+  font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.pts-delta {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.pts-delta.hot { color: var(--pos); }
+.pts-delta.cold { color: var(--neg); }
+
 .delta-pill {
   display: inline-block;
   padding: 1px 6px; border-radius: 3px;
