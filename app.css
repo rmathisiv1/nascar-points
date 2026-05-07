@@ -491,6 +491,12 @@ html, body {
 .dash-tab-group:hover .dash-submenu,
 .dash-tab-group:focus-within .dash-submenu {
   display: flex;
+  /* Quick fade so the menu doesn't pop awkwardly */
+  animation: dash-menu-in 60ms ease-out;
+}
+@keyframes dash-menu-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 /* When a click just navigated, suppress the hover-open state until
    the cursor leaves the group. Otherwise the dropdown stays latched
@@ -5116,18 +5122,20 @@ a.rc-sched-winner:hover {
 }
 
 /* === ALL-TIME DATABASE PAGES (Drivers / Teams / Crew Chiefs) === */
-/* Sortable career stats table with a search box. Lives inside the
-   center-pane takeover (alongside Race / Schedule / Track) so the
-   left/right side panels stay visible. */
+/* Sortable career stats table with search, scope toggle, generation
+   filter, and pagination. Lives inside the center-pane takeover so
+   the side panels stay visible. */
 .alltime-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 4px 12px;
+  padding: 8px 4px;
+  flex-wrap: wrap;
 }
 .alltime-search {
   flex: 1;
   max-width: 320px;
+  min-width: 180px;
   padding: 6px 10px;
   background: var(--bg-2);
   border: 1px solid var(--border);
@@ -5144,7 +5152,73 @@ a.rc-sched-winner:hover {
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.05em;
+  margin-left: auto;
 }
+/* Scope toggle: All-time vs current-season pill pair */
+.alltime-scope-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.alltime-scope-btn {
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.alltime-scope-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.alltime-scope-btn.active {
+  background: var(--accent-bg-hi);
+  color: var(--accent-2);
+}
+/* Generation chips — multi-select */
+.alltime-gens {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 4px 12px;
+}
+.alltime-gens-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-right: 4px;
+}
+.alltime-gen-chip {
+  padding: 3px 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.alltime-gen-chip:hover {
+  color: var(--text);
+  border-color: rgba(255,255,255,0.18);
+}
+.alltime-gen-chip.active {
+  background: var(--accent-bg-hi);
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+.alltime-gen-clear {
+  border-color: rgba(255,255,255,0.06);
+  color: var(--dim);
+}
+/* Table wrapper */
 .alltime-table-wrap {
   padding: 0;
 }
@@ -5172,7 +5246,15 @@ a.rc-sched-winner:hover {
   white-space: nowrap;
 }
 .alltime-th.num { text-align: right; }
+.alltime-th-rank {
+  cursor: default;
+  text-align: right;
+  width: 36px;
+  padding-left: 12px;
+  padding-right: 8px;
+}
 .alltime-th:hover { color: var(--text); }
+.alltime-th-rank:hover { color: var(--dim); }
 .alltime-sort {
   color: var(--accent-2);
   font-size: 8px;
@@ -5186,24 +5268,32 @@ a.rc-sched-winner:hover {
   text-align: right;
   font-family: var(--mono);
 }
+.alltime-rank-cell {
+  color: var(--dim);
+  font-size: 11px;
+  width: 36px;
+  padding-left: 12px;
+  padding-right: 8px;
+}
+/* Alternating rows */
+.alltime-table tbody tr:nth-child(even) {
+  background: rgba(255,255,255,0.015);
+}
 .alltime-table tbody tr:hover {
-  background: rgba(255,255,255,0.025);
+  background: rgba(255,255,255,0.045);
 }
 .alltime-table tbody td .hot { color: var(--pos); font-weight: 600; }
-.alltime-trunc-note {
-  padding: 12px 16px;
-  font-size: 11px;
-  font-family: var(--mono);
-  color: var(--muted);
-  text-align: center;
-  border-top: 1px solid rgba(255,255,255,0.04);
+
+/* Pagination footer */
+.alltime-pag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 14px 8px 8px;
 }
-.alltime-loadall {
-  padding: 16px;
-  text-align: center;
-}
-.alltime-loadall-btn {
-  padding: 8px 16px;
+.alltime-pag-btn {
+  padding: 6px 14px;
   background: var(--bg-2);
   color: var(--text);
   border: 1px solid var(--border);
@@ -5211,15 +5301,22 @@ a.rc-sched-winner:hover {
   font-family: var(--mono);
   font-size: 11px;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
-.alltime-loadall-btn:hover {
+.alltime-pag-btn:hover:not(:disabled) {
   background: rgba(255,255,255,0.04);
   border-color: var(--accent);
+  color: var(--accent-2);
 }
-.alltime-loadall-btn:disabled {
-  opacity: 0.6;
-  cursor: wait;
+.alltime-pag-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.alltime-pag-status {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 /* Lives in the topbar between the series switcher and the topbar-right
    pickers. On desktop expands to fill available width. On mobile collapses

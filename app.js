@@ -500,13 +500,21 @@ function ensureFullSearchData() {
 // just-clicked element until the cursor moves, leaving the submenu
 // stuck open over the destination view. We mark the group .just-clicked
 // to suppress the hover-open state, then clear the flag on mouseleave
-// so re-hovering re-opens normally.
+// so re-hovering re-opens normally. Subitems also force-blur themselves
+// so :focus-within doesn't latch the menu open either.
 function wireTabDropdowns() {
   document.querySelectorAll(".dash-tab-group").forEach(grp => {
-    // Click on parent tab OR any subitem → mark group, allow nav to proceed
+    // Click on parent tab OR any subitem → mark group, force-blur active
+    // element, allow nav to proceed
     grp.querySelectorAll(".dash-tab-parent, .dash-subitem").forEach(a => {
       a.addEventListener("click", () => {
         grp.classList.add("just-clicked");
+        // Defer blur so the click navigation actually fires first
+        setTimeout(() => {
+          if (document.activeElement && grp.contains(document.activeElement)) {
+            document.activeElement.blur();
+          }
+        }, 0);
       });
     });
     // Cursor leaves the group → reset, so next hover behaves normally
@@ -2414,9 +2422,9 @@ function render() {
       profile: "Driver Profile",
       team: "Team",
       cc: "Crew Chief",
-      drivers: "All-Time Drivers",
-      teams: "All-Time Teams",
-      crewchiefs: "All-Time Crew Chiefs",
+      drivers: "Drivers",
+      teams: "Teams",
+      crewchiefs: "Crew Chiefs",
     };
     pageTitleEl.textContent = titleMap[STATE.view] || "NASCAR Points";
   }
@@ -11058,205 +11066,214 @@ function invalidateAllTimeIfStale() {
 }
 
 // Build per-driver career aggregates from SEASON_CACHE. Returns array
-// of { slug, name, starts, wins, top5, top10, finishes, years (Set), bySeries (Map) }
+// of records with a per-year breakdown so callers can filter by
+// scope (e.g. just 2026) or by generation (e.g. only Gen 7) without
+// re-walking the raw cache.
 function computeAllTimeDrivers() {
   const byDrv = new Map();
   Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
     if (!blocks) return;
+    const yr = Number(year);
     Object.entries(blocks).forEach(([sCode, block]) => {
       if (!block || !block.races) return;
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
           if (!d.driver || d.ineligible) return;
+          if (d.finish_pos == null) return;
           const slug = slugify(d.driver);
           let agg = byDrv.get(slug);
           if (!agg) {
-            agg = {
-              slug, name: d.driver,
-              starts: 0, wins: 0, top5: 0, top10: 0,
-              finishSum: 0, finishCount: 0,
-              years: new Set(),
-              bySeries: { NCS: 0, NOS: 0, NTS: 0 },
-            };
+            agg = { slug, name: d.driver, byYear: new Map() };
             byDrv.set(slug, agg);
           }
-          if (d.finish_pos != null) {
-            agg.starts++;
-            agg.finishSum += d.finish_pos;
-            agg.finishCount++;
-            if (d.finish_pos === 1) agg.wins++;
-            if (d.finish_pos <= 5) agg.top5++;
-            if (d.finish_pos <= 10) agg.top10++;
-            agg.years.add(Number(year));
-            if (agg.bySeries[sCode] != null) agg.bySeries[sCode]++;
+          let yt = agg.byYear.get(yr);
+          if (!yt) {
+            yt = { starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            agg.byYear.set(yr, yt);
           }
+          yt.starts++;
+          yt.finishSum += d.finish_pos;
+          if (d.finish_pos === 1) yt.wins++;
+          if (d.finish_pos <= 5) yt.top5++;
+          if (d.finish_pos <= 10) yt.top10++;
         });
       });
     });
   });
-  // Compute derived: avg finish + year range
-  const out = Array.from(byDrv.values()).map(d => {
-    const yrs = Array.from(d.years).sort((a, b) => a - b);
-    const yrLabel = yrs.length === 0 ? "—"
-                  : yrs.length === 1 ? String(yrs[0])
-                  : `${yrs[0]}–${yrs[yrs.length - 1]}`;
-    return {
-      slug: d.slug,
-      name: d.name,
-      starts: d.starts,
-      wins: d.wins,
-      top5: d.top5,
-      top10: d.top10,
-      avgFin: d.finishCount > 0 ? d.finishSum / d.finishCount : null,
-      yearsCount: yrs.length,
-      yearsLabel: yrLabel,
-      bySeries: d.bySeries,
-    };
-  });
-  return out;
+  return Array.from(byDrv.values());
 }
 
-// Build per-team career aggregates from SEASON_CACHE. Keyed by team_code.
-// Sums wins/top5/top10 across every entry in the team for every season.
+// Same idea for teams.
 function computeAllTimeTeams() {
   const byTeam = new Map();
   Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
     if (!blocks) return;
+    const yr = Number(year);
     Object.entries(blocks).forEach(([sCode, block]) => {
       if (!block || !block.races) return;
-      const yr = Number(year);
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
           if (d.ineligible) return;
+          if (d.finish_pos == null) return;
           const code = d.team_code
             || teamCodeFromName(d.team, SERIES_TO_KEY[sCode], d.car_number);
           if (!code) return;
-          // Bucket alliances (WBR→PEN era-aware)
           const grp = teamGroup(code, yr) || code;
           let agg = byTeam.get(grp);
           if (!agg) {
-            agg = {
-              code: grp,
-              starts: 0, wins: 0, top5: 0, top10: 0,
-              finishSum: 0, finishCount: 0,
-              years: new Set(),
-            };
+            agg = { code: grp, name: null, byYear: new Map() };
             byTeam.set(grp, agg);
           }
-          if (d.finish_pos != null) {
-            agg.starts++;
-            agg.finishSum += d.finish_pos;
-            agg.finishCount++;
-            if (d.finish_pos === 1) agg.wins++;
-            if (d.finish_pos <= 5) agg.top5++;
-            if (d.finish_pos <= 10) agg.top10++;
-            agg.years.add(yr);
+          let yt = agg.byYear.get(yr);
+          if (!yt) {
+            yt = { starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            agg.byYear.set(yr, yt);
           }
+          yt.starts++;
+          yt.finishSum += d.finish_pos;
+          if (d.finish_pos === 1) yt.wins++;
+          if (d.finish_pos <= 5) yt.top5++;
+          if (d.finish_pos <= 10) yt.top10++;
         });
       });
     });
   });
+  // Resolve display name from the latest year the team appears in
   return Array.from(byTeam.values()).map(t => {
-    const yrs = Array.from(t.years).sort((a, b) => a - b);
-    const yrLabel = yrs.length === 0 ? "—"
-                  : yrs.length === 1 ? String(yrs[0])
-                  : `${yrs[0]}–${yrs[yrs.length - 1]}`;
-    return {
-      code: t.code,
-      name: teamLabelForEra(t.code, yrs[yrs.length - 1] || STATE.season).full || t.code,
-      starts: t.starts,
-      wins: t.wins,
-      top5: t.top5,
-      top10: t.top10,
-      avgFin: t.finishCount > 0 ? t.finishSum / t.finishCount : null,
-      yearsCount: yrs.length,
-      yearsLabel: yrLabel,
-    };
+    const yrs = Array.from(t.byYear.keys()).sort((a, b) => b - a);
+    t.name = teamLabelForEra(t.code, yrs[0] || STATE.season).full || t.code;
+    return t;
   });
 }
 
-// Build per-CC career aggregates from SEASON_CACHE. Keyed by CC slug.
-// Each driver-race with a populated crew_chief field counts as one start
-// for that CC. Wins/top5/top10 follow the driver's finish.
+// Same idea for crew chiefs.
 function computeAllTimeCrewChiefs() {
   const byCC = new Map();
   Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
     if (!blocks) return;
+    const yr = Number(year);
     Object.entries(blocks).forEach(([sCode, block]) => {
       if (!block || !block.races) return;
-      const yr = Number(year);
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
           if (d.ineligible) return;
           if (!d.crew_chief) return;
+          if (d.finish_pos == null) return;
           const slug = slugify(d.crew_chief);
           let agg = byCC.get(slug);
           if (!agg) {
-            agg = {
-              slug, name: d.crew_chief,
-              starts: 0, wins: 0, top5: 0, top10: 0,
-              finishSum: 0, finishCount: 0,
-              years: new Set(),
-            };
+            agg = { slug, name: d.crew_chief, byYear: new Map() };
             byCC.set(slug, agg);
           }
-          if (d.finish_pos != null) {
-            agg.starts++;
-            agg.finishSum += d.finish_pos;
-            agg.finishCount++;
-            if (d.finish_pos === 1) agg.wins++;
-            if (d.finish_pos <= 5) agg.top5++;
-            if (d.finish_pos <= 10) agg.top10++;
-            agg.years.add(yr);
+          let yt = agg.byYear.get(yr);
+          if (!yt) {
+            yt = { starts: 0, wins: 0, top5: 0, top10: 0, finishSum: 0 };
+            agg.byYear.set(yr, yt);
           }
+          yt.starts++;
+          yt.finishSum += d.finish_pos;
+          if (d.finish_pos === 1) yt.wins++;
+          if (d.finish_pos <= 5) yt.top5++;
+          if (d.finish_pos <= 10) yt.top10++;
         });
       });
     });
   });
-  return Array.from(byCC.values()).map(c => {
-    const yrs = Array.from(c.years).sort((a, b) => a - b);
-    const yrLabel = yrs.length === 0 ? "—"
-                  : yrs.length === 1 ? String(yrs[0])
-                  : `${yrs[0]}–${yrs[yrs.length - 1]}`;
-    return {
-      slug: c.slug,
-      name: c.name,
-      starts: c.starts,
-      wins: c.wins,
-      top5: c.top5,
-      top10: c.top10,
-      avgFin: c.finishCount > 0 ? c.finishSum / c.finishCount : null,
-      yearsCount: yrs.length,
-      yearsLabel: yrLabel,
-    };
-  });
+  return Array.from(byCC.values());
 }
 
-// Track per-page sort + filter state. Single object shared by all three
-// all-time pages — they don't co-exist on screen, so the simplification
-// is fine.
+// Fold a record's per-year breakdown into a single stat block based on
+// the active scope + generation filters. Returns null if no years match
+// (caller should drop the row). The returned object has the shape the
+// table expects: { starts, wins, top5, top10, avgFin, yearsCount, yearsLabel,
+// winPct, top5Pct }.
+function foldRecordByFilters(rec, scope, gens, currentSeason) {
+  const filtered = [];
+  rec.byYear.forEach((stats, year) => {
+    if (scope === "current" && year !== currentSeason) return;
+    if (gens && gens.size > 0) {
+      const inGen = NASCAR_GENERATIONS.some(g =>
+        gens.has(g.id) && year >= g.year_start && year <= g.year_end
+      );
+      if (!inGen) return;
+    }
+    filtered.push({ year, ...stats });
+  });
+  if (filtered.length === 0) return null;
+  let starts = 0, wins = 0, top5 = 0, top10 = 0, finishSum = 0;
+  filtered.forEach(f => {
+    starts += f.starts;
+    wins += f.wins;
+    top5 += f.top5;
+    top10 += f.top10;
+    finishSum += f.finishSum;
+  });
+  const yrs = filtered.map(f => f.year).sort((a, b) => a - b);
+  const yrLabel = yrs.length === 0 ? "—"
+                : yrs.length === 1 ? String(yrs[0])
+                : `${yrs[0]}–${yrs[yrs.length - 1]}`;
+  return {
+    starts, wins, top5, top10,
+    avgFin: starts > 0 ? finishSum / starts : null,
+    winPct: starts > 0 ? (wins / starts) * 100 : null,
+    top5Pct: starts > 0 ? (top5 / starts) * 100 : null,
+    yearsCount: yrs.length,
+    yearsLabel: yrLabel,
+  };
+}
+
+// Track per-page state: sort key, sort dir, search, page index, scope
+// (current season vs all-time), and active generation filters. Single
+// object shared by all three all-time pages — they don't co-exist on
+// screen, so the simplification is fine.
 const ALLTIME_STATE = {
-  drivers:    { sortKey: "starts", sortDir: "desc", search: "" },
-  teams:      { sortKey: "starts", sortDir: "desc", search: "" },
-  crewchiefs: { sortKey: "starts", sortDir: "desc", search: "" },
+  drivers:    { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set() },
+  teams:      { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set() },
+  crewchiefs: { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set() },
 };
 
+// NASCAR Cup generation eras. Used by the generation filter on
+// the all-time pages — toggle one or more pills to scope the table
+// to drivers/teams/CCs whose careers fell within those eras.
+const NASCAR_GENERATIONS = [
+  { id: "g1", label: "Gen 1", year_start: 1948, year_end: 1966 },
+  { id: "g2", label: "Gen 2", year_start: 1967, year_end: 1980 },
+  { id: "g3", label: "Gen 3", year_start: 1981, year_end: 1990 },
+  { id: "g4", label: "Gen 4", year_start: 1991, year_end: 2006 },
+  { id: "g5", label: "Gen 5", year_start: 2007, year_end: 2012 },
+  { id: "g6", label: "Gen 6", year_start: 2013, year_end: 2021 },
+  { id: "g7", label: "Gen 7", year_start: 2022, year_end: 9999 },
+];
+const ALLTIME_PAGE_SIZE = 50;
+
 // Generic sortable table renderer for all-time pages. Pass:
-//   rows       — array of { name, starts, wins, top5, top10, avgFin, yearsLabel, ... }
+//   rawRecs    — array of records with { byYear: Map, name, slug/code, ... }
 //   linkBuilder— (row) => href to that entity's profile, or null for no link
 //   stateKey   — "drivers" | "teams" | "crewchiefs"
+//   pageLabel  — "Drivers" | "Teams" | "Crew Chiefs" (singular/plural label)
 //
-// Caps visible rows to keep the DOM lean. With 26+ seasons cached the
-// drivers table can hit 3000+ entries — rendering all at once locks
-// the main thread for ~1s on slower machines. Search narrows below
-// the cap, so a filtered query always shows complete results.
-const ALLTIME_RENDER_CAP = 250;
-function renderAllTimeTable(rows, linkBuilder, stateKey) {
+// Folds each record by the active scope + gen filters, then sorts +
+// paginates. Pagination defaults to 50 per page so render stays fast
+// even with ~3000 historical drivers.
+function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
   const st = ALLTIME_STATE[stateKey];
   const search = (st.search || "").trim().toLowerCase();
-  let visible = rows;
+  const currentSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]) || STATE.season;
+
+  // Fold each record by active filters; drop those with no matching years
+  let visible = rawRecs.map(rec => {
+    const folded = foldRecordByFilters(rec, st.scope, st.gens, currentSeason);
+    if (!folded) return null;
+    return {
+      slug: rec.slug,
+      code: rec.code,
+      name: rec.name,
+      ...folded,
+    };
+  }).filter(Boolean);
+
   if (search) {
-    visible = rows.filter(r =>
+    visible = visible.filter(r =>
       r.name.toLowerCase().includes(search) ||
       (r.code && r.code.toLowerCase().includes(search))
     );
@@ -11264,7 +11281,7 @@ function renderAllTimeTable(rows, linkBuilder, stateKey) {
   // Sort
   const dir = st.sortDir === "asc" ? 1 : -1;
   const k = st.sortKey;
-  visible = visible.slice().sort((a, b) => {
+  visible.sort((a, b) => {
     const av = a[k]; const bv = b[k];
     if (av == null && bv == null) return 0;
     if (av == null) return 1;
@@ -11273,11 +11290,13 @@ function renderAllTimeTable(rows, linkBuilder, stateKey) {
     return dir * (av - bv);
   });
 
-  // Cap unfiltered results to keep render fast. With a search query
-  // active we trust the user has narrowed it enough to render in full.
-  const totalAfterFilter = visible.length;
-  const truncated = !search && visible.length > ALLTIME_RENDER_CAP;
-  if (truncated) visible = visible.slice(0, ALLTIME_RENDER_CAP);
+  const totalCount = visible.length;
+  const pageCount = Math.max(1, Math.ceil(totalCount / ALLTIME_PAGE_SIZE));
+  // Clamp current page if filters narrowed below it
+  if (st.page >= pageCount) st.page = pageCount - 1;
+  if (st.page < 0) st.page = 0;
+  const startIdx = st.page * ALLTIME_PAGE_SIZE;
+  const pageRows = visible.slice(startIdx, startIdx + ALLTIME_PAGE_SIZE);
 
   const sortAttr = (col) => {
     if (col !== k) return "";
@@ -11285,68 +11304,95 @@ function renderAllTimeTable(rows, linkBuilder, stateKey) {
   };
 
   const header = `<thead><tr>
+    <th class="alltime-th alltime-th-rank">#</th>
     <th class="alltime-th" data-sort="name">Name${sortAttr("name")}</th>
     <th class="alltime-th num" data-sort="starts">Starts${sortAttr("starts")}</th>
     <th class="alltime-th num" data-sort="wins">Wins${sortAttr("wins")}</th>
+    <th class="alltime-th num" data-sort="winPct">Win %${sortAttr("winPct")}</th>
     <th class="alltime-th num" data-sort="top5">T5${sortAttr("top5")}</th>
+    <th class="alltime-th num" data-sort="top5Pct">T5 %${sortAttr("top5Pct")}</th>
     <th class="alltime-th num" data-sort="top10">T10${sortAttr("top10")}</th>
     <th class="alltime-th num" data-sort="avgFin">Avg Fin${sortAttr("avgFin")}</th>
     <th class="alltime-th num" data-sort="yearsCount">Years${sortAttr("yearsCount")}</th>
   </tr></thead>`;
 
-  const body = `<tbody>${visible.map(r => {
+  const body = `<tbody>${pageRows.map((r, i) => {
     const href = linkBuilder ? linkBuilder(r) : null;
     const nameCell = href
       ? `<a class="profile-link" href="${href}">${escapeHTML(r.name)}</a>`
       : escapeHTML(r.name);
+    const overallRank = startIdx + i + 1;
     return `<tr>
+      <td class="num alltime-rank-cell">${overallRank}</td>
       <td>${nameCell}</td>
       <td class="num">${r.starts || 0}</td>
       <td class="num ${r.wins > 0 ? "hot" : ""}">${r.wins || 0}</td>
+      <td class="num">${r.winPct != null ? r.winPct.toFixed(1) + "%" : "—"}</td>
       <td class="num">${r.top5 || 0}</td>
+      <td class="num">${r.top5Pct != null ? r.top5Pct.toFixed(1) + "%" : "—"}</td>
       <td class="num">${r.top10 || 0}</td>
       <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
       <td class="num"><span title="${r.yearsLabel}">${r.yearsCount}</span></td>
     </tr>`;
   }).join("")}</tbody>`;
 
-  const truncNote = truncated
-    ? `<div class="alltime-trunc-note">Showing top ${ALLTIME_RENDER_CAP} of ${rows.length}. Use search to find others.</div>`
-    : "";
+  // Generation chips — built from NASCAR_GENERATIONS, multi-select
+  const genChips = NASCAR_GENERATIONS.map(g => {
+    const active = st.gens && st.gens.has(g.id);
+    const label = g.year_end >= 9999 ? `${g.label} (${g.year_start}+)` : `${g.label} (${g.year_start}–${g.year_end})`;
+    return `<button class="alltime-gen-chip ${active ? "active" : ""}" data-gen="${g.id}">${label}</button>`;
+  }).join("");
+
+  const scopeLabel = st.scope === "current" ? `${currentSeason} season` : "All-time";
+
+  // Pagination controls
+  const pagBtns = `
+    <button class="alltime-pag-btn" data-pag="prev" ${st.page === 0 ? "disabled" : ""}>← Prev</button>
+    <span class="alltime-pag-status">Page ${st.page + 1} of ${pageCount}</span>
+    <button class="alltime-pag-btn" data-pag="next" ${st.page >= pageCount - 1 ? "disabled" : ""}>Next →</button>
+  `;
 
   return `
     <div class="alltime-toolbar">
       <input type="search" class="alltime-search" id="alltime-search-${stateKey}"
-             placeholder="Search by name…" value="${escapeHTML(st.search || "")}">
-      <span class="alltime-count muted">${
-        truncated
-          ? `top ${visible.length} of ${rows.length}`
-          : `${visible.length} of ${rows.length}`
-      }</span>
+             placeholder="Search ${pageLabel.toLowerCase()}…" value="${escapeHTML(st.search || "")}">
+      <div class="alltime-scope-toggle">
+        <button class="alltime-scope-btn ${st.scope === "all" ? "active" : ""}" data-scope="all">All-time</button>
+        <button class="alltime-scope-btn ${st.scope === "current" ? "active" : ""}" data-scope="current">${currentSeason}</button>
+      </div>
+      <span class="alltime-count muted">${totalCount} ${pageLabel.toLowerCase()}</span>
+    </div>
+    <div class="alltime-gens">
+      <span class="alltime-gens-label">Gen filter:</span>
+      ${genChips}
+      ${st.gens && st.gens.size > 0 ? `<button class="alltime-gen-chip alltime-gen-clear" data-gen="__clear__">Clear</button>` : ""}
     </div>
     <div class="card alltime-table-wrap">
       <table class="data-table alltime-table" data-statekey="${stateKey}">
         ${header}
         ${body}
       </table>
-      ${truncNote}
+    </div>
+    <div class="alltime-pag">
+      ${pagBtns}
     </div>
   `;
 }
 
-// Wire toolbar controls (search input + click-to-sort headers) for an
-// all-time page. Re-runs the appropriate render function on input/click.
-// Search input is debounced 150ms so each keystroke doesn't rebuild
-// the entire table — at 3000+ rows that's a 50-100ms hit per keystroke.
+// Wire toolbar controls (search input + click-to-sort headers + scope
+// toggle + generation chips + pagination) for an all-time page. Re-runs
+// the appropriate render function on input/click. Search input is
+// debounced 150ms so each keystroke doesn't rebuild the entire table.
 function wireAllTimeTable(stateKey, rerender) {
+  const st = ALLTIME_STATE[stateKey];
   const input = document.getElementById(`alltime-search-${stateKey}`);
   if (input) {
     let debounce = null;
     input.addEventListener("input", e => {
-      ALLTIME_STATE[stateKey].search = e.target.value;
+      st.search = e.target.value;
+      st.page = 0;   // reset to first page on search
       clearTimeout(debounce);
       debounce = setTimeout(() => {
-        // Preserve cursor on re-render — store sel before rerender
         const sel = input.selectionStart;
         rerender();
         const newInput = document.getElementById(`alltime-search-${stateKey}`);
@@ -11357,18 +11403,53 @@ function wireAllTimeTable(stateKey, rerender) {
       }, 150);
     });
   }
+  // Sort header clicks
   document.querySelectorAll(`.alltime-table[data-statekey="${stateKey}"] .alltime-th`).forEach(th => {
     th.addEventListener("click", () => {
       const col = th.getAttribute("data-sort");
       if (!col) return;
-      const st = ALLTIME_STATE[stateKey];
       if (st.sortKey === col) {
         st.sortDir = st.sortDir === "asc" ? "desc" : "asc";
       } else {
         st.sortKey = col;
         st.sortDir = col === "name" ? "asc" : "desc";
       }
+      st.page = 0;
       rerender();
+    });
+  });
+  // Scope toggle (All-time vs current season)
+  document.querySelectorAll(`.alltime-scope-btn`).forEach(btn => {
+    btn.addEventListener("click", () => {
+      st.scope = btn.getAttribute("data-scope");
+      st.page = 0;
+      rerender();
+    });
+  });
+  // Generation chips (multi-select)
+  document.querySelectorAll(`.alltime-gen-chip`).forEach(btn => {
+    btn.addEventListener("click", () => {
+      const gid = btn.getAttribute("data-gen");
+      if (gid === "__clear__") {
+        st.gens.clear();
+      } else {
+        if (st.gens.has(gid)) st.gens.delete(gid);
+        else st.gens.add(gid);
+      }
+      st.page = 0;
+      rerender();
+    });
+  });
+  // Pagination
+  document.querySelectorAll(`.alltime-pag-btn`).forEach(btn => {
+    btn.addEventListener("click", () => {
+      const dir = btn.getAttribute("data-pag");
+      if (dir === "prev" && st.page > 0) st.page--;
+      else if (dir === "next") st.page++;
+      rerender();
+      // Scroll to top of table after page change
+      const wrap = document.querySelector(`.alltime-table[data-statekey="${stateKey}"]`);
+      if (wrap) wrap.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
 }
@@ -11388,11 +11469,10 @@ function renderAllTimeDrivers() {
   host.innerHTML = renderAllTimeTable(
     ALLTIME_CACHE.drivers,
     r => `#/driver/${encodeURIComponent(r.slug)}`,
-    "drivers"
+    "drivers",
+    "Drivers"
   );
   wireAllTimeTable("drivers", renderAllTimeDrivers);
-  // Trigger the gentle background loader. Idempotent — no-op if already
-  // running. Re-renders once at the end if user is still on this page.
   scheduleAllTimeBackgroundLoad("drivers", renderAllTimeDrivers);
 }
 
@@ -11411,7 +11491,8 @@ function renderAllTimeTeams() {
   host.innerHTML = renderAllTimeTable(
     ALLTIME_CACHE.teams,
     r => `#/team/${encodeURIComponent(r.code)}`,
-    "teams"
+    "teams",
+    "Teams"
   );
   wireAllTimeTable("teams", renderAllTimeTeams);
   scheduleAllTimeBackgroundLoad("teams", renderAllTimeTeams);
@@ -11432,7 +11513,8 @@ function renderAllTimeCrewChiefs() {
   host.innerHTML = renderAllTimeTable(
     ALLTIME_CACHE.crewchiefs,
     r => `#/cc/${encodeURIComponent(r.slug)}`,
-    "crewchiefs"
+    "crewchiefs",
+    "Crew Chiefs"
   );
   wireAllTimeTable("crewchiefs", renderAllTimeCrewChiefs);
   scheduleAllTimeBackgroundLoad("crewchiefs", renderAllTimeCrewChiefs);
