@@ -38,7 +38,7 @@ const STATE = {
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
   arc: { selected: new Set(), ftOnly: true, metric: "points", scoring: "raw" },
-  breakdown: { drivers: [], ftOnly: true, topN: "20" },
+  breakdown: { drivers: [], ftOnly: true, topN: "20", mode: "drivers" },
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
@@ -2193,8 +2193,17 @@ function wireUIControls() {
     });
   });
 
-  // (Stage Points view has no toggles — it always shows all drivers
-  // who have scored at least one stage point this season.)
+  // Stage Points view: Drivers / Teams toggle
+  document.querySelectorAll("#view-breakdown .toggle-group").forEach(g => {
+    const group = g.dataset.group;
+    g.querySelectorAll("button").forEach(b => {
+      b.addEventListener("click", () => {
+        g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+        if (group === "breakdown-mode") STATE.breakdown.mode = b.dataset.val;
+        renderBreakdown();
+      });
+    });
+  });
 
   // Trajectory toggles — exclude traj-seasons, which is a multi-select group
   // managed by renderTrajectorySeasonChips() (different selection semantics
@@ -4269,41 +4278,69 @@ function renderArcGrid() {
 function renderBreakdown() {
   const host = document.getElementById("stage-points-bars");
   const sub = document.getElementById("stage-points-sub");
+  const titleEl = document.querySelector(".stage-points-title");
   if (!host || !STATE.data) return;
 
-  // Aggregate stage points by entity. ALL drivers with at least one stage
-  // point this season — no full-time filter, no top-N cap. Sorted desc.
-  const rows = allEntities().map(e => {
-    let stagePts = 0;
-    let s1 = 0, s2 = 0;
-    (e.races || []).forEach(r => {
-      if (r.dns) return;
-      s1 += r.s1 || 0;
-      s2 += r.s2 || 0;
-      stagePts += (r.s1 || 0) + (r.s2 || 0);
+  const mode = (STATE.breakdown && STATE.breakdown.mode) || "drivers";
+  if (titleEl) {
+    titleEl.textContent = mode === "teams"
+      ? "Stage points · season total by team"
+      : "Stage points · season total";
+  }
+
+  // Aggregate by entity (driver) or by team. Both use s1+s2 fields from
+  // the per-entity per-race data, so the totals are consistent across
+  // modes — switching just re-buckets the same point sums.
+  let rows = [];
+  if (mode === "teams") {
+    // Group entities by their team_code, sum stage points across cars.
+    const byTeam = new Map();
+    allEntities().forEach(e => {
+      const teamCode = e.team_code || teamCodeFromName(e.team, SERIES_TO_KEY[STATE.series], e.car_number);
+      if (!teamCode) return;
+      const grp = teamGroup(teamCode, STATE.season) || teamCode;
+      let agg = byTeam.get(grp);
+      if (!agg) {
+        agg = { team_code: grp, stagePts: 0, cars: new Set() };
+        byTeam.set(grp, agg);
+      }
+      (e.races || []).forEach(r => {
+        if (r.dns) return;
+        agg.stagePts += (r.s1 || 0) + (r.s2 || 0);
+      });
+      agg.cars.add(e.car_number);
     });
-    return {
-      entity: e,
-      driver: e.primaryDriver || e.driver,
-      car_number: e.car_number,
-      stagePts, s1, s2,
-    };
-  })
-  .filter(r => r.stagePts > 0)
-  .sort((a, b) => b.stagePts - a.stagePts);
+    rows = Array.from(byTeam.values())
+      .filter(r => r.stagePts > 0)
+      .sort((a, b) => b.stagePts - a.stagePts);
+  } else {
+    rows = allEntities().map(e => {
+      let stagePts = 0;
+      (e.races || []).forEach(r => {
+        if (r.dns) return;
+        stagePts += (r.s1 || 0) + (r.s2 || 0);
+      });
+      return {
+        entity: e,
+        driver: e.primaryDriver || e.driver,
+        car_number: e.car_number,
+        stagePts,
+      };
+    })
+    .filter(r => r.stagePts > 0)
+    .sort((a, b) => b.stagePts - a.stagePts);
+  }
 
   const max = rows.length > 0 ? rows[0].stagePts : 1;
 
   if (sub) {
     const totalAll = rows.reduce((acc, r) => acc + r.stagePts, 0);
-    // Calculate completed races for this series so we can show the
-    // expected per-race total. Each race awards 110 stage pts max
-    // (10+9+...+1 for top 10 in each of 2 stages).
     const completed = (allRacesSorted() || []).filter(r =>
       (r.results || []).some(d => d.finish_pos === 1)
     ).length;
     const expectedMax = completed * 110;
-    sub.textContent = `${rows.length} drivers · ${totalAll.toLocaleString()} pts across ${completed} race${completed === 1 ? "" : "s"}${completed > 0 ? ` (max ${expectedMax})` : ""}`;
+    const noun = mode === "teams" ? "teams" : "drivers";
+    sub.textContent = `${rows.length} ${noun} · ${totalAll.toLocaleString()} pts across ${completed} race${completed === 1 ? "" : "s"}${completed > 0 ? ` (max ${expectedMax})` : ""}`;
   }
 
   if (rows.length === 0) {
@@ -4312,6 +4349,24 @@ function renderBreakdown() {
   }
 
   host.innerHTML = rows.map((r, i) => {
+    if (mode === "teams") {
+      // Team row — use the team's primary color via teamLabelForEra,
+      // but fall back to a neutral accent if no color available.
+      const lbl = teamLabelForEra(r.team_code, STATE.season);
+      const teamHex = (lbl && lbl.color) || "var(--accent)";
+      const txt = "#fff";
+      const pct = (r.stagePts / max) * 100;
+      const fullName = (lbl && lbl.full) || r.team_code;
+      return `<a class="sp-row profile-link" href="#/team/${encodeURIComponent(r.team_code)}">
+        <span class="sp-rank">${i + 1}</span>
+        <span class="sp-team-tag" style="background:${teamHex};color:${txt}">${escapeHTML(r.team_code)}</span>
+        <span class="sp-name">${escapeHTML(fullName)}</span>
+        <span class="sp-bar-track">
+          <span class="sp-bar-fill" style="width:${pct}%;background:${teamHex}"></span>
+        </span>
+        <span class="sp-pts">${r.stagePts}</span>
+      </a>`;
+    }
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
     const pct = (r.stagePts / max) * 100;

@@ -4441,12 +4441,40 @@ a.rc-sched-winner:hover {
     padding: 7px 10px;
     max-width: 100%;
     gap: 10px;
+    position: relative;   /* anchor the absolute-positioned NEXT indicator */
   }
   /* Hide the result/winner column on mobile to save space — tap row to see */
   .rc-sched-result { display: none; }
   /* Hide the italic race name on mobile to keep the row compact */
   .rc-sched-name { display: none; }
   .rc-sched-track { font-size: 12px; }
+  /* The NEXT pill doesn't fit next to "R12" in a 38px round cell — it
+     overlapped the track name. On mobile, hide the pill text and render
+     a small accent dot on the row's left border instead. The current
+     row already has a blue left border via .rc-sched-row.current; the
+     dot reinforces it without consuming grid space. */
+  .rc-sched-next {
+    /* Replace pill with a 6px dot pinned to the left edge */
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    padding: 0;
+    margin: 0;
+    background: var(--accent);
+    border-radius: 50%;
+    /* Hide the "NEXT" text — the dot conveys the same meaning */
+    text-indent: -9999px;
+    overflow: hidden;
+    line-height: 0;
+  }
+  /* Tighten round cell since pill no longer lives there */
+  .rc-sched-round {
+    gap: 0;
+    justify-content: flex-start;
+  }
 }
 
 /* ============================================================
@@ -7861,4 +7889,20 @@ body.lightbox-open {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
+}
+
+/* Stage points — team-mode tag (wider than car tag for 3-4 char team codes) */
+.sp-team-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-align: center;
+  letter-spacing: 0.04em;
+  min-width: 36px;
+  display: inline-block;
+}
+@media (max-width: 767.98px) {
+  .sp-team-tag { font-size: 9px; min-width: 32px; padding: 2px 4px; }
 }
