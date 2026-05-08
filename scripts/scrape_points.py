@@ -184,6 +184,17 @@ class Race:
     surface: str = ""           # "P" (paved), "R" (road), "D" (dirt)
     stages: int = 2
     fastest_lap_driver: Optional[str] = None
+    # === Race summary (post-race) ===
+    # Pulled from RR's race header / .rDetailsTbl. Useful for the UI's
+    # race-detail page so users can see "the race took 2:56:17, avg speed
+    # 136 mph, pole speed 191 mph" at a glance. All optional — older
+    # races without these fields just stay empty.
+    race_time: str = ""              # "2:56:17"
+    avg_speed: Optional[float] = None     # mph e.g. 136.315
+    pole_speed: Optional[float] = None    # mph e.g. 191.34
+    margin_of_victory: str = ""           # ".407 sec", "1.5 cl" etc
+    cautions: str = ""                    # "7 for 40 laps"
+    lead_changes: Optional[int] = None    # 23
     source_url: str = ""
     results: list[DriverRace] = field(default_factory=list)
 
@@ -345,6 +356,28 @@ def parse_race(race_url: str, series_code: str, round_num: int,
         # track name is the first part of the location string before first comma
         race.track = dm.group(2).split(",")[0].strip()
         race.track_code = track_code_from_name(race.track)
+
+    # --- race summary (rDetailsTbl) ---
+    # The race-detail panel on RR carries: time of race, avg speed, pole
+    # speed, cautions, margin of victory, lead changes. We pull each via
+    # regex against the page text since the HTML structure of that panel
+    # collapses cells unpredictably across years. Each match is optional;
+    # missing fields stay as their dataclass defaults.
+    if (m := re.search(r"Time of race:\s*([\d:]+)", text)):
+        race.race_time = m.group(1)
+    if (m := re.search(r"Average speed:\s*([\d.]+)\s*mph", text)):
+        try: race.avg_speed = float(m.group(1))
+        except ValueError: pass
+    if (m := re.search(r"Pole speed:\s*([\d.]+)\s*mph", text)):
+        try: race.pole_speed = float(m.group(1))
+        except ValueError: pass
+    if (m := re.search(r"Margin of victory:\s*([^\n]+?)(?=Attendance|Lead|Cautions|$)", text, re.DOTALL)):
+        race.margin_of_victory = m.group(1).strip()[:40]
+    if (m := re.search(r"Cautions:\s*([^\n]+?)(?=Margin|Attendance|Lead|$)", text, re.DOTALL)):
+        race.cautions = m.group(1).strip()[:40]
+    if (m := re.search(r"Lead changes:\s*(\d+)", text)):
+        try: race.lead_changes = int(m.group(1))
+        except ValueError: pass
 
     # --- stage lines ---
     stage1_map = parse_stage_line(text, 1)

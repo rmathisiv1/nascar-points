@@ -2059,6 +2059,21 @@ function restoreModeFromStorage() {
 // UI CONTROLS
 // ============================================================
 function wireUIControls() {
+  // Race Center session tabs (Race / Practice 1 / Practice 2 / Qualifying).
+  // Delegated since the tabs DOM is rebuilt every time the user navigates
+  // to a new race. Clicking a tab swaps `.active` on both the tab and its
+  // matching pane — no global state, just DOM toggles.
+  document.addEventListener("click", (e) => {
+    const tab = e.target.closest(".rc-session-tab");
+    if (!tab) return;
+    const wrap = tab.closest(".rc-sessions-tabbed");
+    if (!wrap) return;
+    const targetId = tab.dataset.tab;
+    wrap.querySelectorAll(".rc-session-tab").forEach(t => t.classList.toggle("active", t === tab));
+    wrap.querySelectorAll(".rc-session-pane").forEach(p =>
+      p.classList.toggle("active", p.dataset.pane === targetId));
+  });
+
   // Helper: sync the series toggle UI (buttons + mobile select) to match
   // the active series. Used both at boot and after every series change.
   const syncSeriesUI = (target) => {
@@ -11015,12 +11030,12 @@ function renderRaceCenter() {
     ? renderRaceResultsTable(nextRace)
     : "";
 
-  // Practice + Qualifying session panels. Renders only sessions that
-  // actually have data on this race weekend (some races run only one
-  // practice; older races have no qualifying data scraped). Helper
-  // returns "" when there's nothing to show, so the inline ternary
-  // collapses cleanly.
-  const sessionsHTML = renderRaceSessionsPanel(nextRace);
+  // Tabbed session view: Race Results / Practice 1 / Practice 2 /
+  // Qualifying. Renders only the tabs that have data on this race
+  // weekend. Wraps resultsHTML so the existing race-results table can
+  // live inside the same tab strip rather than as a separate card above
+  // the practice/qual cards.
+  const sessionsHTML = renderRaceSessionTabs(nextRace, resultsHTML);
 
   host.innerHTML = `
     <div class="rc-hero">
@@ -11030,9 +11045,8 @@ function renderRaceCenter() {
       <div class="rc-hero-meta">
         ${dateStr}${timeTV ? " · " + escapeHTML(timeTV) : ""} · ${seriesNameStr}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
       </div>
+      ${renderRaceSummaryStrip(nextRace)}
     </div>
-
-    ${resultsHTML}
 
     ${sessionsHTML}
 
@@ -11054,27 +11068,23 @@ function renderRaceCenter() {
 }
 
 // ============================================================
-// SESSION PANELS — Practice 1, Practice 2, Qualifying
+// SESSION TABS — Race / Practice 1 / Practice 2 / Qualifying
 // ------------------------------------------------------------
-// Each session is a separate card showing a fastest-to-slowest
-// leaderboard. The data comes from the scraper's per-driver fields:
-//   qual_pos, qual_time, qual_speed
-//   practice1_rank, practice1_time, practice1_speed, practice1_laps
-//   practice2_rank, practice2_time, practice2_speed, practice2_laps
+// Tabbed selector so users pick which session table to view rather
+// than scrolling through a stack. Tabs only render when their data
+// exists; default tab is Race Results when present, else the first
+// available session.
 //
-// A session card is only emitted when at least one driver has a
-// non-null rank for that session. Older races (pre-scraper-extension)
-// will return "" for the whole panel — caller's inline ternary
-// handles that gracefully.
+// State note: the active tab is tracked in a data-attribute on the
+// container and switched via inline event handlers (no global state
+// needed since the tabs are stateless once rendered).
 // ============================================================
-function renderRaceSessionsPanel(race) {
-  if (!race || !(race.results || []).length) return "";
+function renderRaceSessionTabs(race, resultsHTML) {
+  if (!race) return "";
 
-  // Pick driver list and collect each session's rows. Each row carries
-  // (rank, time, speed, driver, car_number, [laps]) so the renderer
-  // doesn't have to think about session-specific field names.
+  // Build per-session row data (same shape for practice and qual)
   const collect = (rankField, timeField, speedField, lapsField) => {
-    const rows = (race.results || [])
+    return (race.results || [])
       .filter(d => d[rankField] != null)
       .map(d => ({
         rank: d[rankField],
@@ -11085,36 +11095,63 @@ function renderRaceSessionsPanel(race) {
         car_number: d.car_number,
       }))
       .sort((a, b) => a.rank - b.rank);
-    return rows;
   };
 
   const p1Rows = collect("practice1_rank", "practice1_time", "practice1_speed", "practice1_laps");
   const p2Rows = collect("practice2_rank", "practice2_time", "practice2_speed", "practice2_laps");
   const qualRows = collect("qual_pos", "qual_time", "qual_speed", null);
+  const hasRace = !!resultsHTML;
 
-  // Nothing to show — older race or scrape didn't catch any session
-  if (p1Rows.length === 0 && p2Rows.length === 0 && qualRows.length === 0) {
+  // No tabs to show — fall back to legacy behavior (just the race
+  // results table if it exists, otherwise nothing).
+  if (!hasRace && p1Rows.length === 0 && p2Rows.length === 0 && qualRows.length === 0) {
     return "";
   }
 
-  const cards = [];
-  // Order: Practice 1 → Practice 2 → Qualifying. Reads like the actual
-  // weekend timeline (practice happens before qual at most events).
-  if (p1Rows.length) cards.push(renderSessionCard("Practice 1", p1Rows, true));
-  if (p2Rows.length) cards.push(renderSessionCard("Practice 2", p2Rows, true));
-  if (qualRows.length) cards.push(renderSessionCard("Qualifying", qualRows, false));
+  // Build tab list and corresponding panes. Each tab has an id that
+  // matches its pane's data-pane attribute. First tab in the list
+  // becomes the default-active one.
+  const tabs = [];
+  const panes = [];
+  if (hasRace) {
+    tabs.push({ id: "race", label: "Race" });
+    panes.push({ id: "race", html: resultsHTML });
+  }
+  if (p1Rows.length) {
+    tabs.push({ id: "p1", label: "Practice 1" });
+    panes.push({ id: "p1", html: renderSessionTable("Practice 1", p1Rows, true) });
+  }
+  if (p2Rows.length) {
+    tabs.push({ id: "p2", label: "Practice 2" });
+    panes.push({ id: "p2", html: renderSessionTable("Practice 2", p2Rows, true) });
+  }
+  if (qualRows.length) {
+    tabs.push({ id: "qual", label: "Qualifying" });
+    panes.push({ id: "qual", html: renderSessionTable("Qualifying", qualRows, false) });
+  }
 
-  return `<div class="rc-sessions">${cards.join("")}</div>`;
+  const tabsHTML = tabs.map((t, i) => `
+    <button class="rc-session-tab ${i === 0 ? "active" : ""}" data-tab="${t.id}">
+      ${t.label}
+    </button>`).join("");
+  const panesHTML = panes.map((p, i) => `
+    <div class="rc-session-pane ${i === 0 ? "active" : ""}" data-pane="${p.id}">
+      ${p.html}
+    </div>`).join("");
+
+  // Inline tab-switch handler — no global wiring needed since each
+  // RaceCenter render produces fresh DOM.
+  return `<div class="rc-sessions-tabbed" id="rc-sessions">
+    <div class="rc-session-tabstrip" role="tablist">${tabsHTML}</div>
+    <div class="rc-session-panes">${panesHTML}</div>
+  </div>`;
 }
 
-// Render a single session card. `showLaps` is true for practice (which
-// has a laps-run column) and false for qualifying (single hot lap).
-function renderSessionCard(title, rows, showLaps) {
+// Build the table body for a single session (practice or qual).
+// Returns the inner card markup; the wrapping pane handles tab visibility.
+function renderSessionTable(title, rows, showLaps) {
   if (!rows.length) return "";
   const leader = rows[0];
-  // Compute gap to leader for each row (in seconds). Drivers without a
-  // recorded time (DNQ/withdrawn) still appear with rank but render
-  // "—" in the time/gap columns.
   const trHTML = rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
@@ -11133,7 +11170,6 @@ function renderSessionCard(title, rows, showLaps) {
     </tr>`;
   }).join("");
 
-  // Subtitle highlights the leader: "Pole — Carson Hocevar (#77) · 191.340 mph"
   const leaderName = leader.driver || "";
   const leaderSpd = leader.speed != null ? `${leader.speed.toFixed(3)} mph` : "";
   const leaderTime = leader.time != null ? `${leader.time.toFixed(3)} sec` : "";
@@ -11162,6 +11198,26 @@ function renderSessionCard(title, rows, showLaps) {
         </table>
       </div>
     </div>
+  </div>`;
+}
+
+// Race summary strip: total race time, average speed, pole speed,
+// cautions, lead changes, margin of victory. Pulled from the race-
+// header parse on RR. Only emitted for races where at least one of
+// these fields is populated; older races without summary data return
+// empty string.
+function renderRaceSummaryStrip(race) {
+  if (!race) return "";
+  const items = [];
+  if (race.race_time) items.push({ k: "Race time", v: race.race_time });
+  if (race.avg_speed != null) items.push({ k: "Avg speed", v: `${race.avg_speed.toFixed(2)} mph` });
+  if (race.pole_speed != null) items.push({ k: "Pole speed", v: `${race.pole_speed.toFixed(2)} mph` });
+  if (race.cautions) items.push({ k: "Cautions", v: race.cautions });
+  if (race.margin_of_victory) items.push({ k: "MoV", v: race.margin_of_victory });
+  if (race.lead_changes != null) items.push({ k: "Lead changes", v: String(race.lead_changes) });
+  if (items.length === 0) return "";
+  return `<div class="rc-summary-strip">
+    ${items.map(i => `<div class="rc-summary-item"><span class="rc-summary-k">${i.k}</span><span class="rc-summary-v">${escapeHTML(i.v)}</span></div>`).join("")}
   </div>`;
 }
 
