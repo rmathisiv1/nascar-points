@@ -8224,3 +8224,15 @@ body.lightbox-open {
   .hw-track { font-size: 13px; }
   .hw-name { display: none; }
 }
+
+/* Schedule page: "This Weekend" / "Next Weekend" card sits above the
+   full-season schedule table. Tighter padding than the home version. */
+.schedule-weekend-wrap {
+  margin-bottom: 16px;
+}
+.schedule-weekend-wrap .home-weekend-card {
+  padding: 10px 14px;
+}
+.schedule-weekend-wrap .hw-row {
+  padding: 6px 4px;
+}

@@ -4930,6 +4930,25 @@ function teamGroup(team, year) {
 // Friendly team names for the card header; fall back to the team code itself
 // Track type classification — standard 4-category NASCAR split.
 // Used by Stage Trajectory's track-type filter and any future track-type splits.
+// Pretty manufacturer names — RR uses 3-letter codes (CHV / FRD / TYT)
+// in the data but fans say "Chevy / Ford / Toyota". Used in storylines
+// and any other UI that surfaces a manufacturer name to the reader.
+const MFR_PRETTY_NAMES = {
+  CHV: "Chevy",
+  FRD: "Ford",
+  TYT: "Toyota",
+  DDG: "Dodge",
+  PLY: "Plymouth",
+  PNT: "Pontiac",
+  OLD: "Oldsmobile",
+  BUI: "Buick",
+  MER: "Mercury",
+  AMC: "AMC",
+  HUD: "Hudson",
+  STU: "Studebaker",
+  NSH: "Nash",
+};
+
 // Categories: super (drafting/plate), short (<1 mile), inter (1.5mi ovals + drafting-style),
 // road (twisty circuits + street courses).
 const TRACK_TYPES = {
@@ -8109,13 +8128,6 @@ function renderHome() {
   // ----- Section 1: hero row (next race + last race) -----
   const heroHTML = renderHomeHero(latestYear, series);
 
-  // ----- Section 1b: this weekend across all 3 series -----
-  // Combines the next 7 days of races across NCS / NOS / NTS into a
-  // single chronological strip. Useful for quickly seeing what's
-  // running this Friday / Saturday / Sunday without flipping series
-  // toggles. Returns "" if no series has races in the window.
-  const weekendHTML = renderHomeWeekendCard(latestYear);
-
   // ----- Section 2: three-series mini standings -----
   const standingsHTML = renderHomeStandingsTrio(latestYear);
 
@@ -8126,10 +8138,6 @@ function renderHome() {
   host.innerHTML = `
     <div class="home-grid">
       ${heroHTML}
-      ${weekendHTML ? `
-        <div class="home-section-h">This Weekend</div>
-        ${weekendHTML}
-      ` : ""}
       <div class="home-section-h">Standings · Top 5 each series</div>
       <div class="home-standings-trio">${standingsHTML}</div>
       <div class="home-section-h">Season at a glance · ${series}</div>
@@ -8428,62 +8436,86 @@ function computeStandingsForBlock(block) {
   return out.sort((a, b) => b.total - a.total);
 }
 
-// "This Weekend" — combined view of upcoming races across all 3 series
-// for the next ~9 days. Useful for fans who track multiple series and
-// want to see Friday NTS, Saturday NOS, Sunday NCS at a glance with TV
-// networks + start times.
+// "This Weekend" / "Next Weekend" — combined view of the upcoming
+// race weekend across all 3 series. Used by the Schedule page (and
+// previously on home, since removed for being too dominant).
 //
-// Window logic: shows races dated from today through 9 days out. The
-// 9-day window catches Sunday-to-following-Tuesday gaps where a race
-// weekend straddles the calendar (e.g., off-week followed by Tuesday
-// rain make-up). Returns "" when no series has races in the window.
-function renderHomeWeekendCard(year) {
+// Logic:
+//   - Find the next upcoming Saturday-Sunday pair from "today"
+//   - If today IS a Sat/Sun, use that pair (we're in-the-weekend)
+//   - Window for races: from the Friday before through the Sunday after
+//     (so a Friday-night NTS race counts as part of the weekend)
+//   - Label flips based on day-of-week:
+//       Mon (1) and Tue (2)  → "Next Weekend" (still feels far away)
+//       Wed (3) through Sun  → "This Weekend"
+//   - Returns {html, label} so callers can render their own heading
+//
+// Returns null when no races are scheduled in the window.
+function buildWeekendCard(year) {
   const yearBlock = SEASON_CACHE[year];
-  if (!yearBlock) return "";
+  if (!yearBlock) return null;
 
-  // Today as "YYYY-MM-DD" for date comparisons. We compare strings
-  // because the schedule data stores ISO date strings without time.
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  // 9 days from now — captures a typical race weekend even if today is
-  // Sunday and the next races aren't until next Friday.
-  const horizon = new Date(today.getTime() + 9 * 24 * 60 * 60 * 1000);
-  const horizonStr = horizon.toISOString().slice(0, 10);
+  const dow = today.getDay();   // 0=Sun, 1=Mon, ..., 6=Sat
 
-  // Collect upcoming races from each series within the window. Each
-  // entry: {series, race, dateObj} so we can sort chronologically.
+  // Determine the target weekend's Saturday + Sunday in YYYY-MM-DD form.
+  // If today is Sat (6), the "weekend" is today + tomorrow.
+  // If today is Sun (0), the weekend is yesterday + today.
+  // Otherwise, weekend = upcoming Sat/Sun.
+  const fmt = (d) => {
+    // Format LOCAL date as YYYY-MM-DD (avoid UTC drift)
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const addDays = (d, n) => {
+    const c = new Date(d);
+    c.setDate(c.getDate() + n);
+    return c;
+  };
+
+  let saturday;
+  if (dow === 6) saturday = today;
+  else if (dow === 0) saturday = addDays(today, -1);
+  else saturday = addDays(today, 6 - dow);   // days until next Saturday
+
+  // Window: Friday before the target Saturday → Sunday of that weekend
+  const friday = addDays(saturday, -1);
+  const sunday = addDays(saturday, 1);
+  const fridayStr = fmt(friday);
+  const sundayStr = fmt(sunday);
+
+  // Label depends on day-of-week. Mon-Tue feels far away; Wed onwards
+  // feels imminent. Sat/Sun are obviously "this weekend".
+  const label = (dow === 1 || dow === 2) ? "Next Weekend" : "This Weekend";
+
+  // Collect upcoming races from each series within the window.
   const upcoming = [];
   ["NCS", "NOS", "NTS"].forEach(s => {
     const block = yearBlock[s];
     if (!block || !block.races) return;
     block.races.forEach(r => {
       if (!r.date) return;
-      // "Upcoming" = no winner recorded yet. Some past races may have
-      // been added without results; we still want to skip those if
-      // they're before today.
       const hasResults = (r.results || []).some(d => d.finish_pos === 1);
       if (hasResults) return;
-      if (r.date < todayStr || r.date > horizonStr) return;
+      if (r.date < fridayStr || r.date > sundayStr) return;
       upcoming.push({
         series: s,
         race: r,
-        dateObj: new Date(r.date + "T00:00:00"),  // local midnight
+        dateObj: new Date(r.date + "T00:00:00"),
       });
     });
   });
 
-  if (upcoming.length === 0) return "";
+  if (upcoming.length === 0) return null;
 
-  // Sort chronologically (Friday → Sunday). Ties broken by series order
-  // so NCS shows above NOS shows above NTS on the same day.
   const seriesOrder = { NCS: 0, NOS: 1, NTS: 2 };
   upcoming.sort((a, b) => {
     if (a.race.date !== b.race.date) return a.race.date < b.race.date ? -1 : 1;
     return (seriesOrder[a.series] ?? 9) - (seriesOrder[b.series] ?? 9);
   });
 
-  // Render each entry as a row in a single card. Day-of-week heading
-  // groups same-day races together visually ("Saturday: NOS @ Texas").
   let lastDay = null;
   const rows = upcoming.map(u => {
     const r = u.race;
@@ -8509,9 +8541,17 @@ function renderHomeWeekendCard(year) {
     `;
   }).join("");
 
-  return `<div class="home-card home-weekend-card">
-    <div class="home-weekend-body">${rows}</div>
-  </div>`;
+  return {
+    label,
+    html: `<div class="card home-weekend-card"><div class="home-weekend-body">${rows}</div></div>`,
+  };
+}
+
+// Legacy entry kept for any caller still using the old name. Returns
+// just the HTML string with no label wrapper. Currently unused.
+function renderHomeWeekendCard(year) {
+  const built = buildWeekendCard(year);
+  return built ? built.html : "";
 }
 
 // Render a row of stat cards for "season at a glance".
@@ -9173,9 +9213,12 @@ function generateHomeStorylines(year, series) {
       if (n >= 3 && (!topMfr || n > topMfr.n)) topMfr = { m, n };
     });
     if (topMfr) {
+      // Manufacturer codes from RR are 3-letter (CHV/FRD/TYT). The UI
+      // reads cleaner with the colloquial name fans actually say.
+      const prettyMfr = MFR_PRETTY_NAMES[topMfr.m] || topMfr.m;
       tiles.push({
         tone: "",
-        headline: `${escapeHTML(topMfr.m)} has won ${topMfr.n} of last ${recent.length}`,
+        headline: `${escapeHTML(prettyMfr)} has won ${topMfr.n} of last ${recent.length}`,
         body: `Manufacturer hot streak in ${series}.`,
       });
     }
@@ -11832,7 +11875,19 @@ function renderSchedulePage() {
 
   const scheduleHTML = renderSeasonSchedule(allRaces, nextRound, lastWinnerAt);
 
+  // "This Weekend" / "Next Weekend" card — only renders when there are
+  // upcoming races in the target window. Pulled in from the home page;
+  // belongs naturally above the schedule table.
+  const weekendCard = buildWeekendCard(STATE.season);
+  const weekendHTML = weekendCard
+    ? `<div class="schedule-weekend-wrap">
+         <div class="home-section-h">${weekendCard.label}</div>
+         ${weekendCard.html}
+       </div>`
+    : "";
+
   host.innerHTML = `
+    ${weekendHTML}
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-body rc-schedule-body">${scheduleHTML}</div>
     </div>
