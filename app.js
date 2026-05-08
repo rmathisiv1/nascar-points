@@ -8109,6 +8109,13 @@ function renderHome() {
   // ----- Section 1: hero row (next race + last race) -----
   const heroHTML = renderHomeHero(latestYear, series);
 
+  // ----- Section 1b: this weekend across all 3 series -----
+  // Combines the next 7 days of races across NCS / NOS / NTS into a
+  // single chronological strip. Useful for quickly seeing what's
+  // running this Friday / Saturday / Sunday without flipping series
+  // toggles. Returns "" if no series has races in the window.
+  const weekendHTML = renderHomeWeekendCard(latestYear);
+
   // ----- Section 2: three-series mini standings -----
   const standingsHTML = renderHomeStandingsTrio(latestYear);
 
@@ -8119,6 +8126,10 @@ function renderHome() {
   host.innerHTML = `
     <div class="home-grid">
       ${heroHTML}
+      ${weekendHTML ? `
+        <div class="home-section-h">This Weekend</div>
+        ${weekendHTML}
+      ` : ""}
       <div class="home-section-h">Standings · Top 5 each series</div>
       <div class="home-standings-trio">${standingsHTML}</div>
       <div class="home-section-h">Season at a glance · ${series}</div>
@@ -8261,7 +8272,7 @@ function renderHomeHero(year, series) {
         ${winner ? `
           <a class="home-last-winner profile-link" href="#/driver/${slugify(winner.driver || '')}">
             <span class="home-last-winner-name">${escapeHTML(winner.driver || '—')}</span>
-            ${winnerLapsLed > 0 ? `<span class="home-last-winner-meta">led ${winnerLapsLed}</span>` : ""}
+            ${winnerLapsLed > 0 ? `<span class="home-last-winner-meta">led ${winnerLapsLed} ${winnerLapsLed === 1 ? "lap" : "laps"}</span>` : ""}
           </a>
         ` : ""}
         <div class="home-podium">${podiumPills}</div>
@@ -8415,6 +8426,92 @@ function computeStandingsForBlock(block) {
     return a;
   });
   return out.sort((a, b) => b.total - a.total);
+}
+
+// "This Weekend" — combined view of upcoming races across all 3 series
+// for the next ~9 days. Useful for fans who track multiple series and
+// want to see Friday NTS, Saturday NOS, Sunday NCS at a glance with TV
+// networks + start times.
+//
+// Window logic: shows races dated from today through 9 days out. The
+// 9-day window catches Sunday-to-following-Tuesday gaps where a race
+// weekend straddles the calendar (e.g., off-week followed by Tuesday
+// rain make-up). Returns "" when no series has races in the window.
+function renderHomeWeekendCard(year) {
+  const yearBlock = SEASON_CACHE[year];
+  if (!yearBlock) return "";
+
+  // Today as "YYYY-MM-DD" for date comparisons. We compare strings
+  // because the schedule data stores ISO date strings without time.
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  // 9 days from now — captures a typical race weekend even if today is
+  // Sunday and the next races aren't until next Friday.
+  const horizon = new Date(today.getTime() + 9 * 24 * 60 * 60 * 1000);
+  const horizonStr = horizon.toISOString().slice(0, 10);
+
+  // Collect upcoming races from each series within the window. Each
+  // entry: {series, race, dateObj} so we can sort chronologically.
+  const upcoming = [];
+  ["NCS", "NOS", "NTS"].forEach(s => {
+    const block = yearBlock[s];
+    if (!block || !block.races) return;
+    block.races.forEach(r => {
+      if (!r.date) return;
+      // "Upcoming" = no winner recorded yet. Some past races may have
+      // been added without results; we still want to skip those if
+      // they're before today.
+      const hasResults = (r.results || []).some(d => d.finish_pos === 1);
+      if (hasResults) return;
+      if (r.date < todayStr || r.date > horizonStr) return;
+      upcoming.push({
+        series: s,
+        race: r,
+        dateObj: new Date(r.date + "T00:00:00"),  // local midnight
+      });
+    });
+  });
+
+  if (upcoming.length === 0) return "";
+
+  // Sort chronologically (Friday → Sunday). Ties broken by series order
+  // so NCS shows above NOS shows above NTS on the same day.
+  const seriesOrder = { NCS: 0, NOS: 1, NTS: 2 };
+  upcoming.sort((a, b) => {
+    if (a.race.date !== b.race.date) return a.race.date < b.race.date ? -1 : 1;
+    return (seriesOrder[a.series] ?? 9) - (seriesOrder[b.series] ?? 9);
+  });
+
+  // Render each entry as a row in a single card. Day-of-week heading
+  // groups same-day races together visually ("Saturday: NOS @ Texas").
+  let lastDay = null;
+  const rows = upcoming.map(u => {
+    const r = u.race;
+    const d = u.dateObj;
+    const dayLabel = d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+    const showHeader = dayLabel !== lastDay;
+    lastDay = dayLabel;
+    const trackName = prettyTrack(r.track_code, r.track) || r.track || r.track_code || "—";
+    const seriesPill = `<span class="hw-series-pill hw-${u.series.toLowerCase()}">${u.series}</span>`;
+    const timeStr = r.time ? escapeHTML(r.time) : "TBD";
+    const tvStr = r.tv ? `<span class="hw-tv">${escapeHTML(r.tv)}</span>` : "";
+    const trackHref = r.track_code ? `#/track/${escapeHTML(r.track_code)}` : "#";
+    const surfaceLabel = trackTypeLabel(r.track_code) || "";
+
+    return `
+      ${showHeader ? `<div class="hw-day-header">${dayLabel}</div>` : ""}
+      <div class="hw-row">
+        ${seriesPill}
+        <a class="hw-track" href="${trackHref}">${escapeHTML(trackName)}</a>
+        <span class="hw-meta">${timeStr}${tvStr ? " · " : ""}${tvStr}${surfaceLabel ? ` · ${surfaceLabel}` : ""}</span>
+        ${r.name ? `<span class="hw-name">${escapeHTML(r.name)}</span>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  return `<div class="home-card home-weekend-card">
+    <div class="home-weekend-body">${rows}</div>
+  </div>`;
 }
 
 // Render a row of stat cards for "season at a glance".

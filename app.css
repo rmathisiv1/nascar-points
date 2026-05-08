@@ -8136,3 +8136,91 @@ body.lightbox-open {
     padding: 6px 10px;
   }
 }
+
+/* === HOME — "This Weekend" combined-series card === */
+/* Single card showing the next ~9 days of races across NCS/NOS/NTS in
+   chronological order. Day-of-week headers group same-day races. */
+.home-weekend-card {
+  padding: 14px 18px;
+}
+.home-weekend-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hw-day-header {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-top: 12px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.hw-day-header:first-child { margin-top: 0; }
+.hw-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.025);
+}
+.hw-row:last-child { border-bottom: none; }
+/* Series pill — color-coded same as storylines */
+.hw-series-pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 6px;
+  border-radius: 3px;
+  text-align: center;
+}
+.hw-series-pill.hw-ncs { background: rgba(212, 161, 0, 0.18);  color: #f0c558; }
+.hw-series-pill.hw-nos { background: rgba(41, 196, 107, 0.18); color: #6fdd96; }
+.hw-series-pill.hw-nts { background: rgba(224, 72, 72, 0.18);  color: #f08c8c; }
+.hw-track {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+.hw-track:hover {
+  color: var(--accent);
+}
+.hw-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
+}
+.hw-tv {
+  color: var(--text);
+  font-weight: 600;
+}
+.hw-name {
+  grid-column: 2 / -1;
+  font-size: 11px;
+  color: var(--dim);
+  font-style: italic;
+  margin-top: 2px;
+}
+@media (max-width: 767.98px) {
+  .home-weekend-card { padding: 10px 12px; }
+  .hw-row {
+    grid-template-columns: 36px 1fr;
+    gap: 8px;
+  }
+  .hw-meta {
+    grid-column: 2;
+    text-align: left;
+    font-size: 10px;
+  }
+  .hw-track { font-size: 13px; }
+  .hw-name { display: none; }
+}
