@@ -10948,13 +10948,12 @@ function renderRaceCenter() {
   for (let y = STATE.season - 1; y >= STATE.season - 8 && y >= 2014; y--) {
     seasonsForHistory.push(y);
   }
-  const allLoaded = seasonsForHistory.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]);
-  if (!allLoaded) {
-    Promise.all(seasonsForHistory
-      .filter(y => !(SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]))
-      .map(y => loadSeasonIntoCache(y))
-    ).then(() => {
-      // Only re-render if user is still on Race Center
+  // Same guard as renderTrackPage — only re-attempt years that haven't
+  // been loaded AT ALL. A year that loaded but lacks the requested
+  // series block is genuinely missing data; retrying won't fix it.
+  const seasonsToFetch = seasonsForHistory.filter(y => !SEASON_CACHE[y]);
+  if (seasonsToFetch.length > 0) {
+    Promise.all(seasonsToFetch.map(y => loadSeasonIntoCache(y))).then(() => {
       if (STATE.view === "race") renderRaceCenter();
     }).catch(() => {});
   }
@@ -11479,16 +11478,15 @@ function renderSchedulePage() {
   // Background-load prior years so we can show the most recent winner at each
   // track for upcoming rounds. 5 years gives us a dense lookup without
   // hammering the network.
+  // Same guard as renderTrackPage — re-attempt only years not yet loaded.
+  // If a year's JSON lacks the active series block, that's just missing
+  // data and retrying won't change it.
   const seasonsToLoad = [];
   for (let y = STATE.season - 1; y >= STATE.season - 5 && y >= 2014; y--) {
-    seasonsToLoad.push(y);
+    if (!SEASON_CACHE[y]) seasonsToLoad.push(y);
   }
-  const allLoaded = seasonsToLoad.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]);
-  if (!allLoaded) {
-    Promise.all(seasonsToLoad
-      .filter(y => !(SEASON_CACHE[y] && SEASON_CACHE[y][STATE.series]))
-      .map(y => loadSeasonIntoCache(y))
-    ).then(() => {
+  if (seasonsToLoad.length > 0) {
+    Promise.all(seasonsToLoad.map(y => loadSeasonIntoCache(y))).then(() => {
       if (STATE.view === "schedule") renderSchedulePage();
     }).catch(() => {});
   }
@@ -11592,15 +11590,29 @@ function renderTrackPage() {
   // Background-load every prior year we have data for so the "All Races
   // at this track" history is complete. NCS and NOS have data back to 2001;
   // truck has less. Walks STATE.seasonsAvailable to find what's loadable.
+  //
+  // Bug guard: `allLoaded` checks per-(year, series), but `loadSeasonIntoCache`
+  // populates per-year. If the user is on NOS and a historical year's JSON
+  // doesn't include an NOS block (e.g. very old years), `SEASON_CACHE[y]`
+  // is set after load but `SEASON_CACHE[y][tSeries]` stays undefined →
+  // every render re-fires the load → renderTrackPage recurses on completion
+  // → infinite loop, browser tab seizes. Filter `seasonsToLoad` down to
+  // years that haven't even been ATTEMPTED yet (i.e. SEASON_CACHE[y] is
+  // unset entirely). Years where the load already completed but the
+  // requested series wasn't present just stay missing — that's correct.
   const seasonsToLoad = (STATE.seasonsAvailable || [])
-    .filter(y => y < STATE.season);
-  const allLoaded = seasonsToLoad.every(y => SEASON_CACHE[y] && SEASON_CACHE[y][tSeries]);
-  if (!allLoaded) {
+    .filter(y => y < STATE.season)
+    .filter(y => !SEASON_CACHE[y]);   // skip already-attempted years
+  if (seasonsToLoad.length > 0) {
     Promise.all(seasonsToLoad
-      .filter(y => !(SEASON_CACHE[y] && SEASON_CACHE[y][tSeries]))
       .slice(0, 12)   // batch to avoid stampeding the server
       .map(y => loadSeasonIntoCache(y))
     ).then(() => {
+      // Re-render only if the user is still on this track view AND
+      // the load actually surfaced new data for the active series.
+      // Without that second check, a year that loaded successfully but
+      // had no NOS block would still trigger a re-render with no new
+      // data to show, causing visible flicker.
       if (STATE.view === "track") renderTrackPage();
     }).catch(() => {});
   }

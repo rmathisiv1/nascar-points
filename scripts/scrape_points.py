@@ -87,6 +87,13 @@ HEADERS = {
 
 _SCRAPER = None
 
+# Toggled by --no-sessions CLI flag. When True, skip the qualifying and
+# practice fetches in parse_race for faster scrapes (saves ~2 HTTP
+# requests per race × 36 races × 3 series = ~216 fewer fetches on a full
+# season scrape). Defaults to False so weekly updates pick up session
+# data automatically.
+SKIP_SESSIONS = False
+
 
 def _new_scraper():
     return cloudscraper.create_scraper(
@@ -142,6 +149,24 @@ class DriverRace:
     ineligible: bool = False
     status: str = ""
     crew_chief: Optional[str] = None   # "Chad Knaus", "Rodney Childers", etc. — None if column missing
+    # === Qualifying ===
+    # Pulled from RR's /qual-results/ page for the same race weekend.
+    # None when qualifying was rained out / cancelled / not yet available.
+    qual_pos: Optional[int] = None         # qualifying rank
+    qual_time: Optional[float] = None      # lap time in seconds (e.g., 27.234)
+    qual_speed: Optional[float] = None     # mph (e.g., 196.835)
+    # === Practice ===
+    # Two practice sessions are typical for Cup; some weekends only have
+    # session 1 (e.g., short-track shows). Each captured separately so
+    # downstream UI can show both, or pick the better lap.
+    practice1_rank: Optional[int] = None
+    practice1_time: Optional[float] = None    # seconds
+    practice1_speed: Optional[float] = None   # mph
+    practice1_laps: Optional[int] = None      # laps run in session
+    practice2_rank: Optional[int] = None
+    practice2_time: Optional[float] = None
+    practice2_speed: Optional[float] = None
+    practice2_laps: Optional[int] = None
 
 
 @dataclass
@@ -477,6 +502,52 @@ def parse_race(race_url: str, series_code: str, round_num: int,
                     if cc:
                         d.crew_chief = cc
 
+    # === Qualifying enrichment ===
+    # Fetch RR's qualifying page for this race weekend and merge time +
+    # speed back into per-driver results. Some races (rained-out qual,
+    # pre-2010 events) won't have a page at all; that's fine — we just
+    # leave the qual_* fields as None.
+    if not SKIP_SESSIONS and race.results and season is not None:
+        qual_url = _build_qual_url(season, round_num, series_code)
+        if qual_url:
+            qual_map = _fetch_qual_page(qual_url)
+            if qual_map:
+                for d in race.results:
+                    q = qual_map.get(d.car_number)
+                    if q:
+                        d.qual_pos = q.get("rank")
+                        d.qual_time = q.get("time")
+                        d.qual_speed = q.get("speed")
+
+    # === Practice enrichment ===
+    # NASCAR Cup typically runs 2 practice sessions per weekend; some
+    # short-track or doubleheader weekends only have 1. We fetch both
+    # URLs — empty session pages just return empty dicts and the data
+    # stays as None on the per-driver record. Useful for UIs that want
+    # to show practice-1 vs. practice-2 progression or just the best.
+    if not SKIP_SESSIONS and race.results and season is not None:
+        for session_num in (1, 2):
+            practice_url = _build_practice_url(season, round_num, series_code, session_num)
+            if not practice_url:
+                continue
+            practice_map = _fetch_practice_page(practice_url)
+            if not practice_map:
+                continue
+            for d in race.results:
+                p = practice_map.get(d.car_number)
+                if not p:
+                    continue
+                if session_num == 1:
+                    d.practice1_rank = p.get("rank")
+                    d.practice1_time = p.get("time")
+                    d.practice1_speed = p.get("speed")
+                    d.practice1_laps = p.get("laps")
+                else:
+                    d.practice2_rank = p.get("rank")
+                    d.practice2_time = p.get("time")
+                    d.practice2_speed = p.get("speed")
+                    d.practice2_laps = p.get("laps")
+
     # Even if results parsing failed for some reason, keep the race entry
     # if we have date/track info — schedule data is more useful than nothing.
     if not race.results and not (race.date or race.track):
@@ -500,6 +571,187 @@ def _build_cc_url(race_url: str, season: int, round_num: int, series_code: str) 
         f"https://www.racing-reference.info/race-results"
         f"?series={series_letter}&raceId={race_id}&rType=cc"
     )
+
+
+def _build_qual_url(season: int, round_num: int, series_code: str) -> Optional[str]:
+    """
+    Derive the qualifying-results page URL.
+
+    Racing-Reference exposes qualifying data at:
+      https://www.racing-reference.info/qual-results/{season}-{NN}/{letter}
+    where NN is the zero-padded round and letter is W (Cup), B (Xfinity),
+    or C (Trucks).
+
+    Important: the older ?rType=qual query pattern returns a stub page
+    with no actual data, so we use the real path-based URL instead.
+    """
+    series_letter = {"NCS": "W", "NOS": "B", "NTS": "C"}.get(series_code)
+    if not series_letter:
+        return None
+    race_id = f"{season}-{round_num:02d}"
+    return f"https://www.racing-reference.info/qual-results/{race_id}/{series_letter}"
+
+
+def _build_practice_url(season: int, round_num: int, series_code: str,
+                         session: int = 1) -> Optional[str]:
+    """
+    Practice-results page URL.
+
+    Racing-Reference exposes practice data at:
+      https://www.racing-reference.info/practice-results/{season}-{NN}/{letter}/{session}
+    where session is 1 or 2 (some weekends only have one practice). We
+    default to 1 (the most consistent across years); the caller can ask
+    for session 2 if needed.
+    """
+    series_letter = {"NCS": "W", "NOS": "B", "NTS": "C"}.get(series_code)
+    if not series_letter:
+        return None
+    race_id = f"{season}-{round_num:02d}"
+    return f"https://www.racing-reference.info/practice-results/{race_id}/{series_letter}/{session}"
+
+
+def _parse_qual_table(html: str) -> dict:
+    """
+    Parse RR's qualifying-results table (class="qualResultTbl") at
+    /qual-results/YYYY-NN/letter.
+
+    Column layout (verified 2026):
+        Rank | Driver | Nbr | Car | Time | Speed | (trailing blank)
+
+    Returns a dict keyed by car_number (string):
+        { "5": {"rank": 11, "time": 28.411, "speed": 190.067, "driver": "Kyle Larson"} }
+
+    Drivers without a recorded time (DNQ, withdrawn, etc.) are still
+    included with rank set but time/speed=None — caller can decide how
+    to use them.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    tbl = soup.find("table", class_="qualResultTbl")
+    if tbl is None:
+        # Fallback: look for any table containing "qualifying results" header
+        for cand in soup.find_all("table"):
+            txt = cand.get_text(" ", strip=True).lower()
+            if "qualifying results for this race" in txt and "speed" in txt:
+                tbl = cand
+                break
+    if tbl is None:
+        return {}
+
+    by_car: dict = {}
+    for tr in tbl.find_all("tr"):
+        cells = tr.find_all(["th", "td"])
+        if len(cells) < 6:
+            continue
+        cell_texts = [c.get_text(strip=True) for c in cells]
+        # First cell must be a numeric rank — skips header + section rows
+        try:
+            rank = int(cell_texts[0])
+        except (ValueError, TypeError):
+            continue
+        driver = cell_texts[1]
+        car = cell_texts[2]
+        # cell[3] is Car make (Chevy/Ford/Toyota), skip
+        try:
+            t = float(cell_texts[4]) if cell_texts[4] else None
+        except ValueError:
+            t = None
+        try:
+            s = float(cell_texts[5]) if cell_texts[5] else None
+        except ValueError:
+            s = None
+        if car:
+            by_car[car] = {"rank": rank, "time": t, "speed": s, "driver": driver}
+    return by_car
+
+
+def _parse_practice_table(html: str) -> dict:
+    """
+    Parse RR's practice-results table (class="pracResultsTbl") at
+    /practice-results/YYYY-NN/letter/session.
+
+    Column layout (verified 2026):
+        Rank | Driver | Nbr | Car | Time | Diff | Speed | # Laps | Best Lap
+
+    Returns a dict keyed by car_number, same shape as the qual parser
+    plus extra fields:
+        {
+          "24": {
+            "rank": 1, "time": 28.527, "speed": 189.294,
+            "driver": "William Byron",
+            "laps": 34, "best_lap_num": 2
+          }
+        }
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    tbl = soup.find("table", class_="pracResultsTbl")
+    if tbl is None:
+        # Fallback: anchor on the "Practice X results for this race" heading
+        for cand in soup.find_all("table"):
+            txt = cand.get_text(" ", strip=True).lower()
+            if "practice" in txt and "results for this race" in txt and "speed" in txt:
+                tbl = cand
+                break
+    if tbl is None:
+        return {}
+
+    by_car: dict = {}
+    for tr in tbl.find_all("tr"):
+        cells = tr.find_all(["th", "td"])
+        if len(cells) < 7:
+            continue
+        cell_texts = [c.get_text(strip=True) for c in cells]
+        try:
+            rank = int(cell_texts[0])
+        except (ValueError, TypeError):
+            continue
+        driver = cell_texts[1]
+        car = cell_texts[2]
+        # cells[3] = Car make
+        try:
+            t = float(cell_texts[4]) if cell_texts[4] else None
+        except ValueError:
+            t = None
+        # cells[5] = Diff (gap to leader); informational, we skip
+        try:
+            s = float(cell_texts[6]) if cell_texts[6] else None
+        except ValueError:
+            s = None
+        # cells[7] = # Laps, cells[8] = Best Lap (which lap-number was the
+        # fastest). Both are useful signals so we capture them.
+        try:
+            laps = int(cell_texts[7]) if len(cell_texts) > 7 and cell_texts[7] else None
+        except ValueError:
+            laps = None
+        try:
+            best_lap_num = int(cell_texts[8]) if len(cell_texts) > 8 and cell_texts[8] else None
+        except ValueError:
+            best_lap_num = None
+        if car:
+            by_car[car] = {
+                "rank": rank, "time": t, "speed": s, "driver": driver,
+                "laps": laps, "best_lap_num": best_lap_num,
+            }
+    return by_car
+
+
+def _fetch_qual_page(qual_url: str) -> dict:
+    """Fetch + parse a qualifying-results page. Returns {} on any error."""
+    try:
+        html = fetch(qual_url)
+    except Exception as e:
+        print(f"    ! qual fetch failed: {e}", file=sys.stderr)
+        return {}
+    return _parse_qual_table(html)
+
+
+def _fetch_practice_page(practice_url: str) -> dict:
+    """Fetch + parse a practice-results page. Returns {} on any error."""
+    try:
+        html = fetch(practice_url)
+    except Exception as e:
+        print(f"    ! practice fetch failed: {e}", file=sys.stderr)
+        return {}
+    return _parse_practice_table(html)
 
 
 def _fetch_cc_page(cc_url: str) -> dict:
@@ -1041,7 +1293,16 @@ def main() -> None:
     ap.add_argument("--out",    type=Path, required=True)
     ap.add_argument("--only",   type=str, default=None,
                     help="Comma-separated series codes (NCS,NOS,NTS)")
+    ap.add_argument("--no-sessions", action="store_true",
+                    help="Skip qualifying + practice fetches. Useful for "
+                         "fast scrapes when you only need race results "
+                         "(avoids ~2 extra HTTP fetches per race).")
     args = ap.parse_args()
+
+    # Wire the session-skip flag into a module-level toggle so parse_race
+    # can see it without threading the arg through every call site.
+    global SKIP_SESSIONS
+    SKIP_SESSIONS = bool(args.no_sessions)
 
     only = {s.strip() for s in (args.only or "NCS,NOS,NTS").split(",")}
     series_out = {}
