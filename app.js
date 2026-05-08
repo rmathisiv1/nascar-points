@@ -3145,16 +3145,11 @@ function renderMetricBar() {
       <span class="v">${upcoming ? `<a class="metric-name-link" href="#/race/${upcoming.round}">${upcomingHTML}</a>` : upcomingHTML}</span></div>
   `;
 
-  if (isMobile()) {
-    // Two identical copies side-by-side; the CSS animates the track by -50%
-    // so the second copy lands exactly where the first began — seamless loop.
-    bar.innerHTML = `<div class="metricbar-track">
-      <div class="metricbar-copy">${metricsHTML}</div>
-      <div class="metricbar-copy">${metricsHTML}</div>
-    </div>`;
-  } else {
-    bar.innerHTML = metricsHTML;
-  }
+  // Single emit on both desktop and mobile. The base .metricbar already
+  // has overflow-x: auto + flex layout, so swiping just works. We used to
+  // duplicate copies for an animated ticker on mobile — that's been
+  // retired in favor of user-controlled swipe scrolling.
+  bar.innerHTML = metricsHTML;
 
   // Wire hover handlers for the floating metric tooltip
   const tip = document.getElementById("metric-tooltip");

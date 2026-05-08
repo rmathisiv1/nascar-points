@@ -2996,6 +2996,23 @@ a.driver-cell.profile-link:hover .car-tag {
     gap: 6px;
     padding: 6px 8px;
     flex-wrap: nowrap;
+    /* Mobile screens can't fit hamburger + brand + search + mode toggle +
+       series toggle + pickers all on one line. Allow horizontal swipe so
+       users can reach the series toggle and anything else that overflows. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Hide the scrollbar — the cut-off edge cues the swipe. */
+  .topbar::-webkit-scrollbar { height: 0; display: none; }
+  .topbar { scrollbar-width: none; }
+  /* Lock items so they don't compress weirdly when overflowing */
+  .topbar .brand,
+  .topbar .topbar-search,
+  .topbar .topbar-mode-sw,
+  .topbar .series-sw,
+  .topbar #hamburger-btn {
+    flex-shrink: 0;
   }
   /* The season-pill ("2026 · R9 / 36") duplicates info already shown in the
      year + race pickers on mobile. Hide to reclaim horizontal room. */
@@ -3041,29 +3058,13 @@ a.driver-cell.profile-link:hover .car-tag {
   .metricbar {
     /* Base .metricbar already scrolls horizontally (overflow-x: auto)
        and lays out as a flex row. On mobile we tighten the spacing and
-       hide the scrollbar — users swipe to see all metrics. The old
-       ticker animation is removed; users want to read each metric, not
-       chase moving text. */
+       hide the scrollbar — users swipe to see all metrics. */
     padding: 6px 12px;
     gap: 16px;
     font-size: 10px;
   }
   .metricbar::-webkit-scrollbar { height: 0; display: none; }
   .metricbar { scrollbar-width: none; }
-  /* The JS still emits .metricbar-track > 2x .metricbar-copy for the
-     old ticker. Flatten it: track is transparent (display: contents),
-     and we hide the duplicate copy that was for the seamless ticker. */
-  .metricbar-track {
-    display: contents;
-  }
-  .metricbar-copy {
-    display: flex;
-    gap: 16px;
-    flex-shrink: 0;
-  }
-  .metricbar-copy:nth-child(2) {
-    display: none;   /* duplicate copy from the old ticker pattern */
-  }
   .metric { flex-shrink: 0; }
   .metric .k { font-size: 8px; }
   .metric .v { font-size: 11px; }
