@@ -3039,43 +3039,32 @@ a.driver-cell.profile-link:hover .car-tag {
      making the loop seamless.
   */
   .metricbar {
-    padding: 5px 0;
-    font-size: 10px;
-    /* User-scrollable horizontally on mobile. Replaces the previous
-       auto-ticker animation — users want to read each metric, not chase
-       a moving target. The bar still shows all metrics inline; users
-       swipe to reveal the rest. */
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x proximity;
-    position: relative;
+    /* Base .metricbar already scrolls horizontally (overflow-x: auto)
+       and lays out as a flex row. On mobile we tighten the spacing and
+       hide the scrollbar — users swipe to see all metrics. The old
+       ticker animation is removed; users want to read each metric, not
+       chase moving text. */
+    padding: 6px 12px;
     gap: 16px;
-    white-space: nowrap;
-    padding: 5px 12px;
+    font-size: 10px;
   }
-  /* Hide scrollbar visually — it's not needed when content is short and
-     users intuit the swipe from the partial cut-off on the right edge. */
   .metricbar::-webkit-scrollbar { height: 0; display: none; }
   .metricbar { scrollbar-width: none; }
-  /* Old ticker classes are still emitted by JS for compat; just lay them
-     out as inline-flex with no animation now. */
+  /* The JS still emits .metricbar-track > 2x .metricbar-copy for the
+     old ticker. Flatten it: track is transparent (display: contents),
+     and we hide the duplicate copy that was for the seamless ticker. */
   .metricbar-track {
-    display: contents;   /* track is gone; copies sit directly in the bar */
-  }
-  .metricbar-copy:nth-child(2) {
-    display: none;   /* second copy was for the seamless ticker — not needed */
+    display: contents;
   }
   .metricbar-copy {
     display: flex;
     gap: 16px;
     flex-shrink: 0;
-    scroll-snap-align: start;
   }
-  .metric {
-    flex-shrink: 0;
-    scroll-snap-align: start;
+  .metricbar-copy:nth-child(2) {
+    display: none;   /* duplicate copy from the old ticker pattern */
   }
+  .metric { flex-shrink: 0; }
   .metric .k { font-size: 8px; }
   .metric .v { font-size: 11px; }
 
@@ -7290,21 +7279,25 @@ body.lightbox-open {
   /* Hero card stacks countdown on top, info below */
   .home-hero-card {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
+    padding: 12px 14px;
   }
   .home-hero-countdown {
     flex: 0 0 auto;
     padding-right: 0;
-    padding-bottom: 12px;
+    padding-bottom: 8px;
     border-right: none;
     border-bottom: 1px solid var(--border);
     flex-direction: row;
     align-items: baseline;
-    gap: 10px;
+    gap: 8px;
   }
-  .home-hero-countdown-num { font-size: 38px; }
-  .home-hero-countdown-word { font-size: 22px; }
-  .home-hero-countdown-sub { margin-top: 4px; }
+  .home-hero-countdown-line {
+    gap: 6px;
+  }
+  .home-hero-countdown-num { font-size: 22px; }
+  .home-hero-countdown-word { font-size: 14px; }
+  .home-hero-countdown-sub { margin-top: 0; font-size: 10px; }
 
   .home-hero-track-name { font-size: 19px; }
   .home-hero-track-meta { font-size: 12px; }
