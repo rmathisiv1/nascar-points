@@ -6759,6 +6759,23 @@ function renderCareerTotalsPanel(career, carModeDriverName) {
         <div class="career-stat"><span class="k">Laps Led</span><span class="v">${c.laps_led != null ? c.laps_led.toLocaleString() : '—'}</span></div>
         <div class="career-stat"><span class="k">Avg Start</span><span class="v">${c.avg_start != null ? c.avg_start.toFixed(1) : '—'}</span></div>
         <div class="career-stat"><span class="k">Avg Finish</span><span class="v">${c.avg_finish != null ? c.avg_finish.toFixed(1) : '—'}</span></div>
+        ${(() => {
+          // Start→Finish delta: positive means the driver typically
+          // gains positions in the race vs. their grid spot ("races
+          // forward"), negative means they tend to lose positions. A
+          // useful single-number signal of race-day execution that's
+          // independent of how many wins/top-5s a career has.
+          if (c.avg_start == null || c.avg_finish == null) return "";
+          const delta = c.avg_start - c.avg_finish;
+          const tone = delta > 0.5 ? "hot" : delta < -0.5 ? "cold" : "";
+          const sign = delta > 0 ? "+" : "";
+          const label = delta > 0 ? "gains" : delta < 0 ? "loses" : "even";
+          return `<div class="career-stat" title="Average positions gained from grid to finish. Positive = races forward.">
+            <span class="k">Start→Finish</span>
+            <span class="v ${tone}">${sign}${delta.toFixed(1)}</span>
+            <span class="pct">${label}</span>
+          </div>`;
+        })()}
       </div>
     </div>`;
   }).join("");
@@ -10998,6 +11015,13 @@ function renderRaceCenter() {
     ? renderRaceResultsTable(nextRace)
     : "";
 
+  // Practice + Qualifying session panels. Renders only sessions that
+  // actually have data on this race weekend (some races run only one
+  // practice; older races have no qualifying data scraped). Helper
+  // returns "" when there's nothing to show, so the inline ternary
+  // collapses cleanly.
+  const sessionsHTML = renderRaceSessionsPanel(nextRace);
+
   host.innerHTML = `
     <div class="rc-hero">
       <div class="rc-hero-badge">${heroBadge}</div>
@@ -11009,6 +11033,8 @@ function renderRaceCenter() {
     </div>
 
     ${resultsHTML}
+
+    ${sessionsHTML}
 
     <div class="rc-grid">
       <div class="card rc-card">
@@ -11025,6 +11051,118 @@ function renderRaceCenter() {
       <a class="btn-ghost" href="#/schedule">View full ${STATE.season} schedule →</a>
     </div>
   `;
+}
+
+// ============================================================
+// SESSION PANELS — Practice 1, Practice 2, Qualifying
+// ------------------------------------------------------------
+// Each session is a separate card showing a fastest-to-slowest
+// leaderboard. The data comes from the scraper's per-driver fields:
+//   qual_pos, qual_time, qual_speed
+//   practice1_rank, practice1_time, practice1_speed, practice1_laps
+//   practice2_rank, practice2_time, practice2_speed, practice2_laps
+//
+// A session card is only emitted when at least one driver has a
+// non-null rank for that session. Older races (pre-scraper-extension)
+// will return "" for the whole panel — caller's inline ternary
+// handles that gracefully.
+// ============================================================
+function renderRaceSessionsPanel(race) {
+  if (!race || !(race.results || []).length) return "";
+
+  // Pick driver list and collect each session's rows. Each row carries
+  // (rank, time, speed, driver, car_number, [laps]) so the renderer
+  // doesn't have to think about session-specific field names.
+  const collect = (rankField, timeField, speedField, lapsField) => {
+    const rows = (race.results || [])
+      .filter(d => d[rankField] != null)
+      .map(d => ({
+        rank: d[rankField],
+        time: d[timeField] ?? null,
+        speed: d[speedField] ?? null,
+        laps: lapsField ? (d[lapsField] ?? null) : null,
+        driver: d.driver,
+        car_number: d.car_number,
+      }))
+      .sort((a, b) => a.rank - b.rank);
+    return rows;
+  };
+
+  const p1Rows = collect("practice1_rank", "practice1_time", "practice1_speed", "practice1_laps");
+  const p2Rows = collect("practice2_rank", "practice2_time", "practice2_speed", "practice2_laps");
+  const qualRows = collect("qual_pos", "qual_time", "qual_speed", null);
+
+  // Nothing to show — older race or scrape didn't catch any session
+  if (p1Rows.length === 0 && p2Rows.length === 0 && qualRows.length === 0) {
+    return "";
+  }
+
+  const cards = [];
+  // Order: Practice 1 → Practice 2 → Qualifying. Reads like the actual
+  // weekend timeline (practice happens before qual at most events).
+  if (p1Rows.length) cards.push(renderSessionCard("Practice 1", p1Rows, true));
+  if (p2Rows.length) cards.push(renderSessionCard("Practice 2", p2Rows, true));
+  if (qualRows.length) cards.push(renderSessionCard("Qualifying", qualRows, false));
+
+  return `<div class="rc-sessions">${cards.join("")}</div>`;
+}
+
+// Render a single session card. `showLaps` is true for practice (which
+// has a laps-run column) and false for qualifying (single hot lap).
+function renderSessionCard(title, rows, showLaps) {
+  if (!rows.length) return "";
+  const leader = rows[0];
+  // Compute gap to leader for each row (in seconds). Drivers without a
+  // recorded time (DNQ/withdrawn) still appear with rank but render
+  // "—" in the time/gap columns.
+  const trHTML = rows.map(r => {
+    const carHex = colorFor(STATE.series, r.car_number);
+    const txt = contrastTextFor(carHex);
+    const gap = (r.time != null && leader.time != null && r.time !== leader.time)
+      ? `+${(r.time - leader.time).toFixed(3)}`
+      : (r.rank === 1 ? "—" : "");
+    const driverHref = `#/driver/${slugify(r.driver || '')}`;
+    return `<tr>
+      <td class="num">${r.rank}</td>
+      <td><span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(r.car_number)}</span></td>
+      <td><a class="profile-link" href="${driverHref}">${escapeHTML(r.driver || "")}</a></td>
+      <td class="num mono">${r.time != null ? r.time.toFixed(3) : "—"}</td>
+      <td class="num mono dim">${gap}</td>
+      <td class="num mono">${r.speed != null ? r.speed.toFixed(3) : "—"}</td>
+      ${showLaps ? `<td class="num">${r.laps != null ? r.laps : "—"}</td>` : ""}
+    </tr>`;
+  }).join("");
+
+  // Subtitle highlights the leader: "Pole — Carson Hocevar (#77) · 191.340 mph"
+  const leaderName = leader.driver || "";
+  const leaderSpd = leader.speed != null ? `${leader.speed.toFixed(3)} mph` : "";
+  const leaderTime = leader.time != null ? `${leader.time.toFixed(3)} sec` : "";
+  const leaderLine = leaderName
+    ? `${title === "Qualifying" ? "Pole" : "Fastest"}: ${escapeHTML(leaderName)}${leader.car_number ? ` (#${escapeHTML(leader.car_number)})` : ""}${leaderTime ? " · " + leaderTime : ""}${leaderSpd ? " · " + leaderSpd : ""}`
+    : "";
+
+  return `<div class="card rc-card rc-card-wide rc-session-card">
+    <div class="rc-card-head">
+      <span class="rc-card-title">${title}</span>
+      <span class="rc-card-sub">${leaderLine}</span>
+    </div>
+    <div class="rc-card-body" style="padding:0;">
+      <div style="overflow-x:auto;">
+        <table class="data-table rc-session-table">
+          <thead><tr>
+            <th class="num">Rank</th>
+            <th>Car</th>
+            <th>Driver</th>
+            <th class="num">Time</th>
+            <th class="num">Gap</th>
+            <th class="num">Speed</th>
+            ${showLaps ? `<th class="num">Laps</th>` : ""}
+          </tr></thead>
+          <tbody>${trHTML}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
 }
 
 // Build a finish-order results table for a single race. Every row links the

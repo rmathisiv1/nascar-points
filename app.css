@@ -7977,3 +7977,77 @@ body.lightbox-open {
   .arc-chart-stack { gap: 8px; }
   .arc-chart-label { font-size: 9px; }
 }
+
+/* === RACE CENTER — session panels (Practice / Qualifying) === */
+/* Stack of cards between race results and "last 5 winners". Each card
+   shows a fastest-to-slowest leaderboard for one session. Mirrors the
+   visual rhythm of .rc-results-card. */
+.rc-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0;
+}
+.rc-session-card .rc-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rc-session-card .rc-card-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.rc-session-table {
+  width: 100%;
+}
+.rc-session-table th {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.rc-session-table th.num {
+  text-align: right;
+}
+.rc-session-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+}
+.rc-session-table td.num {
+  text-align: right;
+}
+.rc-session-table td.mono {
+  font-family: var(--mono);
+}
+.rc-session-table td.dim {
+  color: var(--muted);
+}
+.rc-session-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+/* Highlight pole / fastest row */
+.rc-session-table tbody tr:first-child {
+  background: rgba(59, 130, 246, 0.06);
+}
+.rc-session-table tbody tr:first-child td {
+  font-weight: 600;
+}
+@media (max-width: 767.98px) {
+  .rc-session-table th,
+  .rc-session-table td {
+    padding: 5px 6px;
+    font-size: 11px;
+  }
+  .rc-session-table th { font-size: 9px; }
+  /* Hide the laps column on narrow screens — least important */
+  .rc-session-table th:nth-child(7),
+  .rc-session-table td:nth-child(7) { display: none; }
+}
