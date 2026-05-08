@@ -4441,34 +4441,57 @@ a.rc-sched-winner:hover {
     padding: 7px 10px;
     max-width: 100%;
     gap: 10px;
-    position: relative;   /* anchor the absolute-positioned NEXT indicator */
+    position: relative;
   }
   /* Hide the result/winner column on mobile to save space — tap row to see */
   .rc-sched-result { display: none; }
   /* Hide the italic race name on mobile to keep the row compact */
   .rc-sched-name { display: none; }
-  .rc-sched-track { font-size: 12px; }
-  /* The NEXT pill doesn't fit next to "R12" in a 38px round cell — it
-     overlapped the track name. On mobile, hide the pill text and render
-     a small accent dot on the row's left border instead. The current
-     row already has a blue left border via .rc-sched-row.current; the
-     dot reinforces it without consuming grid space. */
+  .rc-sched-track { font-size: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  /* On mobile, the NEXT pill no longer lives in the round cell (no room
+     next to R12 in 38px). It moves to inline beside the track name in
+     the second column where there's plenty of horizontal room. The
+     existing left-border accent on `.rc-sched-row.current` already
+     marks the row; the pill clarifies "this is the upcoming one". */
   .rc-sched-next {
-    /* Replace pill with a 6px dot pinned to the left edge */
-    position: absolute;
-    left: 4px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 6px;
-    height: 6px;
-    padding: 0;
+    /* Reset the desktop pill positioning */
+    position: static;
     margin: 0;
+    padding: 1px 6px;
+    font-size: 8px;
+    letter-spacing: 0.1em;
     background: var(--accent);
-    border-radius: 50%;
-    /* Hide the "NEXT" text — the dot conveys the same meaning */
-    text-indent: -9999px;
-    overflow: hidden;
-    line-height: 0;
+    color: #fff;
+    border-radius: 3px;
+    /* The pill sits inline in track cell — needs visible text again */
+    text-indent: 0;
+    width: auto;
+    height: auto;
+    line-height: 1.4;
+    flex-shrink: 0;
+    /* Make sure it actually shows */
+    display: inline-block;
+    overflow: visible;
+  }
+  /* Need to relocate the pill DOM-wise too — hide the original (in round
+     cell) and clone-render it inside the track cell. We'll do this with
+     a `::after` instead so no JS changes needed: hide the original and
+     render a NEXT label as a pseudo-element after the track link. */
+  .rc-sched-row.current .rc-sched-round .rc-sched-next {
+    display: none;
+  }
+  .rc-sched-row.current .rc-sched-track::before {
+    content: "NEXT";
+    background: var(--accent);
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    margin-right: 6px;
+    flex-shrink: 0;
   }
   /* Tighten round cell since pill no longer lives there */
   .rc-sched-round {

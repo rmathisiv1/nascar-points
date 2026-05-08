@@ -4375,9 +4375,13 @@ function renderBreakdown() {
     const completed = (allRacesSorted() || []).filter(r =>
       (r.results || []).some(d => d.finish_pos === 1)
     ).length;
-    const expectedMax = completed * 110;
+    // Stage points scoring (NCS/NOS post-2017): top 10 in each of 2 stages
+    // get 10-9-8-7-6-5-4-3-2-1. So per race: 110 distributed across all
+    // drivers, max 20 to any one driver. Subtitle reflects both views so
+    // readers don't mistake the season total for a per-driver number.
+    const perDriverMax = completed * 20;
     const noun = mode === "teams" ? "teams" : "drivers";
-    sub.textContent = `${rows.length} ${noun} · ${totalAll.toLocaleString()} pts across ${completed} race${completed === 1 ? "" : "s"}${completed > 0 ? ` (max ${expectedMax})` : ""}`;
+    sub.textContent = `${rows.length} ${noun} · ${completed} race${completed === 1 ? "" : "s"} · max ${perDriverMax} pts per driver`;
   }
 
   if (rows.length === 0) {
