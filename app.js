@@ -38,7 +38,7 @@ const STATE = {
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
   arc: { selected: new Set(), ftOnly: true, metric: "points", scoring: "raw" },
-  breakdown: { drivers: [], ftOnly: true },
+  breakdown: { drivers: [], ftOnly: true, topN: "20" },
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
@@ -46,7 +46,7 @@ const STATE = {
   // Analytics → Track Stats: pick a track, see all-time driver stats there.
   // sortKey/sortDir control the table; gens/series are filters; minStarts
   // hides drivers with low samples (3+ default).
-  trackStats: { code: null, series: "all", gens: new Set(["g5", "g6", "g7"]), sortKey: "wins", sortDir: "desc", minStarts: 3, search: "", expandedSlug: null },
+  trackStats: { code: null, series: "all", gens: new Set(["g5", "g6", "g7"]), sortKey: "wins", sortDir: "desc", minStarts: 1, search: "", expandedSlug: null, yearStart: null, yearEnd: null },
   // Race takeover state: which round is being shown. null = "latest race
   // in the loaded data" (the default — what the Race tab used to do).
   // Set from the #/race/<round> URL when a user clicks into a specific race.
@@ -536,7 +536,50 @@ function wireTabDropdowns() {
 function wireSearch() {
   const input = document.getElementById("search-input");
   const drop = document.getElementById("search-dropdown");
+  const wrap = document.getElementById("topbar-search");
   if (!input || !drop) return;
+
+  // Mobile: tap on the search container expands it from icon-only to
+  // full input. On blur (and the user hasn't typed anything), collapse
+  // back to icon-only. Desktop CSS doesn't apply .expanded so this
+  // class flip is a no-op there.
+  const expandSearch = () => {
+    if (!wrap) return;
+    wrap.classList.add("expanded");
+    // Focus the input AFTER the class flip so the cursor lands properly
+    setTimeout(() => input.focus(), 0);
+  };
+  const collapseSearch = () => {
+    if (!wrap) return;
+    wrap.classList.remove("expanded");
+    drop.hidden = true;
+  };
+  if (wrap) {
+    wrap.addEventListener("click", (e) => {
+      // Don't re-expand if already expanded; the input handles its own
+      // focus inside that state.
+      if (!wrap.classList.contains("expanded")) {
+        e.stopPropagation();
+        expandSearch();
+      }
+    });
+  }
+  // Click outside closes the expanded search (only relevant on mobile).
+  document.addEventListener("click", (e) => {
+    if (!wrap || !wrap.classList.contains("expanded")) return;
+    if (wrap.contains(e.target)) return;
+    if (input.value.trim() === "") collapseSearch();
+  });
+  // Escape collapses it too.
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      input.value = "";
+      drop.hidden = true;
+      drop.innerHTML = "";
+      collapseSearch();
+      input.blur();
+    }
+  });
   // Debounced query handler — keystrokes are cheap but rebuilding the index
   // when years just landed isn't, so debounce ~120ms.
   let debounceTimer = null;
@@ -2150,13 +2193,14 @@ function wireUIControls() {
     });
   });
 
-  // Breakdown toggle (full-time filter)
+  // Breakdown toggles — full-time filter and top-N selector
   document.querySelectorAll("#view-breakdown .toggle-group").forEach(g => {
     const group = g.dataset.group;
     g.querySelectorAll("button").forEach(b => {
       b.addEventListener("click", () => {
         g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
         if (group === "breakdown-ft") STATE.breakdown.ftOnly = (b.dataset.val === "ft");
+        if (group === "breakdown-top") STATE.breakdown.topN = b.dataset.val;
         renderBreakdown();
       });
     });
@@ -2477,7 +2521,10 @@ function render() {
 
   // Mobile page title — visible only on mobile (CSS-controlled). Reflects the
   // current tab/page so users know which view they're on without a tab strip.
+  // Hidden entirely on the Home view since the hero card already establishes
+  // context — a "NASCAR Points" header above it is just noise.
   const pageTitleEl = document.getElementById("mobile-page-title-text");
+  const pageTitleWrap = document.getElementById("mobile-page-title");
   if (pageTitleEl) {
     const titleMap = {
       race: "Race Center",
@@ -2485,10 +2532,11 @@ function render() {
       schedule: "Schedule",
       form: "Trending",
       arc: "Cumulative Season",
-      breakdown: "Points Breakdown",
+      breakdown: "Stage Points",
       trajectory: "Stage vs Finish",
       teammates: "Teammate Delta",
       heatmap: "Heatmap",
+      trackstats: "Track Stats",
       standings: "Standings",
       playoffs: "Playoff Picture",
       profile: "Driver Profile",
@@ -2498,7 +2546,10 @@ function render() {
       teams: "Teams",
       crewchiefs: "Crew Chiefs",
     };
-    pageTitleEl.textContent = titleMap[STATE.view] || "NASCAR Points";
+    pageTitleEl.textContent = titleMap[STATE.view] || "";
+  }
+  if (pageTitleWrap) {
+    pageTitleWrap.style.display = (STATE.view === "home") ? "none" : "";
   }
 
   // Lock the navigation pickers when the view is bound to a specific driver
@@ -4216,384 +4267,72 @@ function renderArcGrid() {
   );
 }
 
+
 // ============================================================
-// BREAKDOWN — multi-select up to 4 drivers, car-color-tinted bars
+// STAGE POINTS — season-long horizontal bar chart
+// ------------------------------------------------------------
+// Each driver gets a horizontal bar showing total stage points
+// accumulated this season. Sorted by stage points descending. Uses
+// the car color so identification is fast. Replaces the old
+// per-race component breakdown.
 // ============================================================
 function renderBreakdown() {
-  const svg = document.getElementById("breakdown-svg");
-  const tip = document.getElementById("breakdown-tooltip");
-  if (!STATE.data) return;
+  const host = document.getElementById("stage-points-bars");
+  const sub = document.getElementById("stage-points-sub");
+  if (!host || !STATE.data) return;
 
-  // Team pills toggle team's cars in STATE.breakdown.drivers. Capped at 4 —
-  // toggling a team replaces selection with that team's cars (truncated).
-  // Tapping the same team again clears selection.
-  renderTeamFilter(
-    "breakdown-team-filter",
-    "breakdown",
-    (teamCode) => {
-      const teamCars = allEntities().filter(e => e.team_code === teamCode);
-      const teamDrivers = teamCars.map(e => e.driver);
-      const allOn = teamDrivers.length > 0 && teamDrivers.every(d => STATE.breakdown.drivers.includes(d));
-      if (allOn) {
-        STATE.breakdown.drivers = STATE.breakdown.drivers.filter(d => !teamDrivers.includes(d));
-      } else {
-        STATE.breakdown.drivers = teamDrivers.slice(0, 4);
-      }
-      renderBreakdown();
-    },
-    () => new Set(STATE.breakdown.drivers.map(d => {
-      const e = allEntities().find(x => x.driver === d);
-      return e ? entityKey(e) : "";
-    })),
-    () => { STATE.breakdown.drivers = []; renderBreakdown(); }
-  );
+  // Aggregate stage points by entity. Filters apply: full-time toggle
+  // (UI), and the "top N" toggle limits how many bars render.
+  const ftOnly = STATE.breakdown && STATE.breakdown.ftOnly !== false;
+  const topN = (STATE.breakdown && STATE.breakdown.topN) || "20";
+  const entities = ftOnly ? allEntities().filter(isFullTime) : allEntities();
 
-  const entities = allEntities();
-  // Default: if nothing selected, pick current leader
-  if (STATE.breakdown.drivers.length === 0 && entities.length) {
-    const totals = computeSeasonTotals();
-    if (totals.length) STATE.breakdown.drivers = [totals[0].driver];
+  const rows = entities.map(e => {
+    let stagePts = 0;
+    let s1 = 0, s2 = 0;
+    (e.races || []).forEach(r => {
+      if (r.dns) return;
+      s1 += r.s1 || 0;
+      s2 += r.s2 || 0;
+      stagePts += (r.s1 || 0) + (r.s2 || 0);
+    });
+    return {
+      entity: e,
+      driver: e.primaryDriver || e.driver,
+      car_number: e.car_number,
+      stagePts, s1, s2,
+    };
+  })
+  .filter(r => r.stagePts > 0)
+  .sort((a, b) => b.stagePts - a.stagePts);
+
+  const limited = topN === "all" ? rows : rows.slice(0, parseInt(topN, 10));
+  const max = limited.length > 0 ? limited[0].stagePts : 1;
+
+  if (sub) {
+    const totalAll = rows.reduce((acc, r) => acc + r.stagePts, 0);
+    sub.textContent = `${limited.length} drivers · ${totalAll.toLocaleString()} pts total`;
   }
-  // Resolve selected entities (keep selections even if hidden by ft filter)
-  const selected = STATE.breakdown.drivers
-    .map(key => entities.find(x => x.driver === key))
-    .filter(Boolean);
 
-  renderBreakdownGrid();
-
-  if (selected.length === 0) {
-    svg.innerHTML = `<text x="20" y="40" fill="var(--muted)" font-family="var(--mono)" font-size="11">Select a driver below to see their per-race breakdown.</text>`;
-    svg.setAttribute("viewBox", "0 0 920 200");
-    document.getElementById("breakdown-legend").innerHTML = "";
+  if (limited.length === 0) {
+    host.innerHTML = `<div class="muted" style="padding:24px;text-align:center;">No stage points scored yet this season.</div>`;
     return;
   }
 
-  const races = racesSorted();
-  // For the chart x-axis, use the FULL season schedule — bar widths stay
-  // constant as the season progresses. Unrun rounds have empty bars.
-  const seasonLength = scheduleLengthForSeries(STATE.series);
-  const totalRounds = (typeof seasonLength === "number" && seasonLength > 0) ? seasonLength : races.length;
-  const rounds = Array.from({ length: totalRounds }, (_, i) => i + 1);
-  const raceByRound = {};
-  races.forEach(r => { raceByRound[r.round] = r; });
-
-  // Per-driver race-indexed data — slot is empty (s1=s2=fin=fl=0) for any
-  // round that hasn't run yet OR that the driver missed.
-  const driverData = selected.map(d => {
-    const byRound = {};
-    d.races.forEach(r => { byRound[r.round] = r; });
-    return {
-      entity: d,
-      color: colorFor(STATE.series, d.car_number),
-      byRound,
-      rows: rounds.map(rd => {
-        const r = byRound[rd] || { s1: 0, s2: 0, fin: 0, fl: 0 };
-        return {
-          round: rd,
-          s1: r.s1 || 0, s2: r.s2 || 0, fin: r.fin || 0, fl: r.fl || 0,
-          finish_pos: r.finish, start_pos: r.start,
-        };
-      }),
-    };
-  });
-
-  // Chart geometry
-  const isMob = isMobile();
-  const W = 920;
-  const H = isMob
-    ? (driverData.length > 1 ? 320 : 280)
-    : (driverData.length > 1 ? 380 : 340);
-  const pad = isMob
-    ? { top: 16, right: 12, bottom: 30, left: 36 }
-    : { top: 20, right: 16, bottom: 34, left: 44 };
-  const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
-
-  // Max total across ALL selected drivers (shared y-scale so comparison is honest)
-  let maxTot = 1;
-  driverData.forEach(dd => {
-    dd.rows.forEach(r => {
-      const t = r.s1 + r.s2 + r.fin + r.fl;
-      if (t > maxTot) maxTot = t;
-    });
-  });
-
-  const nRaces = rounds.length;
-  const groupWidth = innerW / nRaces;
-  const nDrivers = driverData.length;
-  // Leave ~25% of group as gaps between groups when multi-driver
-  const groupInnerPad = nDrivers > 1 ? 0.18 : 0.25;  // fraction of group
-  const availPerGroup = groupWidth * (1 - groupInnerPad);
-  const barW = availPerGroup / nDrivers;
-  const xStep = groupWidth;
-  const yScale = v => pad.top + (1 - v / maxTot) * innerH;
-
-  // Semantic colors (used in SINGLE-driver mode)
-  const COL_S1 = "#60a5fa";
-  const COL_S2 = "#3b82f6";
-  const COL_FN = "#7280a0";
-  const COL_FL = "#fbbf24";
-
-  // Helper: given a car hex and a segment type, produce a tinted shade.
-  // This is used in MULTI-driver mode so all 4 segments of a driver share a hue.
-  function tintedShade(hexOrHsl, segment) {
-    // Parse hex to rgb, then lighten / darken / tint
-    const rgb = hexToRgb(hexOrHsl) || { r: 110, g: 110, b: 180 };
-    const mix = (r, g, b, t) => ({
-      r: Math.round(rgb.r + (r - rgb.r) * t),
-      g: Math.round(rgb.g + (g - rgb.g) * t),
-      b: Math.round(rgb.b + (b - rgb.b) * t),
-    });
-    let c;
-    if (segment === "fin")      c = rgb;                           // base car color
-    else if (segment === "s1")  c = mix(255, 255, 255, 0.40);      // lighter
-    else if (segment === "s2")  c = mix(255, 255, 255, 0.20);      // slightly lighter
-    else if (segment === "fl")  c = mix(255, 215, 0, 0.55);        // golden tint
-    else c = rgb;
-    return `rgb(${c.r}, ${c.g}, ${c.b})`;
-  }
-  function hexToRgb(hex) {
-    if (!hex) return null;
-    // Accept #abc, #abcdef, or rgb()/hsl() — for hsl we give up and return null (fallback happens above).
-    const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.replace("#",""));
-    if (!m) return null;
-    let s = m[1];
-    if (s.length === 3) s = s.split("").map(ch => ch + ch).join("");
-    return { r: parseInt(s.slice(0,2), 16), g: parseInt(s.slice(2,4), 16), b: parseInt(s.slice(4,6), 16) };
-  }
-
-  // Build SVG
-  const svgNS = "http://www.w3.org/2000/svg";
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  svg.innerHTML = "";
-
-  // gridlines
-  for (let i = 0; i <= 5; i++) {
-    const y = pad.top + (i / 5) * innerH;
-    const v = Math.round(maxTot * (1 - i / 5));
-    const line = document.createElementNS(svgNS, "line");
-    line.setAttribute("class", "gridline");
-    line.setAttribute("x1", pad.left); line.setAttribute("x2", W - pad.right);
-    line.setAttribute("y1", y); line.setAttribute("y2", y);
-    svg.appendChild(line);
-    const lbl = document.createElementNS(svgNS, "text");
-    lbl.setAttribute("x", pad.left - 6); lbl.setAttribute("y", y + 3);
-    lbl.setAttribute("text-anchor", "end");
-    lbl.setAttribute("fill", "var(--muted)");
-    lbl.setAttribute("font-family", "var(--mono)"); lbl.setAttribute("font-size", "10");
-    lbl.textContent = v;
-    svg.appendChild(lbl);
-  }
-
-  // Tooltip showing breakdown for all selected drivers in this race
-  const hideTip = () => { if (tip) tip.hidden = true; };
-  const showTip = (rd, groupCx, groupTopY, evt) => {
-    if (!tip) return;
-    const meta = raceByRound[rd];
-    const title = `R${rd} · ${escapeHTML(prettyTrack(meta?.track_code, meta?.track))}`;
-    const isMulti = driverData.length > 1;
-    let body = "";
-    driverData.forEach(dd => {
-      const r = dd.byRound[rd];
-      const hasData = !!r;
-      const s1 = r?.s1 || 0, s2 = r?.s2 || 0, fin = r?.fin || 0, fl = r?.fl || 0;
-      const total = s1 + s2 + fin + fl;
-      const carHex = dd.color;
-      const blockParts = [];
-      if (isMulti) {
-        blockParts.push(`<div class="tt-driver-name"><span class="dot" style="background:${carHex}"></span>#${dd.entity.car_number} ${escapeHTML(dd.entity.driver)}${r?.finish ? ` · P${r.finish}` : ""}</div>`);
-      }
-      if (!hasData) {
-        blockParts.push(`<div class="tt-row"><span class="lbl">did not start</span><span class="val">—</span></div>`);
-      } else {
-        if (fin) blockParts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${isMulti ? tintedShade(carHex, "fin") : COL_FN}"></span>Finish</span><span class="val">${fin}</span></div>`);
-        if (s1)  blockParts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${isMulti ? tintedShade(carHex, "s1") : COL_S1}"></span>Stage 1</span><span class="val">${s1}</span></div>`);
-        if (s2)  blockParts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${isMulti ? tintedShade(carHex, "s2") : COL_S2}"></span>Stage 2</span><span class="val">${s2}</span></div>`);
-        if (fl)  blockParts.push(`<div class="tt-row"><span class="lbl"><span class="sw" style="background:${isMulti ? tintedShade(carHex, "fl") : COL_FL}"></span>Fastest Lap</span><span class="val">${fl}</span></div>`);
-        if (!fin && !s1 && !s2 && !fl) blockParts.push(`<div class="tt-row"><span class="lbl">No points</span><span class="val">0</span></div>`);
-        blockParts.push(`<div class="tt-row total"><span class="lbl">Total</span><span class="val">${total}</span></div>`);
-      }
-      body += `<div class="tt-driver-block">${blockParts.join("")}</div>`;
-    });
-
-    tip.classList.toggle("multi", isMulti);
-    tip.innerHTML = `<div class="tt-hdr">${escapeHTML(title)}</div>${body}`;
-    tip.hidden = false;
-
-    const card = svg.parentElement;
-    const cardRect = card.getBoundingClientRect();
-    const tipRect = tip.getBoundingClientRect();
-
-    // Prefer placing the tooltip offset to the right of the cursor (24px gap),
-    // flipping to the left side if we'd run off the card's right edge.
-    let left, top;
-    if (evt && typeof evt.clientX === "number") {
-      const cx = evt.clientX - cardRect.left;
-      const cy = evt.clientY - cardRect.top;
-      left = cx + 24;
-      if (left + tipRect.width > card.clientWidth - 6) {
-        left = cx - tipRect.width - 24;
-      }
-      // Vertically try to keep centered on cursor, but clamp inside card
-      top = cy - tipRect.height / 2;
-      if (top < 6) top = 6;
-      if (top + tipRect.height > card.clientHeight - 6) top = card.clientHeight - tipRect.height - 6;
-    } else {
-      // Fallback: old anchored-to-group behavior
-      const svgRect = svg.getBoundingClientRect();
-      const scale = svgRect.width / W;
-      const pxX = (svgRect.left - cardRect.left) + groupCx * scale;
-      const pxY = (svgRect.top  - cardRect.top)  + groupTopY * scale;
-      left = pxX - tipRect.width / 2;
-      top = pxY - tipRect.height - 10;
-      left = Math.max(6, Math.min(left, card.clientWidth - tipRect.width - 6));
-      if (top < 6) top = pxY + 14;
-    }
-    tip.style.left = `${left}px`;
-    tip.style.top  = `${top}px`;
-  };
-
-  // Render each race group
-  rounds.forEach((rd, i) => {
-    const groupCx = pad.left + i * xStep + xStep / 2;
-    const groupLeft = pad.left + i * xStep + (xStep - availPerGroup) / 2;
-    const isMulti = driverData.length > 1;
-
-    // Hit-rect spans the whole race column for hovering
-    let topBound = pad.top + innerH;
-    driverData.forEach(dd => {
-      const r = dd.byRound[rd];
-      if (!r) return;
-      const total = r.s1 + r.s2 + r.fin + r.fl;
-      const y = yScale(total);
-      if (y < topBound) topBound = y;
-    });
-    const hit = document.createElementNS(svgNS, "rect");
-    hit.setAttribute("x", pad.left + i * xStep);
-    hit.setAttribute("y", pad.top);
-    hit.setAttribute("width", xStep);
-    hit.setAttribute("height", innerH);
-    hit.setAttribute("fill", "transparent");
-    hit.style.cursor = "pointer";
-    hit.addEventListener("mouseenter", (e) => showTip(rd, groupCx, topBound, e));
-    hit.addEventListener("mousemove",  (e) => showTip(rd, groupCx, topBound, e));
-    hit.addEventListener("mouseleave", hideTip);
-    hit.addEventListener("click",      (e) => showTip(rd, groupCx, topBound, e));
-    svg.appendChild(hit);
-
-    // Per-driver stacked bars inside the group
-    driverData.forEach((dd, dIdx) => {
-      const r = dd.byRound[rd];
-      if (!r) return;
-      const xBar = groupLeft + dIdx * barW;
-      let y0 = pad.top + innerH;
-      const segs = isMulti
-        ? [
-            { v: r.fin, c: tintedShade(dd.color, "fin") },
-            { v: r.s1,  c: tintedShade(dd.color, "s1")  },
-            { v: r.s2,  c: tintedShade(dd.color, "s2")  },
-            { v: r.fl,  c: tintedShade(dd.color, "fl")  },
-          ]
-        : [
-            { v: r.fin, c: COL_FN },
-            { v: r.s1,  c: COL_S1 },
-            { v: r.s2,  c: COL_S2 },
-            { v: r.fl,  c: COL_FL },
-          ];
-      segs.filter(s => s.v > 0).forEach(s => {
-        const h = (s.v / maxTot) * innerH;
-        const y = y0 - h;
-        y0 = y;
-        const rect = document.createElementNS(svgNS, "rect");
-        rect.setAttribute("x", xBar);
-        rect.setAttribute("y", y);
-        rect.setAttribute("width", Math.max(1, barW - (isMulti ? 1 : 0)));
-        rect.setAttribute("height", h);
-        rect.setAttribute("fill", s.c);
-        rect.style.pointerEvents = "none";
-        svg.appendChild(rect);
-      });
-    });
-
-    // Round label — skip every Nth when crowded so they don't overlap.
-    // Threshold: aim for at most ~12 labels visible across the chart.
-    const labelStep = rounds.length > 14 ? Math.ceil(rounds.length / 12) : 1;
-    if (i % labelStep === 0 || i === rounds.length - 1) {
-      const lbl = document.createElementNS(svgNS, "text");
-      lbl.setAttribute("x", groupCx); lbl.setAttribute("y", H - 14);
-      lbl.setAttribute("text-anchor", "middle");
-      lbl.setAttribute("fill", "var(--muted)");
-      lbl.setAttribute("font-family", "var(--mono)"); lbl.setAttribute("font-size", "10");
-      lbl.textContent = `R${rd}`;
-      svg.appendChild(lbl);
-    }
-  });
-
-  svg.addEventListener("mouseleave", hideTip);
-
-  // Legend
-  const isMulti = driverData.length > 1;
-  const stageEra = isStageEra();
-  if (isMulti) {
-    // In multi-driver mode: one legend entry per driver (color) + a note about the tint gradient
-    const driverItems = driverData.map(dd =>
-      `<span class="legend-item"><span class="legend-dot" style="background:${dd.color}"></span>#${dd.entity.car_number} ${escapeHTML(lastNameOf(dd.entity.driver))}</span>`
-    ).join("");
-    const tintNote = stageEra
-      ? "darker = Finish · lighter = Stages · gold tint = FL"
-      : "shade = Finish points (no stages or FL bonus this era)";
-    document.getElementById("breakdown-legend").innerHTML = `
-      ${driverItems}
-      <span class="legend-item muted" style="margin-left:12px">${tintNote}</span>
-    `;
-  } else if (stageEra) {
-    document.getElementById("breakdown-legend").innerHTML = `
-      <span class="legend-item"><span class="legend-swatch" style="background:${COL_FN}"></span>Finish points</span>
-      <span class="legend-item"><span class="legend-swatch" style="background:${COL_S1}"></span>Stage 1</span>
-      <span class="legend-item"><span class="legend-swatch" style="background:${COL_S2}"></span>Stage 2</span>
-      <span class="legend-item"><span class="legend-swatch" style="background:${COL_FL}"></span>Fastest lap</span>
-    `;
-  } else {
-    document.getElementById("breakdown-legend").innerHTML = `
-      <span class="legend-item"><span class="legend-swatch" style="background:${COL_FN}"></span>Finish points</span>
-      <span class="legend-item muted" style="margin-left:12px">Stages and the +1 fastest-lap bonus didn't exist before 2017/2025 — only finish points are shown.</span>
-    `;
-  }
-}
-
-function renderBreakdownGrid() {
-  renderDriverGrid(
-    "breakdown-driver-grid",
-    "multi",
-    STATE.breakdown.ftOnly,
-    (e) => {
-      const key = e.driver;
-      const idx = STATE.breakdown.drivers.indexOf(key);
-      if (idx >= 0) {
-        // Deselect — but prevent going below 1 selected driver
-        if (STATE.breakdown.drivers.length > 1) {
-          STATE.breakdown.drivers.splice(idx, 1);
-        }
-      } else {
-        if (STATE.breakdown.drivers.length >= 4) {
-          // At max — replace the first-selected driver with the new one
-          STATE.breakdown.drivers.shift();
-        }
-        STATE.breakdown.drivers.push(key);
-      }
-      renderBreakdown();
-    },
-    (e) => STATE.breakdown.drivers.includes(e.driver),
-    (teamDrivers) => {
-      const CAP = 4;
-      const picks = teamDrivers.slice(0, CAP).map(e => e.driver);
-      if (picks.length > 0) {
-        STATE.breakdown.drivers = picks;
-        renderBreakdown();
-      }
-    },
-    STATE.breakdown.teamFilter
-  );
+  host.innerHTML = limited.map((r, i) => {
+    const carHex = colorFor(STATE.series, r.car_number);
+    const txt = contrastTextFor(carHex);
+    const pct = (r.stagePts / max) * 100;
+    return `<a class="sp-row profile-link" href="#/driver/${slugify(r.driver || '')}">
+      <span class="sp-rank">${i + 1}</span>
+      <span class="sp-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
+      <span class="sp-name">${escapeHTML(lastNameOf(r.driver || ''))}</span>
+      <span class="sp-bar-track">
+        <span class="sp-bar-fill" style="width:${pct}%;background:${carHex}"></span>
+      </span>
+      <span class="sp-pts">${r.stagePts}</span>
+    </a>`;
+  }).join("");
 }
 
 // ============================================================
@@ -9507,7 +9246,11 @@ function renderTrackStats() {
 
   // ---- Walk all seasons and aggregate per-driver at chosen track ----
   const seriesActive = ts.series;
-  const showGenChips = seriesActive === "all" || seriesActive === "NCS";
+  // Gen chips only apply to NCS data. When the user picks "All" we still
+  // show them since NCS dominates the all-time stats; but for explicit
+  // NOS or NTS the chips are meaningless (those series didn't exist in
+  // the older eras the chips cover) and clutter the toolbar.
+  const showGenChips = seriesActive === "NCS";
   const byDrv = new Map();   // slug -> { slug, name, races: [...] }
 
   Object.entries(SEASON_CACHE).forEach(([year, blocks]) => {
@@ -9518,8 +9261,15 @@ function renderTrackStats() {
       if (seriesActive !== "all" && sCode !== seriesActive) return;
       block.races.forEach(race => {
         if (canonicalTrackCode((race.track_code || "").toUpperCase()) !== ts.code) return;
-        // Generation gate (only meaningful for NCS / All)
-        if (showGenChips && ts.gens.size > 0) {
+        // Custom year-range filter — when either bound is set, applies in
+        // addition to the generation filter. Inclusive on both ends.
+        if (ts.yearStart != null && yr < ts.yearStart) return;
+        if (ts.yearEnd != null && yr > ts.yearEnd) return;
+        // Generation gate (only meaningful for NCS / All). Skipped when a
+        // custom year range is active — users explicitly choosing a range
+        // shouldn't get a layer of gen filtering on top.
+        const yearRangeActive = ts.yearStart != null || ts.yearEnd != null;
+        if (!yearRangeActive && showGenChips && ts.gens.size > 0) {
           const inGen = NASCAR_GENERATIONS.some(g =>
             ts.gens.has(g.id) && yr >= g.year_start && yr <= g.year_end
           );
@@ -9719,6 +9469,13 @@ function renderTrackStats() {
           ${[1, 3, 5, 10, 20].map(n => `<option value="${n}" ${n === ts.minStarts ? "selected" : ""}>${n}</option>`).join("")}
         </select>
       </label>
+      <label class="ts-year-range" title="Filter to a custom year range (overrides generation chips)">
+        Years:
+        <input type="number" id="ts-year-start" class="ts-year-input" placeholder="From" value="${ts.yearStart ?? ""}" min="1949" max="${new Date().getFullYear() + 1}">
+        <span class="muted">–</span>
+        <input type="number" id="ts-year-end" class="ts-year-input" placeholder="To" value="${ts.yearEnd ?? ""}" min="1949" max="${new Date().getFullYear() + 1}">
+        ${(ts.yearStart != null || ts.yearEnd != null) ? `<button class="ts-year-clear" id="ts-year-clear" title="Clear year filter">×</button>` : ""}
+      </label>
       <span class="alltime-count muted">${rows.length} drivers</span>
     </div>
     ${genChipsHTML}
@@ -9731,7 +9488,10 @@ function renderTrackStats() {
   host.querySelectorAll(".ts-srs-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       ts.series = btn.getAttribute("data-srs");
-      if (ts.series !== "all" && ts.series !== "NCS") ts.gens.clear();
+      // Gen chips are NCS-only. Switching to All / NOS / NTS clears any
+      // active gen selection so the user isn't filtered against a hidden
+      // control they can't see.
+      if (ts.series !== "NCS") ts.gens.clear();
       ts.expandedSlug = null;
       renderTrackStats();
     });
@@ -9749,6 +9509,30 @@ function renderTrackStats() {
   const minSel = document.getElementById("ts-min-starts");
   if (minSel) minSel.addEventListener("change", () => {
     ts.minStarts = Number(minSel.value);
+    renderTrackStats();
+  });
+  // Year-range inputs — debounced so typing "2010" doesn't fire 4 renders.
+  const yearStart = document.getElementById("ts-year-start");
+  const yearEnd = document.getElementById("ts-year-end");
+  let yearDbnc = null;
+  const onYearChange = () => {
+    clearTimeout(yearDbnc);
+    yearDbnc = setTimeout(() => {
+      const s = yearStart && yearStart.value ? parseInt(yearStart.value, 10) : null;
+      const e = yearEnd && yearEnd.value ? parseInt(yearEnd.value, 10) : null;
+      ts.yearStart = (Number.isFinite(s) && s >= 1949) ? s : null;
+      ts.yearEnd = (Number.isFinite(e) && e >= 1949) ? e : null;
+      ts.expandedSlug = null;
+      renderTrackStats();
+    }, 350);
+  };
+  if (yearStart) yearStart.addEventListener("input", onYearChange);
+  if (yearEnd) yearEnd.addEventListener("input", onYearChange);
+  const yearClear = document.getElementById("ts-year-clear");
+  if (yearClear) yearClear.addEventListener("click", () => {
+    ts.yearStart = null;
+    ts.yearEnd = null;
+    ts.expandedSlug = null;
     renderTrackStats();
   });
   const searchInput = document.getElementById("ts-search");
@@ -10020,29 +9804,29 @@ function renderStandings() {
         <span>${escapeHTML(r.displayLabel)}</span>
         ${renderCoDriverBadge(r)}
       </a></td>
-      <td>${teamPill}</td>
-      <td class="num">${r.starts}</td>
+      <td class="col-mobile-hide">${teamPill}</td>
+      <td class="num col-mobile-hide">${r.starts}</td>
       <td class="num">${r.wins}</td>
-      <td class="num">${r.top5}</td>
-      <td class="num">${r.top10}</td>
-      <td class="num">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
-      <td class="num">${
+      <td class="num col-mobile-hide">${r.top5}</td>
+      <td class="num col-mobile-hide">${r.top10}</td>
+      <td class="num col-mobile-hide">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
+      <td class="num col-mobile-hide">${
         r.lastRacePts == null
           ? `<span class="muted">—</span>`
           : `<span class="pts-delta-only ${r.lastRaceDelta != null && r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta != null && r.lastRaceDelta < -1.5 ? "cold" : ""}">+${r.lastRacePts}</span>`
       }</td>
-      ${stageEra ? `<td class="num">${r.sumS1}</td>
-      <td class="num">${r.sumS2}</td>
-      <td class="num">${r.sumFL}</td>` : ""}
+      ${stageEra ? `<td class="num col-mobile-hide">${r.sumS1}</td>
+      <td class="num col-mobile-hide">${r.sumS2}</td>
+      <td class="num col-mobile-hide">${r.sumFL}</td>` : ""}
       <td class="num total-col">${r.total}</td>
       <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
       ${diffCell}
     </tr>`;
   }).join("");
 
-  const th = (key, label, numeric) => {
+  const th = (key, label, numeric, hideOnMobile) => {
     const active = STATE.standings.sortKey === key;
-    const cls = `sortable ${numeric ? "num" : ""} ${active ? "sort-" + STATE.standings.sortDir : ""}`.trim();
+    const cls = `sortable ${numeric ? "num" : ""} ${active ? "sort-" + STATE.standings.sortDir : ""} ${hideOnMobile ? "col-mobile-hide" : ""}`.trim();
     const arrow = active ? (STATE.standings.sortDir === "asc" ? "▲" : "▼") : "↕";
     return `<th class="${cls}" data-sort="${key}">${label}<span class="sort-arrow">${arrow}</span></th>`;
   };
@@ -10052,19 +9836,19 @@ function renderStandings() {
       <tr>
         ${th("rank", "Pos", true)}
         ${th("driver", "Driver", false)}
-        ${th("team", "Team", false)}
-        ${th("starts", "Starts", true)}
+        ${th("team", "Team", false, true)}
+        ${th("starts", "Starts", true, true)}
         ${th("wins", "Wins", true)}
-        ${th("top5", "T5", true)}
-        ${th("top10", "T10", true)}
-        ${th("avgFinish", "Avg Fin", true)}
-        ${th("lastRacePts", "Last Pts", true)}
-        ${stageEra ? `${th("sumS1", "S1", true)}
-        ${th("sumS2", "S2", true)}
-        ${th("sumFL", "FL", true)}` : ""}
+        ${th("top5", "T5", true, true)}
+        ${th("top10", "T10", true, true)}
+        ${th("avgFinish", "Avg Fin", true, true)}
+        ${th("lastRacePts", "Last Pts", true, true)}
+        ${stageEra ? `${th("sumS1", "S1", true, true)}
+        ${th("sumS2", "S2", true, true)}
+        ${th("sumFL", "FL", true, true)}` : ""}
         ${th("total", "Total", true)}
         <th class="num" title="Points back from current points leader (live)">Back</th>
-        ${hasCanonicalGap ? `<th class="num" title="Points gap to season champion (year-end canonical)">Diff</th>` : ""}
+        ${hasCanonicalGap ? `<th class="num col-mobile-hide" title="Points gap to season champion (year-end canonical)">Diff</th>` : ""}
       </tr>
     </thead>
     <tbody>${body}</tbody>

@@ -370,20 +370,20 @@
             <button class="on" data-val="ft">Full-time</button>
             <button data-val="all">All</button>
           </div>
+          <div class="toolbar-label">Top</div>
+          <div class="toggle-group" data-group="breakdown-top">
+            <button data-val="10">10</button>
+            <button class="on" data-val="20">20</button>
+            <button data-val="all">All</button>
+          </div>
         </div>
-        <div class="team-filter" id="breakdown-team-filter"></div>
-        <div class="picker-drawer">
-          <button class="picker-drawer-toggle mob-only-btn" type="button" data-target="breakdown-driver-grid">
-            <span class="pdt-label">Pick cars (up to 4)</span>
-            <span class="pdt-chev">▾</span>
-          </button>
-          <div class="driver-picker driver-picker-compact" id="breakdown-driver-grid"></div>
+        <div class="card stage-points-card" id="stage-points-card">
+          <div class="stage-points-head">
+            <span class="stage-points-title">Stage points · season total</span>
+            <span class="stage-points-sub" id="stage-points-sub"></span>
+          </div>
+          <div class="stage-points-bars" id="stage-points-bars"></div>
         </div>
-        <div class="card card-chart tab-chart-fill">
-          <svg id="breakdown-svg"></svg>
-          <div id="breakdown-tooltip" class="chart-tooltip" hidden></div>
-        </div>
-        <div class="legend legend-compact" id="breakdown-legend"></div>
       </section>
 
       <section class="view tab-panel" id="view-trajectory" hidden>
