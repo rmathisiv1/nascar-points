@@ -7821,3 +7821,44 @@ body.lightbox-open {
   .ts-year-range { font-size: 9px; }
   .ts-year-input { width: 50px; font-size: 10px; }
 }
+
+/* === CAREER HEATMAP — horizontal scroll on mobile === */
+/* Both driver-profile and crew-chief-profile heatmaps live in a host
+   container. On narrow phones the grid would crush each round cell to
+   sub-readable widths. Wrap the host so it scrolls horizontally and
+   give the grid a min-width that keeps cells legible. */
+@media (max-width: 767.98px) {
+  #cc-career-heatmap,
+  #profile-career-heatmap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #cc-career-heatmap .ph-grid {
+    min-width: 800px;
+    grid-template-columns: 160px repeat(var(--ph-cols, 36), minmax(18px, 1fr)) 38px;
+  }
+  #profile-career-heatmap .ph-grid {
+    min-width: 720px;
+  }
+  /* The label column is sticky (position:sticky inside a grid). On the
+     CC heatmap the label includes the driver name + team pill; squeeze
+     it down so the heatmap cells dominate the visible area. */
+  #cc-career-heatmap .ph-row-label {
+    font-size: 10px;
+    padding: 4px 4px;
+  }
+}
+
+/* Crew chief profile season-by-season tables — the CC profile renders
+   one or more wide tables that need horizontal scroll on phones too. */
+@media (max-width: 767.98px) {
+  #cc-host .profile-race-table,
+  #cc-host table {
+    min-width: 540px;
+  }
+  #cc-host .profile-panel-body,
+  #cc-host .scrollable {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

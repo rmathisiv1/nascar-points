@@ -13067,10 +13067,15 @@ function computeAllTimeCrewChiefs() {
 // has the shape the table expects.
 function foldRecordByFilters(rec, scope, gens, seriesFilter, currentSeason) {
   const filtered = [];
+  // Gen chips only apply to NCS — when the series filter is anything else
+  // (All / NOS / NTS), ignore the gen set even if it's populated. Keeps
+  // user-data-clear flow consistent with the UI which hides the chips
+  // outside NCS so they can't see what's filtering them.
+  const applyGens = seriesFilter === "NCS";
   rec.byYearSeries.forEach((stats) => {
     if (scope === "current" && stats.year !== currentSeason) return;
     if (seriesFilter && seriesFilter !== "all" && stats.series !== seriesFilter) return;
-    if (gens && gens.size > 0) {
+    if (applyGens && gens && gens.size > 0) {
       const inGen = NASCAR_GENERATIONS.some(g =>
         gens.has(g.id) && stats.year >= g.year_start && stats.year <= g.year_end
       );
@@ -13236,6 +13241,11 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
     </tr>`;
   }).join("")}</tbody>`;
 
+  // Gen chips only meaningful for NCS — the older eras the chips cover
+  // never had NOS or NTS racing. Hide the row entirely on All / NOS / NTS
+  // so users don't get a hidden filter applied.
+  const showGenChips = st.series === "NCS";
+
   // "All" gen chip — active when no specific gens are selected (i.e.
   // every generation appears unfiltered). Clicking it clears the set.
   const allGensActive = !st.gens || st.gens.size === 0;
@@ -13271,11 +13281,12 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
       </div>
       <span class="alltime-count muted">${totalCount} ${pageLabel.toLowerCase()}</span>
     </div>
+    ${showGenChips ? `
     <div class="alltime-gens">
       <span class="alltime-gens-label">Generation:</span>
       ${allGensChip}
       ${genChips}
-    </div>
+    </div>` : ""}
     <div class="alltime-pag alltime-pag-top">
       ${pagBtns("top")}
     </div>
@@ -13338,10 +13349,13 @@ function wireAllTimeTable(stateKey, rerender) {
       rerender();
     });
   });
-  // Series toggle (All / NCS / NOS / NTS)
+  // Series toggle (All / NCS / NOS / NTS). Gen chips are NCS-only; when
+  // the user picks something else we clear the gen filter so they aren't
+  // filtered against an invisible control.
   document.querySelectorAll(`.alltime-series-btn`).forEach(btn => {
     btn.addEventListener("click", () => {
       st.series = btn.getAttribute("data-series");
+      if (st.series !== "NCS" && st.gens) st.gens.clear();
       st.page = 0;
       rerender();
     });
