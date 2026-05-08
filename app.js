@@ -9055,6 +9055,180 @@ function generateHomeStorylines(year, series) {
     });
   }
 
+  // 12b. Most wins by a single crew chief this season. CCs don't get
+  // marquee credit but they call the race — surface the leader. Walks
+  // the per-race results to attribute each win to the CC at the time.
+  if (completed.length >= 3) {
+    const ccWins = new Map();   // slug -> { name, n, drivers:Set }
+    completed.forEach(r => {
+      const w = (r.results || []).find(d => d.finish_pos === 1);
+      if (!w || !w.crew_chief) return;
+      const key = slugify(w.crew_chief);
+      const cur = ccWins.get(key) || { name: w.crew_chief, n: 0, drivers: new Set() };
+      cur.n++;
+      cur.drivers.add(w.driver);
+      ccWins.set(key, cur);
+    });
+    const ccLeaders = Array.from(ccWins.values()).sort((a, b) => b.n - a.n);
+    if (ccLeaders.length > 0 && ccLeaders[0].n >= 2) {
+      const top = ccLeaders[0];
+      const driverList = Array.from(top.drivers).map(d => lastNameOf(d)).join(", ");
+      tiles.push({
+        tone: "success",
+        headline: `${escapeHTML(lastNameOf(top.name))} has called ${top.n} winning ${top.n === 1 ? "race" : "races"}`,
+        body: `Most wins by a ${series} crew chief this season${top.drivers.size > 1 ? ` (${escapeHTML(driverList)})` : ` (${escapeHTML(driverList)})`}.`,
+      });
+    }
+  }
+
+  // 12c. Crew chief on the rise — best avg finish across all races they
+  // called this season. Filters to CCs who called at least half the
+  // season (bypass moonlighters / 1-off pairings).
+  if (completed.length >= 5) {
+    const ccStats = new Map();   // slug -> { name, n, sumFin }
+    completed.forEach(r => {
+      (r.results || []).forEach(d => {
+        if (!d.crew_chief || d.ineligible || d.finish_pos == null) return;
+        const key = slugify(d.crew_chief);
+        const cur = ccStats.get(key) || { name: d.crew_chief, n: 0, sumFin: 0 };
+        cur.n++;
+        cur.sumFin += d.finish_pos;
+        ccStats.set(key, cur);
+      });
+    });
+    const minRaces = Math.max(5, Math.floor(completed.length * 0.6));
+    const ccRanked = Array.from(ccStats.values())
+      .filter(c => c.n >= minRaces)
+      .map(c => ({ ...c, avg: c.sumFin / c.n }))
+      .sort((a, b) => a.avg - b.avg);
+    if (ccRanked.length > 0 && ccRanked[0].avg < 12) {
+      const top = ccRanked[0];
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(top.name))} has the best CC average · ${top.avg.toFixed(1)}`,
+        body: `Best ${series} avg finish among crew chiefs in ${top.n}+ races this season.`,
+      });
+    }
+  }
+
+  // 12d. Same crew chief, multiple wins across MULTIPLE drivers. This is
+  // rare (single-team CCs usually pair with one driver), but happens
+  // when a CC bounces between cars or the team rotates.
+  if (completed.length >= 4) {
+    const ccByDriver = new Map();   // ccSlug -> { name, drivers: Map(driver -> wins) }
+    completed.forEach(r => {
+      const w = (r.results || []).find(d => d.finish_pos === 1);
+      if (!w || !w.crew_chief) return;
+      const key = slugify(w.crew_chief);
+      const cur = ccByDriver.get(key) || { name: w.crew_chief, drivers: new Map() };
+      cur.drivers.set(w.driver, (cur.drivers.get(w.driver) || 0) + 1);
+      ccByDriver.set(key, cur);
+    });
+    let topMulti = null;
+    ccByDriver.forEach(c => {
+      if (c.drivers.size >= 2) {
+        const total = Array.from(c.drivers.values()).reduce((a, b) => a + b, 0);
+        if (!topMulti || total > topMulti.total) {
+          topMulti = { name: c.name, drivers: c.drivers, total };
+        }
+      }
+    });
+    if (topMulti) {
+      const drvList = Array.from(topMulti.drivers.entries())
+        .map(([d, n]) => `${escapeHTML(lastNameOf(d))} (${n})`)
+        .join(", ");
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(topMulti.name))} has won with ${topMulti.drivers.size} different drivers`,
+        body: `Wins this ${series} season: ${drvList}.`,
+      });
+    }
+  }
+
+  // 12e. Crew chief debut watch — first-year CC pairing (CC paired with
+  // current driver only since this season started, not before) leading
+  // their car to a top-10 avg. We approximate "first year" by checking
+  // whether this CC appeared with this driver in the prior season cache.
+  // Fires when a new pairing is producing top-10 finishes consistently.
+  if (completed.length >= 5 && SEASON_CACHE[year - 1] && SEASON_CACHE[year - 1][series]) {
+    const priorB = SEASON_CACHE[year - 1][series];
+    // Build prior-year (driver, cc) pairs that existed in races
+    const priorPairs = new Set();
+    (priorB.races || []).forEach(r => {
+      (r.results || []).forEach(d => {
+        if (!d.crew_chief || !d.driver) return;
+        priorPairs.add(`${slugify(d.driver)}|${slugify(d.crew_chief)}`);
+      });
+    });
+    // Walk this year — find pairs not in priorPairs (= new this year)
+    const thisYearPairs = new Map();
+    completed.forEach(r => {
+      (r.results || []).forEach(d => {
+        if (!d.crew_chief || !d.driver || d.ineligible || d.finish_pos == null) return;
+        const pkey = `${slugify(d.driver)}|${slugify(d.crew_chief)}`;
+        if (priorPairs.has(pkey)) return;   // existing pairing, skip
+        const cur = thisYearPairs.get(pkey) || { driver: d.driver, cc: d.crew_chief, n: 0, sumFin: 0 };
+        cur.n++;
+        cur.sumFin += d.finish_pos;
+        thisYearPairs.set(pkey, cur);
+      });
+    });
+    const newPairings = Array.from(thisYearPairs.values())
+      .filter(p => p.n >= Math.max(4, Math.floor(completed.length * 0.5)))
+      .map(p => ({ ...p, avg: p.sumFin / p.n }))
+      .sort((a, b) => a.avg - b.avg);
+    if (newPairings.length > 0 && newPairings[0].avg < 14) {
+      const top = newPairings[0];
+      tiles.push({
+        tone: "success",
+        headline: `New pairing clicking · ${escapeHTML(lastNameOf(top.driver))} + ${escapeHTML(lastNameOf(top.cc))}`,
+        body: `${top.avg.toFixed(1)} avg fin in ${top.n} races together this ${series} season.`,
+      });
+    }
+  }
+
+  // 12f. Veteran crew chief — most cumulative starts called across all
+  // loaded years for this series. Surface the experienced hand still
+  // active this season. Only fires for CCs who are CURRENTLY calling a
+  // car (so retired Knaus etc. doesn't show).
+  if (completed.length > 0 && Object.keys(SEASON_CACHE).length >= 3) {
+    // Active CCs this season = anyone who appears as crew_chief on any
+    // completed race result this year
+    const activeCCs = new Set();
+    completed.forEach(r => {
+      (r.results || []).forEach(d => {
+        if (d.crew_chief) activeCCs.add(slugify(d.crew_chief));
+      });
+    });
+    if (activeCCs.size > 0) {
+      // Count career starts across all cached years
+      const careerStarts = new Map();   // slug -> { name, n }
+      Object.entries(SEASON_CACHE).forEach(([yr, blocks]) => {
+        if (!blocks || !blocks[series]) return;
+        const block = blocks[series];
+        (block.races || []).forEach(r => {
+          (r.results || []).forEach(d => {
+            if (!d.crew_chief || d.finish_pos == null) return;
+            const key = slugify(d.crew_chief);
+            if (!activeCCs.has(key)) return;   // only currently-active CCs
+            const cur = careerStarts.get(key) || { name: d.crew_chief, n: 0 };
+            cur.n++;
+            careerStarts.set(key, cur);
+          });
+        });
+      });
+      const veterans = Array.from(careerStarts.values()).sort((a, b) => b.n - a.n);
+      if (veterans.length > 0 && veterans[0].n >= 200) {
+        const top = veterans[0];
+        tiles.push({
+          tone: "",
+          headline: `${escapeHTML(lastNameOf(top.name))} has called ${top.n.toLocaleString()} ${series} races`,
+          body: `Most-experienced crew chief still active this season.`,
+        });
+      }
+    }
+  }
+
   // 13. Manufacturer wins streak / dominance. Group recent winners by
   // manufacturer; if one mfr has 3+ in last 5, surface that.
   if (completed.length >= 4) {
