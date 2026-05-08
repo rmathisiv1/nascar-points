@@ -136,6 +136,11 @@ html, body {
 #race-picker.locked { display: none; }
 
 .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+/* Mobile-only series-sw dropdown lives next to the buttons; on desktop
+   we hide it and rely on the button group. The mobile @media block
+   below flips this so the buttons hide and the select shows. */
+.series-sw select.series-sw-select { display: none; }
 .season-select, .select {
   background: var(--card);
   border: 1px solid var(--border);
@@ -2996,23 +3001,29 @@ a.driver-cell.profile-link:hover .car-tag {
     gap: 6px;
     padding: 6px 8px;
     flex-wrap: nowrap;
-    /* Mobile screens can't fit hamburger + brand + search + mode toggle +
-       series toggle + pickers all on one line. Allow horizontal swipe so
-       users can reach the series toggle and anything else that overflows. */
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
   }
-  /* Hide the scrollbar — the cut-off edge cues the swipe. */
-  .topbar::-webkit-scrollbar { height: 0; display: none; }
-  .topbar { scrollbar-width: none; }
-  /* Lock items so they don't compress weirdly when overflowing */
-  .topbar .brand,
-  .topbar .topbar-search,
-  .topbar .topbar-mode-sw,
-  .topbar .series-sw,
-  .topbar #hamburger-btn {
-    flex-shrink: 0;
+  /* Mobile: the 3 series buttons (NCS/NOS/NTS) take more horizontal room
+     than fits next to brand + search + mode toggle. Hide the buttons and
+     use a single-cell dropdown instead. The dropdown is appended at boot
+     by JS into the .series-sw container; on desktop we keep the buttons
+     and hide the select. */
+  .series-sw .series-sw-buttons { display: none; }
+  .series-sw select.series-sw-select {
+    display: inline-block;
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 18px 3px 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4l3 3 3-3' fill='none' stroke='%23a0a0a0' stroke-width='1.4'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
   }
   /* The season-pill ("2026 · R9 / 36") duplicates info already shown in the
      year + race pickers on mobile. Hide to reclaim horizontal room. */
@@ -3056,18 +3067,33 @@ a.driver-cell.profile-link:hover .car-tag {
      making the loop seamless.
   */
   .metricbar {
-    /* Base .metricbar already scrolls horizontally (overflow-x: auto)
-       and lays out as a flex row. On mobile we tighten the spacing and
-       hide the scrollbar — users swipe to see all metrics. */
-    padding: 6px 12px;
-    gap: 16px;
+    padding: 5px 0;
     font-size: 10px;
+    overflow: hidden;
+    position: relative;
+    gap: 0;
+    white-space: nowrap;
   }
-  .metricbar::-webkit-scrollbar { height: 0; display: none; }
-  .metricbar { scrollbar-width: none; }
+  .metricbar-track {
+    display: flex;
+    width: max-content;  /* let the two copies sum to their natural width */
+    animation: ticker 28s linear infinite;
+  }
+  .metricbar-track:hover { animation-play-state: paused; }
+  .metricbar-copy {
+    display: flex;
+    gap: 24px;
+    padding-right: 24px;  /* gap between the end of copy 1 and start of copy 2 */
+    flex-shrink: 0;
+  }
   .metric { flex-shrink: 0; }
   .metric .k { font-size: 8px; }
   .metric .v { font-size: 11px; }
+
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
 
   /* Hamburger button */
   .mobile-menu-btn {

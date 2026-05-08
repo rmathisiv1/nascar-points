@@ -17,9 +17,19 @@
   </a>
   <div class="season-pill" id="season-pill">— / —</div>
   <div class="series-sw" id="series-sw">
-    <button data-series="NCS" class="on">NCS</button>
-    <button data-series="NOS">NOS</button>
-    <button data-series="NTS">NTS</button>
+    <div class="series-sw-buttons">
+      <button data-series="NCS" class="on">NCS</button>
+      <button data-series="NOS">NOS</button>
+      <button data-series="NTS">NTS</button>
+    </div>
+    <!-- Mobile-only dropdown — same series choices wrapped in a native
+         <select> so it fits in one cell. JS keeps the buttons and select
+         in sync. -->
+    <select class="series-sw-select" id="series-sw-select" aria-label="Series">
+      <option value="NCS">NCS</option>
+      <option value="NOS">NOS</option>
+      <option value="NTS">NTS</option>
+    </select>
   </div>
   <div class="topbar-search" id="topbar-search">
     <input type="text" id="search-input" placeholder="Search drivers, teams, crew chiefs, races…  (press /)" autocomplete="off" spellcheck="false" aria-label="Search">

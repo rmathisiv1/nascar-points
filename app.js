@@ -1065,6 +1065,8 @@ async function handleRaceDeepLink() {
     document.querySelectorAll("#series-sw button").forEach(b =>
       b.classList.toggle("on", b.dataset.series === s)
     );
+    const seriesSel = document.getElementById("series-sw-select");
+    if (seriesSel && seriesSel.value !== s) seriesSel.value = s;
     const sel = document.getElementById("season-picker");
     if (sel) sel.value = String(y);
     history.replaceState(null, "", `#/race/${round}`);
@@ -2014,26 +2016,40 @@ function restoreModeFromStorage() {
 // UI CONTROLS
 // ============================================================
 function wireUIControls() {
+  // Helper: sync the series toggle UI (buttons + mobile select) to match
+  // the active series. Used both at boot and after every series change.
+  const syncSeriesUI = (target) => {
+    document.querySelectorAll("#series-sw button").forEach(x =>
+      x.classList.toggle("on", x.dataset.series === target));
+    const sel = document.getElementById("series-sw-select");
+    if (sel && sel.value !== target) sel.value = target;
+  };
+
+  // Shared handler: applies a series change. The mobile <select> and the
+  // desktop <button> group both call this so the swap behavior is identical.
+  const applySeriesChange = async (next) => {
+    if (next === STATE.series) return;
+    STATE.series = next;
+    syncSeriesUI(next);
+    if (STATE.mode === "present") STATE.lastPresentSeries = next;
+    STATE.throughRound = null;
+    STATE.arc.selected.clear();
+    STATE.breakdown.drivers = [];
+    STATE.trajectory.selected.clear();
+    STATE.trajectory.seasons.clear();
+    await loadCurrentData();
+    resetRenderCache();
+    populateRacePicker();
+    renderTimeCursorBanner();
+    render();
+  };
+
   document.querySelectorAll("#series-sw button").forEach(b => {
-    b.addEventListener("click", async () => {
-      document.querySelectorAll("#series-sw button")
-        .forEach(x => x.classList.toggle("on", x === b));
-      STATE.series = b.dataset.series;
-      // In Present mode, remember which series the user picked so the
-      // side panels can snap back to it after a historical detour
-      // (e.g. visiting a 2020 driver profile then coming back).
-      if (STATE.mode === "present") STATE.lastPresentSeries = STATE.series;
-      STATE.throughRound = null;  // cursor is series-specific, reset on series change
-      STATE.arc.selected.clear();
-      STATE.breakdown.drivers = [];
-      STATE.trajectory.selected.clear();
-      STATE.trajectory.seasons.clear();
-      await loadCurrentData();
-      resetRenderCache();   // STATE.data changed; clear cached races/entities
-      populateRacePicker();
-      renderTimeCursorBanner();
-      render();
-    });
+    b.addEventListener("click", () => applySeriesChange(b.dataset.series));
+  });
+  // Mobile dropdown — same effect, single-tap series swap
+  document.getElementById("series-sw-select")?.addEventListener("change", (e) => {
+    applySeriesChange(e.target.value);
   });
 
   // Brand link — clicking "datacarracing" is the global escape hatch.
@@ -2054,10 +2070,8 @@ function wireUIControls() {
       resetRenderCache();
       populateRacePicker();
     }
-    // Sync the series-switcher button "on" state
-    document.querySelectorAll("#series-sw button").forEach(b =>
-      b.classList.toggle("on", b.dataset.series === targetSeries)
-    );
+    // Sync the series-switcher UI (buttons + mobile select) to match
+    syncSeriesUI(targetSeries);
     renderTimeCursorBanner();
     // Sync the season-picker UI to match
     const sel = document.getElementById("season-picker");
@@ -3145,11 +3159,16 @@ function renderMetricBar() {
       <span class="v">${upcoming ? `<a class="metric-name-link" href="#/race/${upcoming.round}">${upcomingHTML}</a>` : upcomingHTML}</span></div>
   `;
 
-  // Single emit on both desktop and mobile. The base .metricbar already
-  // has overflow-x: auto + flex layout, so swiping just works. We used to
-  // duplicate copies for an animated ticker on mobile — that's been
-  // retired in favor of user-controlled swipe scrolling.
-  bar.innerHTML = metricsHTML;
+  if (isMobile()) {
+    // Two identical copies side-by-side; the CSS animates the track by -50%
+    // so the second copy lands exactly where the first began — seamless loop.
+    bar.innerHTML = `<div class="metricbar-track">
+      <div class="metricbar-copy">${metricsHTML}</div>
+      <div class="metricbar-copy">${metricsHTML}</div>
+    </div>`;
+  } else {
+    bar.innerHTML = metricsHTML;
+  }
 
   // Wire hover handlers for the floating metric tooltip
   const tip = document.getElementById("metric-tooltip");
