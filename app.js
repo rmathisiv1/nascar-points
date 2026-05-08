@@ -1156,10 +1156,11 @@ function isMobile() {
 function applyMobileLanding() {
   if (!isMobile()) return;
   const h = (location.hash || "").replace(/^#\//, "").split("/")[0];
-  // If no hash OR the hash is the desktop default (arc), switch to Trending.
-  // Leave any explicit route alone (profile, playoffs, other tabs).
-  if (!h || h === "arc") {
-    history.replaceState(null, "", "#/form");
+  // If no hash, route to home (same default as desktop). Empty hash on
+  // a fresh visit used to redirect to Trending — but Home is the new
+  // canonical landing for everyone, mobile and desktop alike.
+  if (!h) {
+    history.replaceState(null, "", "#/home");
   }
 }
 
@@ -8336,8 +8337,11 @@ function renderHomeHero(year, series) {
     countdownHTML = `
       <div class="home-card home-hero-card">
         <div class="home-hero-countdown">
-          <div class="home-hero-countdown-num">${countdownNum}</div>
-          <div class="home-hero-countdown-unit">${countdownUnit ? countdownUnit + " " : ""}${countdownText}</div>
+          <div class="home-hero-countdown-line">
+            <span class="home-hero-countdown-num">${countdownNum}</span>
+            <span class="home-hero-countdown-word">${countdownUnit || ""}</span>
+          </div>
+          <div class="home-hero-countdown-sub">${countdownText}</div>
         </div>
         <div class="home-hero-info">
           <div class="home-card-label">UPCOMING ${series}</div>
@@ -8662,7 +8666,7 @@ function renderHomeStatCards(year, series) {
 // returns {tone, headline, body} or null. We render whatever survived
 // in priority order.
 function renderHomeStorylines(year, series) {
-  const tiles = generateHomeStorylines(year, series).slice(0, 8);
+  const tiles = generateHomeStorylines(year, series).slice(0, 10);
   if (tiles.length === 0) return "";
   return tiles.map(t => `
     <div class="home-storyline ${t.tone || ''}">
@@ -8967,6 +8971,343 @@ function generateHomeStorylines(year, series) {
       }
     }
   });
+
+  // 11. Head-to-head teammate battle. For top-5 standings drivers, find
+  // the closest H2H race-result count vs their current teammate. Surfaces
+  // when the lead is small (e.g., 5-4, 6-3) so it reads as a real battle.
+  if (homeEntities.length > 0) {
+    const top5 = computeStandingsForBlock(STATE.data).slice(0, 5);
+    for (const r of top5) {
+      const e = homeEntities.find(ent => ent.car_number === r.car_number);
+      if (!e) continue;
+      const mates = profileTeammates(e);
+      if (!mates || mates.length === 0) continue;
+      const top = mates[0];
+      // Count head-to-head wins (where finish was better than teammate's)
+      let myWins = 0, theirWins = 0;
+      (top.series || []).forEach(s => {
+        // s.v is myFinish - theirFinish; negative = I beat them
+        if (s.v < 0) myWins++;
+        else if (s.v > 0) theirWins++;
+      });
+      const total = myWins + theirWins;
+      if (total >= 6 && Math.abs(myWins - theirWins) <= 2) {
+        tiles.push({
+          tone: "",
+          headline: `${escapeHTML(lastNameOf(e.primaryDriver || e.driver || ''))} vs ${escapeHTML(lastNameOf(top.driver || ''))}: ${myWins}-${theirWins}`,
+          body: `Closest active teammate H2H battle in ${series}.`,
+        });
+        break;   // only one H2H tile per render
+      }
+    }
+  }
+
+  // 12. Crew chief swap impact. Detect drivers who changed crew chiefs
+  // mid-season and report the avg-finish delta before/after the swap.
+  // Use STATE.data races directly so we can read d.crew_chief per race.
+  const ccImpact = [];
+  homeEntities.forEach(e => {
+    if (!isFullTime(e)) return;
+    // Walk this driver's races in chronological order, tracking CC changes
+    const sortedRaces = (e.races || []).filter(r => !r.dns).sort((a, b) => a.round - b.round);
+    if (sortedRaces.length < 6) return;
+    // We need crew_chief from the original results (it's not on entity.races)
+    // — look it up via STATE.data.races[].results[]
+    const ccByRound = new Map();
+    (STATE.data.races || []).forEach(rr => {
+      const hit = (rr.results || []).find(d => d.car_number === e.car_number);
+      if (hit && hit.crew_chief) ccByRound.set(rr.round, hit.crew_chief);
+    });
+    if (ccByRound.size < 4) return;
+    // Find the latest CC change
+    let lastCC = null;
+    let changeRound = null;
+    let firstCC = null;
+    for (const r of sortedRaces) {
+      const cc = ccByRound.get(r.round);
+      if (!cc) continue;
+      if (firstCC == null) firstCC = cc;
+      if (lastCC != null && cc !== lastCC) {
+        changeRound = r.round;
+      }
+      lastCC = cc;
+    }
+    if (changeRound == null || firstCC === lastCC) return;
+    // Compute avg fin before and after
+    const before = sortedRaces.filter(r => r.round < changeRound && r.finish != null);
+    const after = sortedRaces.filter(r => r.round >= changeRound && r.finish != null);
+    if (before.length < 3 || after.length < 3) return;
+    const avgBefore = before.reduce((s, r) => s + r.finish, 0) / before.length;
+    const avgAfter = after.reduce((s, r) => s + r.finish, 0) / after.length;
+    const delta = avgBefore - avgAfter;   // positive = improvement (lower = better finish)
+    if (Math.abs(delta) >= 4) {
+      ccImpact.push({ entity: e, delta, avgBefore, avgAfter, oldCC: firstCC, newCC: lastCC });
+    }
+  });
+  if (ccImpact.length > 0) {
+    ccImpact.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    const top = ccImpact[0];
+    const better = top.delta > 0;
+    tiles.push({
+      tone: better ? "success" : "danger",
+      headline: `${escapeHTML(lastNameOf(top.entity.primaryDriver || top.entity.driver || ''))}: avg fin ${better ? "improved" : "fell"} ${Math.abs(top.delta).toFixed(1)} after CC change`,
+      body: `Was ${top.avgBefore.toFixed(1)} under ${escapeHTML(top.oldCC)}, now ${top.avgAfter.toFixed(1)} under ${escapeHTML(top.newCC)}.`,
+    });
+  }
+
+  // 13. Manufacturer wins streak / dominance. Group recent winners by
+  // manufacturer; if one mfr has 3+ in last 5, surface that.
+  if (completed.length >= 4) {
+    const recent = completed.slice(-5);
+    const mfrWins = new Map();
+    recent.forEach(r => {
+      const w = (r.results || []).find(d => d.finish_pos === 1);
+      if (!w || !w.manufacturer) return;
+      const m = w.manufacturer;
+      mfrWins.set(m, (mfrWins.get(m) || 0) + 1);
+    });
+    let topMfr = null;
+    mfrWins.forEach((n, m) => {
+      if (n >= 3 && (!topMfr || n > topMfr.n)) topMfr = { m, n };
+    });
+    if (topMfr) {
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(topMfr.m)} has won ${topMfr.n} of last ${recent.length}`,
+        body: `Manufacturer hot streak in ${series}.`,
+      });
+    }
+  }
+
+  // 14. Biggest race-over-race jump in standings (top 25 only — back-of-pack
+  // moves are noisy). Compares last race vs. one prior.
+  if (completed.length >= 2) {
+    const lastRound = completed[completed.length - 1].round;
+    const prevRound = completed[completed.length - 2].round;
+    const currentMap = pointsMapThroughRound(lastRound);
+    const prevMap = pointsMapThroughRound(prevRound);
+    const cur = Array.from(currentMap.values()).sort((a, b) => b.total - a.total);
+    const prev = Array.from(prevMap.values()).sort((a, b) => b.total - a.total);
+    const curRank = new Map(cur.map((r, i) => [r.car_number, i + 1]));
+    const prevRank = new Map(prev.map((r, i) => [r.car_number, i + 1]));
+    let biggestJump = null;
+    curRank.forEach((newR, car) => {
+      if (newR > 25) return;
+      const oldR = prevRank.get(car);
+      if (!oldR) return;
+      const move = oldR - newR;   // positive = climbed
+      if (move >= 4 && (!biggestJump || move > biggestJump.move)) {
+        const ent = cur[newR - 1];
+        biggestJump = { car, move, oldR, newR, entity: ent };
+      }
+    });
+    if (biggestJump) {
+      tiles.push({
+        tone: "success",
+        headline: `${escapeHTML(lastNameOf(biggestJump.entity.primaryDriver || biggestJump.entity.driver || ''))} climbed ${biggestJump.move} spots`,
+        body: `From P${biggestJump.oldR} to P${biggestJump.newR} after R${lastRound}.`,
+      });
+    }
+  }
+
+  // 15. Biggest avg-finish swing this season vs. last season. If we have
+  // last year's data cached, compare a driver's L4 avg fin to their full
+  // prior-year avg. Surfaces "X is having their best/worst start in years".
+  const priorBlock = SEASON_CACHE[year - 1] && SEASON_CACHE[year - 1][series];
+  if (priorBlock && completed.length >= 4) {
+    const recentRounds = completed.slice(-4).map(r => r.round);
+    let biggestSwing = null;
+    homeEntities.forEach(e => {
+      if (!isFullTime(e)) return;
+      const recentFin = (e.races || []).filter(r => recentRounds.includes(r.round) && r.finish != null);
+      if (recentFin.length < 3) return;
+      const recentAvg = recentFin.reduce((s, r) => s + r.finish, 0) / recentFin.length;
+      // Find this driver's prior-year stats
+      const slug = slugify(e.primaryDriver || e.driver || "");
+      let priorFin = [];
+      priorBlock.races.forEach(rr => {
+        const hit = (rr.results || []).find(d => slugify(d.driver || "") === slug);
+        if (hit && hit.finish_pos != null) priorFin.push(hit.finish_pos);
+      });
+      if (priorFin.length < 10) return;
+      const priorAvg = priorFin.reduce((s, x) => s + x, 0) / priorFin.length;
+      const swing = priorAvg - recentAvg;   // positive = improving
+      if (Math.abs(swing) >= 5 && (!biggestSwing || Math.abs(swing) > Math.abs(biggestSwing.swing))) {
+        biggestSwing = { entity: e, swing, recentAvg, priorAvg };
+      }
+    });
+    if (biggestSwing) {
+      const better = biggestSwing.swing > 0;
+      tiles.push({
+        tone: better ? "success" : "danger",
+        headline: `${escapeHTML(lastNameOf(biggestSwing.entity.primaryDriver || biggestSwing.entity.driver || ''))}: ${better ? "best" : "worst"} avg fin in years`,
+        body: `${biggestSwing.recentAvg.toFixed(1)} L4 avg vs ${biggestSwing.priorAvg.toFixed(1)} in ${year - 1}.`,
+      });
+    }
+  }
+
+  // 16. Long winless streak — driver in top 12 standings who hasn't won
+  // since X. Walks the entire SEASON_CACHE for the driver's last win.
+  // Only surfaces if the streak is meaningful (12+ races) and the driver
+  // is currently competitive (top 12).
+  if (homeEntities.length > 0 && Object.keys(SEASON_CACHE).length >= 2) {
+    const top12 = computeStandingsForBlock(STATE.data).slice(0, 12);
+    let droughtCandidate = null;
+    for (const r of top12) {
+      const driverName = r.primaryDriver || r.driver;
+      if (!driverName) continue;
+      const slug = slugify(driverName);
+      // Walk all cached years (newest first) to find last win
+      const allYears = Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a);
+      let racesSinceWin = 0;
+      let lastWinYear = null;
+      let lastWinTrack = null;
+      let foundWin = false;
+      for (const yr of allYears) {
+        const block = SEASON_CACHE[yr] && SEASON_CACHE[yr][series];
+        if (!block || !block.races) continue;
+        // Walk races in reverse round order
+        const sortedRaces = block.races.slice().sort((a, b) => b.round - a.round);
+        for (const race of sortedRaces) {
+          const hit = (race.results || []).find(d => slugify(d.driver || "") === slug && d.finish_pos != null);
+          if (!hit) continue;
+          if (hit.finish_pos === 1) {
+            lastWinYear = yr;
+            lastWinTrack = race.track;
+            foundWin = true;
+            break;
+          }
+          racesSinceWin++;
+        }
+        if (foundWin) break;
+      }
+      if (foundWin && racesSinceWin >= 12) {
+        if (!droughtCandidate || racesSinceWin > droughtCandidate.n) {
+          droughtCandidate = { name: driverName, n: racesSinceWin, lastWinYear, lastWinTrack };
+        }
+      }
+    }
+    if (droughtCandidate) {
+      tiles.push({
+        tone: "warning",
+        headline: `${escapeHTML(lastNameOf(droughtCandidate.name))} hasn't won in ${droughtCandidate.n} starts`,
+        body: `Last win: ${escapeHTML(droughtCandidate.lastWinTrack || "?")} ${droughtCandidate.lastWinYear}. Currently top 12 in ${series} points.`,
+      });
+    }
+  }
+
+  // 17. Best average start (qualifying performance leader). Different
+  // story than avg finish — captures drivers who put it in front but
+  // can't always hold it.
+  if (completed.length >= 5) {
+    const startByCar = new Map();
+    completed.forEach(r => {
+      (r.results || []).forEach(d => {
+        if (!d.driver || d.ineligible || d.start_pos == null) return;
+        const cur = startByCar.get(d.car_number) || { n: 0, sum: 0, name: d.driver };
+        cur.sum += d.start_pos;
+        cur.n += 1;
+        cur.name = d.driver;
+        startByCar.set(d.car_number, cur);
+      });
+    });
+    const startLeaders = Array.from(startByCar.values())
+      .filter(a => a.n >= Math.max(3, completed.length - 1))
+      .map(a => ({ ...a, avg: a.sum / a.n }))
+      .sort((a, b) => a.avg - b.avg);
+    if (startLeaders.length > 0 && startLeaders[0].avg < 8) {
+      const top = startLeaders[0];
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(top.name))} qualifies up front · ${top.avg.toFixed(1)} avg start`,
+        body: `Best ${series} qualifying performance through ${completed.length} races.`,
+      });
+    }
+  }
+
+  // 18. Same-team 1-2 finish in the most recent race. Always interesting
+  // when teammates lock down the podium.
+  if (completed.length > 0) {
+    const last = completed[completed.length - 1];
+    const podium = (last.results || []).filter(d => d.finish_pos != null && d.finish_pos <= 2)
+      .sort((a, b) => a.finish_pos - b.finish_pos);
+    if (podium.length === 2) {
+      const t1 = podium[0].team_code || teamCodeFromName(podium[0].team, SERIES_TO_KEY[series], podium[0].car_number);
+      const t2 = podium[1].team_code || teamCodeFromName(podium[1].team, SERIES_TO_KEY[series], podium[1].car_number);
+      const grp1 = t1 ? (teamGroup(t1, year) || t1) : null;
+      const grp2 = t2 ? (teamGroup(t2, year) || t2) : null;
+      if (grp1 && grp1 === grp2) {
+        const lbl = teamLabelForEra(grp1, year).full || grp1;
+        tiles.push({
+          tone: "success",
+          headline: `${escapeHTML(lbl)} swept the podium 1-2 at ${escapeHTML(prettyTrack(last.track_code, last.track) || last.track)}`,
+          body: `${escapeHTML(lastNameOf(podium[0].driver))} edged ${escapeHTML(lastNameOf(podium[1].driver))}.`,
+        });
+      }
+    }
+  }
+
+  // 19. Most stage points leader — under-the-radar consistency metric.
+  // Stage racing rewards being up front when stage ends; doesn't always
+  // correlate with wins.
+  if (completed.length >= 5) {
+    const stagePtsByDriver = new Map();
+    completed.forEach(r => {
+      (r.results || []).forEach(d => {
+        if (!d.driver || d.ineligible) return;
+        const sp = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
+        if (sp === 0) return;
+        const k = slugify(d.driver);
+        const cur = stagePtsByDriver.get(k) || { name: d.driver, n: 0 };
+        cur.n += sp;
+        stagePtsByDriver.set(k, cur);
+      });
+    });
+    const spLeaders = Array.from(stagePtsByDriver.values()).sort((a, b) => b.n - a.n);
+    if (spLeaders.length > 0 && spLeaders[0].n >= 30) {
+      const top = spLeaders[0];
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(top.name))} dominates stage racing · ${top.n} stage pts`,
+        body: `Most stage points in ${series} this season.`,
+      });
+    }
+  }
+
+  // 20. Teammate gap — a driver vastly outperforming or underperforming
+  // their full-time teammates this season. Compares avg finish.
+  if (homeEntities.length > 0 && completed.length >= 5) {
+    let extremeGap = null;
+    homeEntities.forEach(e => {
+      if (!isFullTime(e)) return;
+      const myFin = (e.races || []).filter(r => !r.dns && r.finish != null).map(r => r.finish);
+      if (myFin.length < 5) return;
+      const myAvg = myFin.reduce((s, x) => s + x, 0) / myFin.length;
+      // Find teammates (same team_code, different car_number)
+      const teammates = homeEntities.filter(o => o.car_number !== e.car_number && o.team_code === e.team_code && isFullTime(o));
+      if (teammates.length === 0) return;
+      const tmFins = [];
+      teammates.forEach(tm => {
+        (tm.races || []).forEach(r => {
+          if (!r.dns && r.finish != null) tmFins.push(r.finish);
+        });
+      });
+      if (tmFins.length < 5) return;
+      const tmAvg = tmFins.reduce((s, x) => s + x, 0) / tmFins.length;
+      const gap = tmAvg - myAvg;   // positive = I'm beating teammates
+      if (Math.abs(gap) >= 6 && (!extremeGap || Math.abs(gap) > Math.abs(extremeGap.gap))) {
+        extremeGap = { entity: e, gap, myAvg, tmAvg };
+      }
+    });
+    if (extremeGap) {
+      const better = extremeGap.gap > 0;
+      tiles.push({
+        tone: better ? "success" : "danger",
+        headline: `${escapeHTML(lastNameOf(extremeGap.entity.primaryDriver || extremeGap.entity.driver || ''))} ${better ? "outpacing" : "trailing"} teammates by ${Math.abs(extremeGap.gap).toFixed(1)}`,
+        body: `Avg fin ${extremeGap.myAvg.toFixed(1)} vs teammate avg ${extremeGap.tmAvg.toFixed(1)} in ${series}.`,
+      });
+    }
+  }
 
   return tiles;
 }

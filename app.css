@@ -3694,13 +3694,25 @@ a.driver-cell.profile-link:hover .car-tag {
   }
   .mobile-nav-section {
     display: block;
-    padding: 10px 16px 4px;
+    padding: 14px 16px 6px;
     font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.15em;
+    font-size: 10px;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--accent-2);
     font-weight: 600;
+    border-top: 1px solid var(--border);
+    margin-top: 6px;
+  }
+  /* First section: no top border (it's right under the picker block) */
+  .mobile-nav-section:first-of-type {
+    border-top: none;
+    margin-top: 0;
+  }
+  /* Sub-pages within a group are slightly indented to feel grouped */
+  .mobile-nav-section + .mobile-nav-link,
+  .mobile-nav-link + .mobile-nav-link {
+    /* Items sit normally — group is implied by the section header above */
   }
 
   /* Hide the desktop topbar season/race pickers on mobile — settings live
@@ -6938,6 +6950,12 @@ body.lightbox-open {
   flex-direction: column;
   justify-content: center;
 }
+.home-hero-countdown-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  line-height: 1;
+}
 .home-hero-countdown-num {
   font-size: 56px;
   font-weight: 700;
@@ -6945,13 +6963,19 @@ body.lightbox-open {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.home-hero-countdown-unit {
+.home-hero-countdown-word {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+}
+.home-hero-countdown-sub {
   font-family: var(--mono);
   font-size: 12px;
   letter-spacing: 0.06em;
   color: var(--dim);
   text-transform: uppercase;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .home-hero-info {
   flex: 1;
@@ -7247,7 +7271,8 @@ body.lightbox-open {
     gap: 10px;
   }
   .home-hero-countdown-num { font-size: 38px; }
-  .home-hero-countdown-unit { margin-top: 0; }
+  .home-hero-countdown-word { font-size: 22px; }
+  .home-hero-countdown-sub { margin-top: 4px; }
 
   .home-hero-track-name { font-size: 19px; }
   .home-hero-track-meta { font-size: 12px; }
