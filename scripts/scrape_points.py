@@ -1316,11 +1316,35 @@ def main() -> None:
             series_out[code] = {"series_code": code, "season": args.season,
                                 "races": [], "error": str(e)}
 
+    # === Preserve un-scraped series ===
+    # When the user passes --only NCS (or any subset), we ONLY have data
+    # for that subset. Without this merge step, writing the payload would
+    # blow away NOS and NTS data that's already on disk. Read the
+    # existing file (if present) and merge in any series we didn't
+    # rescrape, so partial-series runs are non-destructive.
+    existing_series = {}
+    if args.out.exists():
+        try:
+            existing = json.loads(args.out.read_text())
+            existing_series = (existing or {}).get("series", {}) or {}
+        except Exception as e:
+            print(f"NOTE: couldn't parse existing {args.out} for merge "
+                  f"(will overwrite): {e}", file=sys.stderr)
+    # Layer scraped (fresh) data on top of existing (preserved) data.
+    # `series_out` (just-scraped) takes precedence — its keys overwrite
+    # existing ones; series we didn't scrape carry forward unchanged.
+    merged = dict(existing_series)
+    merged.update(series_out)
+    preserved = [c for c in merged if c not in series_out]
+    if preserved:
+        print(f"NOTE: preserving {','.join(preserved)} from existing file "
+              f"(not in --only)", file=sys.stderr)
+
     payload = {
         "season": args.season,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "source": "racing-reference.info",
-        "series": series_out,
+        "series": merged,
     }
     total = sum(len(s.get("races", [])) for s in series_out.values())
 
