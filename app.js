@@ -8666,14 +8666,107 @@ function renderHomeStatCards(year, series) {
 // returns {tone, headline, body} or null. We render whatever survived
 // in priority order.
 function renderHomeStorylines(year, series) {
-  const tiles = generateHomeStorylines(year, series).slice(0, 10);
-  if (tiles.length === 0) return "";
-  return tiles.map(t => `
-    <div class="home-storyline ${t.tone || ''}">
-      <div class="home-storyline-h">${t.headline}</div>
-      <div class="home-storyline-b">${t.body}</div>
-    </div>
-  `).join("");
+  // Per-series quotas: each series gets a guaranteed minimum count of
+  // tiles in the final mix. CC tiles count separately and are pulled
+  // from any series's bucket. Total cap is 12 tiles to fit the page.
+  const QUOTA = { NCS: 3, NOS: 2, NTS: 2, CC: 2 };
+  const TOTAL_CAP = 12;
+
+  // Generate per-series. Each call returns tiles tagged with category
+  // ("cc" or undefined). We then re-tag with the source series so the
+  // orchestrator can color and bucket them correctly.
+  const buckets = { NCS: [], NOS: [], NTS: [], CC: [] };
+  ["NCS", "NOS", "NTS"].forEach(sCode => {
+    const tiles = generateHomeStorylinesForSeries(year, sCode);
+    tiles.forEach(t => {
+      // Each tile knows its series for coloring; CC tiles also live in
+      // the CC bucket (and a separate copy in their series bucket so we
+      // don't lose them entirely if the CC quota is full).
+      t.series = sCode;
+      if (t.category === "cc") {
+        buckets.CC.push(t);
+      } else {
+        buckets[sCode].push(t);
+      }
+    });
+  });
+
+  // Pick up to N from each bucket, shuffled within the bucket so the
+  // selection varies each render. Then combine + shuffle the final mix.
+  const shuffled = (arr) => arr.slice().sort(() => Math.random() - 0.5);
+  const picked = [];
+  ["NCS", "NOS", "NTS", "CC"].forEach(bk => {
+    picked.push(...shuffled(buckets[bk]).slice(0, QUOTA[bk]));
+  });
+
+  // If we have room left under the cap, fill with overflow from any
+  // bucket — randomized so different categories show up over time.
+  if (picked.length < TOTAL_CAP) {
+    const used = new Set(picked.map(t => t.headline));
+    const leftover = [];
+    ["NCS", "NOS", "NTS", "CC"].forEach(bk => {
+      buckets[bk].forEach(t => {
+        if (!used.has(t.headline)) leftover.push(t);
+      });
+    });
+    picked.push(...shuffled(leftover).slice(0, TOTAL_CAP - picked.length));
+  }
+
+  // Final shuffle so the page doesn't always show NCS-NCS-NCS-NOS-NOS-...
+  const finalMix = shuffled(picked).slice(0, TOTAL_CAP);
+  if (finalMix.length === 0) return "";
+  return finalMix.map(t => {
+    // Color class derived from series + category (CC always blue).
+    const colorClass = t.category === "cc" ? "sl-cc" : `sl-${t.series.toLowerCase()}`;
+    const seriesTag = t.category === "cc"
+      ? `<span class="home-storyline-tag tag-cc">CC</span>`
+      : `<span class="home-storyline-tag tag-${t.series.toLowerCase()}">${t.series}</span>`;
+    return `
+      <div class="home-storyline ${colorClass}">
+        <div class="home-storyline-h">${seriesTag}${t.headline}</div>
+        <div class="home-storyline-b">${t.body}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+// Run the storyline generators against a target series. We swap STATE
+// to point at the target series's loaded block, run the existing
+// generator (which uses STATE.data internally), then restore. The
+// returned tiles are pre-tagged with `category: "cc"` for CC-related
+// ones; the orchestrator handles series tagging + bucketing.
+function generateHomeStorylinesForSeries(year, targetSeries) {
+  const block = SEASON_CACHE[year] && SEASON_CACHE[year][targetSeries];
+  if (!block || !block.races) return [];
+  // Swap STATE temporarily so the existing generator (which references
+  // STATE.data, racesSorted(), allEntities(), computeStandingsForBlock(STATE.data),
+  // etc.) operates on this series. Same pattern sidePanelPresentContext()
+  // uses for the side panels.
+  const prev = { data: STATE.data, season: STATE.season, series: STATE.series };
+  // Snapshot the render cache and clear in place — racesSorted() etc.
+  // memoize into RENDER_CACHE; we need fresh recompute against the new
+  // block, then restore.
+  const prevCache = { races: RENDER_CACHE.races, allRaces: RENDER_CACHE.allRaces, entities: RENDER_CACHE.entities, totals: RENDER_CACHE.totals };
+  RENDER_CACHE.races = null;
+  RENDER_CACHE.allRaces = null;
+  RENDER_CACHE.entities = null;
+  RENDER_CACHE.totals = null;
+  STATE.data = block;
+  STATE.season = year;
+  STATE.series = targetSeries;
+  let tiles;
+  try {
+    tiles = generateHomeStorylines(year, targetSeries);
+  } finally {
+    STATE.data = prev.data;
+    STATE.season = prev.season;
+    STATE.series = prev.series;
+    RENDER_CACHE.races = prevCache.races;
+    RENDER_CACHE.allRaces = prevCache.allRaces;
+    RENDER_CACHE.entities = prevCache.entities;
+    RENDER_CACHE.totals = prevCache.totals;
+  }
+  return tiles;
 }
 
 function generateHomeStorylines(year, series) {
@@ -8925,53 +9018,6 @@ function generateHomeStorylines(year, series) {
     }
   }
 
-  // 10. Cross-series storylines — peek at NOS / NTS to round out the page
-  // when NCS storylines run thin. Only fires for the live latest year.
-  ["NOS", "NTS"].forEach(otherSeries => {
-    if (otherSeries === series) return;
-    const otherBlock = SEASON_CACHE[year] && SEASON_CACHE[year][otherSeries];
-    if (!otherBlock || !otherBlock.races) return;
-    const otherCompleted = otherBlock.races.filter(r => (r.results || []).some(d => d.finish_pos === 1));
-    if (otherCompleted.length === 0) return;
-    // Wins leader for this series
-    const wm = new Map();
-    otherCompleted.forEach(r => {
-      const w = (r.results || []).find(d => d.finish_pos === 1);
-      if (!w) return;
-      const k = slugify(w.driver);
-      wm.set(k, { name: w.driver, n: (wm.get(k)?.n || 0) + 1 });
-    });
-    const wlist = Array.from(wm.values()).sort((a, b) => b.n - a.n);
-    if (wlist.length > 0 && wlist[0].n >= 2) {
-      tiles.push({
-        tone: "",
-        headline: `${otherSeries}: ${escapeHTML(lastNameOf(wlist[0].name))} has ${wlist[0].n} wins`,
-        body: `Leads the ${otherSeries} wins race through ${otherCompleted.length} races.`,
-      });
-    }
-    // Closest standings gap in cutoff
-    const otherRule = resolvePlayoffRules(otherSeries, year);
-    if (otherRule && otherRule.field) {
-      const oStandings = computeStandingsForBlock(otherBlock).slice(0, otherRule.field + 1);
-      if (oStandings.length >= 2) {
-        let tightest = null;
-        for (let i = 1; i < oStandings.length; i++) {
-          const gap = oStandings[i - 1].total - oStandings[i].total;
-          if (tightest == null || gap < tightest.gap) {
-            tightest = { gap, p1: oStandings[i - 1], p2: oStandings[i] };
-          }
-        }
-        if (tightest && tightest.gap <= 5) {
-          tiles.push({
-            tone: "warning",
-            headline: `${otherSeries}: ${tightest.gap}-point fight in the playoff bubble`,
-            body: `${escapeHTML(lastNameOf(tightest.p1.primaryDriver || tightest.p1.driver || ''))} vs ${escapeHTML(lastNameOf(tightest.p2.primaryDriver || tightest.p2.driver || ''))}`,
-          });
-        }
-      }
-    }
-  });
-
   // 11. Head-to-head teammate battle. For top-5 standings drivers, find
   // the closest H2H race-result count vs their current teammate. Surfaces
   // when the lead is small (e.g., 5-4, 6-3) so it reads as a real battle.
@@ -9049,6 +9095,7 @@ function generateHomeStorylines(year, series) {
     const top = ccImpact[0];
     const better = top.delta > 0;
     tiles.push({
+      category: "cc",
       tone: better ? "success" : "danger",
       headline: `${escapeHTML(lastNameOf(top.entity.primaryDriver || top.entity.driver || ''))}: avg fin ${better ? "improved" : "fell"} ${Math.abs(top.delta).toFixed(1)} after CC change`,
       body: `Was ${top.avgBefore.toFixed(1)} under ${escapeHTML(top.oldCC)}, now ${top.avgAfter.toFixed(1)} under ${escapeHTML(top.newCC)}.`,
@@ -9090,6 +9137,7 @@ function generateHomeStorylines(year, series) {
     if (newPairings.length > 0 && newPairings[0].avg < 14) {
       const top = newPairings[0];
       tiles.push({
+        category: "cc",
         tone: "success",
         headline: `New pairing clicking · ${escapeHTML(lastNameOf(top.driver))} + ${escapeHTML(lastNameOf(top.cc))}`,
         body: `${top.avg.toFixed(1)} avg fin in ${top.n} races together this ${series} season.`,
@@ -9131,6 +9179,7 @@ function generateHomeStorylines(year, series) {
       if (veterans.length > 0 && veterans[0].n >= 200) {
         const top = veterans[0];
         tiles.push({
+          category: "cc",
           tone: "",
           headline: `${escapeHTML(lastNameOf(top.name))} has called ${top.n.toLocaleString()} ${series} races`,
           body: `Most-experienced crew chief still active this season.`,
