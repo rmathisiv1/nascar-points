@@ -37,7 +37,7 @@ const STATE = {
   driverBios: null,
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
-  arc: { selected: new Set(), ftOnly: true, metric: "points", scoring: "raw" },
+  arc: { selected: new Set(), ftOnly: true, metric: "points" },
   breakdown: { drivers: [], ftOnly: true, topN: "20", mode: "drivers" },
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
@@ -2293,15 +2293,6 @@ function wireUIControls() {
     targets.forEach(e => STATE.arc.selected.add(entityKey(e)));
     renderArc();
   });
-  // Scoring toggle: raw cumulative vs playoff-aware (resets at playoffs)
-  document.querySelectorAll('[data-group="arc-scoring"] button').forEach(b => {
-    b.addEventListener("click", () => {
-      document.querySelectorAll('[data-group="arc-scoring"] button')
-        .forEach(x => x.classList.toggle("on", x === b));
-      STATE.arc.scoring = b.dataset.val;
-      renderArc();
-    });
-  });
 
   document.getElementById("traj-clear")?.addEventListener("click", () => {
     STATE.trajectory.selected.clear();
@@ -4001,28 +3992,33 @@ function renderDriverGrid(hostId, mode, ftOnly, onSelect, isSelected, onTeamSele
 
 // ============================================================
 // SEASON CUMULATIVE (was Season Arc)
+// ------------------------------------------------------------
+// Renders TWO stacked charts for the active season:
+//   1. Regular Season — cumulative race points R1 → regSeasonEndRound
+//   2. Playoffs — cumulative race points only for drivers in the
+//      playoff field, from regSeasonEndRound+1 onward
+//
+// The playoffs chart uses each driver's actual race points totals
+// (which already reflect post-reset values for the playoff drivers
+// thanks to how the scraper records points). For pre-playoff seasons
+// (no playoffRule for the year) only the regular-season chart shows
+// and the playoffs card is hidden.
 // ============================================================
 function renderArc() {
   const svg = document.getElementById("arc-svg");
   if (!STATE.data) return;
 
-  // Default selection: when the user hasn't actively chosen drivers (and
-  // hasn't explicitly cleared the selection via the Clear button), seed
-  // with the current top-5 in points. This way the first time a user
-  // lands on Cumulative Season they see something useful instead of a
-  // blank chart.
+  // Default selection: top-5 by current standings
   if (STATE.arc.selected.size === 0 && !STATE.arc.userCleared) {
     const totals = computeSeasonTotals();
     totals.slice(0, 5).forEach(t => STATE.arc.selected.add(entityKey(t)));
   }
 
-  // Team pills toggle team-wide selection in STATE.arc.selected
+  // Team-pill selection toggle
   renderTeamFilter(
     "arc-team-filter",
     "arc",
     (teamCode) => {
-      // Toggle: if all cars on this team are already selected, deselect them;
-      // otherwise add them all to the selection.
       const teamCars = allEntities().filter(e => e.team_code === teamCode);
       const allOn = teamCars.length > 0 && teamCars.every(e => STATE.arc.selected.has(entityKey(e)));
       teamCars.forEach(e => {
@@ -4038,41 +4034,109 @@ function renderArc() {
 
   const races = racesSorted();
   if (races.length === 0) {
-    svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">No races loaded.</text>`;
+    if (svg) svg.innerHTML = `<text x="20" y="40" fill="var(--muted)">No races loaded.</text>`;
+    const poCard = document.getElementById("arc-playoff-card");
+    if (poCard) poCard.hidden = true;
     renderArcGrid();
     return;
   }
 
   const entities = applyTeamFilter(allEntities(), "arc");
-  const roundsPresent = races.map(r => r.round);
+  const roundsPresent = races.map(r => r.round).sort((a, b) => a - b);
 
-  // Playoff-aware mode: figure out reg-season-end round + playoff field
-  // for the active series/season. If no playoff format exists for this
-  // year (e.g. early NCS years or 1995 NTS), fall back to raw mode so
-  // we don't break the chart for non-playoff seasons.
+  // Determine playoff cutoff for this year/series. If no playoff format
+  // exists (early seasons), we render only the regular-season chart and
+  // hide the playoffs card.
   const playoffRule = resolvePlayoffRules(STATE.series, STATE.season);
-  const isPlayoffAware = STATE.arc.scoring === "playoff"
-    && playoffRule
+  const hasPlayoffs = playoffRule
     && playoffRule.regSeasonEndRound != null
     && (playoffRule.format === "elimination" || playoffRule.format === "chase-reseeded" || playoffRule.format === "chase" || playoffRule.format === "chase-wildcard");
+  const cutoffRound = hasPlayoffs ? playoffRule.regSeasonEndRound : null;
 
-  // Effective rounds to plot: in playoff-aware mode we cut off at the
-  // regular-season-end round so the chart doesn't show the misleading
-  // post-reset linear extension. Drivers who made the playoffs got
-  // reseeded; drivers who didn't kept their reg-season total. Either
-  // way, the cumulative line past round 26 (Cup) doesn't represent
-  // championship standings anymore.
-  const cutoffRound = isPlayoffAware ? playoffRule.regSeasonEndRound : null;
-  const effectiveRounds = cutoffRound != null
+  // Split the rounds into regular-season and playoff windows
+  const regRounds = cutoffRound != null
     ? roundsPresent.filter(rd => rd <= cutoffRound)
     : roundsPresent;
+  const poRounds = cutoffRound != null
+    ? roundsPresent.filter(rd => rd > cutoffRound)
+    : [];
 
-  // Compute per-round cumulative points for every entity
+  // Show/hide the playoffs card based on whether this season has playoffs
+  // AND any playoff rounds have been run.
+  const poCard = document.getElementById("arc-playoff-card");
+  const showPlayoffs = hasPlayoffs && poRounds.length > 0;
+  if (poCard) poCard.hidden = !showPlayoffs;
+
+  // Regular-season chart — every entity included; cumulative R1→cutoff
+  drawArcChart({
+    svgId: "arc-svg",
+    rounds: regRounds,
+    entities,
+    selectedSet: STATE.arc.selected,
+    metric: STATE.arc.metric || "points",
+    cumStartFromZero: true,
+  });
+
+  // Playoffs chart — only drivers in the playoff field, cumulative from
+  // playoff start (each driver starts at 0 in the playoff chart so the
+  // shape reads as "playoff performance" rather than "championship total").
+  if (showPlayoffs) {
+    // Build playoff field: drivers ranked top-N at the cutoff round.
+    // We use computeStandingsForBlock against the current block which
+    // already accounts for actual standings at any cutoff. To get the
+    // standings AT cutoff, snapshot finishes through cutoff manually.
+    const cutoffStandings = computeStandingsAtCutoff(STATE.data, cutoffRound);
+    const fieldSize = playoffRule.field || 16;
+    const playoffKeys = new Set(cutoffStandings.slice(0, fieldSize).map(e => entityKey(e)));
+    const poEntities = entities.filter(e => playoffKeys.has(entityKey(e)));
+    drawArcChart({
+      svgId: "arc-playoff-svg",
+      rounds: poRounds,
+      entities: poEntities,
+      selectedSet: STATE.arc.selected,
+      metric: STATE.arc.metric || "points",
+      cumStartFromZero: true,
+    });
+  }
+
+  renderArcGrid();
+}
+
+// Compute standings at a specific cutoff round — race points only,
+// summed for all entities in the block. Used to determine the playoff
+// field for the playoffs chart.
+function computeStandingsAtCutoff(block, cutoffRound) {
+  if (!block || !block.races) return [];
+  const totals = new Map();
+  // Build entities first
+  const entities = entitiesFromRaces((block.races || []).filter(r => r.round <= cutoffRound));
+  return entities
+    .map(e => {
+      let total = 0;
+      (e.races || []).forEach(r => { total += r.total || 0; });
+      e.total = total;
+      return e;
+    })
+    .sort((a, b) => b.total - a.total);
+}
+
+// Render a single cumulative chart into an SVG. Pure rendering — caller
+// determines which rounds + which entities go in. Returns nothing.
+function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFromZero }) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  if (!rounds || rounds.length === 0) {
+    svg.innerHTML = `<text x="20" y="30" fill="var(--muted)" font-family="var(--mono)" font-size="11">No races yet.</text>`;
+    svg.setAttribute("viewBox", `0 0 980 200`);
+    return;
+  }
+
+  // Cumulative pts per entity over the rounds window
   const cumByEntity = entities.map(d => {
     const byRound = {};
-    d.races.forEach(r => { byRound[r.round] = r.total || 0; });
+    (d.races || []).forEach(r => { byRound[r.round] = r.total || 0; });
     let cum = 0;
-    const pts = effectiveRounds.map(rd => {
+    const pts = rounds.map(rd => {
       if (byRound[rd] != null) cum += byRound[rd];
       return cum;
     });
@@ -4086,90 +4150,66 @@ function renderArc() {
     };
   });
 
-  // If metric is 'position', convert each round's points to a standings rank.
-  // Rank is computed across ALL entities that have at least one start by that round
-  // (so back-markers who run 2 races don't rank ahead of full-timers who haven't raced yet).
-  const metric = STATE.arc.metric || "points";
   const isPosition = metric === "position";
+  const seriesData = cumByEntity.map(s => ({ ...s, values: s.pts.slice() }));
 
-  const seriesData = cumByEntity.map(s => ({
-    ...s,
-    // In position mode we overwrite `pts` with per-round ranks (1 = best)
-    // Null sentinel for "no data yet" (hasn't started a race by that round)
-    values: s.pts.slice(),
-  }));
-
+  // Position metric: convert to per-round rank
   if (isPosition) {
-    // Mark drivers who have no starts up to each round
-    // We need a Set per entity: set of rounds in which they participated
-    const participatedByEntity = {};
+    const participated = {};
     cumByEntity.forEach(s => {
-      participatedByEntity[s.key] = new Set();
-      s.entity.races.forEach(r => participatedByEntity[s.key].add(r.round));
+      participated[s.key] = new Set();
+      (s.entity.races || []).forEach(r => participated[s.key].add(r.round));
     });
-
-    // For each round index, rank everyone who has participated in at least one race by then
-    effectiveRounds.forEach((_, i) => {
-      // Track whether each entity has raced yet by this round
+    rounds.forEach((_, i) => {
       const hasRacedYet = cumByEntity.map(s => {
         for (let j = 0; j <= i; j++) {
-          if (participatedByEntity[s.key].has(effectiveRounds[j])) return true;
+          if (participated[s.key].has(rounds[j])) return true;
         }
         return false;
       });
-      // Ranked by cumulative points at this round (desc), ties broken arbitrarily
-      const indexed = cumByEntity.map((s, idx) => ({ idx, pts: s.pts[i], hasRaced: hasRacedYet[idx] }));
-      const ranked = indexed
-        .filter(x => x.hasRaced)
-        .sort((a, b) => b.pts - a.pts);
-      // Build rank lookup
+      const ranked = cumByEntity
+        .map((s, idx) => ({ idx, val: s.pts[i], raced: hasRacedYet[idx] }))
+        .filter(x => x.raced)
+        .sort((a, b) => b.val - a.val);
       const rankByIdx = {};
       ranked.forEach((x, rank) => { rankByIdx[x.idx] = rank + 1; });
-      seriesData.forEach((s, idx) => {
-        s.values[i] = rankByIdx[idx] ?? null;
-      });
+      seriesData.forEach((s, idx) => { s.values[i] = rankByIdx[idx] ?? null; });
     });
   }
 
   const isMob = isMobile();
-  const W = 980, H = isMob ? 360 : 420;
-  // On mobile, drop the right-side driver labels area — labels overflow the
-  // narrow viewport. The legend in the picker pills already identifies cars.
+  // Slightly shorter when stacked: each chart gets ~half the height it
+  // would have alone, but never below a comfortable minimum.
+  const W = 980, H = isMob ? 240 : 280;
   const pad = isMob
-    ? { top: 16, right: 12, bottom: 26, left: 36 }
-    : { top: 16, right: 150, bottom: 26, left: 48 };
-  const innerW = W - pad.left - pad.right, innerH = H - pad.top - pad.bottom;
+    ? { top: 14, right: 12, bottom: 24, left: 36 }
+    : { top: 14, right: 150, bottom: 24, left: 48 };
+  const innerW = W - pad.left - pad.right;
+  const innerH = H - pad.top - pad.bottom;
 
-  // Scale computation differs by metric
   let yMax, yMin;
   if (isPosition) {
-    // Find the worst rank any SELECTED driver reached (so axis adapts)
     const allRanksInSelected = seriesData
-      .filter(s => STATE.arc.selected.has(s.key))
+      .filter(s => selectedSet.has(s.key))
       .flatMap(s => s.values.filter(v => v != null));
     yMax = allRanksInSelected.length ? Math.max(...allRanksInSelected) : 30;
-    // Pad slightly and round up to nearest 5
     yMax = Math.ceil((yMax + 2) / 5) * 5;
     yMin = 1;
   } else {
     yMax = Math.max(1, ...seriesData.map(s => s.values[s.values.length - 1] || 0));
     yMin = 0;
   }
-  const nRaces = effectiveRounds.length;
 
+  const nRaces = rounds.length;
   const xScale = (i) => pad.left + (i / Math.max(1, nRaces - 1)) * innerW;
-  // For points: low values at bottom, high at top.
-  // For position: P1 at top, higher numbers at bottom (inverted scale).
   const yScale = (v) => {
-    if (isPosition) {
-      return pad.top + ((v - yMin) / (yMax - yMin)) * innerH;
-    }
+    if (isPosition) return pad.top + ((v - yMin) / (yMax - yMin)) * innerH;
     return pad.top + (1 - v / yMax) * innerH;
   };
 
-  // Gridlines + labels
+  // Gridlines
   const gridlines = [];
-  const gridSteps = 5;
+  const gridSteps = 4;
   for (let i = 0; i <= gridSteps; i++) {
     const y = pad.top + (i / gridSteps) * innerH;
     let val;
@@ -4182,23 +4222,23 @@ function renderArc() {
     gridlines.push(`<line class="gridline" x1="${pad.left}" x2="${W - pad.right}" y1="${y}" y2="${y}"/>`);
     gridlines.push(`<text x="${pad.left - 6}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-family="var(--mono)" font-size="10">${val}</text>`);
   }
-  // Adaptive label density (same approach as profile chart): show every
-  // Nth round label with at least ~28px between them. Always include
-  // first and last so the boundaries are obvious.
+
+  // X axis labels
   const minLabelPx = 28;
-  const racesPerPx = effectiveRounds.length / Math.max(1, innerW);
+  const racesPerPx = rounds.length / Math.max(1, innerW);
   const labelStep = Math.max(1, Math.ceil(minLabelPx * racesPerPx));
-  const xLabels = effectiveRounds.map((r, i) => {
+  const xLabels = rounds.map((r, i) => {
     const isFirst = i === 0;
-    const isLast = i === effectiveRounds.length - 1;
+    const isLast = i === rounds.length - 1;
     const onStep = i % labelStep === 0;
-    const tooCloseToLast = !isLast && (effectiveRounds.length - 1 - i) < labelStep;
+    const tooCloseToLast = !isLast && (rounds.length - 1 - i) < labelStep;
     if (!isFirst && !isLast && (!onStep || tooCloseToLast)) return "";
     return `<text x="${xScale(i)}" y="${H - 8}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">R${r}</text>`;
   }).join("");
 
+  // Active (selected) lines + label-collision avoidance on right edge
   const active = seriesData
-    .filter(s => STATE.arc.selected.has(s.key))
+    .filter(s => selectedSet.has(s.key))
     .map(s => {
       const last = s.values[s.values.length - 1];
       return { ...s, labelY: last != null ? yScale(last) : null };
@@ -4213,7 +4253,6 @@ function renderArc() {
   }
 
   const lines = active.map(s => {
-    // Skip null values (entity hadn't raced yet)
     const segs = [];
     let current = [];
     s.values.forEach((v, i) => {
@@ -4242,8 +4281,6 @@ function renderArc() {
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   svg.innerHTML = `${gridlines.join("")}${xLabels}${lines}`;
-
-  renderArcGrid();
 }
 
 function renderArcGrid() {

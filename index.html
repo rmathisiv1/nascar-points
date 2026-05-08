@@ -328,10 +328,6 @@
             <button class="on" data-val="points">Points</button>
             <button data-val="position">Std. pos</button>
           </div>
-          <div class="toggle-group" data-group="arc-scoring" id="arc-scoring-toggle">
-            <button class="on" data-val="raw">Raw</button>
-            <button data-val="playoff">Playoff-aware</button>
-          </div>
         </div>
         <div class="team-filter" id="arc-team-filter"></div>
         <div class="picker-drawer">
@@ -341,8 +337,15 @@
           </button>
           <div class="driver-picker driver-picker-compact" id="arc-driver-grid"></div>
         </div>
-        <div class="card card-chart tab-chart-fill">
-          <svg id="arc-svg"></svg>
+        <div class="arc-chart-stack">
+          <div class="card card-chart arc-regular-card">
+            <div class="arc-chart-label" id="arc-reg-label">Regular Season</div>
+            <svg id="arc-svg"></svg>
+          </div>
+          <div class="card card-chart arc-playoff-card" id="arc-playoff-card" hidden>
+            <div class="arc-chart-label" id="arc-po-label">Playoffs</div>
+            <svg id="arc-playoff-svg"></svg>
+          </div>
         </div>
       </section>
 

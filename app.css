@@ -7906,3 +7906,51 @@ body.lightbox-open {
 @media (max-width: 767.98px) {
   .sp-team-tag { font-size: 9px; min-width: 32px; padding: 2px 4px; }
 }
+
+/* === CUMULATIVE SEASON — two stacked charts === */
+/* Regular Season + Playoffs render as two separate cards stacked
+   vertically. Each card has its own SVG with the same width/styling so
+   the visual rhythm reads cleanly. The playoffs card is hidden via the
+   `hidden` attribute when the year has no playoff format or no playoff
+   races have been run yet. */
+.arc-chart-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.arc-regular-card,
+.arc-playoff-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.arc-chart-stack svg {
+  width: 100%;
+  flex: 1;
+  min-height: 200px;
+}
+/* Top-left chart label so users can tell which segment is which at a
+   glance. Mono uppercase muted — same vocabulary as the metric bar. */
+.arc-chart-label {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  z-index: 1;
+  pointer-events: none;
+}
+/* When the playoffs card is hidden, the regular-season card grows to
+   fill the available space rather than sitting at half height. */
+.arc-playoff-card[hidden] + * { display: none; }
+@media (max-width: 767.98px) {
+  .arc-chart-stack { gap: 8px; }
+  .arc-chart-label { font-size: 9px; }
+}
