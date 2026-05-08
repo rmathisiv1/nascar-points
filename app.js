@@ -4296,7 +4296,14 @@ function renderBreakdown() {
 
   if (sub) {
     const totalAll = rows.reduce((acc, r) => acc + r.stagePts, 0);
-    sub.textContent = `${rows.length} drivers · ${totalAll.toLocaleString()} pts total`;
+    // Calculate completed races for this series so we can show the
+    // expected per-race total. Each race awards 110 stage pts max
+    // (10+9+...+1 for top 10 in each of 2 stages).
+    const completed = (allRacesSorted() || []).filter(r =>
+      (r.results || []).some(d => d.finish_pos === 1)
+    ).length;
+    const expectedMax = completed * 110;
+    sub.textContent = `${rows.length} drivers · ${totalAll.toLocaleString()} pts across ${completed} race${completed === 1 ? "" : "s"}${completed > 0 ? ` (max ${expectedMax})` : ""}`;
   }
 
   if (rows.length === 0) {
