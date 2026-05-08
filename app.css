@@ -7412,3 +7412,92 @@ body.lightbox-open {
   .alltime-table thead th { padding: 6px 8px; }
   .alltime-table tbody td { padding: 4px 8px; }
 }
+
+/* === STICKY FIRST TWO COLUMNS ON MOBILE TABLE SCROLL ===
+   When a wide table scrolls horizontally on mobile, the # rank and the
+   first identity column (driver name) stay pinned to the left edge so
+   the user always knows whose row they're looking at. Achieved with
+   position: sticky + explicit cell backgrounds (sticky cells must paint
+   their own background or they show the scrolling cells underneath).
+*/
+@media (max-width: 767.98px) {
+  /* Track Stats — sticky # and Driver columns */
+  .ts-table thead th:nth-child(1),
+  .ts-table tbody td:nth-child(1) {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bg-2);
+    box-shadow: 1px 0 0 0 var(--border);
+  }
+  .ts-table thead th:nth-child(2),
+  .ts-table tbody td:nth-child(2) {
+    position: sticky;
+    left: 32px;   /* width of the # column on mobile */
+    z-index: 2;
+    background: var(--bg-2);
+    box-shadow: 1px 0 0 0 var(--border);
+  }
+  /* When the table row is the expanded driver, the sticky cells need a
+     darker background so they match the rest of the row and the blue
+     tint stays consistent. */
+  .ts-table tbody tr.ts-row.expanded td:nth-child(1),
+  .ts-table tbody tr.ts-row.expanded td:nth-child(2) {
+    background: rgba(70, 140, 255, 0.16);   /* darker than the row tint to compensate for being on top of bg */
+  }
+  /* Hover state for sticky cells should match other cells */
+  .ts-table tbody tr.ts-row:hover td:nth-child(1),
+  .ts-table tbody tr.ts-row:hover td:nth-child(2) {
+    background: rgba(50, 60, 80, 0.95);
+  }
+  /* Header cells need a slightly higher z so they overlap body cells
+     when scrolling vertically AND horizontally. */
+  .ts-table thead th:nth-child(1),
+  .ts-table thead th:nth-child(2) {
+    z-index: 3;
+  }
+  /* Detail row inside expand: don't try to make detail cells sticky —
+     they have colspan=16 so the whole TR scrolls as one piece. */
+  .ts-detail-row td {
+    position: static !important;
+  }
+
+  /* All-time tables — same pattern (Drivers / Teams / Crew Chiefs) */
+  .alltime-table thead th:nth-child(1),
+  .alltime-table tbody td:nth-child(1) {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bg-2);
+    box-shadow: 1px 0 0 0 var(--border);
+  }
+  .alltime-table thead th:nth-child(2),
+  .alltime-table tbody td:nth-child(2) {
+    position: sticky;
+    left: 32px;
+    z-index: 2;
+    background: var(--bg-2);
+    box-shadow: 1px 0 0 0 var(--border);
+  }
+  .alltime-table thead th:nth-child(1),
+  .alltime-table thead th:nth-child(2) {
+    z-index: 3;
+  }
+  /* Alternating-row shading: the sticky cells paint on top of the row,
+     and the row's background also paints. So a sticky cell on an even
+     row gets bg-2 + the row's tint. To match the visual, the sticky
+     cell's bg should be the SAME hue as bg-2 plus the same tint
+     compounded once. Simpler: just leave sticky cells transparent on
+     even rows so the row's background paints through — but then
+     scrolling cells leak through. The compromise: set sticky cells to
+     a slightly darker shade so the visual depth matches. */
+  .alltime-table tbody tr:nth-child(even) td:nth-child(1),
+  .alltime-table tbody tr:nth-child(even) td:nth-child(2) {
+    background: var(--bg-2);   /* base, no extra tint — keeps a slight contrast w/ row but reads cleanly */
+  }
+  /* Hover state — sticky cells need to follow the row hover */
+  .alltime-table tbody tr:hover td:nth-child(1),
+  .alltime-table tbody tr:hover td:nth-child(2) {
+    background: rgba(50, 60, 80, 0.95);
+  }
+}
