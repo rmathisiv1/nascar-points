@@ -7626,6 +7626,35 @@ body.lightbox-open {
    Pos / Driver / Wins / Total / Back without horizontal scroll. */
 @media (max-width: 767.98px) {
   #standings-table .col-mobile-hide { display: none; }
+  /* Don't let the driver cell hog all the horizontal space. The flex on
+     .driver-cell makes it expand to fill row width; on mobile we cap it
+     so wins/total/back still fit on screen. */
+  #standings-table td .driver-cell {
+    min-width: 0;
+  }
+  #standings-table td .driver-cell > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Tighten cell padding so all 5 columns fit a 380px viewport */
+  #standings-table th,
+  #standings-table td {
+    padding: 6px 4px;
+    font-size: 12px;
+  }
+  #standings-table th:first-child,
+  #standings-table td:first-child {
+    padding-left: 8px;
+  }
+  #standings-table th:last-child,
+  #standings-table td:last-child {
+    padding-right: 8px;
+  }
+  /* Allow horizontal scroll on the wrapping card as a safety net so
+     the rightmost columns stay reachable if a phone is narrower than
+     expected (e.g. older small phones, side-by-side split view). */
+  #view-standings .scrollable { overflow-x: auto; }
 }
 
 /* === STAGE POINTS — horizontal bar chart === */

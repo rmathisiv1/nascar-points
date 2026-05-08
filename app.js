@@ -2193,18 +2193,8 @@ function wireUIControls() {
     });
   });
 
-  // Breakdown toggles — full-time filter and top-N selector
-  document.querySelectorAll("#view-breakdown .toggle-group").forEach(g => {
-    const group = g.dataset.group;
-    g.querySelectorAll("button").forEach(b => {
-      b.addEventListener("click", () => {
-        g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
-        if (group === "breakdown-ft") STATE.breakdown.ftOnly = (b.dataset.val === "ft");
-        if (group === "breakdown-top") STATE.breakdown.topN = b.dataset.val;
-        renderBreakdown();
-      });
-    });
-  });
+  // (Stage Points view has no toggles — it always shows all drivers
+  // who have scored at least one stage point this season.)
 
   // Trajectory toggles — exclude traj-seasons, which is a multi-select group
   // managed by renderTrajectorySeasonChips() (different selection semantics
@@ -4281,13 +4271,9 @@ function renderBreakdown() {
   const sub = document.getElementById("stage-points-sub");
   if (!host || !STATE.data) return;
 
-  // Aggregate stage points by entity. Filters apply: full-time toggle
-  // (UI), and the "top N" toggle limits how many bars render.
-  const ftOnly = STATE.breakdown && STATE.breakdown.ftOnly !== false;
-  const topN = (STATE.breakdown && STATE.breakdown.topN) || "20";
-  const entities = ftOnly ? allEntities().filter(isFullTime) : allEntities();
-
-  const rows = entities.map(e => {
+  // Aggregate stage points by entity. ALL drivers with at least one stage
+  // point this season — no full-time filter, no top-N cap. Sorted desc.
+  const rows = allEntities().map(e => {
     let stagePts = 0;
     let s1 = 0, s2 = 0;
     (e.races || []).forEach(r => {
@@ -4306,20 +4292,19 @@ function renderBreakdown() {
   .filter(r => r.stagePts > 0)
   .sort((a, b) => b.stagePts - a.stagePts);
 
-  const limited = topN === "all" ? rows : rows.slice(0, parseInt(topN, 10));
-  const max = limited.length > 0 ? limited[0].stagePts : 1;
+  const max = rows.length > 0 ? rows[0].stagePts : 1;
 
   if (sub) {
     const totalAll = rows.reduce((acc, r) => acc + r.stagePts, 0);
-    sub.textContent = `${limited.length} drivers · ${totalAll.toLocaleString()} pts total`;
+    sub.textContent = `${rows.length} drivers · ${totalAll.toLocaleString()} pts total`;
   }
 
-  if (limited.length === 0) {
+  if (rows.length === 0) {
     host.innerHTML = `<div class="muted" style="padding:24px;text-align:center;">No stage points scored yet this season.</div>`;
     return;
   }
 
-  host.innerHTML = limited.map((r, i) => {
+  host.innerHTML = rows.map((r, i) => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
     const pct = (r.stagePts / max) * 100;
