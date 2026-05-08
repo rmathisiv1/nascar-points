@@ -38,7 +38,7 @@ const STATE = {
   seasonsAvailable: [],
   form: { window: "5", search: "", ftOnly: true, sortKey: null, sortDir: "desc" },
   arc: { selected: new Set(), ftOnly: true, metric: "points" },
-  breakdown: { drivers: [], ftOnly: true, topN: "20", mode: "drivers" },
+  breakdown: { mode: "drivers" },
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
@@ -2077,7 +2077,6 @@ function wireUIControls() {
     if (STATE.mode === "present") STATE.lastPresentSeries = next;
     STATE.throughRound = null;
     STATE.arc.selected.clear();
-    STATE.breakdown.drivers = [];
     STATE.trajectory.selected.clear();
     STATE.trajectory.seasons.clear();
     await loadCurrentData();
