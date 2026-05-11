@@ -6646,6 +6646,16 @@ function renderProfile() {
         </div>
       </div>
 
+      <div class="profile-panel" id="profile-notable-panel" style="display:none;">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">Notable Performances</span>
+          <span class="profile-panel-sub">By Driver Rating</span>
+        </div>
+        <div class="profile-panel-body">
+          <div id="profile-notable" class="profile-notable"></div>
+        </div>
+      </div>
+
       <div class="profile-panel full">
         <div class="profile-panel-head">
           <span class="profile-panel-title" id="profile-track-splits-title">${STATE.profile.splitsRange === "career" ? "Career" : STATE.season} Track Splits</span>
@@ -6723,6 +6733,7 @@ function renderProfile() {
   paintProfileRaceTable(rows, kind);
   paintProfileCareerHeatmap();
   paintProfileRatingChart(bioDriverName);
+  paintProfileNotable(bioDriverName);
   wireCoDriverBadges(host);
 
   // Opportunistically load more seasons so the career-context strip fills
@@ -7364,6 +7375,10 @@ function computeCareerTrackSplits(driverSlug, seriesFilter) {
 // 70 marks "league average" so users see immediately whether the
 // driver is consistently above or below average.
 //
+// Each dot has a rich hover tooltip showing track, date, this driver's
+// rating, AND the top-rated driver for that race (so users see who
+// they were beating or losing to that weekend).
+//
 // Falls back to hiding the panel when:
 //   - fewer than 3 rated races exist (insufficient signal)
 //   - SEASON_CACHE doesn't have any years for this driver yet
@@ -7399,6 +7414,38 @@ function paintProfileRatingChart(driverName) {
     sub.textContent = `Career avg ${avg.toFixed(1)} · ${allPts.length} races`;
   }
 
+  // Per-race top-rated-driver lookup. For each (year, series, round)
+  // in our points list, find the highest loop_driver_rating across the
+  // field. Used in the hover tooltip to give context ("Hamlin was tops
+  // here at 128.5"). We do this once, lazily, before draw().
+  const topRaterFor = (year, series, round) => {
+    const block = SEASON_CACHE[year] && SEASON_CACHE[year][series];
+    if (!block || !block.races) return null;
+    const r = block.races.find(x => x.round === round);
+    if (!r || !r.results) return null;
+    let best = null;
+    r.results.forEach(d => {
+      const rating = d.loop_driver_rating;
+      if (rating == null) return;
+      if (!best || rating > best.rating) {
+        best = { driver: d.driver, car_number: d.car_number, rating };
+      }
+    });
+    return best;
+  };
+
+  // Ensure tooltip element exists. One global tooltip is shared across
+  // all charts that use this pattern (cheaper than per-chart elements
+  // and lets us style it in one place).
+  let tip = document.getElementById("chart-tooltip");
+  if (!tip) {
+    tip = document.createElement("div");
+    tip.id = "chart-tooltip";
+    tip.className = "chart-tooltip";
+    tip.style.display = "none";
+    document.body.appendChild(tip);
+  }
+
   function draw() {
     const rect = svg.getBoundingClientRect();
     const W = Math.max(320, Math.floor(rect.width));
@@ -7429,8 +7476,8 @@ function paintProfileRatingChart(driverName) {
     const pathD = allPts.map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(i)} ${yScale(p.rating)}`).join(" ");
     const pathHTML = `<path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/>`;
 
-    // Points — colored by series so users can see context. Tiny so
-    // they don't clutter the line shape but still readable on hover.
+    // Points — colored by series. Each gets a larger transparent hit
+    // target underneath (r=8 invisible) so hovering is forgiving.
     const seriesColors = {
       NCS: "#f0c558",   // gold
       NOS: "#6fdd96",   // green
@@ -7440,13 +7487,71 @@ function paintProfileRatingChart(driverName) {
       const cx = xScale(i);
       const cy = yScale(p.rating);
       const col = seriesColors[p.series] || "var(--accent)";
-      const tip = `${p.year} R${p.round}${p.track_code ? " · " + p.track_code : ""}: ${p.rating.toFixed(1)}`;
-      return `<circle cx="${cx}" cy="${cy}" r="2.2" fill="${col}" stroke="var(--bg)" stroke-width="0.5">
-        <title>${tip}</title>
-      </circle>`;
+      return `<g class="rating-pt" data-i="${i}">
+        <circle class="rating-pt-hit" cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer;"/>
+        <circle cx="${cx}" cy="${cy}" r="2.4" fill="${col}" stroke="var(--bg)" stroke-width="0.6"/>
+      </g>`;
     }).join("");
 
     svg.innerHTML = refLine + refLabel + topLabel + botLabel + pathHTML + dots;
+
+    // Wire hover. Mouse enter shows the tooltip with rich content;
+    // mouse leave hides it. Position is set from the dot's screen coords.
+    svg.querySelectorAll(".rating-pt").forEach(g => {
+      const idx = parseInt(g.dataset.i, 10);
+      const p = allPts[idx];
+      if (!p) return;
+      const hit = g.querySelector(".rating-pt-hit");
+      // Highlight the dot itself on hover for visual feedback
+      const visible = g.querySelectorAll("circle")[1];
+      hit.addEventListener("mouseenter", (e) => {
+        if (visible) visible.setAttribute("r", "3.4");
+        const top = topRaterFor(p.year, p.series, p.round);
+        const isSelf = top && normalizeDriverName(top.driver) === normalizeDriverName(driverName);
+        const trackStr = p.track_code
+          ? (prettyTrack(p.track_code, "") || p.track_code)
+          : "—";
+        const dateStr = p.date ? formatRaceDate(p.date) : "";
+        const ratingTone = p.rating >= 100 ? "hot" : p.rating < 70 ? "cold" : "";
+        let topLine = "";
+        if (top) {
+          if (isSelf) {
+            topLine = `<div class="ct-row ct-self">★ Best on the day</div>`;
+          } else {
+            topLine = `<div class="ct-row">
+              <span class="ct-k">Top rater</span>
+              <span class="ct-v">${escapeHTML(top.driver)} · ${top.rating.toFixed(1)}</span>
+            </div>`;
+          }
+        }
+        tip.innerHTML = `
+          <div class="ct-title">${escapeHTML(trackStr)} <span class="ct-sub">${p.series} R${p.round}</span></div>
+          ${dateStr ? `<div class="ct-date">${escapeHTML(dateStr)}, ${p.year}</div>` : ""}
+          <div class="ct-row">
+            <span class="ct-k">Rating</span>
+            <span class="ct-v ${ratingTone}"><strong>${p.rating.toFixed(1)}</strong></span>
+          </div>
+          ${topLine}
+        `;
+        tip.style.display = "block";
+      });
+      hit.addEventListener("mousemove", (e) => {
+        // Offset right + below the cursor; flip if near right edge.
+        const tw = tip.offsetWidth || 220;
+        const th = tip.offsetHeight || 80;
+        const margin = 14;
+        let x = e.clientX + margin;
+        let y = e.clientY + margin;
+        if (x + tw + 10 > window.innerWidth) x = e.clientX - tw - margin;
+        if (y + th + 10 > window.innerHeight) y = e.clientY - th - margin;
+        tip.style.left = x + "px";
+        tip.style.top = y + "px";
+      });
+      hit.addEventListener("mouseleave", () => {
+        if (visible) visible.setAttribute("r", "2.4");
+        tip.style.display = "none";
+      });
+    });
   }
   draw();
   // Re-draw on resize to keep proportions sharp. Listener is detached
@@ -7458,6 +7563,85 @@ function paintProfileRatingChart(driverName) {
     });
     svg.dataset.resizeBound = "1";
   }
+}
+
+// Paint a "Notable Performances" panel listing standout races by
+// Driver Rating: best, worst, and biggest weekend-over-weekend swing
+// (up + down). Surfaces interesting individual races without making
+// the user scrub the chart. Each row links to the race's Race Center.
+//
+// Hides the panel when the driver has fewer than 5 rated races —
+// "best vs worst" isn't meaningful with a tiny sample.
+function paintProfileNotable(driverName) {
+  const panel = document.getElementById("profile-notable-panel");
+  const host = document.getElementById("profile-notable");
+  if (!panel || !host) return;
+
+  // Reuse the same aggregator — already produces a chronological
+  // ratings list per series.
+  const agg = computeDriverLoopAggregates(driverName);
+  const all = [];
+  ["NCS", "NOS", "NTS"].forEach(s => {
+    const a = agg[s];
+    if (!a) return;
+    a.ratings.forEach(r => all.push({ ...r, series: s }));
+  });
+  if (all.length < 5) {
+    panel.style.display = "none";
+    return;
+  }
+  all.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  panel.style.display = "";
+
+  // Best + worst by rating
+  let best = all[0], worst = all[0];
+  all.forEach(p => {
+    if (p.rating > best.rating) best = p;
+    if (p.rating < worst.rating) worst = p;
+  });
+  // Biggest improvement (positive delta vs prior race) and biggest
+  // drop. Computed on consecutive races; if the driver has gaps
+  // (missed races), we still walk through their rated races only.
+  let biggestUp = null;
+  let biggestDown = null;
+  for (let i = 1; i < all.length; i++) {
+    const delta = all[i].rating - all[i - 1].rating;
+    if (biggestUp == null || delta > biggestUp.delta) {
+      biggestUp = { ...all[i], delta, prior: all[i - 1] };
+    }
+    if (biggestDown == null || delta < biggestDown.delta) {
+      biggestDown = { ...all[i], delta, prior: all[i - 1] };
+    }
+  }
+
+  const row = (label, p, tone, extra) => {
+    if (!p) return "";
+    const trackStr = p.track_code
+      ? (prettyTrack(p.track_code, "") || p.track_code)
+      : "—";
+    const dateStr = p.date ? formatRaceDate(p.date) : "";
+    // Race link: only for current-season races where we have a
+    // canonical #/race/<round> route. Cross-year races link to the
+    // track page instead, since older Race Centers may not be reachable
+    // without changing the active season.
+    const href = (p.year === STATE.season && p.series === STATE.series)
+      ? `#/race/${p.round}`
+      : (p.track_code ? `#/track/${p.track_code}` : null);
+    const open = href ? `<a class="profile-link profile-notable-row" href="${href}">` : `<div class="profile-notable-row">`;
+    const close = href ? `</a>` : `</div>`;
+    return `${open}
+      <span class="pn-label">${label}</span>
+      <span class="pn-where">${escapeHTML(trackStr)} <span class="pn-meta">· ${p.series} R${p.round}${dateStr ? " · " + escapeHTML(dateStr) : ""}</span></span>
+      <span class="pn-value ${tone}">${extra}</span>
+    ${close}`;
+  };
+
+  host.innerHTML = `
+    ${row("Best", best, "hot", `<strong>${best.rating.toFixed(1)}</strong>`)}
+    ${row("Worst", worst, "cold", `<strong>${worst.rating.toFixed(1)}</strong>`)}
+    ${biggestUp && biggestUp.delta > 0 ? row("Biggest Jump", biggestUp, "hot", `+${biggestUp.delta.toFixed(1)} <span class="pn-sub">(${biggestUp.prior.rating.toFixed(0)}→${biggestUp.rating.toFixed(0)})</span>`) : ""}
+    ${biggestDown && biggestDown.delta < 0 ? row("Biggest Drop", biggestDown, "cold", `${biggestDown.delta.toFixed(1)} <span class="pn-sub">(${biggestDown.prior.rating.toFixed(0)}→${biggestDown.rating.toFixed(0)})</span>`) : ""}
+  `;
 }
 
 function paintProfileTrackSplits(entity) {

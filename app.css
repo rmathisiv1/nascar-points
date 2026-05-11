@@ -8265,3 +8265,141 @@ body.lightbox-open {
 .schedule-weekend-wrap .hw-row {
   padding: 6px 4px;
 }
+
+/* === Chart tooltip (driver rating, etc) === */
+/* Lightweight floating tooltip used by SVG charts. Positioned in JS via
+   client coords. Single instance reused across charts to avoid leaking
+   DOM elements between profile navigations. */
+.chart-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-width: 180px;
+  max-width: 260px;
+  font-size: 11px;
+  color: var(--text);
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  line-height: 1.4;
+}
+.chart-tooltip .ct-title {
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.chart-tooltip .ct-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.chart-tooltip .ct-date {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.chart-tooltip .ct-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+.chart-tooltip .ct-k {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.chart-tooltip .ct-v {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  text-align: right;
+}
+.chart-tooltip .ct-v.hot { color: #6fdd96; }
+.chart-tooltip .ct-v.cold { color: #f08c8c; }
+.chart-tooltip .ct-self {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #f0c558;
+  text-align: center;
+  padding: 3px 0;
+  background: rgba(240, 197, 88, 0.08);
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+
+/* === Notable Performances panel === */
+.profile-notable {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+.profile-notable-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background 0.1s;
+  text-decoration: none;
+  color: var(--text);
+}
+.profile-notable-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.pn-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.pn-where {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pn-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.pn-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  text-align: right;
+}
+.pn-value.hot { color: #6fdd96; }
+.pn-value.cold { color: #f08c8c; }
+.pn-sub {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 400;
+}
+@media (max-width: 767.98px) {
+  .profile-notable-row {
+    grid-template-columns: 70px 1fr auto;
+    gap: 6px;
+    padding: 5px 4px;
+  }
+  .pn-where { font-size: 11px; }
+  .pn-value { font-size: 11px; }
+  .pn-meta { display: block; }
+}
