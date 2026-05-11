@@ -8403,3 +8403,312 @@ body.lightbox-open {
   .pn-value { font-size: 11px; }
   .pn-meta { display: block; }
 }
+
+/* ---------- Track-Type Performance panel (profile) ---------- */
+/* Four rows max (super/short/inter/road), each with a label + race
+   count header and a metric strip of four values. Hot/cold tones
+   inherit the same #6fdd96 / #f08c8c anchors used by .pn-value so
+   the visual language matches the Notable Performances panel above. */
+.profile-tt-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tt-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.015);
+  transition: background 0.1s;
+}
+.tt-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.tt-row-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tt-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.tt-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.tt-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.tt-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+  text-align: right;
+}
+.tt-m-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.tt-m-val {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tt-m-val.hot  { color: #6fdd96; }
+.tt-m-val.cold { color: #f08c8c; }
+
+@media (max-width: 767.98px) {
+  .tt-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .tt-row-head {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .tt-label { font-size: 12px; }
+  .tt-metrics { gap: 4px; }
+  .tt-metric { align-items: center; text-align: center; }
+  .tt-m-val { font-size: 12px; }
+  .tt-m-label { font-size: 8px; }
+}
+
+/* ---------- Compare tab ---------- */
+/* Layout: toolbar → picker row (chips + add-input) → chart card → table card.
+   Everything sits inside #view-compare; the parent .tab-panel provides
+   scrolling so the table doesn't overflow the viewport on long lists. */
+.cmp-toolbar {
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cmp-clear {
+  margin-left: auto;
+}
+.cmp-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px 6px;
+  flex-wrap: wrap;
+}
+.cmp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+  flex: 1 1 60%;
+  min-width: 0;
+}
+.cmp-chips-empty {
+  font-size: 12px;
+  color: var(--dim);
+  font-style: italic;
+}
+.cmp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  color: var(--text);
+  --chip-color: var(--accent);
+}
+.cmp-chip-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--chip-color);
+  flex-shrink: 0;
+}
+.cmp-chip-name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cmp-chip-x {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 50%;
+  transition: color 0.1s, background 0.1s;
+}
+.cmp-chip-x:hover {
+  color: #f08c8c;
+  background: rgba(240, 140, 140, 0.1);
+}
+.cmp-picker-wrap {
+  position: relative;
+  flex: 0 0 240px;
+  min-width: 180px;
+}
+.cmp-picker-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+}
+.cmp-picker-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.05);
+}
+.cmp-picker-input::placeholder {
+  color: var(--dim);
+}
+.cmp-picker-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+.cmp-picker-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.cmp-picker-item:last-child { border-bottom: none; }
+.cmp-picker-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.cmp-picker-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.cmp-picker-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.cmp-picker-empty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--dim);
+  text-align: center;
+  font-style: italic;
+}
+.cmp-chart-card {
+  padding: 14px 16px 12px;
+  margin-top: 10px;
+}
+.cmp-chart-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+#cmp-svg {
+  width: 100%;
+  display: block;
+}
+.cmp-dot {
+  cursor: pointer;
+  transition: r 0.1s;
+}
+.cmp-dot:hover {
+  r: 5;
+}
+.cmp-table-card {
+  margin-top: 10px;
+  padding: 0;
+  overflow-x: auto;
+}
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cmp-table th,
+.cmp-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.cmp-table th {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.02);
+}
+.cmp-table th.num,
+.cmp-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
+}
+.cmp-table tr:last-child td { border-bottom: none; }
+.cmp-table-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.cmp-empty {
+  text-align: center;
+  padding: 32px 16px;
+  font-style: italic;
+}
+
+@media (max-width: 767.98px) {
+  .cmp-toolbar { gap: 8px; }
+  .cmp-clear { margin-left: 0; }
+  .cmp-picker-row { flex-direction: column; align-items: stretch; }
+  .cmp-picker-wrap { flex: 1 1 auto; min-width: 0; }
+  .cmp-chart-card { padding: 10px; }
+  .cmp-table th,
+  .cmp-table td { padding: 6px 8px; font-size: 12px; }
+  .cmp-chip-name { max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+
