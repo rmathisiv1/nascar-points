@@ -7389,12 +7389,15 @@ function paintProfileRatingChart(driverName) {
   if (!panel || !svg) return;
 
   const agg = computeDriverLoopAggregates(driverName);
-  // Combine ratings across all 3 series into one chronological list.
-  // We color-code points by series so the user can see context, but
-  // the chart shape itself is one continuous timeline of in-race
-  // performance regardless of which series they ran.
+  // Combine ratings across series. In PRESENT mode, restrict to the
+  // active series toggle so a Cup driver's profile doesn't show
+  // one-off NTS or NOS appearances. In HISTORICAL mode we show all
+  // series since the chart is interpreted as a career arc.
+  const seriesScope = STATE.mode === "present"
+    ? [STATE.series]
+    : ["NCS", "NOS", "NTS"];
   const allPts = [];
-  ["NCS", "NOS", "NTS"].forEach(s => {
+  seriesScope.forEach(s => {
     const a = agg[s];
     if (!a) return;
     a.ratings.forEach(r => allPts.push({ ...r, series: s }));
@@ -7580,8 +7583,11 @@ function paintProfileNotable(driverName) {
   // Reuse the same aggregator — already produces a chronological
   // ratings list per series.
   const agg = computeDriverLoopAggregates(driverName);
+  const seriesScope = STATE.mode === "present"
+    ? [STATE.series]
+    : ["NCS", "NOS", "NTS"];
   const all = [];
-  ["NCS", "NOS", "NTS"].forEach(s => {
+  seriesScope.forEach(s => {
     const a = agg[s];
     if (!a) return;
     a.ratings.forEach(r => all.push({ ...r, series: s }));
@@ -9860,10 +9866,183 @@ function generateHomeStorylines(year, series) {
     }
   }
 
+  // ============================================================
+  // Loop-data-driven storylines. Only meaningful when loop data has
+  // been scraped (2005+ races). We compute per-driver season aggregates
+  // once and reuse across multiple storyline algorithms below.
+  // ============================================================
+  // Build a per-driver season summary of loop stats. Walks STATE.data
+  // races (which is currently swapped to the targetSeries by the
+  // generator harness). Only includes drivers with at least 3 rated
+  // races — small samples produce noisy "leaders".
+  const loopSummary = (() => {
+    const byDriver = new Map();
+    (STATE.data.races || []).forEach(race => {
+      (race.results || []).forEach(d => {
+        if (d.loop_driver_rating == null) return;
+        const key = normalizeDriverName(d.driver || "");
+        if (!key) return;
+        let entry = byDriver.get(key);
+        if (!entry) {
+          entry = {
+            driver: d.driver, car_number: d.car_number,
+            ratings: [], avgPositions: [], qualityPasses: [],
+            pctTop15: [], finishes: [], rounds: [],
+          };
+          byDriver.set(key, entry);
+        }
+        entry.ratings.push(d.loop_driver_rating);
+        entry.rounds.push(race.round);
+        if (d.loop_avg_pos != null) entry.avgPositions.push(d.loop_avg_pos);
+        if (d.loop_quality_passes != null) entry.qualityPasses.push(d.loop_quality_passes);
+        if (d.loop_pct_top15_laps != null) entry.pctTop15.push(d.loop_pct_top15_laps);
+        if (d.finish_pos != null) entry.finishes.push(d.finish_pos);
+      });
+    });
+    const out = [];
+    byDriver.forEach(e => {
+      if (e.ratings.length < 3) return;
+      const avg = (arr) => arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : null;
+      out.push({
+        ...e,
+        avgRating: avg(e.ratings),
+        avgPosition: avg(e.avgPositions),
+        avgFinish: avg(e.finishes),
+        avgQualityPasses: avg(e.qualityPasses),
+        avgPctTop15: avg(e.pctTop15),
+        n: e.ratings.length,
+      });
+    });
+    return out;
+  })();
+
+  // Storyline L1: Driver Rating leader for the season. Single anchor
+  // metric — "who's been the best in races so far". Only fires when
+  // the leader has at least 5 rated races (avoid noise from a hot
+  // first race).
+  if (loopSummary.length > 0) {
+    const ratingLeader = loopSummary
+      .filter(e => e.n >= 5)
+      .sort((a, b) => b.avgRating - a.avgRating)[0];
+    if (ratingLeader) {
+      tiles.push({
+        tone: ratingLeader.avgRating >= 100 ? "success" : "",
+        headline: `${escapeHTML(lastNameOf(ratingLeader.driver))} leads Driver Rating · ${ratingLeader.avgRating.toFixed(1)}`,
+        body: `Best in-race performance through ${ratingLeader.n} ${series} races.`,
+      });
+    }
+  }
+
+  // Storyline L2: Running better than results. Finds the driver whose
+  // average running position is best (lowest) relative to their average
+  // finish — i.e., they're consistently running up front but finish
+  // farther back due to incidents, pit road issues, late-race tire
+  // wear, etc. Gap of 3+ positions is interesting.
+  if (loopSummary.length > 0) {
+    let underrewarded = null;
+    loopSummary.forEach(e => {
+      if (e.avgPosition == null || e.avgFinish == null || e.n < 5) return;
+      const gap = e.avgFinish - e.avgPosition;   // positive = ran better than finished
+      if (gap >= 3 && (!underrewarded || gap > underrewarded.gap)) {
+        underrewarded = { entity: e, gap, avgPos: e.avgPosition, avgFin: e.avgFinish };
+      }
+    });
+    if (underrewarded) {
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(underrewarded.entity.driver))} running better than finishing`,
+        body: `Avg running pos ${underrewarded.avgPos.toFixed(1)} vs avg finish ${underrewarded.avgFin.toFixed(1)} in ${series}.`,
+      });
+    }
+  }
+
+  // Storyline L3: Underperforming pace. Opposite of L2 — driver
+  // finishes better than they actually ran (lucky benefactor of
+  // attrition, fuel-mileage saves, late-race cautions, etc.). Same
+  // 3-position gap threshold but inverted.
+  if (loopSummary.length > 0) {
+    let overrewarded = null;
+    loopSummary.forEach(e => {
+      if (e.avgPosition == null || e.avgFinish == null || e.n < 5) return;
+      const gap = e.avgPosition - e.avgFinish;   // positive = finished better than ran
+      if (gap >= 3 && (!overrewarded || gap > overrewarded.gap)) {
+        overrewarded = { entity: e, gap, avgPos: e.avgPosition, avgFin: e.avgFinish };
+      }
+    });
+    if (overrewarded) {
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(overrewarded.entity.driver))} finishing above pace`,
+        body: `Avg finish ${overrewarded.avgFin.toFixed(1)} vs avg running pos ${overrewarded.avgPos.toFixed(1)} in ${series}.`,
+      });
+    }
+  }
+
+  // Storyline L4: Quality passer. Highest avg quality passes per race
+  // (passes of cars currently running in the top 15). A measure of
+  // "good through traffic" — drivers who actually move forward against
+  // strong competition rather than just collecting positions when
+  // backmarkers crash.
+  if (loopSummary.length > 0) {
+    const qpLeader = loopSummary
+      .filter(e => e.avgQualityPasses != null && e.n >= 5)
+      .sort((a, b) => b.avgQualityPasses - a.avgQualityPasses)[0];
+    if (qpLeader && qpLeader.avgQualityPasses >= 25) {
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(qpLeader.driver))} averages ${qpLeader.avgQualityPasses.toFixed(0)} quality passes`,
+        body: `Most aggressive mover in traffic this season in ${series}.`,
+      });
+    }
+  }
+
+  // Storyline L5: Top-15 consistency. Driver with the highest % of
+  // laps spent running in the top 15. A "consistently up front"
+  // signal independent of how many wins or top-5s they have. Useful
+  // for spotting mid-pack drivers who are stealthily strong.
+  if (loopSummary.length > 0) {
+    const consistencyLeader = loopSummary
+      .filter(e => e.avgPctTop15 != null && e.n >= 5)
+      .sort((a, b) => b.avgPctTop15 - a.avgPctTop15)[0];
+    if (consistencyLeader && consistencyLeader.avgPctTop15 >= 70) {
+      tiles.push({
+        tone: "",
+        headline: `${escapeHTML(lastNameOf(consistencyLeader.driver))} top-15 ${consistencyLeader.avgPctTop15.toFixed(0)}% of laps`,
+        body: `Most consistent top-15 presence this season in ${series}.`,
+      });
+    }
+  }
+
+  // Storyline L6: Driver Rating climber. Compares L5 races avg rating
+  // vs season-long average. A +10 jump from the season baseline means
+  // the driver has elevated their in-race performance recently — often
+  // a leading indicator of an upcoming win or breakthrough finish.
+  if (loopSummary.length > 0 && (STATE.data.races || []).length >= 8) {
+    let climber = null;
+    loopSummary.forEach(e => {
+      if (e.n < 8) return;
+      // Get the chronological last 5 ratings
+      const sorted = e.rounds.map((round, i) => ({ round, rating: e.ratings[i] }))
+        .sort((a, b) => a.round - b.round);
+      const lastFive = sorted.slice(-5);
+      if (lastFive.length < 5) return;
+      const recentAvg = lastFive.reduce((s, x) => s + x.rating, 0) / lastFive.length;
+      const delta = recentAvg - e.avgRating;
+      if (delta >= 10 && (!climber || delta > climber.delta)) {
+        climber = { entity: e, delta, recentAvg, seasonAvg: e.avgRating };
+      }
+    });
+    if (climber) {
+      tiles.push({
+        tone: "success",
+        headline: `${escapeHTML(lastNameOf(climber.entity.driver))} climbing · +${climber.delta.toFixed(1)} rating L5`,
+        body: `L5 avg ${climber.recentAvg.toFixed(1)} vs season ${climber.seasonAvg.toFixed(1)} in ${series}.`,
+      });
+    }
+  }
+
   return tiles;
 }
-
-// Helper: top-N current standings rows, in standings order.
 function homeTopStandings(n) {
   return computeStandingsForBlock(STATE.data).slice(0, n);
 }
