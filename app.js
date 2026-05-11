@@ -12182,7 +12182,7 @@ function renderTrackPage() {
         <div class="rc-card-head">
           <span class="rc-card-title">Most Wins Here</span>
           <div class="toggle-group mini" id="track-scope-toggle">
-            <button class="${tScope === "current" ? "on" : ""}" data-scope="current">${STATE.season}</button>
+            <button class="${tScope === "current" ? "on" : ""}" data-scope="current">${STATE.season} drivers</button>
             <button class="${tScope === "all" ? "on" : ""}" data-scope="all">All-time</button>
           </div>
         </div>

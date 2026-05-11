@@ -207,6 +207,17 @@ TRACK_CODES = {
     "martinsville": "MAR", "bristol": "BRI", "kansas": "KAN",
     "talladega": "TAL", "texas": "TEX", "fort worth": "TEX",
     "watkins glen": "WGI", "glen": "WGI",
+    # Charlotte Motor Speedway hosts TWO distinct races: the 1.5-mile oval
+    # (Coke 600, Bank of America 500) and the "Roval" road course (added
+    # 2018, runs the playoffs round of 12 cutoff). Same physical complex
+    # but radically different track configurations — they need separate
+    # track codes so the per-track history doesn't merge ovals with road
+    # course finishes. More-specific names FIRST since matching is
+    # substring-based (first hit wins). Code: ROV for Roval.
+    # (CLR is taken — it's a team code for Coulter Racing.)
+    "charlotte motor speedway road course": "ROV",  # the Roval
+    "charlotte road course": "ROV",
+    "roval": "ROV",
     "charlotte": "CLT",
     # Specific 'nashville superspeedway' MUST appear before bare 'nashville'
     # since matching is substring-based (first hit wins).
