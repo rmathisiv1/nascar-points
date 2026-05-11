@@ -11240,11 +11240,33 @@ function renderRaceSessionTabs(race, resultsHTML) {
   const p1Rows = collect("practice1_rank", "practice1_time", "practice1_speed", "practice1_laps");
   const p2Rows = collect("practice2_rank", "practice2_time", "practice2_speed", "practice2_laps");
   const qualRows = collect("qual_pos", "qual_time", "qual_speed", null);
+
+  // Loop stats — per-driver in-race timing-and-scoring data. Sorted by
+  // Driver Rating descending (best in-race performers at top), which
+  // often diverges from finish order (a driver who led 80 laps but
+  // crashed late can still have a top-3 Driver Rating).
+  const loopRows = (race.results || [])
+    .filter(d => d.loop_driver_rating != null)
+    .map(d => ({
+      driver: d.driver,
+      car_number: d.car_number,
+      finish: d.finish_pos,
+      avg_pos: d.loop_avg_pos,
+      high_pos: d.loop_high_pos,
+      low_pos: d.loop_low_pos,
+      pass_diff: d.loop_pass_diff,
+      quality_passes: d.loop_quality_passes,
+      pct_top15: d.loop_pct_top15_laps,
+      fastest_laps: d.loop_fastest_laps,
+      driver_rating: d.loop_driver_rating,
+    }))
+    .sort((a, b) => (b.driver_rating ?? -1) - (a.driver_rating ?? -1));
+
   const hasRace = !!resultsHTML;
 
   // No tabs to show — fall back to legacy behavior (just the race
   // results table if it exists, otherwise nothing).
-  if (!hasRace && p1Rows.length === 0 && p2Rows.length === 0 && qualRows.length === 0) {
+  if (!hasRace && p1Rows.length === 0 && p2Rows.length === 0 && qualRows.length === 0 && loopRows.length === 0) {
     return "";
   }
 
@@ -11256,6 +11278,10 @@ function renderRaceSessionTabs(race, resultsHTML) {
   if (hasRace) {
     tabs.push({ id: "race", label: "Race" });
     panes.push({ id: "race", html: resultsHTML });
+  }
+  if (loopRows.length) {
+    tabs.push({ id: "loop", label: "Loop Stats" });
+    panes.push({ id: "loop", html: renderLoopStatsTable(loopRows) });
   }
   if (p1Rows.length) {
     tabs.push({ id: "p1", label: "Practice 1" });
@@ -11284,6 +11310,83 @@ function renderRaceSessionTabs(race, resultsHTML) {
   return `<div class="rc-sessions-tabbed" id="rc-sessions">
     <div class="rc-session-tabstrip" role="tablist">${tabsHTML}</div>
     <div class="rc-session-panes">${panesHTML}</div>
+  </div>`;
+}
+
+// Render the Loop Stats table. Loop data exposes how a driver actually
+// ran in the race, independent of finish position — useful for spotting
+// "drivers who ran the race well but got crashed out" or vice versa.
+//
+// Columns chosen for density + insight:
+//   Fin  - final finish (cross-reference vs the rating)
+//   Car  - car number tag
+//   Driver
+//   Avg Pos - average running position (most important — true race pace)
+//   High/Low - best and worst position held (range gives volatility)
+//   Pass Diff - net green-flag passes (positive = good mover)
+//   QPasses - quality passes (passing cars currently in top 15)
+//   %Top15 - % of laps spent running in top 15 (consistency)
+//   FastLaps - count of laps this driver had the fastest lap on
+//   Rating - NASCAR Driver Rating (0-150 composite, ~70 average)
+function renderLoopStatsTable(rows) {
+  if (!rows.length) return "";
+  const trHTML = rows.map(r => {
+    const carHex = colorFor(STATE.series, r.car_number);
+    const txt = contrastTextFor(carHex);
+    const driverHref = `#/driver/${slugify(r.driver || '')}`;
+    // Color the rating: 100+ exceptional (green), 80-99 strong, 60-79 mid,
+    // <60 poor (red). Use the same tone classes used in driver-profile.
+    const rating = r.driver_rating;
+    const tone = rating == null ? ""
+      : rating >= 100 ? "hot"
+      : rating < 60 ? "cold"
+      : "";
+    return `<tr>
+      <td class="num">${r.finish ?? "—"}</td>
+      <td><span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(r.car_number)}</span></td>
+      <td><a class="profile-link" href="${driverHref}">${escapeHTML(r.driver || "")}</a></td>
+      <td class="num mono">${r.avg_pos != null ? r.avg_pos.toFixed(1) : "—"}</td>
+      <td class="num mono dim">${r.high_pos ?? "—"}</td>
+      <td class="num mono dim">${r.low_pos ?? "—"}</td>
+      <td class="num mono">${r.pass_diff != null ? (r.pass_diff > 0 ? "+" : "") + r.pass_diff : "—"}</td>
+      <td class="num mono">${r.quality_passes ?? "—"}</td>
+      <td class="num mono">${r.pct_top15 != null ? r.pct_top15.toFixed(1) : "—"}</td>
+      <td class="num mono">${r.fastest_laps ?? "—"}</td>
+      <td class="num mono ${tone}"><strong>${rating != null ? rating.toFixed(1) : "—"}</strong></td>
+    </tr>`;
+  }).join("");
+
+  // Subtitle highlights the rating leader (often != race winner)
+  const leader = rows[0];
+  const leaderLine = leader && leader.driver
+    ? `Highest rating: ${escapeHTML(leader.driver)}${leader.car_number ? ` (#${escapeHTML(leader.car_number)})` : ""} · ${leader.driver_rating?.toFixed(1) ?? "—"}`
+    : "";
+
+  return `<div class="card rc-card rc-card-wide rc-session-card">
+    <div class="rc-card-head">
+      <span class="rc-card-title">Loop Stats</span>
+      <span class="rc-card-sub">${leaderLine}</span>
+    </div>
+    <div class="rc-card-body" style="padding:0;">
+      <div style="overflow-x:auto;">
+        <table class="data-table rc-session-table rc-loop-table">
+          <thead><tr>
+            <th class="num">Fin</th>
+            <th>Car</th>
+            <th>Driver</th>
+            <th class="num" title="Average running position">Avg Pos</th>
+            <th class="num" title="Best position held">High</th>
+            <th class="num" title="Worst position held">Low</th>
+            <th class="num" title="Net green-flag passes (passes - times passed)">Pass Diff</th>
+            <th class="num" title="Quality passes (cars passed while they were in the top 15)">QPasses</th>
+            <th class="num" title="Percent of laps running in the top 15">%Top15</th>
+            <th class="num" title="Number of laps this driver had the fastest lap">FastLaps</th>
+            <th class="num" title="NASCAR Driver Rating: 0-150 composite (~70 average)">Rating</th>
+          </tr></thead>
+          <tbody>${trHTML}</tbody>
+        </table>
+      </div>
+    </div>
   </div>`;
 }
 

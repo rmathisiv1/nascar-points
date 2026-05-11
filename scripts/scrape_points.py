@@ -167,6 +167,32 @@ class DriverRace:
     practice2_time: Optional[float] = None
     practice2_speed: Optional[float] = None
     practice2_laps: Optional[int] = None
+    # === Loop Data (post-race in-race statistics) ===
+    # NASCAR's "loop data" is captured from timing-and-scoring loops
+    # embedded around the track. Available from RR's /loopdata/ page for
+    # most races 2005+. Captures things you can't see in the final
+    # results: how high/low a driver ran, how often they were in the
+    # top 15, etc. Driver Rating is NASCAR's composite metric (0-150
+    # scale, ~70 is average) combining wins, finish, laps led, etc.
+    loop_start: Optional[int] = None       # starting position (per loop data — may differ
+                                            # from start_pos if there were post-qual adjustments)
+    loop_mid_race: Optional[int] = None    # position at the midpoint
+    loop_finish: Optional[int] = None      # finish position per loop data
+    loop_high_pos: Optional[int] = None    # best position held at any point
+    loop_low_pos: Optional[int] = None     # worst position held at any point
+    loop_avg_pos: Optional[float] = None   # average running position across the race
+    loop_pass_diff: Optional[int] = None   # green-flag passes made minus times passed
+    loop_gf_passes: Optional[int] = None   # total green-flag passes made
+    loop_gf_passed: Optional[int] = None   # times passed under green
+    loop_quality_passes: Optional[int] = None       # passes of cars running in top 15
+    loop_pct_quality_passes: Optional[float] = None # quality / gf_passes %
+    loop_fastest_laps: Optional[int] = None         # count of laps where this driver was fastest
+    loop_top15_laps: Optional[int] = None           # count of laps spent running in top 15
+    loop_pct_top15_laps: Optional[float] = None     # % of laps in top 15
+    loop_laps_led: Optional[int] = None             # mirrors race-results laps_led
+    loop_pct_laps_led: Optional[float] = None
+    loop_total_laps: Optional[int] = None
+    loop_driver_rating: Optional[float] = None      # 0-150 composite, ~70 average
 
 
 @dataclass
@@ -592,6 +618,42 @@ def parse_race(race_url: str, series_code: str, round_num: int,
                     d.practice2_speed = p.get("speed")
                     d.practice2_laps = p.get("laps")
 
+    # === Loop Data enrichment ===
+    # NASCAR's loop-data page exposes in-race timing-and-scoring stats:
+    # driver rating, avg position, # of fastest laps, pct in top 15, etc.
+    # The page is /loopdata/{YYYY-NN}/{W|B|C} and the table has class
+    # `loopData`. Unlike qual/practice, the loop-data rows don't include
+    # car numbers, so we key by driver name (case-insensitive, normalized
+    # to strip punctuation like "John H. Nemechek" -> "john h nemechek").
+    if not SKIP_SESSIONS and race.results and season is not None:
+        loop_url = _build_loop_url(season, round_num, series_code)
+        if loop_url:
+            loop_map = _fetch_loop_page(loop_url)
+            if loop_map:
+                for d in race.results:
+                    key = _norm_driver_name(d.driver)
+                    lp = loop_map.get(key)
+                    if not lp:
+                        continue
+                    d.loop_start = lp.get("start")
+                    d.loop_mid_race = lp.get("mid_race")
+                    d.loop_finish = lp.get("finish")
+                    d.loop_high_pos = lp.get("high_pos")
+                    d.loop_low_pos = lp.get("low_pos")
+                    d.loop_avg_pos = lp.get("avg_pos")
+                    d.loop_pass_diff = lp.get("pass_diff")
+                    d.loop_gf_passes = lp.get("gf_passes")
+                    d.loop_gf_passed = lp.get("gf_passed")
+                    d.loop_quality_passes = lp.get("quality_passes")
+                    d.loop_pct_quality_passes = lp.get("pct_quality_passes")
+                    d.loop_fastest_laps = lp.get("fastest_laps")
+                    d.loop_top15_laps = lp.get("top15_laps")
+                    d.loop_pct_top15_laps = lp.get("pct_top15_laps")
+                    d.loop_laps_led = lp.get("laps_led")
+                    d.loop_pct_laps_led = lp.get("pct_laps_led")
+                    d.loop_total_laps = lp.get("total_laps")
+                    d.loop_driver_rating = lp.get("driver_rating")
+
     # Even if results parsing failed for some reason, keep the race entry
     # if we have date/track info — schedule data is more useful than nothing.
     if not race.results and not (race.date or race.track):
@@ -796,6 +858,144 @@ def _fetch_practice_page(practice_url: str) -> dict:
         print(f"    ! practice fetch failed: {e}", file=sys.stderr)
         return {}
     return _parse_practice_table(html)
+
+
+def _build_loop_url(season: int, round_num: int, series_code: str) -> Optional[str]:
+    """
+    Loop-data page URL.
+
+    Racing-Reference exposes per-race loop data (driver rating, avg pos,
+    quality passes, etc.) at:
+      https://www.racing-reference.info/loopdata/{season}-{NN}/{letter}
+
+    Confirmed working for current-era NCS, NOS, NTS. Pre-2005 races may
+    not have loop data — the fetch will succeed but return an empty
+    table.
+    """
+    series_letter = {"NCS": "W", "NOS": "B", "NTS": "C"}.get(series_code)
+    if not series_letter:
+        return None
+    race_id = f"{season}-{round_num:02d}"
+    return f"https://www.racing-reference.info/loopdata/{race_id}/{series_letter}"
+
+
+def _norm_driver_name(name: str) -> str:
+    """
+    Normalize a driver name for cross-source matching. RR's loop data
+    table doesn't include car numbers, so we match against the race
+    results by driver name. Names can vary in punctuation between pages
+    ("John H. Nemechek" vs "John H Nemechek"), so we strip punctuation
+    and lowercase. Also collapses multiple spaces.
+    """
+    if not name:
+        return ""
+    s = re.sub(r"[^A-Za-z0-9 ]+", "", name).strip().lower()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def _parse_loop_table(html: str) -> dict:
+    """
+    Parse RR's loop-data table (class="loopData") at /loopdata/YYYY-NN/letter.
+
+    Column layout (verified 2026):
+        Driver | Start | Mid Race | Finish | High Pos. | Low Pos. |
+        Avg. Pos. | Pass Diff. | Green Flag Passes | GF Times Passed |
+        Quality Passes | Pct. Quality Passes | Fastest Lap |
+        Top 15 Laps | Pct. Top 15 Laps | Laps Led | Pct. Laps Led |
+        Total Laps | DRIVER RATING
+
+    Data rows have 19 cells: cell[0] is the driver name, cells[1..18]
+    are the 18 numeric stats in the order above. The header row also
+    has 19 cells (matching layout). RR's table HTML is structurally
+    weird (lots of nested span/div), but the row/cell topology is
+    consistent so we can walk it directly.
+
+    Returns {normalized_driver_name: {...stats...}} for downstream
+    lookup. Driver name keys are normalized via _norm_driver_name.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    tbl = soup.find("table", class_="loopData")
+    if tbl is None:
+        # Fallback: find any table mentioning "Driver Rating"
+        for t in soup.find_all("table"):
+            if "Driver Rating" in t.get_text():
+                tbl = t
+                break
+    if tbl is None:
+        return {}
+
+    by_driver: dict = {}
+    for tr in tbl.find_all("tr"):
+        cells = tr.find_all(["td", "th"])
+        if len(cells) < 19:
+            continue
+        # Skip header rows: cell[0] of header is "Driver" or similar; we
+        # want rows where cell[0] is a person's name. Heuristic: name
+        # should contain at least one alphabetic character and NOT be
+        # a known header label.
+        name_raw = cells[0].get_text(" ", strip=True)
+        if not name_raw:
+            continue
+        nl = name_raw.lower()
+        # Header rows have first-cell text like "Driver" or the giant
+        # blob of "Loop data for this race: Driver Start ...". Skip
+        # anything that doesn't look like a person's name (≤4 words,
+        # >=2 chars per word avg).
+        if nl == "driver" or nl.startswith("loop data for this race"):
+            continue
+        # Some rows are summary/footer rows — bail out if the rest of
+        # the cells aren't numeric-looking.
+        try:
+            start = int(cells[1].get_text(strip=True))
+        except (ValueError, IndexError):
+            continue
+
+        def fnum(idx, kind="int"):
+            """Parse cells[idx] as int or float, returning None on failure."""
+            try:
+                txt = cells[idx].get_text(strip=True)
+                if not txt or txt == "—":
+                    return None
+                return int(txt) if kind == "int" else float(txt)
+            except (ValueError, IndexError):
+                return None
+
+        by_driver[_norm_driver_name(name_raw)] = {
+            "driver":              name_raw,
+            "start":               start,
+            "mid_race":            fnum(2, "int"),
+            "finish":              fnum(3, "int"),
+            "high_pos":            fnum(4, "int"),
+            "low_pos":             fnum(5, "int"),
+            "avg_pos":             fnum(6, "float"),
+            "pass_diff":           fnum(7, "int"),
+            "gf_passes":           fnum(8, "int"),
+            "gf_passed":           fnum(9, "int"),
+            "quality_passes":      fnum(10, "int"),
+            "pct_quality_passes":  fnum(11, "float"),
+            "fastest_laps":        fnum(12, "int"),
+            "top15_laps":          fnum(13, "int"),
+            "pct_top15_laps":      fnum(14, "float"),
+            "laps_led":            fnum(15, "int"),
+            "pct_laps_led":        fnum(16, "float"),
+            "total_laps":          fnum(17, "int"),
+            "driver_rating":       fnum(18, "float"),
+        }
+    return by_driver
+
+
+def _fetch_loop_page(loop_url: str) -> dict:
+    """Fetch + parse a loop-data page. Returns {} on any error."""
+    try:
+        html = fetch(loop_url)
+    except Exception as e:
+        # Older races (pre-2005) don't have loop data — 404 is normal
+        err = str(e).lower()
+        if "404" not in err:
+            print(f"    ! loop fetch failed: {e}", file=sys.stderr)
+        return {}
+    return _parse_loop_table(html)
 
 
 def _fetch_cc_page(cc_url: str) -> dict:
