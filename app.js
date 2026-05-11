@@ -1157,9 +1157,16 @@ async function resolveDriverRoute() {
   // First-pass home detection from already-cached seasons
   let home = findDriverHomeContext(slug);
 
-  // If not found, opportunistically try recent years that may not be cached
+  // If not found, opportunistically try recent years that may not be cached.
+  // Walks back to STATE.season - 8 to catch drivers who retired recently
+  // (Clint Bowyer 2020, Kurt Busch 2022, etc). Hard cap of 8 years keeps
+  // network usage bounded — drivers from before that window will fall
+  // through to the bio-based fallback in renderProfile.
   if (!home.found) {
-    const yearsToTry = [STATE.season, STATE.season - 1, STATE.season - 2];
+    const yearsToTry = [];
+    for (let dy = 0; dy <= 8; dy++) {
+      yearsToTry.push(STATE.season - dy);
+    }
     for (const y of yearsToTry) {
       if (SEASON_CACHE[y]) continue;
       try {
@@ -5968,6 +5975,49 @@ function driverPerspectiveEntity(entity, targetDriverSlug) {
   };
 }
 
+// Walk SEASON_CACHE to find the most recent (year, series) where a
+// driver with the given slug had at least one race. Used by the
+// inactive-driver fallback on the profile page to offer a "View
+// 2020 season →" deep link instead of dead-ending the user.
+//
+// Returns {year, series, driver, starts} or null if the driver never
+// appears in any loaded season block.
+function findLastActiveSeasonForDriver(slug) {
+  if (!slug || !SEASON_CACHE) return null;
+  let best = null;
+  Object.keys(SEASON_CACHE).forEach(yearStr => {
+    const year = parseInt(yearStr, 10);
+    if (!Number.isFinite(year)) return;
+    ["NCS", "NOS", "NTS"].forEach(s => {
+      const block = SEASON_CACHE[yearStr] && SEASON_CACHE[yearStr][s];
+      if (!block || !block.races) return;
+      let driverName = null;
+      let starts = 0;
+      block.races.forEach(r => {
+        (r.results || []).forEach(d => {
+          if (slugify(d.driver || "") === slug && d.finish_pos != null) {
+            starts++;
+            driverName = driverName || d.driver;
+          }
+        });
+      });
+      if (starts === 0) return;
+      // Prefer most-recent year. Among ties (driver ran NCS + NOS in
+      // the same year), prefer the series with the most starts. NCS
+      // breaks remaining ties since it's the top series.
+      const seriesOrder = { NCS: 0, NOS: 1, NTS: 2 };
+      const isBetter = !best
+        || year > best.year
+        || (year === best.year && starts > best.starts)
+        || (year === best.year && starts === best.starts && seriesOrder[s] < seriesOrder[best.series]);
+      if (isBetter) {
+        best = { year, series: s, driver: driverName, starts };
+      }
+    });
+  });
+  return best;
+}
+
 function findEntityFromSlug() {
   if (!STATE.data || !STATE.profile.slug) return null;
 
@@ -6423,6 +6473,101 @@ function renderProfile() {
 
   const entity = findEntityFromSlug();
   if (!entity) {
+    // Inactive-driver fallback. The driver isn't in the current year's
+    // standings (and resolveDriverRoute walked back 8 years without
+    // finding them), but they may still be in the static drivers.json
+    // bio file (every driver who ever raced) and/or in older
+    // SEASON_CACHE years that happen to be loaded. If so, show a
+    // friendly redirect screen with their bio + career totals instead
+    // of a dead end.
+    const slug = STATE.profile.slug || "";
+    const bio = (STATE.driverBios && STATE.driverBios[slug]) || null;
+    const lastActive = findLastActiveSeasonForDriver(slug);
+
+    if (bio || lastActive) {
+      const displayNameStr = (bio && bio.full_name) || lastActive?.driver || slug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const careerLines = [];
+      if (bio && bio.dob) {
+        const age = calcAge(bio.dob);
+        if (age != null) careerLines.push(`<span class="v">${age}</span> years old`);
+      }
+      if (bio && bio.hometown && isPlausibleHometown(bio.hometown)) {
+        careerLines.push(`<span class="v">${escapeHTML(bio.hometown)}</span>`);
+      }
+      const careerLine = careerLines.length ? `<div class="profile-hero-meta">${careerLines.join(" · ")}</div>` : "";
+
+      // If we found a recent season in SEASON_CACHE, offer a deep link
+      // that flips to historical mode for that year. Without this the
+      // user has no clear path forward — they'd have to manually toggle
+      // historical, pick the right year, find the driver, click. The
+      // onclick handler sets up historical context before re-routing.
+      let lastActiveButton = "";
+      if (lastActive) {
+        lastActiveButton = `
+          <button class="profile-backlink" id="profile-jump-historical"
+                  data-year="${lastActive.year}"
+                  data-series="${lastActive.series}"
+                  data-slug="${escapeHTML(slug)}">
+            View ${lastActive.year} ${lastActive.series} season →
+          </button>`;
+      } else {
+        // No cached year had them — likely a pre-Cup-era driver. Hint
+        // at the Historical toggle without making promises.
+        lastActiveButton = `
+          <span class="muted" style="font-size:11px;">
+            Switch to <strong>Historical</strong> mode and pick a year to browse their seasons.
+          </span>`;
+      }
+
+      // Career totals panel still works (reads STATE.driverBios directly).
+      const careerPanelHTML = (bio && bio.career && Object.keys(bio.career).length > 0)
+        ? renderCareerTotalsPanel(bio.career, null, displayNameStr)
+        : "";
+
+      host.innerHTML = `
+        <div class="view-head">
+          <h1>${escapeHTML(displayNameStr)}</h1>
+          <div class="view-sub">
+            Not active in ${STATE.season} ${STATE.series}.
+            ${lastActiveButton}
+          </div>
+          ${careerLine}
+        </div>
+        ${careerPanelHTML}
+      `;
+
+      // Wire the jump-to-historical button. Sets historical mode +
+      // target year/series, then re-navigates to the same driver URL
+      // so resolveDriverRoute picks up the now-loadable context.
+      const jumpBtn = document.getElementById("profile-jump-historical");
+      if (jumpBtn) {
+        jumpBtn.addEventListener("click", async () => {
+          const y = parseInt(jumpBtn.dataset.year, 10);
+          const s = jumpBtn.dataset.series;
+          if (!Number.isFinite(y) || !s) return;
+          STATE.mode = "historical";
+          STATE.season = y;
+          STATE.series = s;
+          STATE.throughRound = null;
+          await loadCurrentData();
+          resetRenderCache();
+          // Re-trigger profile render in the new context
+          await resolveDriverRoute();
+          render();
+        });
+      }
+
+      // Paint rating chart + notable performances using cross-year data
+      // (these will gracefully handle missing data).
+      setTimeout(() => {
+        paintProfileRatingChart(displayNameStr);
+        paintProfileNotable(displayNameStr);
+      }, 0);
+      return;
+    }
+
+    // Truly unknown — no bio, no historical record. Keep the legacy
+    // dead-end message for these (typos, deleted slugs, etc).
     host.innerHTML = `
       <div class="view-head"><h1>Profile not found</h1>
         <div class="view-sub">No driver or car matched "${escapeHTML(STATE.profile.slug || "")}" in ${STATE.season} ${STATE.series}. <a href="#/standings" class="profile-backlink">Back to Standings →</a></div>
@@ -10513,6 +10658,12 @@ function heatmapColor(finish) {
   if (finish == null) return "transparent";
   const clamp = (a, lo, hi) => Math.max(lo, Math.min(hi, a));
   const t = clamp(finish, 1, 40);
+  // Wins (P1) get a distinct gold treatment instead of the deepest green,
+  // so they stand out from the rest of the top-5 finishes at a glance.
+  // Uses the same gold tone the NCS series pill uses elsewhere (#f0c558).
+  if (t === 1) {
+    return `rgba(240, 197, 88, 0.85)`;
+  }
   if (t <= 20) {
     const k = 1 - (t - 1) / 19;
     const a = 0.18 + 0.57 * k;
@@ -10525,6 +10676,8 @@ function heatmapColor(finish) {
 }
 function heatmapText(finish) {
   if (finish == null) return "var(--dim)";
+  // Wins use a dark slate text against the gold background for max contrast
+  if (finish === 1) return "#1a1300";
   if (finish <= 5) return "#00140a";
   if (finish >= 35) return "#230707";
   if (finish <= 10) return "#cef5d9";
