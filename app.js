@@ -11028,14 +11028,22 @@ function renderCompare() {
     const allYears = Object.keys(SEASON_CACHE).map(Number);
     const expectedYears = STATE.seasonsAvailable || [];
     const missingYears = expectedYears.filter(y => !allYears.includes(y));
+    console.log("[compare] career load check:",
+      "cached=", allYears.length,
+      "expected=", expectedYears.length,
+      "missing=", missingYears.length,
+      "willLoad=", missingYears.slice(0, 8));
     if (missingYears.length > 0) {
       // Show loading state in the chart label so the user knows why
-      // the chart looks thin. Strict if check: only set if the label
-      // hasn't already been overridden this render.
+      // the chart looks thin.
       const lbl = document.getElementById("cmp-chart-label");
       if (lbl) lbl.textContent += "  ·  Loading history…";
-      Promise.all(missingYears.slice(0, 8).map(y => loadSeasonIntoCache(y).catch(() => null)))
+      Promise.all(missingYears.slice(0, 8).map(y => loadSeasonIntoCache(y).catch(e => {
+        console.log("[compare] load error year=", y, e);
+        return null;
+      })))
         .then(() => {
+          console.log("[compare] batch done. cache size now=", Object.keys(SEASON_CACHE).length);
           if (STATE.view !== "compare") return;
           renderCompare();
         });
