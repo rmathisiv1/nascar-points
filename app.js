@@ -3319,6 +3319,23 @@ function renderFormTable() {
     return { ...d, formRating, seasonRating, deltaR, lastFinishes, totalPts, windowPts, windowPtsDelta, fullTime: isFullTime(d) };
   });
 
+  // Compute avg NASCAR Driver Rating across the form window for each
+  // entity. Loop data lives on the per-race result row (loop_driver_rating)
+  // so we just walk shown-window races and average. Drivers/cars with
+  // no loop data in the window get null. Pre-2005 era races also have
+  // null. We compute this AFTER the spread above so it integrates cleanly
+  // with the sortable column logic that follows.
+  decorated.forEach(d => {
+    const ratings = (d.races || [])
+      .filter(r => shownRaces.some(sr => sr.round === r.round))
+      .map(r => r.loop_driver_rating)
+      .filter(v => v != null);
+    d.windowRating = ratings.length
+      ? ratings.reduce((s, x) => s + x, 0) / ratings.length
+      : null;
+    d.windowRatingRaces = ratings.length;
+  });
+
   if (STATE.form.ftOnly) decorated = decorated.filter(d => d.fullTime);
 
   // Assign rank by season totalPts (descending) — used by the Pos column.
@@ -3370,6 +3387,11 @@ function renderFormTable() {
       </td>
       <td class="num">${deltaPill(d.deltaR)}</td>
       <td class="num">${
+        d.windowRating == null
+          ? `<span class="muted">—</span>`
+          : `<span class="${d.windowRating >= 100 ? "hot" : d.windowRating < 70 ? "cold" : ""}" title="Avg NASCAR Driver Rating across ${d.windowRatingRaces} races in this window. 100+ = championship-caliber, ~70 = average.">${d.windowRating.toFixed(1)}</span>`
+      }</td>
+      <td class="num">${
         (d.windowPts == null)
           ? `<span class="muted">—</span>`
           : `<span class="pts-delta-only ${d.windowPtsDelta != null && d.windowPtsDelta > 1.5 ? "hot" : d.windowPtsDelta != null && d.windowPtsDelta < -1.5 ? "cold" : ""}">+${d.windowPts}</span>`
@@ -3401,6 +3423,7 @@ function renderFormTable() {
           <th>${formColLabel}</th>
           ${th("formRating", "Rating", true)}
           ${th("deltaR", "vs Season", true)}
+          ${th("windowRating", "Drv Rating", true)}
           ${th("windowPts", windowPtsLabel, true)}
           ${th("totalPts", "Total Pts", true)}
         </tr>
@@ -6513,8 +6536,11 @@ function renderProfile() {
 
   // Career totals panel: works for both driver and car profiles.
   // Car profiles label it explicitly as being the primary driver's career.
+  // bioDriverName is also passed so the panel can compute on-the-fly
+  // loop-data aggregates (avg Driver Rating, etc.) by walking
+  // SEASON_CACHE — these don't live in the static drivers.json.
   const careerPanelHTML = (bio && bio.career && Object.keys(bio.career).length > 0)
-    ? renderCareerTotalsPanel(bio.career, kind === "owner" ? bioDriverName : null)
+    ? renderCareerTotalsPanel(bio.career, kind === "owner" ? bioDriverName : null, bioDriverName)
     : (STATE.driverBios === null
         ? "" // no data file yet — just hide the panel instead of showing a nag
         : `<div class="profile-panel full">
@@ -6610,6 +6636,16 @@ function renderProfile() {
         </div>
       </div>
 
+      <div class="profile-panel" id="profile-rating-panel" style="display:none;">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">Driver Rating</span>
+          <span class="profile-panel-sub" id="profile-rating-sub">In-race performance</span>
+        </div>
+        <div class="profile-panel-body">
+          <svg id="profile-rating-chart" style="width:100%;height:140px;display:block;"></svg>
+        </div>
+      </div>
+
       <div class="profile-panel full">
         <div class="profile-panel-head">
           <span class="profile-panel-title" id="profile-track-splits-title">${STATE.profile.splitsRange === "career" ? "Career" : STATE.season} Track Splits</span>
@@ -6686,6 +6722,7 @@ function renderProfile() {
   paintProfileTrackSplits(entity);
   paintProfileRaceTable(rows, kind);
   paintProfileCareerHeatmap();
+  paintProfileRatingChart(bioDriverName);
   wireCoDriverBadges(host);
 
   // Opportunistically load more seasons so the career-context strip fills
@@ -6753,10 +6790,61 @@ function isPlausibleHometown(s) {
   return true;
 }
 
+// Walk SEASON_CACHE across all loaded years and compute per-series loop-
+// data aggregates for the given driver name. Returns:
+//   { NCS: { avg_rating, races_with_rating, ratings: [...] }, NOS: ..., NTS: ... }
+// Series with no loop-data races are omitted. Used both for the career
+// "Avg Rating" tile and the Driver Rating sparkline chart.
+//
+// Driver-name matching uses normalizeDriverName for cross-source robustness
+// (handles "John H. Nemechek" vs "John H Nemechek" etc).
+function computeDriverLoopAggregates(driverName) {
+  const out = {};
+  if (!driverName) return out;
+  const targetKey = normalizeDriverName(driverName);
+  if (!targetKey) return out;
+
+  ["NCS", "NOS", "NTS"].forEach(code => {
+    const ratings = [];   // {year, round, rating, date, track_code}
+    Object.keys(SEASON_CACHE).forEach(yearStr => {
+      const year = parseInt(yearStr, 10);
+      const block = SEASON_CACHE[yearStr] && SEASON_CACHE[yearStr][code];
+      if (!block || !block.races) return;
+      block.races.forEach(r => {
+        const d = (r.results || []).find(x =>
+          normalizeDriverName(x.driver || "") === targetKey
+        );
+        if (!d || d.loop_driver_rating == null) return;
+        ratings.push({
+          year,
+          round: r.round,
+          rating: d.loop_driver_rating,
+          date: r.date,
+          track_code: r.track_code,
+        });
+      });
+    });
+    if (ratings.length === 0) return;
+    // Sort chronologically for downstream chart consumers.
+    ratings.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const sum = ratings.reduce((acc, x) => acc + x.rating, 0);
+    out[code] = {
+      avg_rating: sum / ratings.length,
+      races_with_rating: ratings.length,
+      ratings,
+    };
+  });
+
+  return out;
+}
+
 // Render the career-totals panel using scraped per-series totals.
 // If `carModeDriverName` is non-null, we're on a car profile and should note
 // that the career stats belong to the primary driver of the car, not the car.
-function renderCareerTotalsPanel(career, carModeDriverName) {
+// `driverName` is the driver to look up for on-the-fly loop-data aggregates
+// (avg Driver Rating, etc.) — these are computed by walking SEASON_CACHE
+// since loop data lives in the per-season JSON, not in drivers.json.
+function renderCareerTotalsPanel(career, carModeDriverName, driverName) {
   const SERIES_ORDER = ["NCS", "NOS", "NTS"];
   // Career stats span all years; use the modern label (no season context).
   // The Xfinity → O'Reilly rename only kicks in when a specific season is
@@ -6773,11 +6861,19 @@ function renderCareerTotalsPanel(career, carModeDriverName) {
     </div>`;
   }
 
+  // Compute per-series loop-data aggregates from cached SEASON_CACHE.
+  // Returns {NCS: {avg_rating, races_with_rating}, ...}. Only includes
+  // series where at least one race had a rating. Loop data only exists
+  // 2005+, so older-era drivers will produce empty results — that's
+  // fine, the UI handles missing data gracefully.
+  const loopAgg = computeDriverLoopAggregates(driverName);
+
   const cards = availableSeries.map(code => {
     const c = career[code];
     const winPct = (c.starts && c.wins != null) ? ((c.wins / c.starts) * 100).toFixed(1) : null;
     const t5Pct = (c.starts && c.top5 != null) ? ((c.top5 / c.starts) * 100).toFixed(1) : null;
     const t10Pct = (c.starts && c.top10 != null) ? ((c.top10 / c.starts) * 100).toFixed(1) : null;
+    const loop = loopAgg[code];
     return `<div class="career-card">
       <div class="career-card-head">
         <span class="career-series-code">${code}</span>
@@ -6808,6 +6904,21 @@ function renderCareerTotalsPanel(career, carModeDriverName) {
             <span class="k">Start→Finish</span>
             <span class="v ${tone}">${sign}${delta.toFixed(1)}</span>
             <span class="pct">${label}</span>
+          </div>`;
+        })()}
+        ${(() => {
+          // Career Driver Rating average — NASCAR's composite in-race
+          // performance metric (0-150 scale, ~70 average, 100+ strong).
+          // Only renders for series where we have at least one race
+          // with loop data. Pre-2005 racers and series that lack loop
+          // data will simply not show this tile.
+          if (!loop || loop.avg_rating == null || loop.races_with_rating < 3) return "";
+          const r = loop.avg_rating;
+          const rTone = r >= 100 ? "hot" : r < 70 ? "cold" : "";
+          return `<div class="career-stat" title="Average NASCAR Driver Rating across ${loop.races_with_rating} races. 0-150 scale, ~70 average, 100+ is championship-caliber.">
+            <span class="k">Avg Rating</span>
+            <span class="v ${rTone}">${r.toFixed(1)}</span>
+            <span class="pct">${loop.races_with_rating} races</span>
           </div>`;
         })()}
       </div>
@@ -7244,6 +7355,109 @@ function computeCareerTrackSplits(driverSlug, seriesFilter) {
     };
   }
   return result;
+}
+
+// Paint a small line chart of the driver's NASCAR Driver Rating over
+// time. Pulls per-race ratings from SEASON_CACHE via
+// computeDriverLoopAggregates, then renders a sparkline-style chart
+// scaled to the rating range (typically 0-150). The reference line at
+// 70 marks "league average" so users see immediately whether the
+// driver is consistently above or below average.
+//
+// Falls back to hiding the panel when:
+//   - fewer than 3 rated races exist (insufficient signal)
+//   - SEASON_CACHE doesn't have any years for this driver yet
+function paintProfileRatingChart(driverName) {
+  const panel = document.getElementById("profile-rating-panel");
+  const svg = document.getElementById("profile-rating-chart");
+  const sub = document.getElementById("profile-rating-sub");
+  if (!panel || !svg) return;
+
+  const agg = computeDriverLoopAggregates(driverName);
+  // Combine ratings across all 3 series into one chronological list.
+  // We color-code points by series so the user can see context, but
+  // the chart shape itself is one continuous timeline of in-race
+  // performance regardless of which series they ran.
+  const allPts = [];
+  ["NCS", "NOS", "NTS"].forEach(s => {
+    const a = agg[s];
+    if (!a) return;
+    a.ratings.forEach(r => allPts.push({ ...r, series: s }));
+  });
+  if (allPts.length < 3) {
+    panel.style.display = "none";
+    return;
+  }
+  allPts.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  panel.style.display = "";
+
+  // Subtitle: career avg + "n races" so the user has a single-number
+  // anchor before parsing the line shape.
+  const sum = allPts.reduce((s, p) => s + p.rating, 0);
+  const avg = sum / allPts.length;
+  if (sub) {
+    sub.textContent = `Career avg ${avg.toFixed(1)} · ${allPts.length} races`;
+  }
+
+  function draw() {
+    const rect = svg.getBoundingClientRect();
+    const W = Math.max(320, Math.floor(rect.width));
+    const H = 140;
+    const pad = { t: 12, r: 12, b: 18, l: 32 };
+    const innerW = W - pad.l - pad.r;
+    const innerH = H - pad.t - pad.b;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+    // Y range: 0-150 is the formal Driver Rating range, but pad a bit
+    // for visual breathing room. We always show the 70 reference line.
+    const yMin = 30;
+    const yMax = 150;
+    const yScale = v => pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+    const xScale = i => allPts.length === 1
+      ? pad.l + innerW / 2
+      : pad.l + (i / (allPts.length - 1)) * innerW;
+
+    // Reference line at 70 (league average) — labeled, slightly dimmed.
+    const refY = yScale(70);
+    const refLine = `<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${refY}" y2="${refY}" stroke-dasharray="3 3"/>`;
+    const refLabel = `<text class="axis-label" x="${pad.l - 4}" y="${refY + 3}" text-anchor="end" style="opacity:0.6;">70</text>`;
+    // Top + bottom labels
+    const topLabel = `<text class="axis-label" x="${pad.l - 4}" y="${pad.t + 4}" text-anchor="end">150</text>`;
+    const botLabel = `<text class="axis-label" x="${pad.l - 4}" y="${pad.t + innerH + 3}" text-anchor="end">30</text>`;
+
+    // Line path
+    const pathD = allPts.map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(i)} ${yScale(p.rating)}`).join(" ");
+    const pathHTML = `<path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/>`;
+
+    // Points — colored by series so users can see context. Tiny so
+    // they don't clutter the line shape but still readable on hover.
+    const seriesColors = {
+      NCS: "#f0c558",   // gold
+      NOS: "#6fdd96",   // green
+      NTS: "#f08c8c",   // red-ish
+    };
+    const dots = allPts.map((p, i) => {
+      const cx = xScale(i);
+      const cy = yScale(p.rating);
+      const col = seriesColors[p.series] || "var(--accent)";
+      const tip = `${p.year} R${p.round}${p.track_code ? " · " + p.track_code : ""}: ${p.rating.toFixed(1)}`;
+      return `<circle cx="${cx}" cy="${cy}" r="2.2" fill="${col}" stroke="var(--bg)" stroke-width="0.5">
+        <title>${tip}</title>
+      </circle>`;
+    }).join("");
+
+    svg.innerHTML = refLine + refLabel + topLabel + botLabel + pathHTML + dots;
+  }
+  draw();
+  // Re-draw on resize to keep proportions sharp. Listener is detached
+  // when the user navigates away from the profile (the SVG element
+  // disappears, so the callback is a no-op).
+  if (!svg.dataset.resizeBound) {
+    window.addEventListener("resize", () => {
+      if (document.getElementById("profile-rating-chart") === svg) draw();
+    });
+    svg.dataset.resizeBound = "1";
+  }
 }
 
 function paintProfileTrackSplits(entity) {
