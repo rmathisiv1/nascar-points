@@ -54,9 +54,12 @@ const STATE = {
   standings: { sortKey: "total", sortDir: "desc" },
   // Driver Compare tab: loop-data overlay across N drivers.
   // metric = which loop field drives the Y axis on the chart.
-  // scope = season-only vs career (all loaded years).
+  // scope  = season-only vs career (all loaded years).
+  // series = "active" (limit to STATE.series) vs "all" (cross-series career view).
+  //          We default to "active" so the chart matches the tab the user is on;
+  //          users explicitly opt in to "all" to see truck-only drivers etc.
   // drivers = array of driver slugs, in pick order (max ~6).
-  compare: { drivers: [], metric: "rating", scope: "season" },
+  compare: { drivers: [], metric: "rating", scope: "season", series: "active" },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
   selectedCar: null,
@@ -1740,6 +1743,8 @@ function parseHash() {
       if (m && ["rating", "pass_diff", "top15", "finish"].includes(m)) STATE.compare.metric = m;
       const sc = params.get("scope");
       if (sc && ["season", "career"].includes(sc)) STATE.compare.scope = sc;
+      const sr = params.get("series");
+      if (sr && ["active", "all"].includes(sr)) STATE.compare.series = sr;
     }
     STATE.lastHash = location.hash;
     return;
@@ -2287,14 +2292,15 @@ function wireUIControls() {
     });
   });
 
-  // Compare view toggles (metric + scope)
+  // Compare view toggles (metric + scope + series)
   document.querySelectorAll("#view-compare .toggle-group").forEach(g => {
     const group = g.dataset.group;
     g.querySelectorAll("button").forEach(b => {
       b.addEventListener("click", () => {
         g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
-        if (group === "cmp-metric") STATE.compare.metric = b.dataset.val;
-        if (group === "cmp-scope")  STATE.compare.scope = b.dataset.val;
+        if (group === "cmp-metric")  STATE.compare.metric = b.dataset.val;
+        if (group === "cmp-scope")   STATE.compare.scope  = b.dataset.val;
+        if (group === "cmp-series")  STATE.compare.series = b.dataset.val;
         syncCompareHash();
         renderCompare();
       });
@@ -10867,6 +10873,9 @@ function renderCompare() {
   document.querySelectorAll('.toggle-group[data-group="cmp-scope"] button').forEach(b => {
     b.classList.toggle("on", b.dataset.val === STATE.compare.scope);
   });
+  document.querySelectorAll('.toggle-group[data-group="cmp-series"] button').forEach(b => {
+    b.classList.toggle("on", b.dataset.val === STATE.compare.series);
+  });
 
   // ----- Render chips -----
   renderCompareChips();
@@ -10876,7 +10885,16 @@ function renderCompare() {
   // Update chart label up top
   if (chartLabel) {
     const labels = { rating: "Driver Rating", pass_diff: "Pass Diff (positions gained/lost)", top15: "% Laps in Top 15", finish: "Finish Position" };
-    const scopeLbl = STATE.compare.scope === "career" ? "career" : `${STATE.season} ${STATE.series}`;
+    let scopeLbl;
+    if (STATE.compare.scope === "season") {
+      scopeLbl = `${STATE.season} ${STATE.series}`;
+    } else {
+      // Career scope: honor the series toggle so the user knows whether
+      // they're seeing single-series career or cross-series career.
+      scopeLbl = (STATE.compare.series === "all")
+        ? "career · all series"
+        : `career · ${STATE.series}`;
+    }
     chartLabel.textContent = `${labels[STATE.compare.metric] || ""} — ${scopeLbl}`;
   }
 
@@ -10889,9 +10907,20 @@ function renderCompare() {
   if (empty) empty.hidden = (drivers.length >= 1); // <2 still shows the chart since one-driver overlay is harmless
 
   // ----- Gather per-driver data -----
-  const seriesScope = STATE.compare.scope === "career"
-    ? ["NCS", "NOS", "NTS"]
-    : [STATE.series];
+  // Determine which series to pull from. Season scope always uses the
+  // active series (you can't compare a Truck race against a Cup race in
+  // the same season-X view). Career scope honors the Series toggle:
+  //   active = only STATE.series (so NCS tab shows Cup careers only)
+  //   all    = all three series merged (true cross-series career arc)
+  // This is the fix for the "Truck driver appearing in Cup compare" bug.
+  let seriesScope;
+  if (STATE.compare.scope === "season") {
+    seriesScope = [STATE.series];
+  } else {
+    seriesScope = (STATE.compare.series === "all")
+      ? ["NCS", "NOS", "NTS"]
+      : [STATE.series];
+  }
   const yearFilter = STATE.compare.scope === "season"
     ? STATE.season
     : null;
@@ -10956,14 +10985,30 @@ function renderCompare() {
       sortKey: r.date || "",
     }));
   } else {
-    // career — union of all driver dates
+    // career — union of all driver race dates. Each tick is a single
+    // calendar date so dots align on shared race days, but axis LABELS
+    // only show year markers (one tick per year, at the first race of
+    // that year) since per-race date labels become unreadable across
+    // 5+ years of data.
     const dateSet = new Set();
     series.forEach(s => s.pts.forEach(p => p.date && dateSet.add(p.date)));
-    xDomain = Array.from(dateSet).sort().map(d => ({
-      key: d,
-      label: d.slice(2, 7).replace("-", "/"),  // "23-08" from "2023-08-15"
-      sortKey: d,
-    }));
+    const sortedDates = Array.from(dateSet).sort();
+    // Mark only the first date in each calendar year with a year label;
+    // every other tick gets an empty label so it's still positioned in
+    // the domain but doesn't print text. paintCompareChart's existing
+    // tickStep logic respects empty labels naturally.
+    let lastYear = null;
+    xDomain = sortedDates.map(d => {
+      const yr = d.slice(0, 4);
+      const isFirstOfYear = (yr !== lastYear);
+      lastYear = yr;
+      return {
+        key: d,
+        label: isFirstOfYear ? yr : "",   // only year tick labels in career view
+        sortKey: d,
+        showTick: isFirstOfYear,
+      };
+    });
   }
 
   // ----- Paint chart -----
@@ -10971,6 +11016,31 @@ function renderCompare() {
 
   // ----- Paint table -----
   paintCompareTable(tbl, series);
+
+  // ----- Opportunistic load for Career scope -----
+  // The chart and table can only show what's in SEASON_CACHE. In Career
+  // scope we want every available year loaded so retired drivers (Kurt
+  // Busch, Bowyer) actually plot. Profiles do this on mount — Compare
+  // needs the same treatment. We trigger a single batch load and
+  // re-render when it completes. Limited to 8 years per pass; further
+  // history backfills on subsequent re-renders.
+  if (STATE.compare.scope === "career" && STATE.compare.drivers.length > 0) {
+    const allYears = Object.keys(SEASON_CACHE).map(Number);
+    const expectedYears = STATE.seasonsAvailable || [];
+    const missingYears = expectedYears.filter(y => !allYears.includes(y));
+    if (missingYears.length > 0) {
+      // Show loading state in the chart label so the user knows why
+      // the chart looks thin. Strict if check: only set if the label
+      // hasn't already been overridden this render.
+      const lbl = document.getElementById("cmp-chart-label");
+      if (lbl) lbl.textContent += "  ·  Loading history…";
+      Promise.all(missingYears.slice(0, 8).map(y => loadSeasonIntoCache(y).catch(() => null)))
+        .then(() => {
+          if (STATE.view !== "compare") return;
+          renderCompare();
+        });
+    }
+  }
 }
 
 // Pluck the correct metric off a per-race record for chart plotting.
@@ -11102,12 +11172,20 @@ function paintCompareChart(svg, series, xDomain) {
   html += `<text class="axis-label" x="${pad.l - 4}" y="${pad.t + 4}" text-anchor="end">${invertY ? yMin : yMax}</text>`;
   html += `<text class="axis-label" x="${pad.l - 4}" y="${pad.t + innerH + 3}" text-anchor="end">${invertY ? yMax : yMin}</text>`;
 
-  // X axis ticks — only label every Nth column to avoid crowding
+  // X axis ticks — for season scope we throttle to avoid crowding;
+  // for career scope the xDomain pre-labels only year boundaries so
+  // we just render whichever entries have non-empty labels (no further
+  // throttling needed there).
+  const isCareer = (STATE.compare.scope === "career");
   const tickStep = Math.max(1, Math.ceil(xDomain.length / 14));
   xDomain.forEach((d, i) => {
-    if (i % tickStep !== 0 && i !== xDomain.length - 1) return;
+    if (!d.label) return;             // skip empty labels (career intra-year)
+    if (!isCareer) {
+      // Season scope: throttle by index step
+      if (i % tickStep !== 0 && i !== xDomain.length - 1) return;
+    }
     const x = xScale(i);
-    html += `<text class="axis-label" x="${x}" y="${pad.t + innerH + 16}" text-anchor="middle" style="font-size:9px;">${escapeHTML(d.label || "")}</text>`;
+    html += `<text class="axis-label" x="${x}" y="${pad.t + innerH + 16}" text-anchor="middle" style="font-size:9px;">${escapeHTML(d.label)}</text>`;
   });
 
   // ----- Per-driver lines + dots -----
@@ -11207,7 +11285,8 @@ function syncCompareHash() {
   const params = new URLSearchParams();
   if (STATE.compare.drivers.length) params.set("drivers", STATE.compare.drivers.join(","));
   if (STATE.compare.metric !== "rating") params.set("metric", STATE.compare.metric);
-  if (STATE.compare.scope !== "season") params.set("scope", STATE.compare.scope);
+  if (STATE.compare.scope !== "season")  params.set("scope", STATE.compare.scope);
+  if (STATE.compare.series !== "active") params.set("series", STATE.compare.series);
   const qs = params.toString();
   const newHash = qs ? `#/compare?${qs}` : `#/compare`;
   if (location.hash !== newHash) {
