@@ -8451,9 +8451,17 @@ function computeStandingsForBlock(block) {
 //   - Returns {html, label} so callers can render their own heading
 //
 // Returns null when no races are scheduled in the window.
-function buildWeekendCard(year) {
+function buildWeekendCard(year, seriesFilter) {
   const yearBlock = SEASON_CACHE[year];
   if (!yearBlock) return null;
+
+  // Optional series filter — when set to "NCS"/"NOS"/"NTS", only races
+  // from that series appear in the card. When null/undefined, races
+  // from all 3 series appear (original behavior). Used by the Schedule
+  // page to show only the currently-viewed series.
+  const allowedSeries = seriesFilter
+    ? [seriesFilter]
+    : ["NCS", "NOS", "NTS"];
 
   const today = new Date();
   const dow = today.getDay();   // 0=Sun, 1=Mon, ..., 6=Sat
@@ -8492,7 +8500,7 @@ function buildWeekendCard(year) {
 
   // Collect upcoming races from each series within the window.
   const upcoming = [];
-  ["NCS", "NOS", "NTS"].forEach(s => {
+  allowedSeries.forEach(s => {
     const block = yearBlock[s];
     if (!block || !block.races) return;
     block.races.forEach(r => {
@@ -11862,8 +11870,14 @@ function renderSeasonSchedule(allRaces, currentRound, lastWinnerAt) {
     const trackLink = r.track_code
       ? `<a class="rc-sched-track-link" href="#/track/${escapeHTML(r.track_code)}" onclick="event.stopPropagation()">${escapeHTML(trackDisplay)}</a>`
       : `<span>${escapeHTML(trackDisplay)}</span>`;
+    // Race name: links to Race Center ONLY when the race has been run.
+    // Future races get plain-text styling (no anchor) since there's no
+    // race results to show. The anchor wraps only the name text — not
+    // the full row — so the clickable area is exactly the race title.
     const raceNameHTML = r.name
-      ? `<span class="rc-sched-name">${escapeHTML(r.name)}</span>`
+      ? (hasRun
+          ? `<a class="rc-sched-name rc-sched-name-link" href="#/race/${r.round}" onclick="event.stopPropagation()">${escapeHTML(r.name)}</a>`
+          : `<span class="rc-sched-name">${escapeHTML(r.name)}</span>`)
       : "";
 
     const roundCell = isCurrent
@@ -11978,10 +11992,11 @@ function renderSchedulePage() {
 
   const scheduleHTML = renderSeasonSchedule(allRaces, nextRound, lastWinnerAt);
 
-  // "This Weekend" / "Next Weekend" card — only renders when there are
-  // upcoming races in the target window. Pulled in from the home page;
-  // belongs naturally above the schedule table.
-  const weekendCard = buildWeekendCard(STATE.season);
+  // "This Weekend" / "Next Weekend" card — filtered to the currently
+  // active series so a user on NCS doesn't see Dover NOS/NTS races at
+  // the top of the NCS schedule page. The races that appear in the
+  // card match the series block being viewed below.
+  const weekendCard = buildWeekendCard(STATE.season, STATE.series);
   const weekendHTML = weekendCard
     ? `<div class="schedule-weekend-wrap">
          <div class="home-section-h">${weekendCard.label}</div>
@@ -12004,15 +12019,16 @@ function renderSchedulePage() {
   //     races there's no result table to show, so this is the useful fallback.
   host.querySelectorAll(".rc-sched-row[data-round]").forEach(row => {
     row.addEventListener("click", (e) => {
-      if (e.target.closest("a")) return;   // let track / winner links propagate
+      if (e.target.closest("a")) return;   // let track / winner / race-name links propagate
       const round = parseInt(row.dataset.round, 10);
       if (!Number.isFinite(round)) return;
       const isCompleted = row.classList.contains("run");
+      // Only navigate for completed races. Upcoming races have no race-
+      // results page to show; clicking the row should do nothing (the
+      // track link and race-name link inside the row are still clickable
+      // and handle their own navigation).
       if (isCompleted) {
         window.location.hash = `#/race/${round}`;
-      } else {
-        STATE.throughRound = round;
-        window.location.hash = "#/arc";
       }
     });
   });
@@ -12369,11 +12385,18 @@ function renderTrackThisSeason(history) {
     subBits.push(`R${h.round}`);
     if (dateStr) subBits.push(dateStr);
     if (h.name) subBits.push(escapeHTML(h.name));
-    return `<a class="tk-this-card profile-link" href="#/car/${w.car_number}">
+    // Card-level link → race center for this round. The driver name
+    // inside is a nested anchor → driver profile; clicking it stops
+    // propagation so it doesn't fall through to the race-center link.
+    // (HTML disallows nested anchors, so we use a <span> wrapper for
+    // the card and inline event handlers to do the actual navigation.)
+    const drvSlug = slugify(w.driver || "");
+    return `<a class="tk-this-card" href="#/race/${h.round}">
       <div class="tk-this-label">${STATE.season} Winner</div>
       <div class="tk-this-body">
         <span class="car-tag tk-this-tag" style="background:${carHex};color:${txt}">${w.car_number}</span>
-        <span class="tk-this-driver">${escapeHTML(w.driver)}</span>
+        <span class="tk-this-driver tk-this-driver-link"
+              onclick="event.stopPropagation(); event.preventDefault(); window.location.hash='#/driver/${drvSlug}'">${escapeHTML(w.driver)}</span>
       </div>
       <div class="tk-this-sub">${subBits.join(" · ")}</div>
     </a>`;

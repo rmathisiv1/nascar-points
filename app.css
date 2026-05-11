@@ -4281,7 +4281,6 @@ a.driver-cell.profile-link:hover .car-tag {
   gap: 18px;
   padding: 4px 24px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
-  cursor: pointer;
   transition: background 0.1s;
   font-size: 11px;
   border-left: 3px solid transparent;
@@ -4290,6 +4289,11 @@ a.driver-cell.profile-link:hover .car-tag {
   margin: 0 auto;
   box-sizing: border-box;
 }
+/* Pointer cursor only when there's something to click (completed races
+   navigate to Race Center). Upcoming rows have no row-level click; the
+   inner track link + race-name link still work as expected. */
+.rc-sched-row.run { cursor: pointer; }
+.rc-sched-row:focus { outline: none; }
 .rc-sched-row:last-child { border-bottom: none; }
 .rc-sched-row:hover { background: rgba(255,255,255,0.03); }
 /* Upcoming races render at full opacity so race name + date stay sharp;
@@ -4332,6 +4336,20 @@ a.driver-cell.profile-link:hover .car-tag {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Race name as a clickable link (completed races only). Keeps the
+   italic dim styling but adds an underline-on-hover affordance so the
+   clickable area is clearly distinct. Inline-block so the underline
+   only spans the name text — not the rest of the row. */
+.rc-sched-name-link {
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-block;
+  align-self: flex-start;
+}
+.rc-sched-name-link:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 .rc-sched-date {
   font-family: var(--mono);
@@ -4598,6 +4616,17 @@ a.rc-sched-winner:hover {
   color: var(--text);
   letter-spacing: -0.01em;
   line-height: 1.1;
+}
+/* When the driver name within the winner card is its own clickable link
+   (separate from the card's race-center link), give it a hover affordance
+   so users see it's interactive. */
+.tk-this-driver-link {
+  cursor: pointer;
+  transition: color 0.1s;
+}
+.tk-this-driver-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 .tk-this-sub {
   font-family: var(--mono);
