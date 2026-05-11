@@ -7078,13 +7078,21 @@ function isPlausibleHometown(s) {
 // Series with no loop-data races are omitted. Used both for the career
 // "Avg Rating" tile and the Driver Rating sparkline chart.
 //
-// Driver-name matching uses normalizeDriverName for cross-source robustness
-// (handles "John H. Nemechek" vs "John H Nemechek" etc).
-function computeDriverLoopAggregates(driverName) {
+// Driver matching uses normalizeDriverName for cross-source robustness
+// (handles "John H. Nemechek" vs "John H Nemechek" etc). If `slug` is
+// provided AND name normalization misses a row, we fall back to matching
+// by slugify(row.driver) === slug. This catches cases where bio.name
+// from drivers.json doesn't match the verbatim race-row string (e.g.
+// "Kurt Busch" in bio vs "Kurt T. Busch" in older race data — the
+// normalized names differ but the slugs both map to "kurt-busch"). This
+// is the same forgiving lookup the profile page uses implicitly via
+// its `lastActive.driver` resolution.
+function computeDriverLoopAggregates(driverName, slug) {
   const out = {};
-  if (!driverName) return out;
-  const targetKey = normalizeDriverName(driverName);
-  if (!targetKey) return out;
+  if (!driverName && !slug) return out;
+  const targetKey = normalizeDriverName(driverName || "");
+  const targetSlug = slug || (driverName ? slugify(driverName) : "");
+  if (!targetKey && !targetSlug) return out;
 
   ["NCS", "NOS", "NTS"].forEach(code => {
     // `ratings` keeps the legacy shape (downstream chart + notable
@@ -7098,9 +7106,18 @@ function computeDriverLoopAggregates(driverName) {
       const block = SEASON_CACHE[yearStr] && SEASON_CACHE[yearStr][code];
       if (!block || !block.races) return;
       block.races.forEach(r => {
-        const d = (r.results || []).find(x =>
-          normalizeDriverName(x.driver || "") === targetKey
-        );
+        const d = (r.results || []).find(x => {
+          const drv = x.driver || "";
+          if (!drv) return false;
+          // Primary match: normalized name. Robust against accent /
+          // suffix / punctuation differences.
+          if (targetKey && normalizeDriverName(drv) === targetKey) return true;
+          // Fallback: slug match. Catches retired drivers whose bio.name
+          // doesn't quite match the race-row form ("Kurt Busch" bio vs
+          // "Kurt T. Busch" race row → both slugify-collapse).
+          if (targetSlug && slugify(drv) === targetSlug) return true;
+          return false;
+        });
         if (!d || d.loop_driver_rating == null) return;
         ratings.push({
           year,
@@ -10929,7 +10946,10 @@ function renderCompare() {
   const series = drivers.map(slug => {
     const bio = STATE.driverBios ? STATE.driverBios[slug] : null;
     const name = (bio && bio.name) || slug;
-    const agg = computeDriverLoopAggregates(name);
+    // Pass both name AND slug. The slug fallback catches retired drivers
+    // whose race-row name format differs slightly from bio.name (middle
+    // initials, suffixes, etc) — see computeDriverLoopAggregates comment.
+    const agg = computeDriverLoopAggregates(name, slug);
     const pts = [];
     seriesScope.forEach(s => {
       const a = agg[s];
@@ -11028,22 +11048,13 @@ function renderCompare() {
     const allYears = Object.keys(SEASON_CACHE).map(Number);
     const expectedYears = STATE.seasonsAvailable || [];
     const missingYears = expectedYears.filter(y => !allYears.includes(y));
-    console.log("[compare] career load check:",
-      "cached=", allYears.length,
-      "expected=", expectedYears.length,
-      "missing=", missingYears.length,
-      "willLoad=", missingYears.slice(0, 8));
     if (missingYears.length > 0) {
       // Show loading state in the chart label so the user knows why
       // the chart looks thin.
       const lbl = document.getElementById("cmp-chart-label");
       if (lbl) lbl.textContent += "  ·  Loading history…";
-      Promise.all(missingYears.slice(0, 8).map(y => loadSeasonIntoCache(y).catch(e => {
-        console.log("[compare] load error year=", y, e);
-        return null;
-      })))
+      Promise.all(missingYears.slice(0, 8).map(y => loadSeasonIntoCache(y).catch(() => null)))
         .then(() => {
-          console.log("[compare] batch done. cache size now=", Object.keys(SEASON_CACHE).length);
           if (STATE.view !== "compare") return;
           renderCompare();
         });
