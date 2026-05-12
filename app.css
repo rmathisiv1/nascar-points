@@ -8488,3 +8488,45 @@ body.lightbox-open {
   .tt-m-label { font-size: 8px; }
 }
 
+
+/* ---------- Standings view switcher + manufacturer cells ---------- */
+.standings-views-host {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  margin: -6px -6px 6px;
+}
+.standings-views {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.standings-mfr-note {
+  font-size: 11px;
+  color: var(--dim);
+  font-style: italic;
+  margin-left: auto;
+}
+.mfr-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.mfr-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 767.98px) {
+  .standings-views { gap: 8px; }
+  .standings-mfr-note { display: block; width: 100%; margin-left: 0; }
+}

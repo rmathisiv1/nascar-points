@@ -51,7 +51,11 @@ const STATE = {
   // in the loaded data" (the default — what the Race tab used to do).
   // Set from the #/race/<round> URL when a user clicks into a specific race.
   race: { round: null },
-  standings: { sortKey: "total", sortDir: "desc" },
+  // Standings view + sort. view = "driver" | "owner" | "manufacturer".
+  // Driver is default (most-fan-friendly); Owner mirrors NASCAR's owner
+  // standings (per-car, subs accrue to the car); Manufacturer uses
+  // NASCAR's modern (2011+) mfr point scale applied to all years.
+  standings: { sortKey: "total", sortDir: "desc", view: "driver" },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
   selectedCar: null,
@@ -1554,7 +1558,28 @@ function syncMobileDropdowns() {
 
 function parseHash() {
   const h = location.hash.replace("#/", "").split("/");
-  const view = h[0];
+  // Split a possible "?query" off the leading segment. This is how
+  // per-view options like #/standings?view=mfr or #/profile/<slug>?tab=x
+  // get passed without colliding with the slash-separated route shape.
+  let view = h[0];
+  let firstSegmentQuery = "";
+  if (typeof view === "string" && view.includes("?")) {
+    const i = view.indexOf("?");
+    firstSegmentQuery = view.slice(i + 1);
+    view = view.slice(0, i);
+    h[0] = view;
+  }
+  // Standings view selector. #/standings?view=driver|owner|manufacturer
+  // lets us route directly to a specific standings tab from the nav or
+  // from a shared URL. Falls through to the default-view STATE on bare
+  // #/standings.
+  if (view === "standings" && firstSegmentQuery) {
+    const params = new URLSearchParams(firstSegmentQuery);
+    const v = params.get("view");
+    if (v && ["driver", "owner", "manufacturer"].includes(v)) {
+      STATE.standings.view = v;
+    }
+  }
   // Present mode invariant — STATE.season must always reflect the latest
   // available year EXCEPT during the brief window where renderProfile
   // needs a historical context (resolveDriverRoute runs AFTER parseHash
@@ -9896,9 +9921,14 @@ function generateHomeStorylines(year, series) {
   }
 
   // 13. Manufacturer wins streak / dominance. Group recent winners by
-  // manufacturer; if one mfr has 3+ in last 5, surface that.
+  // manufacturer; if one mfr has won >=80% of the last 5 races, surface
+  // that. 80% on a 5-race window = 4 wins minimum. The earlier 60%
+  // threshold (3-of-5) flagged too often during normal Cup-era parity;
+  // 80% genuinely means a manufacturer is on a run worth narrating.
   if (completed.length >= 4) {
     const recent = completed.slice(-5);
+    const STREAK_PCT = 0.80;
+    const minWins = Math.ceil(recent.length * STREAK_PCT);
     const mfrWins = new Map();
     recent.forEach(r => {
       const w = (r.results || []).find(d => d.finish_pos === 1);
@@ -9908,7 +9938,7 @@ function generateHomeStorylines(year, series) {
     });
     let topMfr = null;
     mfrWins.forEach((n, m) => {
-      if (n >= 3 && (!topMfr || n > topMfr.n)) topMfr = { m, n };
+      if (n >= minWins && (!topMfr || n > topMfr.n)) topMfr = { m, n };
     });
     if (topMfr) {
       // Manufacturer codes from RR are 3-letter (CHV/FRD/TYT). The UI
@@ -10837,20 +10867,51 @@ function renderStandings() {
   // hiding those columns keeps the table honest for old years.
   const stageEra = isStageEra();
 
+  // Which view? Manufacturer uses its own data pipeline (per-race mfr
+  // ranking → modern point scale). Owner = the historical per-car
+  // accumulator. Driver = sums per normalized driver name.
+  const view = STATE.standings.view || "driver";
+
   const races = racesSorted();
   const lastRaceRound = races.length ? races[races.length - 1].round : null;
   const previousCutoff = lastRaceRound ? lastRaceRound - 1 : null;
 
-  const currentMap = pointsMapThroughRound(lastRaceRound);
-  const currentRows = rankingRowsFrom(currentMap);
+  // ----- Build current + previous rows for the selected view -----
+  let currentRows, previousRows;
+  if (view === "manufacturer") {
+    currentRows  = manufacturerStandingsThroughRound(lastRaceRound);
+    previousRows = previousCutoff && previousCutoff >= 1
+      ? manufacturerStandingsThroughRound(previousCutoff)
+      : [];
+  } else if (view === "owner") {
+    const currentMap = pointsMapThroughRound(lastRaceRound);
+    currentRows = rankingRowsFrom(currentMap);
+    const previousMap = previousCutoff && previousCutoff >= 1
+      ? pointsMapThroughRound(previousCutoff)
+      : new Map();
+    previousRows = previousCutoff && previousCutoff >= 1
+      ? rankingRowsFrom(previousMap)
+      : [];
+  } else {
+    // driver (default)
+    const currentMap = driverPointsMapThroughRound(lastRaceRound);
+    currentRows = driverRankingRowsFrom(currentMap);
+    const previousMap = previousCutoff && previousCutoff >= 1
+      ? driverPointsMapThroughRound(previousCutoff)
+      : new Map();
+    previousRows = previousCutoff && previousCutoff >= 1
+      ? driverRankingRowsFrom(previousMap)
+      : [];
+  }
 
-  const previousMap = previousCutoff && previousCutoff >= 1
-    ? pointsMapThroughRound(previousCutoff)
-    : new Map();
+  // Rank-change uses each row's `key` field (car_number for owner,
+  // normalized driver name for driver, manufacturer code for mfr).
   const previousRank = new Map();
-  Array.from(previousMap.entries())
-    .sort((a, b) => b[1].total - a[1].total)
-    .forEach(([k], i) => previousRank.set(k, i + 1));
+  previousRows
+    .slice()
+    .sort((a, b) => b.total - a.total)
+    .forEach((r, i) => previousRank.set(r.key, i + 1));
+  const previousTotalByKey = new Map(previousRows.map(r => [r.key, r.total]));
 
   let rows = currentRows.map((r, i) => {
     const currRank = i + 1;
@@ -10859,7 +10920,7 @@ function renderStandings() {
     // Points scored in the most recent race = current total minus
     // previous total. If no previous race exists (round 1), there's
     // no "last race" to delta against, so we'll show "—".
-    const prevTotal = previousMap.has(r.key) ? previousMap.get(r.key).total : null;
+    const prevTotal = previousTotalByKey.has(r.key) ? previousTotalByKey.get(r.key) : null;
     const lastRacePts = (prevTotal != null && lastRaceRound != null && previousCutoff >= 1)
       ? r.total - prevTotal
       : null;
@@ -10904,63 +10965,111 @@ function renderStandings() {
   // live data, independent of canonical Diff (which uses year-end gaps).
   const leaderTotal = rows.reduce((max, r) => Math.max(max, r.total || 0), 0);
 
-  const body = rows.map(r => {
-    const carHex = colorFor(STATE.series, r.car_number);
-    const txt = contrastTextFor(carHex);
-    const teamPill = renderTeamPill(r.team_code, /*clickable=*/true);
-    const pc = r.posChange;
-    let pcPill;
-    if (r.prevRank == null) {
-      pcPill = `<span class="pos-change new">NEW</span>`;
-    } else if (pc === 0) {
-      pcPill = `<span class="pos-change flat">—</span>`;
-    } else if (pc > 0) {
-      pcPill = `<span class="pos-change up">▲${pc}</span>`;
-    } else {
-      pcPill = `<span class="pos-change down">▼${Math.abs(pc)}</span>`;
-    }
-    // Driver pill -> driver profile (auto-detects driver's home year/series).
-    // Year/series can be changed from inside the profile body — URL stays clean.
-    const driverSlug = slugify(r.primaryDriver || r.driver);
-    const driverHref = `#/driver/${driverSlug}`;
-    // DIFF cell — shows gap to leader using canonical data; "—" for the
-    // leader (gap=0) and rows without canonical match (part-timers).
-    let diffCell = "";
-    if (hasCanonicalGap) {
-      if (r.canonicalGap == null) {
-        diffCell = `<td class="num muted">—</td>`;
-      } else if (r.canonicalGap === 0) {
-        diffCell = `<td class="num leader-cell">—</td>`;
+  // ----- Body row rendering — branches on view -----
+  let body;
+  if (view === "manufacturer") {
+    // Manufacturer rows: no car/team/driver-link decoration. The "Driver"
+    // column becomes the manufacturer name with a color swatch. Stage
+    // points / fastest lap don't apply at the mfr level so those columns
+    // are omitted in the header (see below) — we still emit empty cells
+    // here so column counts match.
+    body = rows.map(r => {
+      const pc = r.posChange;
+      let pcPill;
+      if (r.prevRank == null) {
+        pcPill = `<span class="pos-change new">NEW</span>`;
+      } else if (pc === 0) {
+        pcPill = `<span class="pos-change flat">—</span>`;
+      } else if (pc > 0) {
+        pcPill = `<span class="pos-change up">▲${pc}</span>`;
       } else {
-        diffCell = `<td class="num diff-cell">${r.canonicalGap}</td>`;
+        pcPill = `<span class="pos-change down">▼${Math.abs(pc)}</span>`;
       }
-    }
-    return `<tr data-car-key="${escapeHTML(r.key)}">
-      <td class="rank-cell">${r.currRank}${pcPill}</td>
-      <td><a class="driver-cell profile-link" href="${driverHref}">
-        <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
-        <span>${escapeHTML(r.displayLabel)}</span>
-        ${renderCoDriverBadge(r)}
-      </a></td>
-      <td class="col-mobile-hide">${teamPill}</td>
-      <td class="num col-mobile-hide">${r.starts}</td>
-      <td class="num">${r.wins}</td>
-      <td class="num col-mobile-hide">${r.top5}</td>
-      <td class="num col-mobile-hide">${r.top10}</td>
-      <td class="num col-mobile-hide">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
-      <td class="num col-mobile-hide">${
-        r.lastRacePts == null
-          ? `<span class="muted">—</span>`
-          : `<span class="pts-delta-only ${r.lastRaceDelta != null && r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta != null && r.lastRaceDelta < -1.5 ? "cold" : ""}">+${r.lastRacePts}</span>`
-      }</td>
-      ${stageEra ? `<td class="num col-mobile-hide">${r.sumS1}</td>
-      <td class="num col-mobile-hide">${r.sumS2}</td>
-      <td class="num col-mobile-hide">${r.sumFL}</td>` : ""}
-      <td class="num total-col">${r.total}</td>
-      <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
-      ${diffCell}
-    </tr>`;
-  }).join("");
+      // Manufacturer color uses the team palette as a rough proxy (Chevy =
+      // blue, Ford = blue, Toyota = red is the common public association).
+      // Hardcoded so it's visually distinct across all years.
+      const mfrColors = { CHV: "#fdbb30", FRD: "#00407a", TYT: "#eb1a23", DOD: "#a31818", PNT: "#cf9800", BUI: "#700000", OLD: "#5b6770", MER: "#8b8589", PLY: "#1f4d8a", CHR: "#7e1e1e" };
+      const mfrColor = mfrColors[r.manufacturer] || "#777";
+      return `<tr data-mfr-key="${escapeHTML(r.key)}">
+        <td class="rank-cell">${r.currRank}${pcPill}</td>
+        <td><span class="mfr-cell">
+          <span class="mfr-swatch" style="background:${mfrColor};"></span>
+          <span>${escapeHTML(r.displayLabel)}</span>
+        </span></td>
+        <td class="col-mobile-hide muted">—</td>
+        <td class="num col-mobile-hide">${r.starts}</td>
+        <td class="num">${r.wins}</td>
+        <td class="num col-mobile-hide">${r.top5}</td>
+        <td class="num col-mobile-hide">${r.top10}</td>
+        <td class="num col-mobile-hide">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
+        <td class="num col-mobile-hide">${
+          r.lastRacePts == null
+            ? `<span class="muted">—</span>`
+            : `<span class="pts-delta-only">+${r.lastRacePts}</span>`
+        }</td>
+        <td class="num total-col">${r.total}</td>
+        <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
+      </tr>`;
+    }).join("");
+  } else {
+    body = rows.map(r => {
+      const carHex = colorFor(STATE.series, r.car_number);
+      const txt = contrastTextFor(carHex);
+      const teamPill = renderTeamPill(r.team_code, /*clickable=*/true);
+      const pc = r.posChange;
+      let pcPill;
+      if (r.prevRank == null) {
+        pcPill = `<span class="pos-change new">NEW</span>`;
+      } else if (pc === 0) {
+        pcPill = `<span class="pos-change flat">—</span>`;
+      } else if (pc > 0) {
+        pcPill = `<span class="pos-change up">▲${pc}</span>`;
+      } else {
+        pcPill = `<span class="pos-change down">▼${Math.abs(pc)}</span>`;
+      }
+      // Driver pill -> driver profile (auto-detects driver's home year/series).
+      // Year/series can be changed from inside the profile body — URL stays clean.
+      const driverSlug = slugify(r.primaryDriver || r.driver);
+      const driverHref = `#/driver/${driverSlug}`;
+      // DIFF cell — shows gap to leader using canonical data; "—" for the
+      // leader (gap=0) and rows without canonical match (part-timers).
+      let diffCell = "";
+      if (hasCanonicalGap) {
+        if (r.canonicalGap == null) {
+          diffCell = `<td class="num muted">—</td>`;
+        } else if (r.canonicalGap === 0) {
+          diffCell = `<td class="num leader-cell">—</td>`;
+        } else {
+          diffCell = `<td class="num diff-cell">${r.canonicalGap}</td>`;
+        }
+      }
+      return `<tr data-car-key="${escapeHTML(r.key)}">
+        <td class="rank-cell">${r.currRank}${pcPill}</td>
+        <td><a class="driver-cell profile-link" href="${driverHref}">
+          <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
+          <span>${escapeHTML(r.displayLabel)}</span>
+          ${renderCoDriverBadge(r)}
+        </a></td>
+        <td class="col-mobile-hide">${teamPill}</td>
+        <td class="num col-mobile-hide">${r.starts}</td>
+        <td class="num">${r.wins}</td>
+        <td class="num col-mobile-hide">${r.top5}</td>
+        <td class="num col-mobile-hide">${r.top10}</td>
+        <td class="num col-mobile-hide">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
+        <td class="num col-mobile-hide">${
+          r.lastRacePts == null
+            ? `<span class="muted">—</span>`
+            : `<span class="pts-delta-only ${r.lastRaceDelta != null && r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta != null && r.lastRaceDelta < -1.5 ? "cold" : ""}">+${r.lastRacePts}</span>`
+        }</td>
+        ${stageEra ? `<td class="num col-mobile-hide">${r.sumS1}</td>
+        <td class="num col-mobile-hide">${r.sumS2}</td>
+        <td class="num col-mobile-hide">${r.sumFL}</td>` : ""}
+        <td class="num total-col">${r.total}</td>
+        <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
+        ${diffCell}
+      </tr>`;
+    }).join("");
+  }
 
   const th = (key, label, numeric, hideOnMobile) => {
     const active = STATE.standings.sortKey === key;
@@ -10969,28 +11078,95 @@ function renderStandings() {
     return `<th class="${cls}" data-sort="${key}">${label}<span class="sort-arrow">${arrow}</span></th>`;
   };
 
+  // ----- Header columns: mfr trims stage / FL / Diff -----
+  const driverColLabel = view === "manufacturer" ? "Manufacturer" : "Driver";
+  let headerRow;
+  if (view === "manufacturer") {
+    headerRow = `
+      ${th("rank", "Pos", true)}
+      ${th("driver", driverColLabel, false)}
+      <th class="col-mobile-hide muted">—</th>
+      ${th("starts", "Races", true, true)}
+      ${th("wins", "Wins", true)}
+      ${th("top5", "T5", true, true)}
+      ${th("top10", "T10", true, true)}
+      ${th("avgFinish", "Avg Best", true, true)}
+      ${th("lastRacePts", "Last Pts", true, true)}
+      ${th("total", "Total", true)}
+      <th class="num" title="Points back from current points leader">Back</th>
+    `;
+  } else {
+    headerRow = `
+      ${th("rank", "Pos", true)}
+      ${th("driver", driverColLabel, false)}
+      ${th("team", "Team", false, true)}
+      ${th("starts", "Starts", true, true)}
+      ${th("wins", "Wins", true)}
+      ${th("top5", "T5", true, true)}
+      ${th("top10", "T10", true, true)}
+      ${th("avgFinish", "Avg Fin", true, true)}
+      ${th("lastRacePts", "Last Pts", true, true)}
+      ${stageEra ? `${th("sumS1", "S1", true, true)}
+      ${th("sumS2", "S2", true, true)}
+      ${th("sumFL", "FL", true, true)}` : ""}
+      ${th("total", "Total", true)}
+      <th class="num" title="Points back from current points leader (live)">Back</th>
+      ${hasCanonicalGap ? `<th class="num col-mobile-hide" title="Points gap to season champion (year-end canonical)">Diff</th>` : ""}
+    `;
+  }
+
+  // ----- View switcher toolbar (above the table) -----
+  // Driver / Owner / Manufacturer. Sticky-positioned via .standings-views
+  // CSS so it doesn't scroll away inside the scrollable card.
+  const viewToggleHTML = `
+    <div class="standings-views toolbar-slim">
+      <span class="toolbar-label">View</span>
+      <div class="toggle-group" data-group="standings-view">
+        <button class="${view === "driver" ? "on" : ""}" data-val="driver">Driver</button>
+        <button class="${view === "owner"  ? "on" : ""}" data-val="owner">Owner</button>
+        <button class="${view === "manufacturer" ? "on" : ""}" data-val="manufacturer">Manufacturer</button>
+      </div>
+      ${view === "manufacturer" ? `<span class="standings-mfr-note">Points computed using NASCAR's modern (2011+) manufacturer scale.</span>` : ""}
+    </div>
+  `;
+
   table.innerHTML = `
     <thead>
-      <tr>
-        ${th("rank", "Pos", true)}
-        ${th("driver", "Driver", false)}
-        ${th("team", "Team", false, true)}
-        ${th("starts", "Starts", true, true)}
-        ${th("wins", "Wins", true)}
-        ${th("top5", "T5", true, true)}
-        ${th("top10", "T10", true, true)}
-        ${th("avgFinish", "Avg Fin", true, true)}
-        ${th("lastRacePts", "Last Pts", true, true)}
-        ${stageEra ? `${th("sumS1", "S1", true, true)}
-        ${th("sumS2", "S2", true, true)}
-        ${th("sumFL", "FL", true, true)}` : ""}
-        ${th("total", "Total", true)}
-        <th class="num" title="Points back from current points leader (live)">Back</th>
-        ${hasCanonicalGap ? `<th class="num col-mobile-hide" title="Points gap to season champion (year-end canonical)">Diff</th>` : ""}
-      </tr>
+      <tr>${headerRow}</tr>
     </thead>
     <tbody>${body}</tbody>
   `;
+
+  // Inject the view toggle into the parent card, above the table, only once.
+  const card = table.closest(".card");
+  if (card) {
+    let toggleHost = card.querySelector(".standings-views-host");
+    if (!toggleHost) {
+      toggleHost = document.createElement("div");
+      toggleHost.className = "standings-views-host";
+      card.insertBefore(toggleHost, card.firstChild);
+    }
+    toggleHost.innerHTML = viewToggleHTML;
+    toggleHost.querySelectorAll('[data-group="standings-view"] button').forEach(btn => {
+      btn.addEventListener("click", () => {
+        const v = btn.dataset.val;
+        if (!v || v === STATE.standings.view) return;
+        STATE.standings.view = v;
+        // Reset sort to leader-first on view switch — the sort columns
+        // diverge between views (mfr has no S1/FL/Diff) so the previous
+        // sort key may not exist in the new view's headers.
+        STATE.standings.sortKey = "total";
+        STATE.standings.sortDir = "desc";
+        // Update URL so the view is shareable / back-navigable.
+        const newHash = v === "driver" ? "#/standings" : `#/standings?view=${v}`;
+        if (location.hash !== newHash) {
+          history.replaceState(null, "", newHash);
+          STATE.lastHash = newHash;
+        }
+        renderStandings();
+      });
+    });
+  }
 
   table.querySelectorAll("th.sortable").forEach(th => {
     th.addEventListener("click", () => {
@@ -11006,11 +11182,40 @@ function renderStandings() {
     });
   });
 
+  // Mark the Total <th> with a 'total-col' class on render so the mobile
+  // collapse helper can locate it regardless of which view is active.
+  // (The body cells already carry that class.)
+  const ths = Array.from(table.querySelectorAll("thead th"));
+  ths.forEach(t => {
+    const txt = t.textContent.trim();
+    if (txt.startsWith("Total")) t.classList.add("total-col");
+  });
+
   wireCoDriverBadges(table);
 
-  // Mobile collapse — keep #, Driver, Total. Hide Team, Starts, Wins, T5, T10, Avg, S1, S2, FL.
-  // Column indices: 0=#, 1=Driver, 2=Team, 3=Starts, 4=Wins, 5=T5, 6=T10, 7=AvgFin, 8=S1, 9=S2, 10=FL, 11=Total
-  applyMobileTableCollapse(table, [0, 1, 11]);
+  // Mobile collapse — keep Pos (0), Driver/Mfr (1), Total visible.
+  // Total's index depends on view + stage era (which adds 3 columns).
+  // We compute it from the actual <th> count so layout changes don't
+  // require touching this. Total is always the second-to-last header
+  // (last is "Back"; "Diff" only appears when canonical gap is present).
+  const thCount = table.querySelectorAll("thead th").length;
+  // Visible-on-mobile columns. Total = thCount - 2 if no Diff column,
+  // or thCount - 3 if Diff is present (but Diff is already hidden via
+  // col-mobile-hide so it doesn't count for visible mapping). To keep
+  // it simple: read positions of cells WITHOUT col-mobile-hide and
+  // include the Total column explicitly.
+  const totalColIdx = (() => {
+    const ths = Array.from(table.querySelectorAll("thead th"));
+    for (let i = 0; i < ths.length; i++) {
+      if (ths[i].classList.contains("total-col")) return i;
+    }
+    // Fallback: look for the header whose text is "Total".
+    for (let i = 0; i < ths.length; i++) {
+      if (ths[i].textContent.trim().startsWith("Total")) return i;
+    }
+    return ths.length - 2;
+  })();
+  applyMobileTableCollapse(table, [0, 1, totalColIdx]);
 }
 
 function pointsMapThroughRound(maxRound) {
@@ -11087,6 +11292,223 @@ function rankingRowsFrom(map) {
   // leader.
   applyCanonicalStandings(rows);
 
+  rows.sort((a, b) => b.total - a.total);
+  return rows;
+}
+
+// Driver-keyed points accumulator (vs. car-keyed pointsMapThroughRound).
+// This is the data source for the new "Driver" view of the standings
+// page — points follow the driver across cars, so a substitute appearance
+// credits the sub (not the regular driver of that car). Normalized names
+// are the join key so "Kyle Larson" and "Kyle  Larson" (double space)
+// collapse to one row.
+//
+// Each entry tracks the "home" car/team — defined as the car they have
+// the most starts in this season — for table labeling and color. This
+// keeps the visual the same as the Owner view in the typical case where
+// a driver only ever runs one car all season.
+function driverPointsMapThroughRound(maxRound) {
+  const map = new Map();
+  (STATE.data?.races || []).forEach(r => {
+    if (r.round > maxRound) return;
+    (r.results || []).forEach(d => {
+      if (d.ineligible) return;
+      const name = d.driver;
+      if (!name) return;
+      const key = normalizeDriverName(name);
+      if (!key) return;
+      if (!map.has(key)) {
+        map.set(key, {
+          key, driver: name,
+          car_number: d.car_number, team: d.team, team_code: d.team_code || null,
+          // carCounts: tracks starts per car so we can pick the "home"
+          // car for display purposes. Replaces the existing driverStarts
+          // map (which was on the car-keyed entity, opposite direction).
+          carCounts: {},
+          total: 0, starts: 0, wins: 0, top5: 0, top10: 0,
+          finishes: [],
+          sumS1: 0, sumS2: 0, sumFin: 0, sumFL: 0,
+        });
+      }
+      const e = map.get(key);
+      e.driver = name;  // refresh to latest seen variant (encoding can drift)
+      e.total  += d.race_pts || 0;
+      e.sumS1  += d.stage_1_pts || 0;
+      e.sumS2  += d.stage_2_pts || 0;
+      e.sumFin += d.finish_pts || 0;
+      e.sumFL  += d.fastest_lap_pt || 0;
+      e.starts += 1;
+      const cnum = String(d.car_number);
+      e.carCounts[cnum] = (e.carCounts[cnum] || 0) + 1;
+      if (d.finish_pos != null) {
+        e.finishes.push(d.finish_pos);
+        if (d.finish_pos === 1) e.wins += 1;
+        if (d.finish_pos <= 5)  e.top5 += 1;
+        if (d.finish_pos <= 10) e.top10 += 1;
+      }
+    });
+  });
+  // Resolve display car (most starts) and stamp display fields so the
+  // table rows can use the same shape as ranking rows.
+  map.forEach(e => {
+    const entries = Object.entries(e.carCounts).sort((a, b) => b[1] - a[1]);
+    if (entries.length) {
+      e.car_number = entries[0][0];
+      // Backfill team / team_code from the most recent race where this
+      // driver was in their home car.
+      (STATE.data?.races || []).some(r => {
+        if (r.round > maxRound) return false;
+        const hit = (r.results || []).find(x =>
+          normalizeDriverName(x.driver || "") === e.key &&
+          String(x.car_number) === e.car_number
+        );
+        if (hit) {
+          e.team = hit.team || e.team;
+          e.team_code = hit.team_code || e.team_code;
+          return true;
+        }
+        return false;
+      });
+    }
+  });
+  return map;
+}
+
+// Builds driver-keyed row objects with the same shape rankingRowsFrom
+// produces for cars, so the table render path can be shared.
+function driverRankingRowsFrom(map) {
+  const rows = Array.from(map.values()).map(e => {
+    const avgFinish = e.finishes.length
+      ? e.finishes.reduce((s, x) => s + x, 0) / e.finishes.length
+      : null;
+    const carCount = Object.keys(e.carCounts || {}).length;
+    // Driver view label is just the driver name; if they ran multiple
+    // cars we suffix with a small "+N cars" hint so the user knows.
+    const displayLabel = carCount > 1
+      ? `${e.driver} <span class="muted" style="font-size:10px;font-weight:400;">(${carCount} cars)</span>`
+      : e.driver;
+    return {
+      ...e,
+      avgFinish,
+      displayLabel,
+      primaryDriver: e.driver,
+      coDrivers: [],
+      driversByStarts: [{ name: e.driver, starts: e.starts }],
+      // Override `driver` with the label so existing render code reads it.
+      driver: displayLabel,
+    };
+  });
+  applyCanonicalStandings(rows);
+  rows.sort((a, b) => b.total - a.total);
+  return rows;
+}
+
+// ---- Manufacturer standings ----
+// NASCAR's manufacturer championship is fundamentally different from
+// driver/owner championships: each race the top-finishing CAR of each
+// manufacturer wins points from a fixed mfr-only scale, and those
+// per-race manufacturer points accumulate over the season. Lower-
+// finishing cars of the same manufacturer contribute nothing.
+//
+// Modern (2011+) NASCAR scale for ALL three series:
+//   1st mfr: 40, 2nd: 38, 3rd: 36, 4th: 34, 5th: 32
+//   6th+:    31, 30, 29... (descending by 1)
+// Pre-2011 NASCAR used different scales; we apply the modern scale to
+// every year (1949+) for consistency. The standings page surfaces a
+// disclaimer in the header so users know what they're seeing.
+const MFR_SCALE = [40, 38, 36, 34, 32]; // positions 1-5
+function manufacturerPointsForRank(rank) {
+  if (rank < 1) return 0;
+  if (rank <= 5) return MFR_SCALE[rank - 1];
+  // 6th = 31, 7th = 30, ... down to a floor of 1.
+  return Math.max(1, 31 - (rank - 6));
+}
+
+// Per-race, rank manufacturers by best-finishing car. The list returned
+// is rank-ordered ([mfr_code, best_finish], ...). Ties (two mfrs whose
+// best car finished at the same position — rare but possible) get the
+// same rank, but the next rank skips: 1, 1, 3, 4... This mirrors NASCAR
+// practice for tiebreaks.
+function rankManufacturersForRace(race) {
+  const bestByMfr = new Map();
+  (race.results || []).forEach(d => {
+    if (d.ineligible) return;
+    const m = d.manufacturer;
+    if (!m) return;
+    if (d.finish_pos == null) return;
+    const cur = bestByMfr.get(m);
+    if (!cur || d.finish_pos < cur) bestByMfr.set(m, d.finish_pos);
+  });
+  const sorted = Array.from(bestByMfr.entries())
+    .sort((a, b) => a[1] - b[1]);
+  // Assign ranks with tie awareness.
+  const ranked = [];
+  let lastBest = null, lastRank = 0;
+  sorted.forEach(([m, best], i) => {
+    let rank;
+    if (best === lastBest) {
+      rank = lastRank;     // tie — same rank as previous
+    } else {
+      rank = i + 1;
+      lastBest = best;
+      lastRank = rank;
+    }
+    ranked.push({ manufacturer: m, best_finish: best, rank });
+  });
+  return ranked;
+}
+
+// Build a manufacturer-keyed accumulator. Returns rows shaped like the
+// driver/owner rows so the same table render code can be reused.
+function manufacturerStandingsThroughRound(maxRound) {
+  const map = new Map();
+  const races = (STATE.data?.races || []).filter(r => r.round <= maxRound);
+  races.forEach(r => {
+    const ranked = rankManufacturersForRace(r);
+    ranked.forEach(({ manufacturer, best_finish, rank }) => {
+      if (!map.has(manufacturer)) {
+        map.set(manufacturer, {
+          key: manufacturer,
+          manufacturer,
+          total: 0,
+          starts: 0,
+          wins: 0,
+          top5: 0,
+          top10: 0,
+          best_finishes: [],
+        });
+      }
+      const e = map.get(manufacturer);
+      e.total += manufacturerPointsForRank(rank);
+      e.starts += 1;
+      e.best_finishes.push(best_finish);
+      if (best_finish === 1)  e.wins  += 1;
+      if (best_finish <= 5)   e.top5  += 1;
+      if (best_finish <= 10)  e.top10 += 1;
+    });
+  });
+  const rows = Array.from(map.values()).map(e => {
+    const avgBest = e.best_finishes.length
+      ? e.best_finishes.reduce((s, x) => s + x, 0) / e.best_finishes.length
+      : null;
+    const prettyName = (typeof MFR_PRETTY_NAMES !== "undefined" && MFR_PRETTY_NAMES[e.manufacturer])
+      ? MFR_PRETTY_NAMES[e.manufacturer]
+      : e.manufacturer;
+    return {
+      ...e,
+      avgFinish: avgBest,           // table reads avgFinish for the "Avg Fin" column
+      displayLabel: prettyName,
+      primaryDriver: prettyName,
+      driver: prettyName,
+      // Hide team / car fields so render path doesn't try to show them
+      car_number: "",
+      team: "",
+      team_code: null,
+      // Stage points / fastest lap aren't applicable at the mfr level
+      // (those are driver awards). Show 0 / hide column instead.
+      sumS1: 0, sumS2: 0, sumFin: 0, sumFL: 0,
+    };
+  });
   rows.sort((a, b) => b.total - a.total);
   return rows;
 }
