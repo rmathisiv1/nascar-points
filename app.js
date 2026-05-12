@@ -1050,6 +1050,19 @@ async function boot() {
     const preSeason = STATE.season;
     const preSeries = STATE.series;
     parseHash();
+    // If parseHash kicked off a series swap (e.g. from #/standings?series=NOS),
+    // wait for the new series' data to land before rendering. Otherwise the
+    // render would paint the new STATE.series against the previous block.
+    if (STATE.pendingSeriesSwap) {
+      const swap = STATE.pendingSeriesSwap;
+      delete STATE.pendingSeriesSwap;
+      await swap;
+      // applySeriesChangeGlobal already called render() on completion, so
+      // we're done. Just sync nav UI and return.
+      markMobileNavActive();
+      closeMobileNav();
+      return;
+    }
     // Race route with deep-link query params (#/race/N?_y=YYYY&_s=NCS).
     const handled = await handleRaceDeepLink();
     if (handled === "lightbox") {
@@ -1571,13 +1584,26 @@ function parseHash() {
   }
   // Standings view selector. #/standings?view=driver|owner|manufacturer
   // lets us route directly to a specific standings tab from the nav or
-  // from a shared URL. Falls through to the default-view STATE on bare
-  // #/standings.
+  // from a shared URL. Also accepts ?series=NCS|NOS|NTS so the home-page
+  // mini-standings "Full →" link lands on the correct series even if
+  // the user is currently viewing a different one. Falls through to the
+  // default-view STATE on bare #/standings.
   if (view === "standings" && firstSegmentQuery) {
     const params = new URLSearchParams(firstSegmentQuery);
     const v = params.get("view");
     if (v && ["driver", "owner", "manufacturer"].includes(v)) {
       STATE.standings.view = v;
+    }
+    const sr = params.get("series");
+    if (sr && ["NCS", "NOS", "NTS"].includes(sr) && sr !== STATE.series) {
+      // Trigger a full series switch (state reset + data load + render).
+      // applySeriesChangeGlobal calls render() on its own when data settles,
+      // so we flag the in-flight swap and let the hashchange listener
+      // skip its own render to avoid painting stale data mid-swap.
+      STATE.view = "standings";
+      STATE.pendingSeriesSwap = applySeriesChangeGlobal(sr);
+      STATE.lastHash = location.hash;
+      return;
     }
   }
   // Present mode invariant — STATE.season must always reflect the latest
@@ -2090,6 +2116,35 @@ function restoreModeFromStorage() {
 // ============================================================
 // UI CONTROLS
 // ============================================================
+// Sync the series toggle UI (topbar buttons + mobile select) to match
+// the active series. Module-scoped so callers outside wireUIControls
+// (parseHash, etc.) can use it.
+function syncSeriesUIGlobal(target) {
+  document.querySelectorAll("#series-sw button").forEach(x =>
+    x.classList.toggle("on", x.dataset.series === target));
+  const sel = document.getElementById("series-sw-select");
+  if (sel && sel.value !== target) sel.value = target;
+}
+
+// Apply a series change with all the necessary side-effects (state
+// reset, data load, UI sync, re-render). Hoisted to module scope so
+// the hash router can trigger it for query params like #/standings?series=NOS.
+async function applySeriesChangeGlobal(next) {
+  if (next === STATE.series) return;
+  STATE.series = next;
+  syncSeriesUIGlobal(next);
+  if (STATE.mode === "present") STATE.lastPresentSeries = next;
+  STATE.throughRound = null;
+  STATE.arc.selected.clear();
+  STATE.trajectory.selected.clear();
+  STATE.trajectory.seasons.clear();
+  await loadCurrentData();
+  resetRenderCache();
+  populateRacePicker();
+  renderTimeCursorBanner();
+  render();
+}
+
 function wireUIControls() {
   // Race Center session tabs (Race / Practice 1 / Practice 2 / Qualifying).
   // Delegated since the tabs DOM is rebuilt every time the user navigates
@@ -2108,30 +2163,13 @@ function wireUIControls() {
 
   // Helper: sync the series toggle UI (buttons + mobile select) to match
   // the active series. Used both at boot and after every series change.
-  const syncSeriesUI = (target) => {
-    document.querySelectorAll("#series-sw button").forEach(x =>
-      x.classList.toggle("on", x.dataset.series === target));
-    const sel = document.getElementById("series-sw-select");
-    if (sel && sel.value !== target) sel.value = target;
-  };
+  // (Now a thin wrapper around the module-scoped helper.)
+  const syncSeriesUI = syncSeriesUIGlobal;
 
   // Shared handler: applies a series change. The mobile <select> and the
   // desktop <button> group both call this so the swap behavior is identical.
-  const applySeriesChange = async (next) => {
-    if (next === STATE.series) return;
-    STATE.series = next;
-    syncSeriesUI(next);
-    if (STATE.mode === "present") STATE.lastPresentSeries = next;
-    STATE.throughRound = null;
-    STATE.arc.selected.clear();
-    STATE.trajectory.selected.clear();
-    STATE.trajectory.seasons.clear();
-    await loadCurrentData();
-    resetRenderCache();
-    populateRacePicker();
-    renderTimeCursorBanner();
-    render();
-  };
+  // (Now a thin wrapper around the module-scoped helper.)
+  const applySeriesChange = applySeriesChangeGlobal;
 
   document.querySelectorAll("#series-sw button").forEach(b => {
     b.addEventListener("click", () => applySeriesChange(b.dataset.series));
@@ -9102,7 +9140,7 @@ function renderHomeStandingsTrio(year) {
     return `<div class="home-card home-standings-card">
       <div class="home-standings-head">
         <span class="home-standings-label">${s}</span>
-        <a class="home-standings-link" href="#/standings">Full →</a>
+        <a class="home-standings-link" href="#/standings?series=${s}">Full →</a>
       </div>
       ${rows}
     </div>`;

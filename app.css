@@ -7980,6 +7980,11 @@ body.lightbox-open {
   flex-direction: column;
   position: relative;
 }
+/* The HTML 'hidden' attribute sets display:none via the UA stylesheet,
+   but author rules (like display:flex above) outrank that. Restore the
+   hide behavior explicitly so the playoff card actually disappears when
+   renderArc sets poCard.hidden = true. */
+.arc-playoff-card[hidden] { display: none; }
 .arc-chart-stack svg {
   width: 100%;
   flex: 1;
