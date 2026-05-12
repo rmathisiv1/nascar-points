@@ -11043,11 +11043,27 @@ function renderStandings() {
           diffCell = `<td class="num diff-cell">${r.canonicalGap}</td>`;
         }
       }
+      // Row label varies by view:
+      //   Owner  → just "#5" (the car IS the entity; co-driver badge
+      //            still appears to show subs).
+      //   Driver → driver name, plus a small "(N cars)" suffix if they
+      //            drove multiple cars this season. The suffix is built
+      //            here (post-escape) instead of embedded in displayLabel
+      //            so escapeHTML doesn't print it as literal markup.
+      let nameCellInner;
+      if (view === "owner") {
+        nameCellInner = `<span>#${r.car_number}</span>`;
+      } else {
+        const carsHint = r.carsHint
+          ? ` <span class="muted" style="font-size:10px;font-weight:400;">(${r.carsHint} cars)</span>`
+          : "";
+        nameCellInner = `<span>${escapeHTML(r.displayLabel)}${carsHint}</span>`;
+      }
       return `<tr data-car-key="${escapeHTML(r.key)}">
         <td class="rank-cell">${r.currRank}${pcPill}</td>
         <td><a class="driver-cell profile-link" href="${driverHref}">
           <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
-          <span>${escapeHTML(r.displayLabel)}</span>
+          ${nameCellInner}
           ${renderCoDriverBadge(r)}
         </a></td>
         <td class="col-mobile-hide">${teamPill}</td>
@@ -11079,7 +11095,10 @@ function renderStandings() {
   };
 
   // ----- Header columns: mfr trims stage / FL / Diff -----
-  const driverColLabel = view === "manufacturer" ? "Manufacturer" : "Driver";
+  const driverColLabel =
+    view === "manufacturer" ? "Manufacturer" :
+    view === "owner"        ? "Car"          :
+                              "Driver";
   let headerRow;
   if (view === "manufacturer") {
     headerRow = `
@@ -11277,6 +11296,10 @@ function rankingRowsFrom(map) {
     const primaryDriver = driversByStarts[0] ? driversByStarts[0].name : e.driver;
     const coDrivers = driversByStarts.slice(1);
     const coCount = coDrivers.length;
+    // displayLabel retains the rich "#5 · Larson +N" form because it's
+    // consumed by the home-page mini standings, bracket cards, form
+    // strip tooltips, etc. The Owner view in renderStandings overrides
+    // the cell to show car number only — see the body renderer there.
     const displayLabel = coCount > 0
       ? `#${e.car_number} · ${primaryDriver} +${coCount}`
       : `#${e.car_number} · ${primaryDriver}`;
@@ -11382,19 +11405,20 @@ function driverRankingRowsFrom(map) {
       ? e.finishes.reduce((s, x) => s + x, 0) / e.finishes.length
       : null;
     const carCount = Object.keys(e.carCounts || {}).length;
-    // Driver view label is just the driver name; if they ran multiple
-    // cars we suffix with a small "+N cars" hint so the user knows.
-    const displayLabel = carCount > 1
-      ? `${e.driver} <span class="muted" style="font-size:10px;font-weight:400;">(${carCount} cars)</span>`
-      : e.driver;
+    // displayLabel is just the plain driver name (no HTML, no decoration)
+    // so escapeHTML in the renderer doesn't double-encode anything. The
+    // "ran N cars" hint is exposed as a separate field so the renderer
+    // can append its own properly-escaped markup.
+    const displayLabel = e.driver;
     return {
       ...e,
       avgFinish,
       displayLabel,
+      carsHint: carCount > 1 ? carCount : null,
       primaryDriver: e.driver,
       coDrivers: [],
       driversByStarts: [{ name: e.driver, starts: e.starts }],
-      // Override `driver` with the label so existing render code reads it.
+      // Keep `driver` as plain name too — render path treats it as label.
       driver: displayLabel,
     };
   });
