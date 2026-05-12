@@ -52,14 +52,6 @@ const STATE = {
   // Set from the #/race/<round> URL when a user clicks into a specific race.
   race: { round: null },
   standings: { sortKey: "total", sortDir: "desc" },
-  // Driver Compare tab: loop-data overlay across N drivers.
-  // metric = which loop field drives the Y axis on the chart.
-  // scope  = season-only vs career (all loaded years).
-  // series = "active" (limit to STATE.series) vs "all" (cross-series career view).
-  //          We default to "active" so the chart matches the tab the user is on;
-  //          users explicitly opt in to "all" to see truck-only drivers etc.
-  // drivers = array of driver slugs, in pick order (max ~6).
-  compare: { drivers: [], metric: "rating", scope: "season", series: "active" },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
   selectedCar: null,
@@ -89,7 +81,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
+const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -1723,32 +1715,6 @@ function parseHash() {
     STATE.lastHash = location.hash;
     return;
   }
-  // Driver Compare tab: #/compare or #/compare?drivers=slug1,slug2,...
-  // Shareable URL — paste in chat and the recipient lands on the same
-  // overlay. Query parameters parsed manually since the hash router
-  // splits on "/" but the query string lives after a "?".
-  if (view === "compare" || (h[0] || "").split("?")[0] === "compare") {
-    stashPrev("compare");
-    STATE.view = "compare";
-    const raw = h[0] || "";
-    const qIdx = raw.indexOf("?");
-    if (qIdx !== -1) {
-      const params = new URLSearchParams(raw.slice(qIdx + 1));
-      const drvParam = params.get("drivers");
-      if (drvParam != null) {
-        const slugs = drvParam.split(",").map(s => s.trim()).filter(Boolean).slice(0, 6);
-        STATE.compare.drivers = slugs;
-      }
-      const m = params.get("metric");
-      if (m && ["rating", "pass_diff", "top15", "finish"].includes(m)) STATE.compare.metric = m;
-      const sc = params.get("scope");
-      if (sc && ["season", "career"].includes(sc)) STATE.compare.scope = sc;
-      const sr = params.get("series");
-      if (sr && ["active", "all"].includes(sr)) STATE.compare.series = sr;
-    }
-    STATE.lastHash = location.hash;
-    return;
-  }
   // Leaving a takeover (profile/team/cc/track/race) → restore the previous
   // (series, season) we stashed before entering. In Present mode we go a
   // step further: hard-snap to the latest available season regardless of
@@ -2292,84 +2258,6 @@ function wireUIControls() {
     });
   });
 
-  // Compare view toggles (metric + scope + series)
-  document.querySelectorAll("#view-compare .toggle-group").forEach(g => {
-    const group = g.dataset.group;
-    g.querySelectorAll("button").forEach(b => {
-      b.addEventListener("click", () => {
-        g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
-        if (group === "cmp-metric")  STATE.compare.metric = b.dataset.val;
-        if (group === "cmp-scope")   STATE.compare.scope  = b.dataset.val;
-        if (group === "cmp-series")  STATE.compare.series = b.dataset.val;
-        syncCompareHash();
-        renderCompare();
-      });
-    });
-  });
-
-  // Compare picker — typeahead input + result clicks. Delegation on
-  // dropdown so dynamic results stay clickable across re-renders.
-  const cmpInput = document.getElementById("cmp-picker-input");
-  const cmpDrop = document.getElementById("cmp-picker-dropdown");
-  if (cmpInput) {
-    cmpInput.addEventListener("input", () => {
-      const q = cmpInput.value;
-      if (!q || q.trim().length === 0) {
-        if (cmpDrop) cmpDrop.hidden = true;
-        return;
-      }
-      const results = compareSearchDrivers(q);
-      renderComparePickerDropdown(results);
-    });
-    cmpInput.addEventListener("focus", () => {
-      if (cmpInput.value && cmpInput.value.trim().length > 0) {
-        const results = compareSearchDrivers(cmpInput.value);
-        renderComparePickerDropdown(results);
-      }
-    });
-    cmpInput.addEventListener("blur", () => {
-      // Delay hide so click on a result registers before blur kills it
-      setTimeout(() => { if (cmpDrop) cmpDrop.hidden = true; }, 150);
-    });
-    cmpInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        // Pick first result on Enter
-        const first = cmpDrop && cmpDrop.querySelector(".cmp-picker-item");
-        if (first) {
-          const slug = first.getAttribute("data-slug");
-          compareAddDriver(slug);
-          cmpInput.value = "";
-          cmpDrop.hidden = true;
-        }
-      } else if (e.key === "Escape") {
-        cmpInput.value = "";
-        if (cmpDrop) cmpDrop.hidden = true;
-      }
-    });
-  }
-  if (cmpDrop) {
-    cmpDrop.addEventListener("click", (e) => {
-      const btn = e.target.closest(".cmp-picker-item");
-      if (!btn) return;
-      const slug = btn.getAttribute("data-slug");
-      compareAddDriver(slug);
-      if (cmpInput) cmpInput.value = "";
-      cmpDrop.hidden = true;
-    });
-  }
-
-  // Compare chip remove (delegated since chips re-render on each pick)
-  document.getElementById("cmp-chips")?.addEventListener("click", (e) => {
-    const btn = e.target.closest(".cmp-chip-x");
-    if (!btn) return;
-    const slug = btn.getAttribute("data-slug");
-    compareRemoveDriver(slug);
-  });
-
-  document.getElementById("cmp-clear")?.addEventListener("click", () => {
-    compareClearAll();
-  });
-
   // Takeover back button returns to dashboard home (default = Trending tab)
   // Profile back: return to the previous page IN FULL — including any
   // parameter (so #/team/HMS restores cleanly, not as #/team).
@@ -2620,7 +2508,7 @@ function renderTimeCursorBanner() {
 // RENDER
 // ============================================================
 // Views that live as tabs inside the center panel.
-const TAB_VIEWS = ["home", "arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings"];
+const TAB_VIEWS = ["home", "arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings"];
 // Full-width takeovers — none currently. Reserved for future use.
 const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
@@ -2660,7 +2548,6 @@ function render() {
       teammates: "Teammate Delta",
       heatmap: "Heatmap",
       trackstats: "Track Stats",
-      compare: "Driver Compare",
       standings: "Standings",
       playoffs: "Playoff Picture",
       profile: "Driver Profile",
@@ -2799,7 +2686,6 @@ function render() {
         case "teammates":  renderTeammates(); break;
         case "heatmap":    renderHeatmap(); break;
         case "trackstats": renderTrackStats(); break;
-        case "compare":    renderCompare(); break;
         case "standings":  renderStandings(); break;
       }
     }
@@ -7078,46 +6964,29 @@ function isPlausibleHometown(s) {
 // Series with no loop-data races are omitted. Used both for the career
 // "Avg Rating" tile and the Driver Rating sparkline chart.
 //
-// Driver matching uses normalizeDriverName for cross-source robustness
-// (handles "John H. Nemechek" vs "John H Nemechek" etc). If `slug` is
-// provided AND name normalization misses a row, we fall back to matching
-// by slugify(row.driver) === slug. This catches cases where bio.name
-// from drivers.json doesn't match the verbatim race-row string (e.g.
-// "Kurt Busch" in bio vs "Kurt T. Busch" in older race data — the
-// normalized names differ but the slugs both map to "kurt-busch"). This
-// is the same forgiving lookup the profile page uses implicitly via
-// its `lastActive.driver` resolution.
-function computeDriverLoopAggregates(driverName, slug) {
+// Driver-name matching uses normalizeDriverName for cross-source robustness
+// (handles "John H. Nemechek" vs "John H Nemechek" etc).
+function computeDriverLoopAggregates(driverName) {
   const out = {};
-  if (!driverName && !slug) return out;
-  const targetKey = normalizeDriverName(driverName || "");
-  const targetSlug = slug || (driverName ? slugify(driverName) : "");
-  if (!targetKey && !targetSlug) return out;
+  if (!driverName) return out;
+  const targetKey = normalizeDriverName(driverName);
+  if (!targetKey) return out;
 
   ["NCS", "NOS", "NTS"].forEach(code => {
     // `ratings` keeps the legacy shape (downstream chart + notable
     // consumers iterate ratings[].rating). We additionally attach
     // pass_diff / top15_pct / finish_pos / avg_pos onto each rating
-    // record so the new track-type panel (and Compare tab) can read
-    // multiple metrics off the same record without a second walk.
+    // record so the new track-type panel can read multiple metrics
+    // off the same record without a second walk.
     const ratings = [];
     Object.keys(SEASON_CACHE).forEach(yearStr => {
       const year = parseInt(yearStr, 10);
       const block = SEASON_CACHE[yearStr] && SEASON_CACHE[yearStr][code];
       if (!block || !block.races) return;
       block.races.forEach(r => {
-        const d = (r.results || []).find(x => {
-          const drv = x.driver || "";
-          if (!drv) return false;
-          // Primary match: normalized name. Robust against accent /
-          // suffix / punctuation differences.
-          if (targetKey && normalizeDriverName(drv) === targetKey) return true;
-          // Fallback: slug match. Catches retired drivers whose bio.name
-          // doesn't quite match the race-row form ("Kurt Busch" bio vs
-          // "Kurt T. Busch" race row → both slugify-collapse).
-          if (targetSlug && slugify(drv) === targetSlug) return true;
-          return false;
-        });
+        const d = (r.results || []).find(x =>
+          normalizeDriverName(x.driver || "") === targetKey
+        );
         if (!d || d.loop_driver_rating == null) return;
         ratings.push({
           year,
@@ -7125,8 +6994,7 @@ function computeDriverLoopAggregates(driverName, slug) {
           rating: d.loop_driver_rating,
           date: r.date,
           track_code: r.track_code,
-          // Optional secondary loop metrics — may be null on older
-          // races. Consumers must null-guard before averaging.
+          // Optional secondary loop metrics — may be null on older races.
           pass_diff:   d.loop_pass_diff,
           top15_pct:   d.loop_pct_top15_laps,
           avg_pos:     d.loop_avg_pos,
@@ -7150,15 +7018,13 @@ function computeDriverLoopAggregates(driverName, slug) {
 
 // Group a driver's rated races by track type and compute mean of each
 // key loop metric per group. Returns:
-//   { super: { count, avg_rating, avg_pass_diff, avg_top15_pct, avg_finish, races: [...] }, short: {...}, ... }
-// where keys are present only if the driver has >=1 rated race of that
-// type. `races` retains the per-race objects for hover/tooltip use.
-//
-// `seriesScope` is an array like ["NCS"] (present mode) or ["NCS","NOS","NTS"]
-// (historical mode). Matches the rating-chart convention.
+//   { super: { count, avg_rating, avg_pass_diff, avg_top15_pct, avg_finish, races: [...] }, ... }
+// Keys are present only if the driver has >=1 rated race of that type.
+// `seriesScope` is an array like ["NCS"] (present mode) or all three
+// series codes (historical mode). Matches the rating-chart convention.
 function computeDriverTrackTypeLoop(driverName, seriesScope) {
   const agg = computeDriverLoopAggregates(driverName);
-  const buckets = {}; // type -> { ratings:[], pass_diffs:[], top15s:[], finishes:[], races:[] }
+  const buckets = {};
   seriesScope.forEach(s => {
     const a = agg[s];
     if (!a) return;
@@ -7174,16 +7040,16 @@ function computeDriverTrackTypeLoop(driverName, seriesScope) {
       b.races.push({ ...r, series: s });
     });
   });
-  const mean = arr => arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : null;
+  const m = arr => arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : null;
   const out = {};
   Object.keys(buckets).forEach(t => {
     const b = buckets[t];
     out[t] = {
       count:          b.ratings.length,
-      avg_rating:     mean(b.ratings),
-      avg_pass_diff:  mean(b.pass_diffs),
-      avg_top15_pct:  mean(b.top15s),
-      avg_finish:     mean(b.finishes),
+      avg_rating:     m(b.ratings),
+      avg_pass_diff:  m(b.pass_diffs),
+      avg_top15_pct:  m(b.top15s),
+      avg_finish:     m(b.finishes),
       races:          b.races,
     };
   });
@@ -7994,21 +7860,8 @@ function paintProfileNotable(driverName) {
 // Track-Type Performance panel: groups the driver's rated races by
 // venue category (super / short / inter / road) and shows mean of
 // Driver Rating, Pass Diff, % Top-15 Laps, and Avg Finish for each.
-//
-// Series scope follows the same convention as the rating chart:
-// present mode = active series only; historical mode = all series
-// combined (career arc view). Panel hides entirely if the driver
-// has fewer than 2 distinct track types with rated data (a single
-// bar is not "by category" — it's just one number).
-//
-// Why these four metrics:
-//   • Avg Rating    — NASCAR's composite, the single best summary
-//   • Avg Pass Diff — positional movement (skill at gaining ground)
-//   • % Top-15 Laps — sustained pace (where you ran, not just where you finished)
-//   • Avg Finish    — the bottom-line result on race day
-// Together they describe "did he run well + finish well + make moves"
-// across each track type — the exact triangulation that's invisible
-// when you only have wins/top-10s/avg-finish.
+// Hides itself if fewer than 2 track types have data (single bar is
+// not "by category" — it's just one number, already shown elsewhere).
 function paintProfileTrackTypeLoop(driverName) {
   const panel = document.getElementById("profile-tt-panel");
   const host  = document.getElementById("profile-tt-grid");
@@ -8020,20 +7873,17 @@ function paintProfileTrackTypeLoop(driverName) {
     : ["NCS", "NOS", "NTS"];
   const tt = computeDriverTrackTypeLoop(driverName, seriesScope);
   const types = Object.keys(tt);
-  // Need at least 2 categories with data to make "by category" meaningful.
-  // (One category = same info already shown in the rating chart.)
   if (types.length < 2) {
     panel.style.display = "none";
     return;
   }
   panel.style.display = "";
 
-  // Render in canonical track-type display order so the panel reads
-  // the same across drivers (Cup season order: super, short, inter, road).
+  // Canonical track-type display order so the panel reads the same
+  // across drivers (super, short, inter, road).
   const ORDER = ["super", "short", "inter", "road"];
   const ordered = ORDER.filter(t => tt[t]);
 
-  // Subtitle reflects scope: in present mode tag the series, otherwise "all series".
   if (sub) {
     const totalRated = ordered.reduce((s, t) => s + tt[t].count, 0);
     const scopeLabel = STATE.mode === "present"
@@ -8042,13 +7892,13 @@ function paintProfileTrackTypeLoop(driverName) {
     sub.textContent = `${totalRated} rated races · ${scopeLabel}`;
   }
 
-  // Color thresholds. Driver Rating: same green/red anchors used in the
-  // race-day Loop Stats tab (>=100 hot, <70 cold). Pass diff: positive
-  // is good (gained spots). %Top15: high is good. Avg finish: low is good.
-  const ratingTone = v => v == null ? ""        : (v >= 100 ? "hot" : v < 70 ? "cold" : "");
-  const passTone   = v => v == null ? ""        : (v >  0   ? "hot" : v < 0  ? "cold" : "");
-  const t15Tone    = v => v == null ? ""        : (v >= 70  ? "hot" : v < 40 ? "cold" : "");
-  const finTone    = v => v == null ? ""        : (v <= 10  ? "hot" : v > 20 ? "cold" : "");
+  // Color thresholds. Driver Rating: same green/red anchors used in
+  // the Loop Stats tab (>=100 hot, <70 cold). Pass diff: positive is
+  // good. %Top15: high is good. Avg finish: low is good.
+  const ratingTone = v => v == null ? "" : (v >= 100 ? "hot" : v < 70 ? "cold" : "");
+  const passTone   = v => v == null ? "" : (v >  0   ? "hot" : v <  0 ? "cold" : "");
+  const t15Tone    = v => v == null ? "" : (v >= 70  ? "hot" : v < 40 ? "cold" : "");
+  const finTone    = v => v == null ? "" : (v <= 10  ? "hot" : v > 20 ? "cold" : "");
 
   const fmt1 = v => v == null ? "—" : v.toFixed(1);
   const fmtSigned = v => v == null ? "—" : (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
@@ -10852,532 +10702,6 @@ function renderTrackStats() {
       renderTrackStats();
     });
   });
-}
-
-// ============================================================
-// DRIVER COMPARE  — overlay loop-data charts for N drivers
-// ============================================================
-// Compare lets the user pick 2-6 drivers and overlay their loop-data
-// trends on a single chart, plus see a side-by-side aggregate table.
-//
-// Data model:
-//   Each driver in STATE.compare.drivers is a slug; we look up the
-//   bio's canonical name and run computeDriverLoopAggregates against
-//   it. The aggregator returns per-series rating arrays — we flatten
-//   to a single chronological array per driver, sorted by race date.
-//
-// Two scope modes:
-//   • Season — restrict to STATE.season + STATE.series (head-to-head
-//     within the current campaign). X axis = chronological race index.
-//   • Career — all loaded years, all series combined. X axis = date.
-//
-// Four metrics (chart Y axis):
-//   rating · pass_diff · top15 · finish
-// Finish has inverted scaling (lower = better) so we flip the axis on
-// that one — best (P1) at top, worst at bottom, matching the standings
-// table convention used elsewhere on the site.
-function renderCompare() {
-  const empty = document.getElementById("cmp-empty");
-  const chartLabel = document.getElementById("cmp-chart-label");
-  const svg = document.getElementById("cmp-svg");
-  const tbl = document.getElementById("cmp-table");
-  if (!svg || !tbl) return;
-
-  // ----- Sync toolbar buttons -----
-  document.querySelectorAll('.toggle-group[data-group="cmp-metric"] button').forEach(b => {
-    b.classList.toggle("on", b.dataset.val === STATE.compare.metric);
-  });
-  document.querySelectorAll('.toggle-group[data-group="cmp-scope"] button').forEach(b => {
-    b.classList.toggle("on", b.dataset.val === STATE.compare.scope);
-  });
-  document.querySelectorAll('.toggle-group[data-group="cmp-series"] button').forEach(b => {
-    b.classList.toggle("on", b.dataset.val === STATE.compare.series);
-  });
-
-  // ----- Render chips -----
-  renderCompareChips();
-
-  const drivers = STATE.compare.drivers || [];
-
-  // Update chart label up top
-  if (chartLabel) {
-    const labels = { rating: "Driver Rating", pass_diff: "Pass Diff (positions gained/lost)", top15: "% Laps in Top 15", finish: "Finish Position" };
-    let scopeLbl;
-    if (STATE.compare.scope === "season") {
-      scopeLbl = `${STATE.season} ${STATE.series}`;
-    } else {
-      // Career scope: honor the series toggle so the user knows whether
-      // they're seeing single-series career or cross-series career.
-      scopeLbl = (STATE.compare.series === "all")
-        ? "career · all series"
-        : `career · ${STATE.series}`;
-    }
-    chartLabel.textContent = `${labels[STATE.compare.metric] || ""} — ${scopeLbl}`;
-  }
-
-  if (drivers.length === 0) {
-    if (empty) empty.hidden = false;
-    svg.innerHTML = "";
-    tbl.innerHTML = "";
-    return;
-  }
-  if (empty) empty.hidden = (drivers.length >= 1); // <2 still shows the chart since one-driver overlay is harmless
-
-  // ----- Gather per-driver data -----
-  // Determine which series to pull from. Season scope always uses the
-  // active series (you can't compare a Truck race against a Cup race in
-  // the same season-X view). Career scope honors the Series toggle:
-  //   active = only STATE.series (so NCS tab shows Cup careers only)
-  //   all    = all three series merged (true cross-series career arc)
-  // This is the fix for the "Truck driver appearing in Cup compare" bug.
-  let seriesScope;
-  if (STATE.compare.scope === "season") {
-    seriesScope = [STATE.series];
-  } else {
-    seriesScope = (STATE.compare.series === "all")
-      ? ["NCS", "NOS", "NTS"]
-      : [STATE.series];
-  }
-  const yearFilter = STATE.compare.scope === "season"
-    ? STATE.season
-    : null;
-
-  // Build [{slug, name, color, pts:[{date, x_index, metric_val, year, round, series}], summary: {...}}]
-  const series = drivers.map(slug => {
-    const bio = STATE.driverBios ? STATE.driverBios[slug] : null;
-    const name = (bio && bio.name) || slug;
-    // Pass both name AND slug. The slug fallback catches retired drivers
-    // whose race-row name format differs slightly from bio.name (middle
-    // initials, suffixes, etc) — see computeDriverLoopAggregates comment.
-    const agg = computeDriverLoopAggregates(name, slug);
-    const pts = [];
-    seriesScope.forEach(s => {
-      const a = agg[s];
-      if (!a) return;
-      a.ratings.forEach(r => {
-        if (yearFilter != null && r.year !== yearFilter) return;
-        const val = compareMetricVal(r, STATE.compare.metric);
-        if (val == null) return;
-        pts.push({
-          date: r.date || "",
-          year: r.year,
-          round: r.round,
-          series: s,
-          val,
-          track_code: r.track_code,
-          rating: r.rating,
-          pass_diff: r.pass_diff,
-          top15: r.top15_pct,
-          finish: r.finish_pos,
-        });
-      });
-    });
-    pts.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-    // Summary aggregates — these populate the table row
-    const sum = {
-      n: pts.length,
-      avg_rating:    pts.length ? mean(pts.map(p => p.rating).filter(v => v != null))     : null,
-      avg_pass_diff: pts.length ? mean(pts.map(p => p.pass_diff).filter(v => v != null))  : null,
-      avg_top15:     pts.length ? mean(pts.map(p => p.top15).filter(v => v != null))      : null,
-      avg_finish:    pts.length ? mean(pts.map(p => p.finish).filter(v => v != null))     : null,
-    };
-    return {
-      slug,
-      name,
-      color: compareDriverColor(slug, drivers.indexOf(slug)),
-      pts,
-      summary: sum,
-    };
-  });
-
-  // ----- Build the shared X domain -----
-  // Season scope: round numbers 1..N for the season. We anchor at the
-  // current season's races so empty drivers (e.g. inactive ones picked
-  // for career compare) still get a visible row in the table.
-  // Career scope: dates from earliest to latest across all drivers.
-  let xDomain = []; // ordered array of {key, label, sortKey}
-  if (STATE.compare.scope === "season") {
-    const races = (STATE.data && STATE.data.races) ? racesSorted() : [];
-    xDomain = races.map(r => ({
-      key: `R${r.round}`,
-      label: r.track_code || `R${r.round}`,
-      round: r.round,
-      sortKey: r.date || "",
-    }));
-  } else {
-    // career — union of all driver race dates. Each tick is a single
-    // calendar date so dots align on shared race days, but axis LABELS
-    // only show year markers (one tick per year, at the first race of
-    // that year) since per-race date labels become unreadable across
-    // 5+ years of data.
-    const dateSet = new Set();
-    series.forEach(s => s.pts.forEach(p => p.date && dateSet.add(p.date)));
-    const sortedDates = Array.from(dateSet).sort();
-    // Mark only the first date in each calendar year with a year label;
-    // every other tick gets an empty label so it's still positioned in
-    // the domain but doesn't print text. paintCompareChart's existing
-    // tickStep logic respects empty labels naturally.
-    let lastYear = null;
-    xDomain = sortedDates.map(d => {
-      const yr = d.slice(0, 4);
-      const isFirstOfYear = (yr !== lastYear);
-      lastYear = yr;
-      return {
-        key: d,
-        label: isFirstOfYear ? yr : "",   // only year tick labels in career view
-        sortKey: d,
-        showTick: isFirstOfYear,
-      };
-    });
-  }
-
-  // ----- Paint chart -----
-  paintCompareChart(svg, series, xDomain);
-
-  // ----- Paint table -----
-  paintCompareTable(tbl, series);
-
-  // ----- Opportunistic load for Career scope -----
-  // The chart and table can only show what's in SEASON_CACHE. In Career
-  // scope we want every available year loaded so retired drivers (Kurt
-  // Busch, Bowyer) actually plot. Profiles do this on mount — Compare
-  // needs the same treatment. We trigger a single batch load and
-  // re-render when it completes. Limited to 8 years per pass; further
-  // history backfills on subsequent re-renders.
-  if (STATE.compare.scope === "career" && STATE.compare.drivers.length > 0) {
-    const allYears = Object.keys(SEASON_CACHE).map(Number);
-    const expectedYears = STATE.seasonsAvailable || [];
-    const missingYears = expectedYears.filter(y => !allYears.includes(y));
-    if (missingYears.length > 0) {
-      // Show loading state in the chart label so the user knows why
-      // the chart looks thin.
-      const lbl = document.getElementById("cmp-chart-label");
-      if (lbl) lbl.textContent += "  ·  Loading history…";
-      Promise.all(missingYears.slice(0, 8).map(y => loadSeasonIntoCache(y).catch(() => null)))
-        .then(() => {
-          if (STATE.view !== "compare") return;
-          renderCompare();
-        });
-    }
-  }
-}
-
-// Pluck the correct metric off a per-race record for chart plotting.
-function compareMetricVal(rec, metric) {
-  if (metric === "rating")    return rec.rating;
-  if (metric === "pass_diff") return rec.pass_diff;
-  if (metric === "top15")     return rec.top15_pct;
-  if (metric === "finish")    return rec.finish_pos;
-  return null;
-}
-
-// (Uses the existing global mean() helper from earlier in the file.)
-
-// Color per compare slot — stable across renders for a given slug.
-// We use hashColor (the same fallback color helper used elsewhere for
-// drivers without palette entries) seeded by slug so the same driver
-// gets the same color every time. Slot index acts as a tie-breaker for
-// hash collisions.
-function compareDriverColor(slug, slotIdx) {
-  // Prefer a curated bright palette for the first 6 slots so the chart
-  // reads cleanly. Beyond 6 we fall back to hashColor.
-  const PALETTE = [
-    "#3b82f6",  // blue
-    "#ef4444",  // red
-    "#22c55e",  // green
-    "#f59e0b",  // amber
-    "#a855f7",  // purple
-    "#06b6d4",  // cyan
-  ];
-  if (slotIdx >= 0 && slotIdx < PALETTE.length) return PALETTE[slotIdx];
-  return hashColor("cmp:" + slug);
-}
-
-function renderCompareChips() {
-  const host = document.getElementById("cmp-chips");
-  if (!host) return;
-  const drivers = STATE.compare.drivers || [];
-  if (drivers.length === 0) {
-    host.innerHTML = `<span class="cmp-chips-empty">No drivers selected</span>`;
-    return;
-  }
-  host.innerHTML = drivers.map((slug, i) => {
-    const bio = STATE.driverBios ? STATE.driverBios[slug] : null;
-    const name = (bio && bio.name) || slug;
-    const color = compareDriverColor(slug, i);
-    return `<span class="cmp-chip" style="--chip-color:${color};" data-slug="${escapeHTML(slug)}">
-      <span class="cmp-chip-dot"></span>
-      <span class="cmp-chip-name">${escapeHTML(name)}</span>
-      <button class="cmp-chip-x" data-slug="${escapeHTML(slug)}" aria-label="Remove">×</button>
-    </span>`;
-  }).join("");
-}
-
-// SVG chart: one line per driver. X = position in xDomain, Y = metric value.
-// Dots at each race; lines connect a driver's own dots only.
-function paintCompareChart(svg, series, xDomain) {
-  if (!svg) return;
-  const rect = svg.getBoundingClientRect();
-  const W = Math.max(600, Math.floor(rect.width || 800));
-  const H = 360;
-  const pad = { t: 20, r: 20, b: 50, l: 48 };
-  const innerW = W - pad.l - pad.r;
-  const innerH = H - pad.t - pad.b;
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-
-  if (xDomain.length === 0) {
-    svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" class="axis-label" fill="var(--dim)">No races in this scope yet.</text>`;
-    return;
-  }
-
-  // Y range per metric. We default to fixed scales for rating / top15
-  // (familiar baselines) and auto-scale for pass_diff / finish (data
-  // determines bounds since pass_diff can be any signed int).
-  let yMin, yMax, invertY = false, refLines = [];
-  const metric = STATE.compare.metric;
-  // Pull every Y value into a flat array for auto-scaling.
-  const allVals = [];
-  series.forEach(s => s.pts.forEach(p => allVals.push(p.val)));
-  if (metric === "rating") {
-    yMin = 30; yMax = 150;
-    refLines.push({ y: 70, label: "70 avg" });
-    refLines.push({ y: 100, label: "100" });
-  } else if (metric === "top15") {
-    yMin = 0; yMax = 100;
-    refLines.push({ y: 50, label: "50%" });
-  } else if (metric === "finish") {
-    yMin = 1; yMax = 40;
-    invertY = true;
-    refLines.push({ y: 10, label: "P10" });
-    refLines.push({ y: 20, label: "P20" });
-  } else if (metric === "pass_diff") {
-    // Symmetric around 0 with breathing room
-    const maxAbs = allVals.length ? Math.max(...allVals.map(Math.abs), 5) : 10;
-    yMax = Math.ceil(maxAbs / 5) * 5;
-    yMin = -yMax;
-    refLines.push({ y: 0, label: "0" });
-  } else {
-    yMin = 0; yMax = 100;
-  }
-
-  const yScale = v => invertY
-    ? pad.t + ((v - yMin) / (yMax - yMin)) * innerH
-    : pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
-  const xScale = i => xDomain.length === 1
-    ? pad.l + innerW / 2
-    : pad.l + (i / (xDomain.length - 1)) * innerW;
-
-  // Map for fast lookup: x-key -> index in xDomain
-  const xKeyToIdx = {};
-  xDomain.forEach((d, i) => { xKeyToIdx[d.key] = i; });
-
-  // Translate a per-race record to an xDomain index based on scope.
-  const ptToXIdx = p => {
-    if (STATE.compare.scope === "season") {
-      return xKeyToIdx[`R${p.round}`];
-    }
-    return xKeyToIdx[p.date];
-  };
-
-  // ----- Gridlines + ref lines -----
-  let html = "";
-  refLines.forEach(ref => {
-    const y = yScale(ref.y);
-    html += `<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}" stroke-dasharray="3 3"/>`;
-    html += `<text class="axis-label" x="${pad.l - 4}" y="${y + 3}" text-anchor="end" style="opacity:0.6;">${escapeHTML(ref.label)}</text>`;
-  });
-
-  // Y bounds labels
-  html += `<text class="axis-label" x="${pad.l - 4}" y="${pad.t + 4}" text-anchor="end">${invertY ? yMin : yMax}</text>`;
-  html += `<text class="axis-label" x="${pad.l - 4}" y="${pad.t + innerH + 3}" text-anchor="end">${invertY ? yMax : yMin}</text>`;
-
-  // X axis ticks — for season scope we throttle to avoid crowding;
-  // for career scope the xDomain pre-labels only year boundaries so
-  // we just render whichever entries have non-empty labels (no further
-  // throttling needed there).
-  const isCareer = (STATE.compare.scope === "career");
-  const tickStep = Math.max(1, Math.ceil(xDomain.length / 14));
-  xDomain.forEach((d, i) => {
-    if (!d.label) return;             // skip empty labels (career intra-year)
-    if (!isCareer) {
-      // Season scope: throttle by index step
-      if (i % tickStep !== 0 && i !== xDomain.length - 1) return;
-    }
-    const x = xScale(i);
-    html += `<text class="axis-label" x="${x}" y="${pad.t + innerH + 16}" text-anchor="middle" style="font-size:9px;">${escapeHTML(d.label)}</text>`;
-  });
-
-  // ----- Per-driver lines + dots -----
-  series.forEach(s => {
-    if (s.pts.length === 0) return;
-    // Build path: each driver's points sorted by x index.
-    const indexed = s.pts.map(p => ({ p, x: ptToXIdx(p) }))
-                          .filter(o => o.x != null)
-                          .sort((a, b) => a.x - b.x);
-    if (indexed.length === 0) return;
-    const pathD = indexed.map((o, i) =>
-      `${i === 0 ? "M" : "L"} ${xScale(o.x).toFixed(1)} ${yScale(o.p.val).toFixed(1)}`
-    ).join(" ");
-    html += `<path d="${pathD}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" opacity="0.85"/>`;
-    indexed.forEach(o => {
-      const cx = xScale(o.x).toFixed(1);
-      const cy = yScale(o.p.val).toFixed(1);
-      // dot with hover affordance
-      const tipParts = [
-        `<strong>${escapeHTML(s.name)}</strong>`,
-        prettyTrack(o.p.track_code, "") || o.p.track_code || "",
-        `${o.p.series} R${o.p.round}` + (o.p.date ? ` · ${o.p.date}` : ""),
-      ];
-      const labelMetric = { rating: "Rating", pass_diff: "Pass Diff", top15: "% Top-15", finish: "Finish" }[metric] || "";
-      tipParts.push(`${labelMetric}: <strong>${formatCompareVal(o.p.val, metric)}</strong>`);
-      const tip = tipParts.filter(Boolean).join(" · ");
-      html += `<circle class="cmp-dot" cx="${cx}" cy="${cy}" r="3.5" fill="${s.color}" stroke="var(--bg)" stroke-width="1" data-tip="${escapeHTML(tip)}"/>`;
-    });
-  });
-
-  svg.innerHTML = html;
-  svg.style.height = `${H}px`;
-
-  // Hover tooltip — reuse the global #chart-tooltip element
-  let tip = document.getElementById("chart-tooltip");
-  if (!tip) {
-    tip = document.createElement("div");
-    tip.id = "chart-tooltip";
-    tip.className = "chart-tooltip";
-    tip.style.display = "none";
-    document.body.appendChild(tip);
-  }
-  svg.querySelectorAll(".cmp-dot").forEach(dot => {
-    dot.addEventListener("mouseenter", e => {
-      tip.innerHTML = dot.getAttribute("data-tip") || "";
-      tip.style.display = "block";
-    });
-    dot.addEventListener("mousemove", e => {
-      tip.style.left = (e.clientX + 12) + "px";
-      tip.style.top = (e.clientY + 12) + "px";
-    });
-    dot.addEventListener("mouseleave", () => { tip.style.display = "none"; });
-  });
-}
-
-function formatCompareVal(v, metric) {
-  if (v == null) return "—";
-  if (metric === "pass_diff") return v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
-  if (metric === "top15")     return `${v.toFixed(1)}%`;
-  return v.toFixed(1);
-}
-
-function paintCompareTable(tbl, series) {
-  if (!tbl) return;
-  if (series.length === 0) { tbl.innerHTML = ""; return; }
-  const head = `<thead><tr>
-    <th>Driver</th>
-    <th class="num">Races</th>
-    <th class="num">Avg Rating</th>
-    <th class="num">Pass Diff</th>
-    <th class="num">% Top-15</th>
-    <th class="num">Avg Finish</th>
-  </tr></thead>`;
-  const fmt = (v, kind) => {
-    if (v == null) return "—";
-    if (kind === "signed") return v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
-    if (kind === "pct")    return `${v.toFixed(1)}%`;
-    return v.toFixed(1);
-  };
-  const body = `<tbody>${series.map(s => `
-    <tr>
-      <td><span class="cmp-table-dot" style="background:${s.color};"></span><a class="profile-link" href="#/driver/${encodeURIComponent(s.slug)}">${escapeHTML(s.name)}</a></td>
-      <td class="num">${s.summary.n}</td>
-      <td class="num">${fmt(s.summary.avg_rating)}</td>
-      <td class="num">${fmt(s.summary.avg_pass_diff, "signed")}</td>
-      <td class="num">${fmt(s.summary.avg_top15, "pct")}</td>
-      <td class="num">${fmt(s.summary.avg_finish)}</td>
-    </tr>`).join("")}</tbody>`;
-  tbl.innerHTML = head + body;
-}
-
-// Update the URL hash to reflect current STATE.compare without firing
-// a hashchange (we're already in the renderer). Lets the user copy the
-// URL and share an exact overlay.
-function syncCompareHash() {
-  if (STATE.view !== "compare") return;
-  const params = new URLSearchParams();
-  if (STATE.compare.drivers.length) params.set("drivers", STATE.compare.drivers.join(","));
-  if (STATE.compare.metric !== "rating") params.set("metric", STATE.compare.metric);
-  if (STATE.compare.scope !== "season")  params.set("scope", STATE.compare.scope);
-  if (STATE.compare.series !== "active") params.set("series", STATE.compare.series);
-  const qs = params.toString();
-  const newHash = qs ? `#/compare?${qs}` : `#/compare`;
-  if (location.hash !== newHash) {
-    // history.replaceState avoids the hashchange listener firing.
-    history.replaceState(null, "", newHash);
-    STATE.lastHash = newHash;
-  }
-}
-
-// Filter the search index down to drivers for the compare picker
-// dropdown. Reuses the same scoring/match logic as the topbar search
-// (substring + prefix bonus + popularity score) so behavior is
-// consistent — typing "byr" surfaces William Byron in both places.
-function compareSearchDrivers(query) {
-  query = (query || "").trim().toLowerCase();
-  if (query.length < 1) return [];
-  const idx = buildSearchIndex().filter(e => e.type === "driver");
-  const queryParts = query.split(/\s+/).filter(Boolean);
-  const scored = [];
-  for (const entry of idx) {
-    const s = scoreSearchEntry(entry, query, queryParts);
-    if (s > 0) scored.push({ entry, score: s });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 12).map(x => x.entry);
-}
-
-function renderComparePickerDropdown(results) {
-  const drop = document.getElementById("cmp-picker-dropdown");
-  if (!drop) return;
-  if (results.length === 0) {
-    drop.innerHTML = `<div class="cmp-picker-empty">No drivers match</div>`;
-    drop.hidden = false;
-    return;
-  }
-  // Hide drivers already selected
-  const picked = new Set(STATE.compare.drivers);
-  const filtered = results.filter(r => !picked.has(r.key));
-  if (filtered.length === 0) {
-    drop.innerHTML = `<div class="cmp-picker-empty">All matches already picked</div>`;
-    drop.hidden = false;
-    return;
-  }
-  drop.innerHTML = filtered.map(r => `
-    <button class="cmp-picker-item" data-slug="${escapeHTML(r.key)}" data-name="${escapeHTML(r.label)}">
-      <span class="cmp-picker-name">${escapeHTML(r.label)}</span>
-      <span class="cmp-picker-sub">${escapeHTML(r.sub || "")}</span>
-    </button>
-  `).join("");
-  drop.hidden = false;
-}
-
-// Add a driver to STATE.compare by slug. Caps at 6.
-function compareAddDriver(slug) {
-  if (!slug) return;
-  if (STATE.compare.drivers.includes(slug)) return;
-  if (STATE.compare.drivers.length >= 6) return;  // soft cap
-  STATE.compare.drivers.push(slug);
-  syncCompareHash();
-  renderCompare();
-}
-
-function compareRemoveDriver(slug) {
-  STATE.compare.drivers = STATE.compare.drivers.filter(s => s !== slug);
-  syncCompareHash();
-  renderCompare();
-}
-
-function compareClearAll() {
-  STATE.compare.drivers = [];
-  syncCompareHash();
-  renderCompare();
 }
 
 // ============================================================
