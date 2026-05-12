@@ -11003,18 +11003,18 @@ function renderStandings() {
           <span class="mfr-swatch" style="background:${mfrColor};"></span>
           <span>${escapeHTML(r.displayLabel)}</span>
         </span></td>
-        <td class="num col-mobile-hide">${r.starts}</td>
-        <td class="num">${r.wins}</td>
-        <td class="num col-mobile-hide">${r.top5}</td>
-        <td class="num col-mobile-hide">${r.top10}</td>
-        <td class="num col-mobile-hide">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
+        <td class="num total-col">${r.total}</td>
+        <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
         <td class="num col-mobile-hide">${
           r.lastRacePts == null
             ? `<span class="muted">—</span>`
             : `<span class="pts-delta-only">+${r.lastRacePts}</span>`
         }</td>
-        <td class="num total-col">${r.total}</td>
-        <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
+        <td class="num col-mobile-hide">${r.starts}</td>
+        <td class="num">${r.wins}</td>
+        <td class="num col-mobile-hide">${r.top5}</td>
+        <td class="num col-mobile-hide">${r.top10}</td>
+        <td class="num col-mobile-hide">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
       </tr>`;
     }).join("");
   } else {
@@ -11073,21 +11073,21 @@ function renderStandings() {
           ${renderCoDriverBadge(r)}
         </a></td>
         <td class="col-mobile-hide">${teamPill}</td>
-        <td class="num col-mobile-hide">${r.starts}</td>
-        <td class="num">${r.wins}</td>
-        <td class="num col-mobile-hide">${r.top5}</td>
-        <td class="num col-mobile-hide">${r.top10}</td>
-        <td class="num col-mobile-hide">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
+        <td class="num total-col">${r.total}</td>
+        <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
         <td class="num col-mobile-hide">${
           r.lastRacePts == null
             ? `<span class="muted">—</span>`
             : `<span class="pts-delta-only ${r.lastRaceDelta != null && r.lastRaceDelta > 1.5 ? "hot" : r.lastRaceDelta != null && r.lastRaceDelta < -1.5 ? "cold" : ""}">+${r.lastRacePts}</span>`
         }</td>
+        <td class="num col-mobile-hide">${r.starts}</td>
+        <td class="num">${r.wins}</td>
+        <td class="num col-mobile-hide">${r.top5}</td>
+        <td class="num col-mobile-hide">${r.top10}</td>
+        <td class="num col-mobile-hide">${r.avgFinish != null ? r.avgFinish.toFixed(1) : "—"}</td>
         ${stageEra ? `<td class="num col-mobile-hide">${r.sumS1}</td>
         <td class="num col-mobile-hide">${r.sumS2}</td>
         <td class="num col-mobile-hide">${r.sumFL}</td>` : ""}
-        <td class="num total-col">${r.total}</td>
-        <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
         ${diffCell}
       </tr>`;
     }).join("");
@@ -11110,31 +11110,31 @@ function renderStandings() {
     headerRow = `
       ${th("rank", "Pos", true)}
       ${th("driver", driverColLabel, false)}
+      ${th("total", "Total", true)}
+      <th class="num" title="Points back from current points leader">Back</th>
+      ${th("lastRacePts", "Last Pts", true, true)}
       ${th("starts", "Races", true, true)}
       ${th("wins", "Wins", true)}
       ${th("top5", "T5", true, true)}
       ${th("top10", "T10", true, true)}
       ${th("avgFinish", "Avg Best", true, true)}
-      ${th("lastRacePts", "Last Pts", true, true)}
-      ${th("total", "Total", true)}
-      <th class="num" title="Points back from current points leader">Back</th>
     `;
   } else {
     headerRow = `
       ${th("rank", "Pos", true)}
       ${th("driver", driverColLabel, false)}
       ${th("team", "Team", false, true)}
+      ${th("total", "Total", true)}
+      <th class="num" title="Points back from current points leader (live)">Back</th>
+      ${th("lastRacePts", "Last Pts", true, true)}
       ${th("starts", "Starts", true, true)}
       ${th("wins", "Wins", true)}
       ${th("top5", "T5", true, true)}
       ${th("top10", "T10", true, true)}
       ${th("avgFinish", "Avg Fin", true, true)}
-      ${th("lastRacePts", "Last Pts", true, true)}
       ${stageEra ? `${th("sumS1", "S1", true, true)}
       ${th("sumS2", "S2", true, true)}
       ${th("sumFL", "FL", true, true)}` : ""}
-      ${th("total", "Total", true)}
-      <th class="num" title="Points back from current points leader (live)">Back</th>
       ${hasCanonicalGap ? `<th class="num col-mobile-hide" title="Points gap to season champion (year-end canonical)">Diff</th>` : ""}
     `;
   }
