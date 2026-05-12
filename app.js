@@ -8360,6 +8360,7 @@ function paintProfileCareerHeatmap() {
       if (!block || !block.races) return;
       const finishByRound = new Map();
       const trackByRound = new Map();
+      const carByRound = new Map();
       let driverDrove = false;
       let driverNameThisYear = null;
       // Tally team_code occurrences across the season — drivers can switch
@@ -8383,6 +8384,7 @@ function paintProfileCareerHeatmap() {
           driverDrove = true;
           finishByRound.set(race.round, hit.finish_pos);
           trackByRound.set(race.round, race);
+          if (hit.car_number) carByRound.set(race.round, hit.car_number);
           driverNameThisYear = hit.driver;
           // Resolve team code: explicit field if present, else fallback
           // to the team-name → code mapping (older data without team_code).
@@ -8430,7 +8432,7 @@ function paintProfileCareerHeatmap() {
           if (idx >= 0) standingsRank = idx + 1;
         }
         rows.push({
-          year, series: sCode, finishByRound, trackByRound, standingsRank,
+          year, series: sCode, finishByRound, trackByRound, carByRound, standingsRank,
           team: dominantTeam,
           car: dominantCar,
         });
@@ -8498,9 +8500,14 @@ function paintProfileCareerHeatmap() {
     for (let i = 1; i <= maxRound; i++) {
       const fin = r.finishByRound.get(i);
       const race = r.trackByRound.get(i);
+      const carThisRace = r.carByRound ? r.carByRound.get(i) : null;
       const trackTip = race ? prettyTrack(race.track_code, race.track) : "";
+      // Car suffix on tooltip — useful for drivers who switched mid-
+      // season (Kahne 2012, Truex 2014, etc.). Falls off cleanly when
+      // unknown (very old data without car_number captured).
+      const carTip = carThisRace ? ` · #${carThisRace}` : "";
       const titleAttr = fin != null
-        ? `${r.year} ${r.series} R${i}${trackTip ? " · " + trackTip : ""} · P${fin}`
+        ? `${r.year} ${r.series} R${i}${trackTip ? " · " + trackTip : ""}${carTip} · P${fin}`
         : "";
       // Wrap clickable cells in an anchor pointing at the race route. Use
       // the search-format URL (#/race/<round>?_y=<year>&_s=<series>) so we
