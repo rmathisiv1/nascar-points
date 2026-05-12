@@ -10996,7 +10996,6 @@ function renderStandings() {
           <span class="mfr-swatch" style="background:${mfrColor};"></span>
           <span>${escapeHTML(r.displayLabel)}</span>
         </span></td>
-        <td class="col-mobile-hide muted">—</td>
         <td class="num col-mobile-hide">${r.starts}</td>
         <td class="num">${r.wins}</td>
         <td class="num col-mobile-hide">${r.top5}</td>
@@ -11044,15 +11043,15 @@ function renderStandings() {
         }
       }
       // Row label varies by view:
-      //   Owner  → just "#5" (the car IS the entity; co-driver badge
-      //            still appears to show subs).
+      //   Owner  → the car-tag swatch IS the label; we omit any extra
+      //            text since '#5' would just duplicate the swatch.
       //   Driver → driver name, plus a small "(N cars)" suffix if they
       //            drove multiple cars this season. The suffix is built
       //            here (post-escape) instead of embedded in displayLabel
       //            so escapeHTML doesn't print it as literal markup.
       let nameCellInner;
       if (view === "owner") {
-        nameCellInner = `<span>#${r.car_number}</span>`;
+        nameCellInner = "";
       } else {
         const carsHint = r.carsHint
           ? ` <span class="muted" style="font-size:10px;font-weight:400;">(${r.carsHint} cars)</span>`
@@ -11104,7 +11103,6 @@ function renderStandings() {
     headerRow = `
       ${th("rank", "Pos", true)}
       ${th("driver", driverColLabel, false)}
-      <th class="col-mobile-hide muted">—</th>
       ${th("starts", "Races", true, true)}
       ${th("wins", "Wins", true)}
       ${th("top5", "T5", true, true)}
@@ -11139,7 +11137,6 @@ function renderStandings() {
   // CSS so it doesn't scroll away inside the scrollable card.
   const viewToggleHTML = `
     <div class="standings-views toolbar-slim">
-      <span class="toolbar-label">View</span>
       <div class="toggle-group" data-group="standings-view">
         <button class="${view === "driver" ? "on" : ""}" data-val="driver">Driver</button>
         <button class="${view === "owner"  ? "on" : ""}" data-val="owner">Owner</button>

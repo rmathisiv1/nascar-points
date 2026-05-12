@@ -91,7 +91,6 @@
   <a href="#/trajectory" class="mobile-nav-link" data-view="trajectory">Stage vs Finish</a>
   <a href="#/breakdown"  class="mobile-nav-link" data-view="breakdown">Stage Points</a>
   <a href="#/trackstats" class="mobile-nav-link" data-view="trackstats">Track Stats</a>
-  <a href="#/compare"    class="mobile-nav-link" data-view="compare">Driver Compare</a>
 
   <!-- Data group (matches desktop Data ▾ dropdown) -->
   <div class="mobile-nav-section">Data</div>
@@ -146,7 +145,6 @@
           <a href="#/trajectory" class="dash-subitem" data-view="trajectory">Stage vs Finish</a>
           <a href="#/breakdown"  class="dash-subitem" data-view="breakdown">Stage Points</a>
           <a href="#/trackstats" class="dash-subitem" data-view="trackstats">Track Stats</a>
-          <a href="#/compare"    class="dash-subitem" data-view="compare">Driver Compare</a>
         </div>
       </div>
 
@@ -464,44 +462,6 @@
         <div class="card tab-chart-fill scrollable">
           <div id="trackstats-host"></div>
         </div>
-      </section>
-
-      <section class="view tab-panel" id="view-compare" hidden>
-        <div class="toolbar-slim cmp-toolbar">
-          <span class="toolbar-label">Metric</span>
-          <div class="toggle-group" data-group="cmp-metric">
-            <button class="on" data-val="rating">Driver Rating</button>
-            <button data-val="pass_diff">Pass Diff</button>
-            <button data-val="top15">% Top-15</button>
-            <button data-val="finish">Finish</button>
-          </div>
-          <span class="toolbar-label">Scope</span>
-          <div class="toggle-group" data-group="cmp-scope">
-            <button class="on" data-val="season">Season</button>
-            <button data-val="career">Career</button>
-          </div>
-          <span class="toolbar-label">Series</span>
-          <div class="toggle-group" data-group="cmp-series">
-            <button class="on" data-val="active">Active</button>
-            <button data-val="all">All</button>
-          </div>
-          <button class="btn-ghost cmp-clear" id="cmp-clear">Clear</button>
-        </div>
-        <div class="cmp-picker-row">
-          <div class="cmp-chips" id="cmp-chips"></div>
-          <div class="cmp-picker-wrap">
-            <input type="search" id="cmp-picker-input" class="cmp-picker-input" placeholder="+ Add driver…" autocomplete="off" spellcheck="false">
-            <div class="cmp-picker-dropdown" id="cmp-picker-dropdown" hidden></div>
-          </div>
-        </div>
-        <div class="card card-chart cmp-chart-card">
-          <div class="cmp-chart-label" id="cmp-chart-label">—</div>
-          <svg id="cmp-svg"></svg>
-        </div>
-        <div class="card cmp-table-card">
-          <table class="cmp-table" id="cmp-table"></table>
-        </div>
-        <div class="cmp-empty muted" id="cmp-empty" hidden>Pick 2+ drivers to compare their loop-data trends.</div>
       </section>
 
       <section class="view tab-panel" id="view-standings" hidden>
