@@ -12139,11 +12139,11 @@ function renderCompareCareerChart(drivers) {
   if (seriesOptions.length === 0) return "";
 
   const seriesToggleHTML = seriesOptions.map(s =>
-    `<button class="${s === seriesChoice ? "on" : ""}" data-cmp-chart-series="${s}">${s}</button>`
+    `<button class="${s === seriesChoice ? "on" : ""}" data-cmp-chart-series="${s}" data-val="${s}">${s}</button>`
   ).join("");
 
   const metricToggleHTML = COMPARE_CHART_METRICS.map(m =>
-    `<button class="${m.key === metricChoice ? "on" : ""}" data-cmp-chart-metric="${m.key}">${m.label}</button>`
+    `<button class="${m.key === metricChoice ? "on" : ""}" data-cmp-chart-metric="${m.key}" data-val="${m.key}">${m.label}</button>`
   ).join("");
 
   // Display mode toggle — Per-season vs Cumulative. Per-season shows
@@ -12155,7 +12155,7 @@ function renderCompareCareerChart(drivers) {
     { key: "per-season",  label: "Per-season" },
     { key: "cumulative",  label: "Cumulative" },
   ].map(m =>
-    `<button class="${m.key === displayMode ? "on" : ""}" data-cmp-chart-display="${m.key}">${m.label}</button>`
+    `<button class="${m.key === displayMode ? "on" : ""}" data-cmp-chart-display="${m.key}" data-val="${m.key}">${m.label}</button>`
   ).join("");
 
   // Gather per-driver yearly data for the selected series

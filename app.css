@@ -9487,8 +9487,14 @@ body.lightbox-open {
   border-collapse: collapse;
   font-family: var(--mono);
   font-size: 13px;
+  /* Fixed layout = column widths are determined by the first row's
+     <th>/<td> width declarations, not by content. Combined with
+     percentage widths below, this guarantees evenly-spaced data
+     columns regardless of how large their numeric values are. */
+  table-layout: fixed;
 }
-.cmp-table th {
+.cmp-table tbody th {
+  /* The stat-label column (Starts / Wins / etc.) — fixed width on the left. */
   text-align: left;
   padding: 8px 14px;
   background: var(--bg);
@@ -9499,12 +9505,15 @@ body.lightbox-open {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
-  width: 35%;
+  width: 28%;
 }
 .cmp-table td {
-  padding: 8px 12px;
+  /* Data columns share the remaining width equally. text-align right
+     keeps numeric values aligned visually with their neighbors. */
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
+  text-align: right;
 }
 .cmp-table tr:last-child th,
 .cmp-table tr:last-child td {
@@ -9656,10 +9665,13 @@ body.lightbox-open {
   .cmp-headers {
     grid-template-columns: 1fr 1fr;
   }
-  .cmp-table th {
-    width: 40%;
+  .cmp-table tbody th {
+    width: 38%;
     padding: 6px 8px;
     font-size: 10px;
+  }
+  .cmp-thead th:first-child {
+    width: 38%;
   }
   .cmp-table td {
     padding: 6px 8px;
@@ -10234,6 +10246,12 @@ body.lightbox-open {
 .cmp-thead {
   background: var(--bg);
 }
+/* The first thead cell is empty (placeholder above the stat-label
+   column). It must match tbody's 28% so all the driver-chip headers
+   line up perfectly above the corresponding data columns. */
+.cmp-thead th:first-child {
+  width: 28%;
+}
 .cmp-thead th {
   padding: 8px 12px !important;
   border-bottom: 1px solid var(--border);
@@ -10331,12 +10349,12 @@ body.lightbox-open {
    ============================================================================ */
 #view-compare .view-head {
   display: block;
-  padding-top: 8px;
-  margin-bottom: 14px;
+  padding-top: 22px;
+  margin-bottom: 18px;
 }
 #view-compare .view-head h1 {
-  margin-bottom: 6px;
-  line-height: 1.15;        /* a touch more room for descenders */
+  margin-bottom: 8px;
+  line-height: 1.2;
 }
 #view-compare .view-sub {
   display: block;
@@ -10348,8 +10366,8 @@ body.lightbox-open {
 
 @media (max-width: 767.98px) {
   #view-compare .view-head {
-    padding-top: 4px;
-    margin-bottom: 10px;
+    padding-top: 14px;
+    margin-bottom: 14px;
   }
   #view-compare .view-sub {
     font-size: 12px;
