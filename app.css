@@ -10347,9 +10347,23 @@ body.lightbox-open {
    We stack here instead, and add comfortable top padding so the headline
    isn't visually pressed against the topbar / metricbar above.
    ============================================================================ */
+/* ============================================================================
+   Compare view — content padding inside the host card. Other takeover views
+   set this on their host div via their own CSS; compare didn't, which is
+   why the title looked jammed against the card's top-left corner.
+   ============================================================================ */
+#compare-host {
+  padding: 24px 24px 24px;
+}
+@media (max-width: 767.98px) {
+  #compare-host {
+    padding: 14px 14px 14px;
+  }
+}
+
 #view-compare .view-head {
   display: block;
-  padding-top: 22px;
+  padding-top: 0;
   margin-bottom: 18px;
 }
 #view-compare .view-head h1 {
@@ -10366,7 +10380,6 @@ body.lightbox-open {
 
 @media (max-width: 767.98px) {
   #view-compare .view-head {
-    padding-top: 14px;
     margin-bottom: 14px;
   }
   #view-compare .view-sub {
