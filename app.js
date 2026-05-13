@@ -12725,6 +12725,15 @@ function wireCompareEventHandlers() {
       renderCompare();
     });
   }
+
+  // After every compare render the DOM has fresh .toggle-group nodes for
+  // the chart. The global render() pipeline calls syncMobileDropdowns()
+  // once, but our internal toggle-click handlers re-render compare
+  // without going through render(). Call sync directly so the mobile
+  // select-mirrors get rebuilt every time. Idempotent via data-sig.
+  if (typeof syncMobileDropdowns === "function") {
+    syncMobileDropdowns();
+  }
 }
 
 

@@ -10064,22 +10064,31 @@ body.lightbox-open {
     padding: 5px 4px;
   }
   /* Finish rows on mobile: main row is 4 cols, then the extras sub-row
-     wraps below at full width. .hp-row-extras flips from display:contents
-     (desktop) to a flex sub-row that spans across the parent grid via
-     grid-column: 1 / -1. */
+     wraps below at full width. Higher-specificity selector here is
+     intentional — the desktop rule `.rps-col-finish .hp-row-finish`
+     has specificity (0,2,0) and would otherwise still apply on mobile,
+     keeping the 7-col template (and causing all columns to overlap in
+     ~380px screens). */
+  .rps-col-finish .hp-row-finish,
+  .rps-full-body .hp-row-finish,
   .hp-row-finish {
     grid-template-columns: 22px 38px 1fr 50px;
     gap: 6px;
     padding: 6px 4px 5px;
     row-gap: 4px;
   }
+  .rps-col-finish .hp-row-finish .hp-row-extras,
+  .rps-full-body .hp-row-finish .hp-row-extras,
   .hp-row-finish .hp-row-extras {
     display: flex;
     grid-column: 1 / -1;          /* span entire row */
     margin-left: 64px;            /* indent past rank + car columns */
     gap: 14px;
     align-items: baseline;
+    flex-wrap: wrap;              /* allow wrap if too narrow */
   }
+  .rps-col-finish .hp-row-finish .hp-extra-cell,
+  .rps-full-body .hp-row-finish .hp-extra-cell,
   .hp-row-finish .hp-extra-cell {
     display: inline-flex;
     align-items: baseline;
