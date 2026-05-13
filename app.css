@@ -3208,6 +3208,14 @@ a.driver-cell.profile-link:hover .car-tag {
     color: #fff;
     border-color: #c62828;
   }
+  /* Reset the OPEN dropdown panel options to neutral surface tones —
+     the option list inherits the colored background from the select
+     by default in most engines, which looks like a giant solid panel.
+     We want a normal dropdown where only the closed head is colored. */
+  .series-sw select.series-sw-select option {
+    background-color: var(--card);
+    color: var(--text);
+  }
   /* The season-pill ("2026 · R9 / 36") duplicates info already shown in the
      year + race pickers on mobile. Hide to reclaim horizontal room. */
   .season-pill {
