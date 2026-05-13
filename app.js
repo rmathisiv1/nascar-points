@@ -1006,6 +1006,9 @@ async function boot() {
   }
   populateSeasonPicker();
   applyModeToDom();   // hide/show season picker based on restored mode
+  // Sync series toggle UI to initial STATE.series — sets data-series
+  // on the mobile <select> so it gets the correct color at boot.
+  syncSeriesUIGlobal(STATE.series);
   await loadCurrentData();
   populateRacePicker();
   renderTimeCursorBanner();
@@ -1281,10 +1284,14 @@ function openMobileNav() {
 // across and wire a 'change' on the mobile select that re-fires on the desktop
 // one (which already has all the right handlers wired).
 function syncMobileNavSettings() {
+  // Mirrors the desktop topbar season/race pickers into the mobile-only
+  // secondary topbar row (#topbar-historical), so phone users in
+  // Historical mode have year + race-cursor controls without opening
+  // the side-sheet. Idempotent — listener marker prevents stacking.
   const desktopSeason = document.getElementById("season-picker");
   const desktopRace = document.getElementById("race-picker");
-  const mobSeason = document.getElementById("mobile-season-picker");
-  const mobRace = document.getElementById("mobile-race-picker");
+  const mobSeason = document.getElementById("topbar-historical-season");
+  const mobRace = document.getElementById("topbar-historical-race");
   if (!desktopSeason || !mobSeason || !desktopRace || !mobRace) return;
 
   // Copy options across (rebuild each time — option lists change with data load).
@@ -2153,11 +2160,14 @@ function applyModeToDom() {
   // tease state, just gone, per the design intent of "live at the present").
   const seasonSel = document.getElementById("season-picker");
   if (seasonSel) seasonSel.hidden = !isHistorical;
-  // Mobile season picker (lives in the side-sheet)
-  const mobileSeasonSel = document.getElementById("mobile-season-picker");
-  if (mobileSeasonSel) {
-    const wrap = mobileSeasonSel.closest("label");
-    if (wrap) wrap.hidden = !isHistorical;
+  // Mobile secondary topbar row — only visible in Historical mode. Hosts
+  // both the season picker and the race-cursor picker.
+  const historicalRow = document.getElementById("topbar-historical");
+  if (historicalRow) {
+    historicalRow.hidden = !isHistorical;
+    // When the row becomes visible, ensure its selects are populated
+    // and synced with the desktop pickers. Safe to call repeatedly.
+    if (isHistorical) syncMobileNavSettings();
   }
   // Update the Present/Historical selector button "on" state
   document.querySelectorAll("#topbar-mode-sw button").forEach(b => {
@@ -2191,7 +2201,12 @@ function syncSeriesUIGlobal(target) {
   document.querySelectorAll("#series-sw button").forEach(x =>
     x.classList.toggle("on", x.dataset.series === target));
   const sel = document.getElementById("series-sw-select");
-  if (sel && sel.value !== target) sel.value = target;
+  if (sel) {
+    if (sel.value !== target) sel.value = target;
+    // data-series drives the colored background (gold/green/red) on
+    // mobile — see CSS rules in app.css for .series-sw-select[data-series=].
+    sel.setAttribute("data-series", target);
+  }
 }
 
 // Apply a series change with all the necessary side-effects (state
@@ -2271,7 +2286,7 @@ function wireUIControls() {
     // Sync the season-picker UI to match
     const sel = document.getElementById("season-picker");
     if (sel) sel.value = String(targetSeason);
-    const mobileSel = document.getElementById("mobile-season-picker");
+    const mobileSel = document.getElementById("topbar-historical-season");
     if (mobileSel) mobileSel.value = String(targetSeason);
     // Always brings the user back to the canonical landing — the home page.
     if (location.hash !== "#/home") {
@@ -2321,7 +2336,7 @@ function wireUIControls() {
       }
       const sel = document.getElementById("season-picker");
       if (sel) sel.value = String(STATE.season);
-      const mobileSel = document.getElementById("mobile-season-picker");
+      const mobileSel = document.getElementById("topbar-historical-season");
       if (mobileSel) mobileSel.value = String(STATE.season);
     }
     // Sync the mobile <select> to match (when called from the desktop
@@ -2641,6 +2656,8 @@ function populateRacePicker() {
     });
     sel._wired = true;
   }
+  // Keep the mobile mirror in sync with the freshly-rebuilt options.
+  syncMobileNavSettings();
 }
 
 function renderTimeCursorBanner() {

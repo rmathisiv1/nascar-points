@@ -55,6 +55,21 @@
   </div>
 </header>
 
+<!-- Secondary topbar row — mobile-only, visible only in Historical mode.
+     Mirrors the desktop topbar-right pickers so phone users can change
+     year + race-cursor without opening the side-sheet. JS keeps these in
+     sync with the desktop pickers above. -->
+<div class="topbar-historical" id="topbar-historical" hidden>
+  <label class="th-field">
+    <span class="th-label">Season</span>
+    <select id="topbar-historical-season"></select>
+  </label>
+  <label class="th-field">
+    <span class="th-label">Through</span>
+    <select id="topbar-historical-race"></select>
+  </label>
+</div>
+
 <!-- Mobile navigation side-sheet. Hidden on desktop via CSS; opened by the
      hamburger on mobile. Tapping a link navigates and closes the sheet. -->
 <div class="mobile-nav-overlay" id="mobile-nav-overlay" hidden></div>
@@ -62,21 +77,6 @@
   <div class="mobile-nav-head">
     <span class="mobile-nav-title">Pages</span>
     <button class="mobile-nav-close" id="mobile-nav-close" aria-label="Close menu">×</button>
-  </div>
-
-  <!-- Mobile-only settings block: season + race-cursor pickers. The desktop
-       has these in the topbar, but on a phone the topbar can't fit them.
-       JS (syncMobileNavSettings) keeps these in sync with the real <select>s
-       in the topbar so changes flow either way. -->
-  <div class="mobile-nav-settings">
-    <label class="mns-label">
-      <span>Season</span>
-      <select id="mobile-season-picker"></select>
-    </label>
-    <label class="mns-label">
-      <span>View through</span>
-      <select id="mobile-race-picker"></select>
-    </label>
   </div>
 
   <!-- Top-level pages (match desktop topbar order) -->
