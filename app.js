@@ -6718,6 +6718,64 @@ function renderProfile() {
         ? renderCareerTotalsPanel(bio.career, null, displayNameStr)
         : "";
 
+      // Cross-year panels for retired/inactive drivers. The painters
+      // walk SEASON_CACHE rather than the current STATE.data, so they
+      // work for any driver who appears in any cached season. We render
+      // the containers display:none-by-default; each painter unhides
+      // its panel once it has data (and the panel stays hidden for
+      // drivers with no cached data, which gives a clean fallback for
+      // genuine pre-cache era drivers).
+      const crossYearPanelsHTML = `
+        <div class="profile-panels" style="margin-top:14px;">
+          <div class="profile-panel" id="profile-rating-panel" style="display:none;">
+            <div class="profile-panel-head">
+              <span class="profile-panel-title">Driver Rating</span>
+              <span class="profile-panel-sub" id="profile-rating-sub">In-race performance</span>
+            </div>
+            <div class="profile-panel-body">
+              <svg id="profile-rating-chart" style="width:100%;height:140px;display:block;"></svg>
+            </div>
+          </div>
+
+          <div class="profile-panel" id="profile-notable-panel" style="display:none;">
+            <div class="profile-panel-head">
+              <span class="profile-panel-title">Notable Performances</span>
+              <span class="profile-panel-sub">By Driver Rating</span>
+            </div>
+            <div class="profile-panel-body">
+              <div id="profile-notable" class="profile-notable"></div>
+            </div>
+          </div>
+
+          <div class="profile-panel full" id="profile-tt-panel" style="display:none;">
+            <div class="profile-panel-head">
+              <span class="profile-panel-title">Track-Type Performance</span>
+              <span class="profile-panel-sub" id="profile-tt-sub">In-race metrics by venue category</span>
+            </div>
+            <div class="profile-panel-body">
+              <div id="profile-tt-grid" class="profile-tt-grid"></div>
+            </div>
+          </div>
+
+          <div class="profile-panel full">
+            <div class="profile-panel-head">
+              <span class="profile-panel-title">Career Heatmap</span>
+              <div class="profile-panel-head-right">
+                <div class="toggle-group mini" id="profile-heatmap-series-toggle">
+                  <button class="${(STATE.profile.heatmapSeries || "all") === "all" ? "on" : ""}" data-srs="all">All</button>
+                  <button class="${STATE.profile.heatmapSeries === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
+                  <button class="${STATE.profile.heatmapSeries === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
+                  <button class="${STATE.profile.heatmapSeries === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
+                </div>
+              </div>
+            </div>
+            <div class="profile-panel-body">
+              <div id="profile-career-heatmap"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
       host.innerHTML = `
         <div class="view-head">
           <h1>${escapeHTML(displayNameStr)}</h1>
@@ -6728,6 +6786,7 @@ function renderProfile() {
           ${careerLine}
         </div>
         ${careerPanelHTML}
+        ${crossYearPanelsHTML}
       `;
 
       // Wire the jump-to-historical button. Sets historical mode +
@@ -6751,12 +6810,14 @@ function renderProfile() {
         });
       }
 
-      // Paint rating chart + notable performances + track-type panel
-      // using cross-year data (these will gracefully handle missing data).
+      // Paint rating chart + notable performances + track-type panel +
+      // career heatmap using cross-year data (these gracefully handle
+      // missing data by leaving their panels hidden).
       setTimeout(() => {
         paintProfileRatingChart(displayNameStr);
         paintProfileNotable(displayNameStr);
         paintProfileTrackTypeLoop(displayNameStr);
+        paintProfileCareerHeatmap();
       }, 0);
       return;
     }
