@@ -960,6 +960,22 @@ window.dcDebug = {
 };
 
 async function boot() {
+  // Restore theme preference before any UI paints, so we never flash
+  // the wrong palette. Defaults to light (the design system's home base).
+  try {
+    const saved = localStorage.getItem("dcr-theme");
+    if (saved === "light" || saved === "dark") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (e) { /* localStorage may be unavailable */ }
+  // Sync the topbar's theme-toggle icon to whatever's active (the click
+  // handler in wireUIControls flips it on every click but doesn't run at
+  // boot).
+  {
+    const active = document.documentElement.getAttribute("data-theme") || "light";
+    const icon = document.querySelector("#theme-toggle .theme-toggle-icon");
+    if (icon) icon.textContent = active === "light" ? "☾" : "☀";
+  }
   // Restore the user's mode (Present/Historical) preference BEFORE wiring
   // any UI — so the toggle button starts in the right state and the
   // season-picker visibility doesn't flicker on first paint.
@@ -2211,6 +2227,21 @@ function wireUIControls() {
     } else {
       render();
     }
+  });
+
+  // Theme toggle (light / dark). Persists user's choice across sessions
+  // via localStorage. The actual color values live in CSS — toggling
+  // [data-theme] on <html> swaps the variable scope. The toggle icon
+  // shows the OPPOSITE of the current theme so it reads as "switch to X".
+  const applyTheme = (theme) => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try { localStorage.setItem("dcr-theme", theme); } catch (e) { /* private mode etc */ }
+    const icon = document.querySelector("#theme-toggle .theme-toggle-icon");
+    if (icon) icon.textContent = theme === "light" ? "☾" : "☀";
+  };
+  document.getElementById("theme-toggle")?.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") || "light";
+    applyTheme(current === "light" ? "dark" : "light");
   });
 
   // Historical/Present mode selector — explicit two-option switch (so both

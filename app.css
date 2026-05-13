@@ -1,34 +1,113 @@
 /* =========================================================================
-   NASCAR Points Analysis — app.css
-   Direction C · dense dark dashboard with blue accent
+   datacarracing — app.css
+   Direction: Mid-century race program — editorial typography on cream,
+   with a faithful dark-mode mirror. Serif headlines (Newsreader), Inter
+   for data, IBM Plex Mono for tabular density. Oxblood as the signature
+   accent. Every variable below reskins the entire site.
    ========================================================================= */
 
-:root {
-  --bg: #0a0b0f;
-  --bg-2: #0f1117;
-  --card: #12141b;
-  --card-hi: #171a23;
-  --border: #1e2230;
-  --border-hi: #2a2f40;
-  --text: #eef0f5;
-  --text-2: #d4d8e2;     /* slightly brighter so secondary labels read clearly */
-  --muted: #9aa0b0;      /* used for less-emphasized prose (was #7a8091) */
-  --dim: #6b7180;        /* used for very-muted hints/helpers (was #444a58) */
+:root,
+[data-theme="light"] {
+  /* === Surfaces ============================================================
+     The cream isn't pure white — it's aged-newsprint #f2ece0. Cards sit
+     slightly LIGHTER than the page (the opposite of dark mode) which is
+     the print convention: paper is the surface, page is the desk. */
+  --bg:        #f2ece0;
+  --bg-2:      #ece5d5;
+  --card:      #fbf6ea;
+  --card-hi:   #fffbef;
+  --border:    #d4c8b0;   /* taupe rule line — never pure black on cream */
+  --border-hi: #b8a987;
 
-  --pos: #3fd97a;
-  --pos-bg: rgba(63, 217, 122, 0.08);
-  --pos-bg-hi: rgba(63, 217, 122, 0.22);
-  --neg: #ff6b6b;
-  --neg-bg: rgba(255, 107, 107, 0.08);
-  --neg-bg-hi: rgba(255, 107, 107, 0.22);
+  /* === Text ===============================================================
+     Warm near-black, not pure. Bodies of text get the primary; secondary
+     metadata (dates, subtitles) goes to a soft brown; muted hints go to
+     dusty taupe. */
+  --text:   #1a1612;
+  --text-2: #3a2f24;
+  --muted:  #5c4f42;
+  --dim:    #8a7a68;
 
-  --accent: #3b82f6;
-  --accent-2: #60a5fa;
-  --accent-bg: rgba(59, 130, 246, 0.1);
-  --accent-bg-hi: rgba(59, 130, 246, 0.2);
+  /* === Hot / Cold =========================================================
+     Race-program palette: forest green for positive, oxblood for negative.
+     Bright neon greens read wrong on cream. */
+  --pos:        #3d6e3a;
+  --pos-bg:     rgba(61, 110, 58, 0.10);
+  --pos-bg-hi:  rgba(61, 110, 58, 0.22);
+  --neg:        #7a2a1a;
+  --neg-bg:     rgba(122, 42, 26, 0.10);
+  --neg-bg-hi:  rgba(122, 42, 26, 0.22);
 
-  --mono: "SF Mono", "Menlo", "Consolas", "Courier New", monospace;
-  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* === Accent =============================================================
+     Oxblood — the signature. Replaces the old blue. Every "active state",
+     focus ring, kicker label, and selected pill uses this. */
+  --accent:        #7a2a1a;
+  --accent-2:      #993c2c;
+  --accent-bg:     rgba(122, 42, 26, 0.10);
+  --accent-bg-hi:  rgba(122, 42, 26, 0.20);
+
+  /* === Fonts ==============================================================
+     Three-family system:
+     - --serif: display headlines + hero numbers (Newsreader)
+     - --sans:  body, navigation, tables (Inter)
+     - --mono:  tabular numerics, race codes, telemetry (IBM Plex Mono)
+     System fallbacks let the page remain readable while Google fonts load. */
+  --serif: "Newsreader", "Georgia", "Times New Roman", serif;
+  --sans:  "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono:  "IBM Plex Mono", "SF Mono", "Menlo", "Consolas", monospace;
+
+  /* === Theme-aware overlays ==============================================
+     For subtle decorations (zebra-stripe borders, hover backgrounds,
+     dotted-line accents). Dark mode = whites; light mode = blacks. Many
+     existing components used hardcoded rgba(255,255,255,…) which only
+     made sense against a dark page — these tokens make them work both
+     ways. */
+  --tint-0:    rgba(0, 0, 0, 0.015);
+  --tint-1:    rgba(0, 0, 0, 0.03);
+  --tint-2:    rgba(0, 0, 0, 0.04);
+  --tint-3:    rgba(0, 0, 0, 0.06);
+  --tint-4:    rgba(0, 0, 0, 0.08);
+  --tint-5:    rgba(0, 0, 0, 0.10);
+  --tint-emph: rgba(0, 0, 0, 0.18);
+}
+
+/* Dark mode mirror. Same warm hues, inverted lightness. Cards sit DARKER
+   than the page (the night convention: page is ambient room, cards are
+   illuminated objects). Accent shifts to a warmer/brighter oxblood
+   (#c14a3a) so it stays legible against the charcoal page. */
+[data-theme="dark"] {
+  --bg:        #1a1612;
+  --bg-2:      #15110d;
+  --card:      #221d18;
+  --card-hi:   #2a241e;
+  --border:    #3a3128;
+  --border-hi: #5c4f42;
+
+  --text:   #f0e9dc;
+  --text-2: #d4c8b0;
+  --muted:  #b8a995;
+  --dim:    #7a6b5a;
+
+  --pos:        #7fb069;
+  --pos-bg:     rgba(127, 176, 105, 0.10);
+  --pos-bg-hi:  rgba(127, 176, 105, 0.22);
+  --neg:        #c14a3a;
+  --neg-bg:     rgba(193, 74, 58, 0.10);
+  --neg-bg-hi:  rgba(193, 74, 58, 0.22);
+
+  --accent:        #c14a3a;
+  --accent-2:      #d96a5a;
+  --accent-bg:     rgba(193, 74, 58, 0.12);
+  --accent-bg-hi:  rgba(193, 74, 58, 0.22);
+
+  /* In dark mode, the same overlay roles flip to whites. */
+  --tint-0:    rgba(255, 255, 255, 0.015);
+  --tint-1:    rgba(255, 255, 255, 0.03);
+  --tint-2:    rgba(255, 255, 255, 0.04);
+  --tint-3:    rgba(255, 255, 255, 0.06);
+  --tint-4:    rgba(255, 255, 255, 0.08);
+  --tint-5:    rgba(255, 255, 255, 0.10);
+  --tint-emph: rgba(255, 255, 255, 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -56,30 +135,39 @@ html, body {
 }
 .brand {
   display: flex; align-items: center; gap: 10px;
-  font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  font-style: italic;
+  letter-spacing: -0.015em;
   white-space: nowrap;
   text-decoration: none;
   color: var(--text);
   flex-shrink: 0;
+  /* Optical alignment — italic serifs tend to "lean off" the baseline;
+     a fractional negative top compensates so the wordmark sits with the
+     rest of the topbar pills. */
+  transform: translateY(-1px);
 }
 .brand:hover { color: var(--accent); }
 .brand-name {
-  font-weight: 700;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
 }
-/* Logo image — kept compact so it fits the topbar height. The original
-   PNG is wide (~3:2 with checkered flag), so we height-cap it and let
-   width auto-scale. */
+/* Logo image (legacy) — hidden in the editorial design; the italic
+   wordmark IS the brand mark now. Kept the rule for compatibility with
+   any older builds that include the <img>. */
 .brand-logo {
-  height: 28px;
-  width: auto;
-  display: block;
-  flex-shrink: 0;
+  display: none;
 }
 .brand-mark {
-  font-family: var(--mono); font-size: 10px; font-weight: 700;
-  padding: 2px 6px; border-radius: 3px;
-  background: var(--accent); color: #fff;
-  letter-spacing: 0.05em;
+  /* The little "BETA" tag style — moved to mono small caps so it reads
+     as a system label, not a logo. */
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  padding: 2px 6px; border-radius: 2px;
+  background: var(--accent); color: var(--card);
+  letter-spacing: 0.06em;
   flex-shrink: 0;
 }
 .season-pill {
@@ -136,6 +224,33 @@ html, body {
 #race-picker.locked { display: none; }
 
 .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+/* Theme toggle — a small icon-only button in the topbar. The icon is a
+   sun (light mode active) or moon (dark mode active). Same visual
+   weight as the mode-switch pills so it integrates rather than shouts. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+  flex-shrink: 0;
+}
+.theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.theme-toggle-icon { display: block; }
 
 /* Mobile-only series-sw dropdown lives next to the buttons; on desktop
    we hide it and rely on the button group. The mobile @media block
@@ -282,18 +397,20 @@ html, body {
   flex-shrink: 0;
 }
 .panel-title {
-  font-family: var(--mono);
-  font-size: 10px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
+  letter-spacing: 0;
+  text-transform: lowercase;
+  color: var(--accent);
 }
 .panel-sub {
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--dim);
-  letter-spacing: 0.05em;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0;
 }
 .panel-body {
   flex: 1;
@@ -321,7 +438,7 @@ html, body {
   color: var(--text);
   transition: background 0.1s;
 }
-.std-mini-row:hover { background: rgba(255,255,255,0.03); }
+.std-mini-row:hover { background: var(--tint-1); }
 .std-mini-rank { color: var(--muted); text-align: right; }
 .std-mini-car {
   display: inline-flex; align-items: center; justify-content: center;
@@ -338,7 +455,7 @@ html, body {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.std-mini-val.back { color: #ff8a8a; font-weight: 500; }
+.std-mini-val.back { color: var(--neg); font-weight: 500; }
 .std-mini-row.below { opacity: 0.7; }
 
 .std-mini-cutoff {
@@ -355,7 +472,7 @@ html, body {
   font-family: var(--mono);
   font-size: 8px;
   letter-spacing: 0.12em;
-  color: #ff5050;
+  color: var(--neg);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -371,7 +488,7 @@ html, body {
   border-bottom: 1px solid var(--border);
   transition: background 0.1s;
 }
-.form-mini-row:hover { background: rgba(255,255,255,0.03); }
+.form-mini-row:hover { background: var(--tint-1); }
 .form-mini-top {
   display: flex;
   align-items: center;
@@ -405,8 +522,8 @@ html, body {
   font-size: 10px;
   flex-shrink: 0;
 }
-.form-mini-delta.hot  { color: #5fd97a; }
-.form-mini-delta.cold { color: #ff8a8a; }
+.form-mini-delta.hot  { color: var(--pos); }
+.form-mini-delta.cold { color: var(--neg); }
 .form-mini-delta.flat { color: var(--dim); }
 .form-mini-bottom {
   display: flex;
@@ -522,7 +639,7 @@ html, body {
   letter-spacing: 0.02em;
   transition: background 0.1s, color 0.1s;
 }
-.dash-subitem:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.dash-subitem:hover { background: var(--tint-2); color: var(--text); }
 .dash-subitem.active {
   background: var(--accent-bg-hi);
   color: var(--accent-2);
@@ -773,7 +890,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-weight: 600;
   color: var(--text);
 }
-.po-mini-stat .val.hot { color: #5fd97a; }
+.po-mini-stat .val.hot { color: var(--pos); }
 .po-mini-stat .val.accent { color: var(--accent-2); }
 .po-mini-stat .val .unit {
   font-size: 10px;
@@ -812,7 +929,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   border-radius: 3px;
   transition: background 0.1s;
 }
-.po-mini-row:hover { background: rgba(255,255,255,0.03); }
+.po-mini-row:hover { background: var(--tint-1); }
 .po-mini-num {
   display: inline-flex; align-items: center; justify-content: center;
   height: 18px; min-width: 22px; padding: 0 4px;
@@ -821,7 +938,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-weight: 700;
   font-size: 10px;
 }
-.po-mini-back { color: #ff8a8a; font-family: var(--mono); font-size: 11px; }
+.po-mini-back { color: var(--neg); font-family: var(--mono); font-size: 11px; }
 .po-mini-empty {
   padding: 20px;
   background: var(--card);
@@ -859,7 +976,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-weight: 600;
   color: var(--text);
 }
-.po-mini-stat .val.hot { color: #5fd97a; }
+.po-mini-stat .val.hot { color: var(--pos); }
 .po-mini-stat .val.accent { color: var(--accent-2); }
 .po-mini-stat .val .unit {
   font-size: 10px;
@@ -898,7 +1015,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   border-radius: 3px;
   transition: background 0.1s;
 }
-.po-mini-row:hover { background: rgba(255,255,255,0.03); }
+.po-mini-row:hover { background: var(--tint-1); }
 .po-mini-num {
   display: inline-flex; align-items: center; justify-content: center;
   height: 18px; min-width: 22px; padding: 0 4px;
@@ -907,7 +1024,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-weight: 700;
   font-size: 10px;
 }
-.po-mini-back { color: #ff8a8a; font-family: var(--mono); font-size: 11px; }
+.po-mini-back { color: var(--neg); font-family: var(--mono); font-size: 11px; }
 .po-mini-empty {
   padding: 20px;
   background: var(--card);
@@ -925,11 +1042,23 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   flex-wrap: wrap;
 }
 .view-head h1 {
-  font-size: 20px; font-weight: 600;
-  margin: 0; letter-spacing: -0.01em;
+  /* Display serif headline — was sans 20/600. The size bump and the
+     serif transition is the single biggest visual change on the page. */
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+  color: var(--text);
 }
 .view-sub {
-  color: var(--muted); font-size: 12px;
+  /* Italic byline — was muted sans 12. */
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 /* ========== TOOLBAR ========== */
@@ -939,9 +1068,16 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   flex-wrap: wrap;
 }
 .toolbar-label {
-  font-family: var(--mono); font-size: 10px;
-  color: var(--dim); letter-spacing: 0.1em;
-  text-transform: uppercase; margin-right: 2px;
+  /* Italic serif kicker — was uppercase mono. The labels read as
+     editorial labels ("scope", "metric", "mode") instead of telemetry. */
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  margin-right: 4px;
 }
 .toggle-group {
   display: inline-flex;
@@ -1083,7 +1219,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   color: var(--muted);
   letter-spacing: 0.06em;
   padding: 2px 6px;
-  background: rgba(255,255,255,0.04);
+  background: var(--tint-2);
   border-radius: 3px;
   flex-shrink: 0;
 }
@@ -1177,7 +1313,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
 }
 .card-chart {
@@ -1248,12 +1384,14 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 }
 .data-table th {
   text-align: left;
+  font-family: var(--serif);
+  font-style: italic;
   font-weight: 500;
   color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 6px 10px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: lowercase;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
   position: sticky; top: 0; z-index: 5;
@@ -1271,12 +1409,12 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 
 .data-table td {
   padding: 4px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--tint-1);
   font-size: 12px;
   white-space: nowrap;
 }
 .data-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--tint-1);
 }
 .data-table td.num {
   text-align: right;
@@ -1373,7 +1511,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   border-radius: 3px;
   letter-spacing: 0.05em;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--tint-emph);
 }
 .team-pill.fallback {
   background: var(--card-hi);
@@ -1396,7 +1534,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .heat-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; font-weight: 800; box-shadow: 0 0 6px rgba(255,200,50,0.45); }
 .heat-t5   { background: rgba(50,230,100,0.55); color: #00140a; font-weight: 700; }
 .heat-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
-.heat-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.heat-mid  { background: var(--tint-2); color: var(--text-2); }
 .heat-down { background: rgba(255, 70, 70, 0.22); color: #ffc2c2; }
 .heat-bot  { background: rgba(255, 70, 70,0.55); color: #230707; font-weight: 700; }
 .heat-none { color: var(--dim); }
@@ -1587,7 +1725,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   display: flex; justify-content: space-between; align-items: center;
   padding: 5px 0; font-size: 12px;
 }
-.callout .row + .row { border-top: 1px solid rgba(255, 255, 255, 0.03); }
+.callout .row + .row { border-top: 1px solid var(--tint-1); }
 .callout .name { display: inline-flex; align-items: center; gap: 8px; }
 .callout .delta {
   font-family: var(--mono); font-size: 11px;
@@ -1830,7 +1968,7 @@ code {
   min-width: 0;
 }
 .tm-col-headers {
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
   border-bottom: 1px solid var(--border);
   font-family: var(--mono); font-size: 8px;
   color: var(--muted);
@@ -1842,9 +1980,9 @@ code {
 .tm-help { cursor: help; }
 .tm-help:hover { color: var(--text-2); }
 
-.tm-row { border-bottom: 1px solid rgba(255,255,255,0.03); }
+.tm-row { border-bottom: 1px solid var(--tint-1); }
 .tm-row:last-child { border-bottom: none; }
-.tm-row:hover { background: rgba(255,255,255,0.02); }
+.tm-row:hover { background: var(--tint-1); }
 .tm-row.part-time { opacity: 0.82; }
 
 .tm-car {
@@ -1924,7 +2062,7 @@ code {
   margin-bottom: 6px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid var(--tint-4);
   padding-bottom: 4px;
 }
 #metric-tooltip.co-tip .co-tip-row {
@@ -2001,7 +2139,7 @@ code {
 .po-status.locked {
   background: rgba(46,204,64,0.15);
   border: 1px solid rgba(46,204,64,0.4);
-  color: #5fd97a;
+  color: var(--pos);
 }
 .po-status.in-pts {
   background: rgba(59,130,246,0.12);
@@ -2023,7 +2161,7 @@ code {
 }
 .po-round {
   padding: 12px;
-  background: rgba(255,255,255,0.02);
+  background: var(--tint-1);
   border: 1px solid var(--border);
   border-radius: 6px;
 }
@@ -2040,7 +2178,7 @@ code {
   color: var(--dim);
   letter-spacing: 0.05em;
 }
-td.neg { color: #ff8a8a; }
+td.neg { color: var(--neg); }
 
 /* Chase-reseeded (2026+) additions */
 .po-format-note { padding: 0; }
@@ -2064,7 +2202,7 @@ td.neg { color: #ff8a8a; }
   justify-content: space-between;
   align-items: baseline;
   padding: 8px 10px;
-  background: rgba(255,255,255,0.03);
+  background: var(--tint-1);
   border: 1px solid var(--border);
   border-radius: 4px;
 }
@@ -2102,7 +2240,7 @@ td.neg { color: #ff8a8a; }
   flex-direction: column;
   gap: 2px;
   padding: 10px 12px;
-  background: rgba(255,255,255,0.03);
+  background: var(--tint-1);
   border: 1px solid var(--border);
   border-radius: 6px 6px 0 0;
   border-bottom: none;
@@ -2125,7 +2263,7 @@ td.neg { color: #ff8a8a; }
   flex-direction: column;
   gap: 4px;
   padding: 8px;
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
   border: 1px solid var(--border);
   border-top: none;
   border-radius: 0 0 6px 6px;
@@ -2196,7 +2334,7 @@ td.neg { color: #ff8a8a; }
 }
 .tm-true-team {
   font-family: var(--mono); font-size: 9px; font-weight: 700;
-  color: var(--dim); background: rgba(255,255,255,0.04);
+  color: var(--dim); background: var(--tint-2);
   padding: 1px 4px; border-radius: 2px;
   letter-spacing: 0.08em;
   flex-shrink: 0;
@@ -2288,7 +2426,7 @@ td.neg { color: #ff8a8a; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
-  background: rgba(255,255,255,0.06);
+  background: var(--tint-3);
   border-radius: 2px;
   vertical-align: middle;
 }
@@ -2386,7 +2524,7 @@ td.neg { color: #ff8a8a; }
   gap: 12px;
 }
 .career-card {
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
@@ -2397,7 +2535,7 @@ td.neg { color: #ff8a8a; }
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  background: rgba(255,255,255,0.02);
+  background: var(--tint-1);
 }
 .career-series-code {
   display: inline-flex;
@@ -2434,8 +2572,8 @@ td.neg { color: #ff8a8a; }
   display: flex;
   align-items: baseline;
   gap: 6px;
-  border-right: 1px solid rgba(255,255,255,0.03);
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-right: 1px solid var(--tint-1);
+  border-bottom: 1px solid var(--tint-1);
   position: relative;
 }
 .career-stat:nth-child(2n) { border-right: none; }
@@ -2537,12 +2675,21 @@ td.neg { color: #ff8a8a; }
   display: flex; align-items: center; gap: 10px; justify-content: space-between;
 }
 .profile-panel-title {
-  font-size: 12px; font-weight: 700; color: var(--text);
-  letter-spacing: 0.04em;
+  /* Serif panel title — was tracked-caps sans. The headline form
+     reinforces "this is a thing the editor decided to show you". */
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
 }
 .profile-panel-sub {
-  font-family: var(--mono); font-size: 10px; color: var(--muted);
-  letter-spacing: 0.06em;
+  /* Italic byline subtitle — was tracked-caps mono. */
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0;
 }
 .profile-panel-body { padding: 14px; }
 
@@ -2557,7 +2704,7 @@ td.neg { color: #ff8a8a; }
   justify-content: start;
   gap: 3px;
   padding: 8px;
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
   border-radius: 4px;
 }
 .profile-heat-cell {
@@ -2582,10 +2729,10 @@ td.neg { color: #ff8a8a; }
 .profile-heat-cell.heat-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45), 0 0 8px rgba(255,200,50,0.35); }
 .profile-heat-cell.heat-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
 .profile-heat-cell.heat-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
-.profile-heat-cell.heat-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.profile-heat-cell.heat-mid  { background: var(--tint-2); color: var(--text-2); }
 .profile-heat-cell.heat-down { background: rgba(255,70,70,0.22); color: #ffc2c2; }
 .profile-heat-cell.heat-bot  { background: rgba(255,70,70,0.55); color: #230707; }
-.profile-heat-cell.heat-dns  { background: rgba(255,255,255,0.02); color: var(--dim); font-style: italic; }
+.profile-heat-cell.heat-dns  { background: var(--tint-1); color: var(--dim); font-style: italic; }
 /* Backward-compat aliases */
 .profile-heat-cell.heat-top  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45), 0 0 8px rgba(255,200,50,0.35); }
 .profile-heat-cell.heat-up   { background: rgba(50,230,100,0.55); color: #00140a; }
@@ -2612,7 +2759,7 @@ td.neg { color: #ff8a8a; }
   gap: 12px;
 }
 .track-split-card {
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
@@ -2624,7 +2771,7 @@ td.neg { color: #ff8a8a; }
   justify-content: space-between;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  background: rgba(255,255,255,0.02);
+  background: var(--tint-1);
 }
 .track-split-label {
   font-family: var(--sans);
@@ -2658,8 +2805,8 @@ td.neg { color: #ff8a8a; }
   display: flex;
   align-items: baseline;
   gap: 8px;
-  border-right: 1px solid rgba(255,255,255,0.03);
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-right: 1px solid var(--tint-1);
+  border-bottom: 1px solid var(--tint-1);
 }
 .track-split-stat:nth-child(2n) { border-right: none; }
 .track-split-stat:nth-last-child(-n+2) { border-bottom: none; }
@@ -2695,16 +2842,16 @@ td.neg { color: #ff8a8a; }
   color: var(--muted); letter-spacing: 0.1em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
   white-space: nowrap;
 }
 .profile-race-table th.num { text-align: right; }
 .profile-race-table td {
   padding: 7px 10px;
   font-size: 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
 }
-.profile-race-table tr:hover td { background: rgba(255,255,255,0.02); }
+.profile-race-table tr:hover td { background: var(--tint-1); }
 .profile-race-table td.num {
   text-align: right;
   font-family: var(--mono);
@@ -2751,10 +2898,10 @@ td.neg { color: #ff8a8a; }
   align-items: center;
   gap: 10px;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
 }
 .profile-tm-row:last-child { border-bottom: none; }
-.profile-tm-row:hover { background: rgba(255,255,255,0.015); }
+.profile-tm-row:hover { background: var(--tint-0); }
 .profile-tm-spark {
   display: block;
   min-width: 0;
@@ -2779,7 +2926,7 @@ td.neg { color: #ff8a8a; }
 }
 
 /* Chart helpers for profile chart */
-.chart-gridline { stroke: rgba(255,255,255,0.04); stroke-dasharray: 2 3; }
+.chart-gridline { stroke: var(--tint-2); stroke-dasharray: 2 3; }
 .axis-label {
   fill: var(--muted);
   font-family: var(--mono);
@@ -3224,7 +3371,7 @@ a.driver-cell.profile-link:hover .car-tag {
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--tint-1);
     transition: background 0.1s;
   }
   .mobile-nav-link:active,
@@ -3348,7 +3495,7 @@ a.driver-cell.profile-link:hover .car-tag {
   /* Expand row styling */
   tr.mob-expand-row > td {
     padding: 0 !important;
-    background: rgba(255,255,255,0.02);
+    background: var(--tint-1);
     border-bottom: 1px solid var(--border);
   }
   .mob-expand-body {
@@ -3363,7 +3510,7 @@ a.driver-cell.profile-link:hover .car-tag {
     align-items: baseline;
     gap: 8px;
     padding: 3px 0;
-    border-bottom: 1px dashed rgba(255,255,255,0.04);
+    border-bottom: 1px dashed var(--tint-2);
     min-width: 0;
   }
   .mob-kv:last-child { border-bottom: none; }
@@ -4197,13 +4344,13 @@ a.driver-cell.profile-link:hover .car-tag {
   padding: 7px 14px;
   text-decoration: none;
   color: var(--text);
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
   transition: background 0.1s;
 }
 .rc-winner-row:last-child,
 .rc-hot-row:last-child { border-bottom: none; }
 .rc-winner-row:hover,
-.rc-hot-row:hover { background: rgba(255,255,255,0.03); }
+.rc-hot-row:hover { background: var(--tint-1); }
 .rc-winner-year {
   font-family: var(--mono);
   font-size: 10px;
@@ -4252,14 +4399,14 @@ a.driver-cell.profile-link:hover .car-tag {
 .rc-result-table th.num { text-align: right; }
 .rc-result-table td {
   padding: 6px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
 }
 .rc-result-table td.num {
   text-align: right;
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
-.rc-result-table tr:hover td { background: rgba(255,255,255,0.02); }
+.rc-result-table tr:hover td { background: var(--tint-1); }
 .rc-result-name {
   display: inline-flex;
   align-items: center;
@@ -4280,7 +4427,7 @@ a.driver-cell.profile-link:hover .car-tag {
   align-items: center;
   gap: 18px;
   padding: 4px 24px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
   transition: background 0.1s;
   font-size: 11px;
   border-left: 3px solid transparent;
@@ -4295,7 +4442,7 @@ a.driver-cell.profile-link:hover .car-tag {
 .rc-sched-row.run { cursor: pointer; }
 .rc-sched-row:focus { outline: none; }
 .rc-sched-row:last-child { border-bottom: none; }
-.rc-sched-row:hover { background: rgba(255,255,255,0.03); }
+.rc-sched-row:hover { background: var(--tint-1); }
 /* Upcoming races render at full opacity so race name + date stay sharp;
    only the prior-year-winner indicator (.rc-sched-prior) is muted to
    distinguish it from the current-year winner. */
@@ -4653,7 +4800,7 @@ a.rc-sched-winner:hover {
 }
 .tk-manu-bar {
   height: 8px;
-  background: rgba(255,255,255,0.04);
+  background: var(--tint-2);
   border-radius: 2px;
   overflow: hidden;
   position: relative;
@@ -4865,11 +5012,11 @@ a.rc-sched-winner:hover {
   color: var(--text);
   padding: 1px 4px;
   border-radius: 3px;
-  background: rgba(255,255,255,0.03);
+  background: var(--tint-1);
   transition: background 0.1s;
 }
 .metric-finisher:hover {
-  background: rgba(255,255,255,0.06);
+  background: var(--tint-3);
 }
 .metric-pos {
   font-weight: 700;
@@ -5113,7 +5260,7 @@ a.rc-sched-winner:hover {
 .ctx-chip-empty {
   /* Empty cell when the driver wasn't in this series that year. Visually
      distinguishable from a chip but doesn't draw the eye away. */
-  background: rgba(255,255,255,0.02);
+  background: var(--tint-1);
   border-radius: 4px;
   border: 1px dashed transparent;
 }
@@ -5142,8 +5289,8 @@ a.rc-sched-winner:hover {
   border-color: var(--accent);
   color: #fff;
 }
-.ctx-chip.active .ctx-series { background: rgba(255,255,255,0.18); }
-.ctx-chip.active .ctx-pt { background: rgba(255,255,255,0.18); color: #fff; }
+.ctx-chip.active .ctx-series { background: var(--tint-emph); }
+.ctx-chip.active .ctx-pt { background: var(--tint-emph); color: #fff; }
 .ctx-year {
   font-weight: 700;
   font-size: 12px;
@@ -5231,8 +5378,8 @@ a.rc-sched-winner:hover {
   .tm-cc-body-wrap.tm-cc-triple { grid-template-columns: 1fr; }
 }
 .tm-cc-pane {
-  background: rgba(255,255,255,0.015);
-  border: 1px solid rgba(255,255,255,0.04);
+  background: var(--tint-0);
+  border: 1px solid var(--tint-2);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -5241,8 +5388,8 @@ a.rc-sched-winner:hover {
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: rgba(255,255,255,0.02);
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  background: var(--tint-1);
+  border-bottom: 1px solid var(--tint-2);
 }
 .tm-cc-pane-count {
   font-size: 9px;
@@ -5265,7 +5412,7 @@ a.rc-sched-winner:hover {
   transition: background 0.12s ease;
 }
 .tm-cc-row:hover {
-  background: rgba(255,255,255,0.04);
+  background: var(--tint-2);
 }
 .tm-cc-car {
   flex-shrink: 0;
@@ -5360,7 +5507,7 @@ a.rc-sched-winner:hover {
 .alltime-toggle-btn:hover,
 .alltime-series-btn:hover {
   color: var(--text);
-  border-color: rgba(255,255,255,0.18);
+  border-color: var(--tint-emph);
 }
 .alltime-toggle-btn.active,
 .alltime-series-btn.active {
@@ -5398,7 +5545,7 @@ a.rc-sched-winner:hover {
 }
 .alltime-gen-chip:hover {
   color: var(--text);
-  border-color: rgba(255,255,255,0.18);
+  border-color: var(--tint-emph);
 }
 .alltime-gen-chip.active {
   background: var(--accent-bg-hi);
@@ -5451,7 +5598,7 @@ a.rc-sched-winner:hover {
 }
 .alltime-table tbody td {
   padding: 6px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
 }
 .alltime-table tbody td.num {
   text-align: right;
@@ -5466,10 +5613,10 @@ a.rc-sched-winner:hover {
 }
 /* Alternating rows */
 .alltime-table tbody tr:nth-child(even) {
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
 }
 .alltime-table tbody tr:hover {
-  background: rgba(255,255,255,0.045);
+  background: var(--tint-2);
 }
 .alltime-table tbody td .hot { color: var(--pos); font-weight: 600; }
 
@@ -5482,8 +5629,8 @@ a.rc-sched-winner:hover {
   padding: 12px 8px;
 }
 .alltime-pag-top {
-  border-top: 1px solid rgba(255,255,255,0.04);
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-top: 1px solid var(--tint-2);
+  border-bottom: 1px solid var(--tint-2);
   padding: 8px 8px;
 }
 .alltime-pag-bottom {
@@ -5501,7 +5648,7 @@ a.rc-sched-winner:hover {
   transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 .alltime-pag-btn:hover:not(:disabled) {
-  background: rgba(255,255,255,0.04);
+  background: var(--tint-2);
   border-color: var(--accent);
   color: var(--accent-2);
 }
@@ -5539,7 +5686,7 @@ a.rc-sched-winner:hover {
 }
 .takeover-sibling:hover {
   color: var(--text);
-  background: rgba(255,255,255,0.03);
+  background: var(--tint-1);
 }
 .takeover-sibling.active {
   background: var(--accent-bg-hi);
@@ -5572,7 +5719,7 @@ a.rc-sched-winner:hover {
 }
 .topbar-search input {
   width: 100%;
-  background: rgba(255,255,255,0.06);
+  background: var(--tint-3);
   border: 1px solid rgba(255,255,255,0.14);
   color: var(--text);
   padding: 8px 12px 8px 32px;   /* extra left padding for the icon */
@@ -5584,11 +5731,11 @@ a.rc-sched-winner:hover {
 }
 .topbar-search input:hover {
   border-color: rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.08);
+  background: var(--tint-4);
 }
 .topbar-search input:focus {
   border-color: var(--accent);
-  background: rgba(255,255,255,0.08);
+  background: var(--tint-4);
 }
 .topbar-search input::placeholder {
   color: var(--text-2);
@@ -5639,7 +5786,7 @@ a.rc-sched-winner:hover {
 }
 .search-result:hover,
 .search-result.kbd-active {
-  background: rgba(255,255,255,0.06);
+  background: var(--tint-3);
 }
 .search-result-icon {
   flex-shrink: 0;
@@ -5685,7 +5832,7 @@ a.rc-sched-winner:hover {
   margin-top: 4px;
 }
 .search-shortcut-hint kbd {
-  background: rgba(255,255,255,0.08);
+  background: var(--tint-4);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 5px;
@@ -5863,7 +6010,7 @@ a.rc-sched-winner:hover {
 }
 .ph-cell-empty {
   height: 22px;
-  background: rgba(255,255,255,0.02);
+  background: var(--tint-1);
   border-radius: 2px;
 }
 /* Year-end standings rank pill at the right edge of each row. Same
@@ -5884,7 +6031,7 @@ a.rc-sched-winner:hover {
 .ph-rank.ph-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.55), 0 0 6px rgba(255,200,50,0.45); }
 .ph-rank.ph-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
 .ph-rank.ph-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
-.ph-rank.ph-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.ph-rank.ph-mid  { background: var(--tint-2); color: var(--text-2); }
 .ph-rank.ph-down { background: rgba(255,70,70,0.22); color: #ffc2c2; }
 .ph-rank.ph-bot  { background: rgba(255,70,70,0.55); color: #230707; }
 .ph-rank-empty {
@@ -5906,7 +6053,7 @@ a.rc-sched-winner:hover {
 .ph-cell.ph-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45); }
 .ph-cell.ph-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
 .ph-cell.ph-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
-.ph-cell.ph-mid  { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.ph-cell.ph-mid  { background: var(--tint-2); color: var(--text-2); }
 .ph-cell.ph-down { background: rgba(255,70,70,0.22); color: #ffc2c2; }
 .ph-cell.ph-bot  { background: rgba(255,70,70,0.55); color: #230707; }
 .ph-cell:hover {
@@ -6017,8 +6164,8 @@ a.rc-sched-winner:hover {
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 .race-lightbox-close:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: var(--tint-4);
+  border-color: var(--tint-emph);
 }
 .race-lightbox-loading {
   padding: 60px 20px;
@@ -6082,7 +6229,7 @@ body.lightbox-open {
 }
 .topbar-mode-sw button:not(.on):hover { color: var(--text); }
 .topbar-mode-sw button[data-mode="present"].on {
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--tint-5);
   color: var(--text);
 }
 .topbar-mode-sw button[data-mode="historical"].on {
@@ -6220,7 +6367,7 @@ body.lightbox-open {
   transition: background 0.12s ease;
 }
 .tm-car-row:last-child { border-bottom: none; }
-.tm-car-row:hover { background: rgba(255,255,255,0.03); }
+.tm-car-row:hover { background: var(--tint-1); }
 .tm-car-num {
   width: 44px; height: 36px;
   display: flex; align-items: center; justify-content: center;
@@ -6374,7 +6521,7 @@ body.lightbox-open {
 .rank-pill.ph-win   { background: rgba(255,200,50,0.85); color: #2a1d00; box-shadow: 0 0 6px rgba(255,200,50,0.45); }
 .rank-pill.ph-t5    { background: rgba(50,230,100,0.55); color: #00140a; }
 .rank-pill.ph-t10   { background: rgba(50,230,100,0.18); color: #a7f0bc; }
-.rank-pill.ph-mid   { background: rgba(255,255,255,0.05); color: var(--text-2); }
+.rank-pill.ph-mid   { background: var(--tint-2); color: var(--text-2); }
 .rank-pill.ph-down  { background: rgba(255,70,70,0.22); color: #ffc2c2; }
 .rank-pill.ph-bot   { background: rgba(255,70,70,0.55); color: #230707; }
 .wins-pill {
@@ -6546,7 +6693,7 @@ body.lightbox-open {
 /* Team pill in the CC season-by-season table — small clickable code chip */
 .tm-history-table .team-pill {
   display: inline-block;
-  background: rgba(255,255,255,0.06);
+  background: var(--tint-3);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 6px;
@@ -6559,8 +6706,8 @@ body.lightbox-open {
   letter-spacing: 0.04em;
 }
 .tm-history-table .team-pill:hover {
-  background: rgba(255,255,255,0.10);
-  border-color: rgba(255,255,255,0.18);
+  background: var(--tint-5);
+  border-color: var(--tint-emph);
 }
 
 /* Team pill on the heatmap row label — clickable code chip, sits next to
@@ -6568,7 +6715,7 @@ body.lightbox-open {
    rather than navigation text. */
 .ph-team-pill {
   display: inline-block;
-  background: rgba(255,255,255,0.06);
+  background: var(--tint-3);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 5px;
@@ -6581,15 +6728,15 @@ body.lightbox-open {
   flex-shrink: 0;
 }
 .ph-team-pill:hover {
-  background: rgba(255,255,255,0.10);
-  border-color: rgba(255,255,255,0.18);
+  background: var(--tint-5);
+  border-color: var(--tint-emph);
 }
 .ph-team-pill-empty {
   color: var(--dim);
   cursor: default;
 }
 .ph-team-pill-empty:hover {
-  background: rgba(255,255,255,0.06);
+  background: var(--tint-3);
   border-color: var(--border);
 }
 /* Small "+" badge appended to a driver pill on a CC heatmap row when the
@@ -6641,7 +6788,7 @@ body.lightbox-open {
    reflects the complete career. */
 .cc-partial-row td {
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--tint-0);
 }
 .cc-partial-row td:first-child {
   position: relative;
@@ -6654,7 +6801,7 @@ body.lightbox-open {
   top: 25%;
   bottom: 25%;
   width: 2px;
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--tint-emph);
   border-radius: 1px;
 }
 .cc-partial-row .car-tag,
@@ -6676,8 +6823,8 @@ body.lightbox-open {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--tint-2);
+  border: 1px solid var(--tint-4);
   border-radius: 2px;
   vertical-align: middle;
   line-height: 1.5;
@@ -6712,7 +6859,7 @@ body.lightbox-open {
 }
 .tk-history-table .team-pill {
   display: inline-block;
-  background: rgba(255,255,255,0.06);
+  background: var(--tint-3);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 6px;
@@ -6724,8 +6871,8 @@ body.lightbox-open {
   letter-spacing: 0.04em;
 }
 .tk-history-table .team-pill:hover {
-  background: rgba(255,255,255,0.10);
-  border-color: rgba(255,255,255,0.18);
+  background: var(--tint-5);
+  border-color: var(--tint-emph);
 }
 
 /* === PROFILE TRACK PICKER === */
@@ -6771,7 +6918,7 @@ body.lightbox-open {
   border-right: 1px solid var(--border);
 }
 .profile-track-srs-btn:last-child { border-right: none; }
-.profile-track-srs-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.profile-track-srs-btn:hover { color: var(--text); background: var(--tint-2); }
 .profile-track-srs-btn.active {
   background: var(--accent-bg-hi);
   color: var(--accent-2);
@@ -6805,7 +6952,7 @@ body.lightbox-open {
 }
 .profile-track-gen-chip:hover {
   color: var(--text);
-  border-color: rgba(255,255,255,0.18);
+  border-color: var(--tint-emph);
 }
 .profile-track-gen-chip.active {
   background: var(--accent-bg-hi);
@@ -6848,7 +6995,7 @@ body.lightbox-open {
   margin-top: 8px;
   max-height: 360px;
   overflow-y: auto;
-  border-top: 1px solid rgba(255,255,255,0.04);
+  border-top: 1px solid var(--tint-2);
 }
 .profile-track-races-table {
   width: 100%;
@@ -6872,7 +7019,7 @@ body.lightbox-open {
 .profile-track-races-table thead th.num { text-align: right; }
 .profile-track-races-table tbody td {
   padding: 5px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
 }
 .profile-track-races-table tbody td.num {
   text-align: right;
@@ -6880,7 +7027,7 @@ body.lightbox-open {
   font-variant-numeric: tabular-nums;
 }
 .profile-track-races-table tbody tr:nth-child(even) {
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
 }
 .profile-track-races-table .fin-win  { color: var(--pos); font-weight: 600; }
 .profile-track-races-table .fin-t5   { color: var(--pos); }
@@ -6940,7 +7087,7 @@ body.lightbox-open {
   cursor: pointer;
 }
 .ts-srs-btn:last-child { border-right: none; }
-.ts-srs-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.ts-srs-btn:hover { color: var(--text); background: var(--tint-2); }
 .ts-srs-btn.active { background: var(--accent-bg-hi); color: var(--accent-2); }
 .ts-min-starts {
   font-family: var(--mono);
@@ -6986,7 +7133,7 @@ body.lightbox-open {
   cursor: pointer;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
-.ts-gen-chip:hover { color: var(--text); border-color: rgba(255,255,255,0.18); }
+.ts-gen-chip:hover { color: var(--text); border-color: var(--tint-emph); }
 .ts-gen-chip.active { background: var(--accent-bg-hi); border-color: var(--accent); color: var(--accent-2); }
 /* Reuse alltime-table styles by aliasing */
 .ts-table { width: 100%; font-size: 12px; }
@@ -7027,7 +7174,7 @@ body.lightbox-open {
 .ts-th:hover { color: var(--text); }
 .ts-table tbody td {
   padding: 6px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
 }
 .ts-table tbody td.num {
   text-align: right;
@@ -7035,10 +7182,10 @@ body.lightbox-open {
   font-variant-numeric: tabular-nums;
 }
 .ts-table tbody tr:nth-child(even) {
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
 }
 .ts-table tbody tr:hover {
-  background: rgba(255,255,255,0.045);
+  background: var(--tint-2);
 }
 .ts-table tbody td.hot { color: var(--pos); font-weight: 600; }
 
@@ -7057,24 +7204,28 @@ body.lightbox-open {
 .home-card {
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 18px 22px;
 }
 .home-card-label {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.07em;
-  color: var(--dim);
-  text-transform: uppercase;
-  margin-bottom: 8px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--accent);
+  text-transform: lowercase;
+  margin-bottom: 6px;
 }
 .home-section-h {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--dim);
-  text-transform: uppercase;
-  margin: 12px 4px 4px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0;
+  color: var(--muted);
+  text-transform: lowercase;
+  margin: 12px 4px 6px;
 }
 
 /* Hero row */
@@ -7209,7 +7360,7 @@ body.lightbox-open {
   transition: background 0.1s, border-color 0.1s;
 }
 .home-pod-pill:hover {
-  background: rgba(255,255,255,0.04);
+  background: var(--tint-2);
   border-color: var(--accent);
 }
 .home-pod-pos {
@@ -7263,17 +7414,19 @@ body.lightbox-open {
   margin-bottom: 8px;
 }
 .home-standings-label {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--dim);
-  text-transform: uppercase;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-transform: none;
 }
 .home-standings-link {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--accent-2);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--accent);
   text-decoration: none;
 }
 .home-standings-link:hover { text-decoration: underline; }
@@ -7284,10 +7437,10 @@ body.lightbox-open {
   padding: 6px 0;
   align-items: center;
   text-decoration: none;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
 }
 .home-mini-row:last-child { border-bottom: none; }
-.home-mini-row:hover { background: rgba(255,255,255,0.025); }
+.home-mini-row:hover { background: var(--tint-1); }
 .home-mini-rank {
   font-family: var(--mono);
   font-size: 13px;
@@ -7522,7 +7675,7 @@ body.lightbox-open {
   cursor: pointer;
 }
 .ts-row:hover {
-  background: rgba(255,255,255,0.045);
+  background: var(--tint-2);
 }
 .ts-row.expanded {
   background: rgba(70, 140, 255, 0.10);
@@ -7580,7 +7733,7 @@ body.lightbox-open {
 .ts-detail-table thead th.num { text-align: right; }
 .ts-detail-table tbody td {
   padding: 5px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--tint-1);
 }
 .ts-detail-table tbody td.num {
   text-align: right;
@@ -7588,7 +7741,7 @@ body.lightbox-open {
   font-variant-numeric: tabular-nums;
 }
 .ts-detail-table tbody tr:nth-child(even) {
-  background: rgba(255,255,255,0.015);
+  background: var(--tint-0);
 }
 .ts-detail-table .fin-win  { color: var(--pos); font-weight: 600; }
 .ts-detail-table .fin-t5   { color: var(--pos); }
@@ -7773,10 +7926,10 @@ body.lightbox-open {
   align-items: center;
   padding: 4px 0;
   text-decoration: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid var(--tint-1);
 }
 .sp-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--tint-1);
 }
 .sp-rank {
   font-family: var(--mono);
@@ -7802,7 +7955,7 @@ body.lightbox-open {
 }
 .sp-bar-track {
   height: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tint-2);
   border-radius: 3px;
   overflow: hidden;
   position: relative;
@@ -7994,13 +8147,15 @@ body.lightbox-open {
    glance. Mono uppercase muted — same vocabulary as the metric bar. */
 .arc-chart-label {
   position: absolute;
-  top: 8px;
-  left: 12px;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--dim);
+  top: 10px;
+  left: 14px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: lowercase;
+  color: var(--accent);
   z-index: 1;
   pointer-events: none;
 }
@@ -8052,7 +8207,7 @@ body.lightbox-open {
 }
 .rc-session-table td {
   padding: 6px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--tint-1);
   font-size: 13px;
 }
 .rc-session-table td.num {
@@ -8065,7 +8220,7 @@ body.lightbox-open {
   color: var(--muted);
 }
 .rc-session-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--tint-1);
 }
 /* Highlight pole / fastest row */
 .rc-session-table tbody tr:first-child {
@@ -8140,7 +8295,7 @@ body.lightbox-open {
   gap: 16px;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--tint-2);
 }
 .rc-summary-item {
   display: flex;
@@ -8200,7 +8355,7 @@ body.lightbox-open {
   align-items: baseline;
   gap: 12px;
   padding: 8px 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid var(--tint-1);
 }
 .hw-row:last-child { border-bottom: none; }
 /* Series pill — color-coded same as storylines */
@@ -8360,7 +8515,7 @@ body.lightbox-open {
   color: var(--text);
 }
 .profile-notable-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--tint-1);
 }
 .pn-label {
   font-family: var(--mono);
@@ -8422,12 +8577,12 @@ body.lightbox-open {
   gap: 12px;
   padding: 8px 10px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--tint-2);
+  background: var(--tint-0);
   transition: background 0.1s;
 }
 .tt-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tint-2);
 }
 .tt-row-head {
   display: flex;
@@ -8501,7 +8656,7 @@ body.lightbox-open {
   z-index: 5;
   padding: 6px 8px;
   background: var(--bg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--tint-2);
   margin: -6px -6px 6px;
 }
 .standings-views {
@@ -8528,10 +8683,111 @@ body.lightbox-open {
   height: 14px;
   border-radius: 3px;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tint-4);
 }
 
 @media (max-width: 767.98px) {
   .standings-views { gap: 8px; }
   .standings-mfr-note { display: block; width: 100%; margin-left: 0; }
+}
+
+/* ============================================================================
+   Editorial typography — utility classes for the mid-century race-program
+   design system. New components built in Pass 2 lean on these; existing
+   components can also opt in by adding the class.
+
+   The vocabulary:
+     .ed-kicker    — small italic uppercase serif label
+                     ("after round 12 · watkins glen")
+     .ed-hero      — display serif headline (page titles, hero numbers)
+     .ed-number    — tabular display serif number (standings totals, ratings)
+     .ed-byline    — italic serif metadata line ("by datacarracing · sun, may 13")
+     .ed-rule      — thin taupe horizontal divider with optional ornament
+     .ed-section-h — uppercase tracked sans label for table/list section heads
+   ============================================================================ */
+
+.ed-kicker {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  text-transform: lowercase;
+  line-height: 1.2;
+}
+
+.ed-hero {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 36px;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  margin: 0;
+}
+.ed-hero-sm { font-size: 24px; }
+.ed-hero-lg { font-size: 56px; }
+
+.ed-number {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+}
+
+.ed-byline {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.ed-rule {
+  height: 1px;
+  background: var(--border);
+  border: 0;
+  margin: 12px 0;
+}
+.ed-rule-thick {
+  height: 2px;
+  background: var(--text);
+  margin: 16px 0;
+}
+
+.ed-section-h {
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Italic ornament — a small accented italic letter at the start of a
+   section header, replacing the typical mono-uppercase label style.
+   Use sparingly (one or two per page). */
+.ed-ornament {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 28px;
+  color: var(--accent);
+  line-height: 0.8;
+  vertical-align: -4px;
+  margin-right: 4px;
+}
+
+/* Print-style dropcap, for the lead paragraph of a profile bio etc. */
+.ed-dropcap::first-letter {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-style: italic;
+  font-size: 3em;
+  line-height: 0.85;
+  float: left;
+  padding: 4px 8px 0 0;
+  color: var(--accent);
 }
