@@ -9661,8 +9661,19 @@ body.lightbox-open {
 .rps-col-performers .rps-col-table-head {
   grid-template-columns: 24px 42px 1fr 48px 36px 50px;
 }
-.rps-col-stage .rps-col-table-head {
-  grid-template-columns: 24px 42px 1fr 60px;
+/* Right column (Top 10 predicted finish): same 5-col grid as the
+   full-field details, since both render finish rows with evidence dots. */
+.rps-col-finish .rps-col-table-head {
+  grid-template-columns: 24px 42px 1fr 60px 50px;
+}
+/* Stage points details — 4 cols (no evidence dots column) */
+.rps-stage-table-head {
+  grid-template-columns: 24px 42px 1fr 60px !important;
+}
+/* Finish rows inside the right column inherit the same template as the
+   full-field finish rows below. */
+.rps-col-finish .hp-row-finish {
+  grid-template-columns: 24px 42px 1fr 60px 50px;
 }
 .rps-col-label {
   text-align: right;
@@ -9813,8 +9824,21 @@ body.lightbox-open {
   transition: transform 0.1s;
 }
 .rps-full-details[open] .rps-full-summary-cta {
-  transform: rotate(90deg);
-  display: inline-block;
+  /* When expanded, swap "View full prediction →" to "Hide full prediction"
+     via a CSS-only text replacement on the ::before/::after pseudo. Cleaner
+     than rotating the whole label sideways (which looked like a glitch).
+     The visibility:hidden hides the original text from the layout but keeps
+     its width — prevents the summary jumping width on expand. */
+  visibility: hidden;
+  position: relative;
+}
+.rps-full-details[open] .rps-full-summary-cta::after {
+  content: "Hide full prediction ↑";
+  position: absolute;
+  inset: 0;
+  visibility: visible;
+  white-space: nowrap;
+  text-align: right;
 }
 .rps-full-body {
   margin-top: 10px;
@@ -9897,8 +9921,13 @@ body.lightbox-open {
     gap: 6px;
     padding: 4px;
   }
-  .rps-col-stage .rps-col-table-head {
-    grid-template-columns: 22px 38px 1fr 50px;
+  .rps-col-finish .rps-col-table-head {
+    grid-template-columns: 22px 38px 1fr 50px 40px;
+    gap: 6px;
+    padding: 4px;
+  }
+  .rps-stage-table-head {
+    grid-template-columns: 22px 38px 1fr 50px !important;
     gap: 6px;
     padding: 4px;
   }
@@ -9924,4 +9953,28 @@ body.lightbox-open {
   .hbt-stat-cell, .hp-stat-cell {
     font-size: 11px;
   }
+}
+
+/* Methodology formula list — used to spell out the Top Performers
+   scoring rules. Keeps the bullets editorial: italic serif markers,
+   tight spacing, dim color. */
+.rps-formula {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 6px 12px;
+  font-family: var(--serif);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.rps-formula li {
+  padding-left: 12px;
+  position: relative;
+}
+.rps-formula li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
 }

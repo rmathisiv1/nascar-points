@@ -9570,14 +9570,21 @@ function renderRacePredictionSection(opts) {
   // on a brand-new venue with no historical data and no full-timers yet.
   if (performers.length === 0 && predictions.total === 0) return "";
 
-  const top5HTML = performers.slice(0, 5)
+  const top10HTML = performers.slice(0, 10)
     .map((row, i) => _renderPerformerRow(row, i, series))
+    .join("");
+  // Right column: top-10 predicted finishers (was stage points). Stage
+  // points moved into a collapsible <details> below.
+  const finishTop10HTML = predictions.byFinish.slice(0, 10)
+    .map((p, i) => _renderFinishRow(p, i, series))
+    .join("");
+  // Full-field (35+ drivers) and the stage-points top-10 both live in
+  // <details> sections below the two main columns.
+  const finishFullHTML = predictions.byFinish
+    .map((p, i) => _renderFinishRow(p, i, series))
     .join("");
   const stageTop10HTML = predictions.byStage.slice(0, 10)
     .map((p, i) => _renderStagePtsRow(p, i, series))
-    .join("");
-  const finishFullHTML = predictions.byFinish
-    .map((p, i) => _renderFinishRow(p, i, series))
     .join("");
 
   // Header text varies depending on context — on Home we already have a
@@ -9592,11 +9599,11 @@ function renderRacePredictionSection(opts) {
 
   // Build columns. Top performers may be empty (new track) — in that case
   // we render a placeholder card so the layout doesn't collapse.
-  const performersCol = top5HTML ? `
+  const performersCol = top10HTML ? `
     <div class="rps-col rps-col-performers">
       <div class="rps-col-head">
-        <div class="rps-col-title">Top performers</div>
-        <div class="ed-byline">Active ${series} drivers · recency-weighted</div>
+        <div class="rps-col-title">Top 10 performers</div>
+        <div class="ed-byline">Active ${series} drivers · recency-weighted historical strength</div>
       </div>
       <div class="rps-col-table-head">
         <span></span><span></span><span></span>
@@ -9605,13 +9612,13 @@ function renderRacePredictionSection(opts) {
         <span class="rps-col-label">STARTS</span>
       </div>
       <div class="rps-list">
-        ${top5HTML}
+        ${top10HTML}
       </div>
     </div>
   ` : `
     <div class="rps-col rps-col-performers">
       <div class="rps-col-head">
-        <div class="rps-col-title">Top performers</div>
+        <div class="rps-col-title">Top 10 performers</div>
       </div>
       <div class="rps-empty">
         <span class="ed-byline">No active drivers have raced at ${escapeHTML(trackName)} in loaded seasons.</span>
@@ -9619,18 +9626,19 @@ function renderRacePredictionSection(opts) {
     </div>
   `;
 
-  const stageCol = stageTop10HTML ? `
-    <div class="rps-col rps-col-stage">
+  const finishCol = finishTop10HTML ? `
+    <div class="rps-col rps-col-finish">
       <div class="rps-col-head">
-        <div class="rps-col-title">Top 10 predicted stage points</div>
-        <div class="ed-byline">Combined S1 + S2 expected</div>
+        <div class="rps-col-title">Top 10 predicted finish</div>
+        <div class="ed-byline">Five-signal model · lower predicted = better</div>
       </div>
       <div class="rps-col-table-head">
         <span></span><span></span><span></span>
-        <span class="rps-col-label">PRED PTS</span>
+        <span class="rps-col-label">PRED FIN</span>
+        <span class="rps-col-label">EVIDENCE</span>
       </div>
       <div class="rps-list">
-        ${stageTop10HTML}
+        ${finishTop10HTML}
       </div>
     </div>
   ` : "";
@@ -9640,7 +9648,7 @@ function renderRacePredictionSection(opts) {
   const finishDetails = finishFullHTML ? `
     <details class="rps-full-details">
       <summary class="rps-full-summary">
-        <span class="rps-full-summary-title">Predicted finishing order · ${predictions.total} full-time drivers</span>
+        <span class="rps-full-summary-title">Full predicted finishing order · ${predictions.total} drivers</span>
         <span class="rps-full-summary-cta">View full prediction →</span>
       </summary>
       <div class="rps-full-body">
@@ -9654,6 +9662,25 @@ function renderRacePredictionSection(opts) {
         </div>
         <div class="rps-evidence-legend">
           <span class="ed-byline">Evidence: <strong>•••</strong> track + track-type data · <strong>••○</strong> one of the two · <strong>•○○</strong> form/season only</span>
+        </div>
+      </div>
+    </details>
+  ` : "";
+
+  // Stage-points top 10 — secondary metric, lives in its own <details>.
+  const stageDetails = stageTop10HTML ? `
+    <details class="rps-full-details">
+      <summary class="rps-full-summary">
+        <span class="rps-full-summary-title">Top 10 predicted stage points</span>
+        <span class="rps-full-summary-cta">View stage prediction →</span>
+      </summary>
+      <div class="rps-full-body">
+        <div class="rps-col-table-head rps-stage-table-head">
+          <span></span><span></span><span></span>
+          <span class="rps-col-label">PRED PTS</span>
+        </div>
+        <div class="rps-list">
+          ${stageTop10HTML}
         </div>
       </div>
     </details>
@@ -9681,9 +9708,14 @@ function renderRacePredictionSection(opts) {
         <em>last 5 starts at this track type</em> (30%),
         and <em>recent form across the last 8 races</em> (30%).
         <br><br>
-        <strong>Top performers</strong> uses a separate recency-weighted score: wins count 3×, top-5 1.5×, top-10 1.0×, with each
-        contribution halving for each year prior. A finish-position penalty (0.05 per place below P1) discourages
-        rewarding lots of mid-pack finishes over a single win.
+        <strong>Top performers</strong> ranks active full-time drivers by a recency-weighted "track strength" score across all their starts at this venue. For each start the driver gets:
+        <ul class="rps-formula">
+          <li>+3.0 points for a win (P1)</li>
+          <li>+1.5 additional points for a top-5 finish</li>
+          <li>+1.0 additional points for a top-10 finish</li>
+          <li>−0.05 points per position below P1 (so P20 gets −0.95 before win/T5/T10 bonuses)</li>
+        </ul>
+        Each contribution is then multiplied by a <em>recency weight</em> that halves for each year prior: 1.0× for this year, 0.5× last year, 0.25× two years ago, 0.125× three years ago, and so on. A driver who won here last year (1.0× × 5.5) outranks one who won six years ago (0.03× × 5.5) even though they both have one win. The AVG FIN / WINS / STARTS columns shown are unweighted career totals at this track — they explain <em>why</em> the score is what it is, but they don't directly determine the ranking.
         <br><br>
         Full-time drivers only.
       </div>
@@ -9695,9 +9727,10 @@ function renderRacePredictionSection(opts) {
     <div class="rps-card card">
       <div class="rps-cols">
         ${performersCol}
-        ${stageCol}
+        ${finishCol}
       </div>
       ${finishDetails}
+      ${stageDetails}
       ${explainerDetails}
     </div>
   `;
