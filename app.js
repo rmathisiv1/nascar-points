@@ -14116,7 +14116,10 @@ function renderTeamPage() {
       ${bestCar ? `
         <div class="tm-best-panel">
           <div class="ed-kicker">most successful car</div>
-          <div class="tm-best-name ed-hero ed-hero-sm">#${escapeHTML(bestCar.car_number)}</div>
+          <div class="tm-best-name ed-hero ed-hero-sm">
+            #${escapeHTML(bestCar.car_number)}
+            ${bestCar.series ? `<span class="series-tag series-${bestCar.series.toLowerCase()}" style="font-size:11px; vertical-align:6px; margin-left:8px;">${bestCar.series}</span>` : ""}
+          </div>
           <div class="tm-best-meta">
             <span class="tm-best-meta-pair"><span class="ed-number">${bestCar.wins}</span> wins</span>
             <span class="tm-best-meta-sep">·</span>
@@ -14169,14 +14172,12 @@ function renderTeamPage() {
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-head">
         <span class="rc-card-title">Current cars · ${STATE.season}</span>
-        <span class="rc-card-sub">all series · click a driver for full profile</span>
+        <span class="rc-card-sub">all series · click a driver for full profile · click CC for career</span>
       </div>
       <div class="rc-card-body tm-cars-body">
         ${renderAllSeriesCarCards(allSeriesCurrentCars) || `<div class="empty">No cars in ${STATE.season}.</div>`}
       </div>
     </div>
-
-    ${renderTeamCrewChiefsCard(currentCars)}
 
     <div class="card rc-card rc-card-wide has-sticky-thead">
       <div class="rc-card-head">
@@ -14292,12 +14293,18 @@ function computeTeamCareerStats(teamCode) {
             e.lapsLed += d.laps_led || 0;
           }
 
-          // Per-car-number
-          const cKey = String(d.car_number);
-          if (cKey) {
+          // Per-car-number. Keyed by SERIES+NUMBER so a team's Cup #20
+          // doesn't collapse with their Xfinity #20 (different cars in
+          // a fan's mind). The display layer can show the series tag
+          // alongside the number so "#20 NCS · Tony Stewart" reads
+          // unambiguously.
+          const cKey = `${sCode}/${d.car_number}`;
+          if (cKey && d.car_number) {
             if (!carMap.has(cKey)) {
               carMap.set(cKey, {
-                car_number: cKey, starts: 0,
+                car_number: String(d.car_number),
+                series: sCode,
+                starts: 0,
                 wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0,
                 driverStarts: {},
               });
@@ -14439,8 +14446,17 @@ function computeAllSeriesCurrentCars(teamCode) {
 // Render the "Current cars" card body when showing all 3 series at once.
 // Each row gets a series tag so the user can tell what series the car is
 // in. Clicking the row routes to the driver profile.
+// Render the "Current cars" card body when showing all 3 series at once.
+// Each row gets a series tag so the user can tell what series the car is
+// in. Clicking the row routes to the driver profile; the CC chip is a
+// nested link to the CC's career page (event.stopPropagation in CSS via
+// pointer-events prevents click-through).
 function renderAllSeriesCarCards(rows) {
   if (!rows || rows.length === 0) return "";
+  // Look up CC for each row from SEASON_CACHE. Cheaper than re-walking
+  // races inside the row map — pre-compute once per series here.
+  const year = STATE.season;
+  const blocks = SEASON_CACHE[year];
   return rows.map(row => {
     const e = row.entity;
     const sCode = row.series;
@@ -14450,15 +14466,32 @@ function renderAllSeriesCarCards(rows) {
     const carTxt = contrastTextFor(carHex);
     const drvName = e.primaryDriver || e.driver || "—";
     const rankStr = row.rank != null ? `P${row.rank}` : "—";
+    // Resolve crew chief from this driver's most-recent race in this series.
+    const drvSlug = slugify(drvName);
+    let ccName = null;
+    const block = blocks && blocks[sCode];
+    if (block && block.races) {
+      ccName = currentCrewChiefForDriverInBlock(drvSlug, block.races);
+    }
+    // CC chip — uses a nested anchor with onclick → window.location to
+    // avoid the nested-anchor HTML issue, same pattern used elsewhere on
+    // the team page for clickable inner badges.
+    const ccChip = ccName
+      ? `<span class="tm-car-cc-chip" onclick="event.stopPropagation(); event.preventDefault(); window.location.hash='#/cc/${slugify(ccName)}'" title="View ${escapeHTML(ccName)}'s career">
+           <span class="tm-car-cc-label">CC</span>
+           <span class="tm-car-cc-name">${escapeHTML(ccName)}</span>
+         </span>`
+      : "";
     return `<a class="tm-car-row profile-link" href="#/driver/${slugify(drvName)}">
       <div class="tm-car-num" style="background:${carHex};color:${carTxt}">${e.car_number}</div>
       <div class="tm-car-body">
         <div class="tm-car-headline">
           <span class="tm-car-driver">${escapeHTML(drvName)}</span>
           <span class="series-tag series-${sCode.toLowerCase()}">${sCode}</span>
+          ${ccChip}
         </div>
-        <div class="tm-car-stats muted">
-          ${row.wins}W · ${row.top5} T5 · ${row.top10} T10 · ${row.total} pts
+        <div class="tm-car-stats">
+          <strong>${row.wins}W</strong> · <strong>${row.top5}</strong> T5 · <strong>${row.top10}</strong> T10 · <strong>${row.total}</strong> pts
         </div>
       </div>
       <div class="tm-car-rank">${rankStr}</div>

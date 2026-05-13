@@ -6391,7 +6391,7 @@ body.lightbox-open {
   grid-template-columns: 44px 1fr auto;
   gap: 14px;
   align-items: center;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   text-decoration: none;
   color: var(--text);
@@ -6411,21 +6411,64 @@ body.lightbox-open {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .tm-car-driver {
-  font-weight: 700;
-  font-size: 13px;
+  font-weight: 600;
+  font-size: 16px;          /* was 13 — driver name is the row's anchor, deserves weight */
 }
 .tm-car-stats {
   font-family: var(--mono);
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: 12px;          /* was 10 — too small to glance-read */
+  color: var(--text-2);
+  margin-top: 4px;
+}
+.tm-car-stats strong {
+  color: var(--text);
+  font-weight: 600;
 }
 .tm-car-rank {
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 700;
+  font-family: var(--serif);
+  font-size: 22px;          /* was 14 — make the rank visible at a glance */
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inline crew-chief chip — sits next to the series-tag in each car row.
+   Clickable; routes to the CC's career page. Visually subordinate to
+   the driver name (smaller font, muted) but obviously interactive
+   (cursor + hover affordance). */
+.tm-car-cc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: var(--tint-1);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--sans);
+  font-size: 11px;
   color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.tm-car-cc-chip:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tm-car-cc-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.tm-car-cc-chip:hover .tm-car-cc-label { color: var(--accent); }
+.tm-car-cc-name {
+  font-weight: 500;
 }
 
 @media (max-width: 767.98px) {
@@ -8984,6 +9027,12 @@ body.lightbox-open {
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: 4px;
+}
+/* The CC page renders its own hero card inside #cc-host and blanks the
+   outer view-head's h1/sub on render. Without this rule the styled-but-
+   empty bar shows up as a thin oxblood-bordered strip above the real hero. */
+#view-cc .view-head:has(h1:empty) {
+  display: none;
 }
 #view-team .view-head h1,
 #view-cc   .view-head h1 {
