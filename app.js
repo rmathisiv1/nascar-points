@@ -1187,24 +1187,8 @@ async function resolveDriverRoute() {
   const slug = STATE.profile && STATE.profile.slug;
   if (!slug) return;
 
-  // TEMP DIAG — instrument the resolve flow so we can see exactly where
-  // it fails for non-Cup drivers. Remove once Brandon Jones et al. resolve.
-  const yearsInCache = Object.keys(SEASON_CACHE).map(Number).sort((a,b)=>b-a);
-  console.log(`[resolveDriverRoute] slug="${slug}"  STATE.series=${STATE.series} STATE.season=${STATE.season}  cached years=[${yearsInCache.join(",")}]`);
-  if (yearsInCache.length > 0) {
-    const y = yearsInCache[0];
-    const blocks = SEASON_CACHE[y];
-    ["NCS","NOS","NTS"].forEach(s => {
-      const b = blocks && blocks[s];
-      if (!b) { console.log(`  ${y}/${s}: no block`); return; }
-      const hit = scanSeriesBlockForDriver(b, slug);
-      console.log(`  ${y}/${s}: scanResult=${JSON.stringify(hit)}`);
-    });
-  }
-
   // First-pass home detection from already-cached seasons
   let home = findDriverHomeContext(slug);
-  console.log(`[resolveDriverRoute] home=${JSON.stringify(home)}`);
 
   // If not found, opportunistically try recent years that may not be cached.
   // Walks back to STATE.season - 8 to catch drivers who retired recently
@@ -1226,14 +1210,10 @@ async function resolveDriverRoute() {
     }
   }
 
-  if (!home.found) {
-    console.log(`[resolveDriverRoute] EXIT — driver not found anywhere`);
-    return;
-  }
+  if (!home.found) return;
 
   const needSwitchSeries = home.series !== STATE.series;
   const needSwitchSeason = home.season !== STATE.season;
-  console.log(`[resolveDriverRoute] needSwitchSeries=${needSwitchSeries} needSwitchSeason=${needSwitchSeason}`);
   if (needSwitchSeries || needSwitchSeason) {
     STATE.series = home.series;
     STATE.season = home.season;
@@ -1242,7 +1222,6 @@ async function resolveDriverRoute() {
   }
   STATE.profile.resolvedCarNumber = home.car_number;
   STATE.profile.resolvedDriver = home.driver;
-  console.log(`[resolveDriverRoute] DONE — STATE.series=${STATE.series} STATE.season=${STATE.season} resolvedCarNumber=${home.car_number}`);
 }
 
 // ============================================================
@@ -6205,35 +6184,6 @@ function findLastActiveSeasonForDriver(slug) {
 
 function findEntityFromSlug() {
   if (!STATE.data || !STATE.profile.slug) return null;
-
-  // TEMP DIAG — show what's in allEntities() at the moment findEntityFromSlug
-  // runs for a driver route, so we can see why the resolver succeeds but the
-  // entity lookup fails.
-  if (STATE.profile.kind === "driver") {
-    const ents = allEntities();
-    const targetSlug = STATE.profile.slug;
-    console.log(`[findEntityFromSlug] slug="${targetSlug}" STATE.series=${STATE.series} STATE.data.season=${STATE.data && STATE.data.season} #entities=${ents.length} resolvedCarNumber="${STATE.profile.resolvedCarNumber}"`);
-    // List a few primary drivers so we can see if our target shows up
-    const matchesByPrimary = ents.filter(e =>
-      slugify(e.primaryDriver || e.driver) === targetSlug
-    );
-    console.log(`  primary slug matches: ${matchesByPrimary.length}`,
-      matchesByPrimary.map(e => `#${e.car_number} primary="${e.primaryDriver || e.driver}"`));
-    // List entities where target appears as a co-driver
-    const matchesByCo = ents.filter(e =>
-      (e.driversByStarts || []).some(dc => slugify(dc.name) === targetSlug)
-    );
-    console.log(`  co-driver slug matches: ${matchesByCo.length}`,
-      matchesByCo.map(e => `#${e.car_number}`));
-    // For Brandon Jones specifically, show the #20 entity if present
-    const car20 = ents.find(e => e.car_number === "20");
-    if (car20) {
-      console.log(`  #20 entity present: primary="${car20.primaryDriver}", driversByStarts=`,
-        (car20.driversByStarts || []).map(d => `"${d.name}"(${d.starts})`));
-    } else {
-      console.log(`  #20 entity NOT in allEntities()`);
-    }
-  }
 
   // Driver-centric route: we always render from the TARGET driver's
   // perspective — even when the underlying car was primarily driven by
@@ -12357,7 +12307,26 @@ function sidePanelPresentContext() {
   if (STATE.season === latestYear && STATE.series === canonicalSeries && STATE.data === block) {
     return () => {};
   }
+  // Snapshot STATE *and* RENDER_CACHE. Side-panel renderers call
+  // racesSorted()/allEntities()/computeSeasonTotals() which lazily
+  // populate the cache against the current STATE.data. If we only
+  // restore STATE without resetting the cache, downstream calls
+  // (renderProfile etc.) will keep seeing cached entities from the
+  // canonical-Present block — that produced cross-series leakage when
+  // the user navigated to a profile in a different series. Snapshot,
+  // null out the cache so the side panels build fresh entries
+  // scoped to the canonical block, and restore both on cleanup.
   const prev = { data: STATE.data, season: STATE.season, series: STATE.series };
+  const prevCache = {
+    races: RENDER_CACHE.races,
+    allRaces: RENDER_CACHE.allRaces,
+    entities: RENDER_CACHE.entities,
+    totals: RENDER_CACHE.totals,
+  };
+  RENDER_CACHE.races = null;
+  RENDER_CACHE.allRaces = null;
+  RENDER_CACHE.entities = null;
+  RENDER_CACHE.totals = null;
   STATE.data = block;
   STATE.season = latestYear;
   STATE.series = canonicalSeries;
@@ -12365,6 +12334,10 @@ function sidePanelPresentContext() {
     STATE.data = prev.data;
     STATE.season = prev.season;
     STATE.series = prev.series;
+    RENDER_CACHE.races = prevCache.races;
+    RENDER_CACHE.allRaces = prevCache.allRaces;
+    RENDER_CACHE.entities = prevCache.entities;
+    RENDER_CACHE.totals = prevCache.totals;
   };
 }
 
