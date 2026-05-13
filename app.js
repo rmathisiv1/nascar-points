@@ -60,7 +60,15 @@ const STATE = {
   // 4 to keep the side-by-side layout readable on mobile. Persisted in
   // STATE only; not in localStorage (each visit should be a fresh slate
   // unless the user lands via a ?with=... URL).
-  compare: { slugs: [] },
+  // Driver Compare page state.
+  //   slugs   — drivers currently in the comparison set (cap 4).
+  //   chart   — career-trajectory chart settings: series + metric.
+  //             Defaults to NCS / wins because that's the most informative
+  //             single chart most users want.
+  compare: {
+    slugs: [],
+    chart: { series: "NCS", metric: "wins" },
+  },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
   selectedCar: null,
@@ -11846,6 +11854,9 @@ function renderCompare() {
   // ----- Section: career stats per series -----
   const careerHTML = renderCompareCareerSection(drivers);
 
+  // ----- Section: career trajectory line chart -----
+  const chartHTML = renderCompareCareerChart(drivers);
+
   // ----- Section: track-type splits (NCS only — primary series for analysis) -----
   const trackTypeHTML = renderCompareTrackTypeSection(drivers);
 
@@ -11863,6 +11874,7 @@ function renderCompare() {
     ${pickerHTML}
     <div class="cmp-headers">${headersHTML}</div>
     ${careerHTML}
+    ${chartHTML}
     ${trackTypeHTML}
     ${h2hHTML}
     ${formHTML}
@@ -12013,6 +12025,255 @@ function renderCompareCareerSection(drivers) {
 
 // Track-type splits — for each driver, avg finish on short/inter/super/road
 // in NCS only. (Other series have less data and the splits are noisy.)
+// ============================================================
+// COMPARE: Career trajectory chart
+// ============================================================
+// Multi-line chart with absolute calendar years on the X axis and the
+// chosen metric on the Y axis. Each driver gets one line, colored to
+// match their current car color so the legend reads naturally next to
+// the header card chips above.
+//
+// "Full-time year" definition: a year in which the driver started at
+// least 75% of that series' races. Lower than the 90% FT threshold used
+// elsewhere because we want pre-Cup-regular years to show too (a driver
+// in their first half-season is still legitimately "running that year")
+// — but high enough to exclude one-race-substitute years from cluttering
+// the chart.
+
+const COMPARE_CHART_METRICS = [
+  { key: "wins",     label: "Wins" },
+  { key: "top5",     label: "Top 5s" },
+  { key: "top10",    label: "Top 10s" },
+  { key: "poles",    label: "Poles" },
+  // Laps Led is intentionally omitted — per-race laps_led isn't captured
+  // in points data (only career totals from drivers.json). Adding it
+  // would render a flat-zero line. If we ever scrape per-race laps led,
+  // re-add: { key: "laps_led", label: "Laps Led" }.
+];
+
+// Compute per-year stats for one driver in one series. Returns
+// [{year, starts, wins, top5, top10, poles, laps_led}, ...]
+// sorted ascending by year. Only includes years where the driver
+// started at least minStarts races (default 10 — filters out cameo years).
+function _compareDriverYearlyStats(driverName, series, minStarts = 10) {
+  const history = getDriverRaceHistory(driverName, series);
+  if (history.length === 0) return [];
+  const byYear = new Map();
+  for (const r of history) {
+    if (!byYear.has(r.year)) {
+      byYear.set(r.year, {
+        year: r.year,
+        starts: 0, wins: 0, top5: 0, top10: 0, poles: 0, laps_led: 0,
+      });
+    }
+    const y = byYear.get(r.year);
+    y.starts++;
+    if (r.finish_pos === 1) y.wins++;
+    if (r.finish_pos != null && r.finish_pos <= 5) y.top5++;
+    if (r.finish_pos != null && r.finish_pos <= 10) y.top10++;
+    if (r.start_pos === 1) y.poles++;
+    // laps_led isn't in race history — we don't have laps led per
+    // race in the points JSON. Drop laps_led from the metric list at
+    // chart-time if the data isn't there.
+  }
+  return [...byYear.values()]
+    .filter(y => y.starts >= minStarts)
+    .sort((a, b) => a.year - b.year);
+}
+
+function renderCompareCareerChart(drivers) {
+  const settings = STATE.compare.chart || { series: "NCS", metric: "wins" };
+  const seriesChoice = settings.series;
+  const metricChoice = settings.metric;
+
+  // Compute series-availability — only show buttons for series where at
+  // least one driver actually has data.
+  const seriesOptions = ["NCS", "NOS", "NTS"].filter(s => {
+    return drivers.some(d => getDriverRaceHistory(d.name, s).length > 0);
+  });
+  if (seriesOptions.length === 0) return "";
+
+  // Series toggle UI
+  const seriesToggleHTML = seriesOptions.map(s =>
+    `<button class="${s === seriesChoice ? "on" : ""}" data-cmp-chart-series="${s}">${s}</button>`
+  ).join("");
+
+  // Metric toggle UI — only show metrics where we have data. Laps led
+  // is the most likely to be missing.
+  const metricToggleHTML = COMPARE_CHART_METRICS.map(m =>
+    `<button class="${m.key === metricChoice ? "on" : ""}" data-cmp-chart-metric="${m.key}">${m.label}</button>`
+  ).join("");
+
+  // Gather per-driver yearly data for the selected series
+  const driverData = drivers.map(d => {
+    const yearly = _compareDriverYearlyStats(d.name, seriesChoice);
+    return { driver: d, yearly };
+  }).filter(d => d.yearly.length > 0);
+
+  if (driverData.length === 0) {
+    return `
+      <div class="cmp-section">
+        <div class="cmp-section-head">
+          <span class="cmp-section-title">Career Trajectory</span>
+        </div>
+        <div class="cmp-chart-controls">
+          <span class="cmp-chart-control-label">Series</span>
+          <div class="toggle-group mini" id="cmp-chart-series-toggle">${seriesToggleHTML}</div>
+          <span class="cmp-chart-control-label">Metric</span>
+          <div class="toggle-group mini" id="cmp-chart-metric-toggle">${metricToggleHTML}</div>
+        </div>
+        <div class="cmp-chart-empty">
+          <span class="ed-byline">No ${seriesChoice} starts on file for these drivers.</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Compute axis ranges across all drivers' data
+  const allYears = driverData.flatMap(d => d.yearly.map(y => y.year));
+  const allVals = driverData.flatMap(d => d.yearly.map(y => y[metricChoice] || 0));
+  const minYear = Math.min(...allYears);
+  const maxYear = Math.max(...allYears);
+  const maxVal = Math.max(...allVals, 1); // floor at 1 so a flat-zero line still renders
+
+  // SVG layout — fixed viewBox so it scales cleanly. Margin large enough
+  // for tick labels (years across bottom, metric values down left).
+  const W = 720;
+  const H = 320;
+  const M = { l: 48, r: 18, t: 18, b: 36 };
+  const plotW = W - M.l - M.r;
+  const plotH = H - M.t - M.b;
+
+  // Map data coords to SVG coords. Year span +1 so the rightmost year
+  // doesn't sit flush against the right edge.
+  const yearSpan = Math.max(1, maxYear - minYear + 1);
+  const xFor = (year) => M.l + ((year - minYear) / (maxYear - minYear || 1)) * plotW;
+  const yFor = (val) => M.t + plotH - (val / maxVal) * plotH;
+
+  // Build X-axis year ticks. Use every year if span <= 8; every other
+  // for medium; every 5 for long. Always include first and last.
+  let tickStep = 1;
+  if (yearSpan > 16) tickStep = 5;
+  else if (yearSpan > 8) tickStep = 2;
+  const xTicks = [];
+  for (let y = minYear; y <= maxYear; y += tickStep) xTicks.push(y);
+  if (xTicks[xTicks.length - 1] !== maxYear) xTicks.push(maxYear);
+
+  // Y-axis ticks — 4-5 evenly spaced values. Use round numbers so labels
+  // read cleanly (1, 2, 5, 10, 20, 50, etc).
+  const niceStep = (max) => {
+    const target = max / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(target)));
+    const norm = target / mag;
+    let step;
+    if (norm < 1.5) step = 1;
+    else if (norm < 3.5) step = 2;
+    else if (norm < 7.5) step = 5;
+    else step = 10;
+    return step * mag;
+  };
+  const yStep = niceStep(maxVal);
+  const yTicks = [];
+  for (let v = 0; v <= maxVal; v += yStep) yTicks.push(v);
+  if (yTicks[yTicks.length - 1] < maxVal) yTicks.push(yTicks[yTicks.length - 1] + yStep);
+
+  // Build SVG: grid lines, axes, paths, dots
+  const gridLines = yTicks.map(v =>
+    `<line class="cmp-chart-grid" x1="${M.l}" x2="${W - M.r}" y1="${yFor(v)}" y2="${yFor(v)}"/>`
+  ).join("");
+
+  const xTickLabels = xTicks.map(y =>
+    `<text class="cmp-chart-tick" x="${xFor(y)}" y="${H - 14}" text-anchor="middle">${y}</text>`
+  ).join("");
+
+  const yTickLabels = yTicks.map(v =>
+    `<text class="cmp-chart-tick" x="${M.l - 8}" y="${yFor(v) + 4}" text-anchor="end">${v.toLocaleString()}</text>`
+  ).join("");
+
+  // One line per driver
+  const linesHTML = driverData.map((d, di) => {
+    const series = d.driver.series;
+    const carHex = colorFor(series, d.driver.entity.car_number);
+    const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
+
+    const points = d.yearly.map(y => ({
+      x: xFor(y.year),
+      y: yFor(y[metricChoice] || 0),
+      val: y[metricChoice] || 0,
+      year: y.year,
+      starts: y.starts,
+    }));
+    if (points.length === 0) return "";
+
+    const pathD = points.map((p, i) =>
+      `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`
+    ).join(" ");
+
+    const dotsHTML = points.map(p =>
+      `<circle class="cmp-chart-dot"
+         cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5"
+         fill="${safeHex}" stroke="var(--card)" stroke-width="1.5"
+         data-driver="${escapeHTML(d.driver.name)}"
+         data-year="${p.year}" data-val="${p.val}" data-starts="${p.starts}">
+        <title>${escapeHTML(d.driver.name)} · ${p.year} · ${p.val} ${COMPARE_CHART_METRICS.find(m=>m.key===metricChoice).label.toLowerCase()} in ${p.starts} starts</title>
+       </circle>`
+    ).join("");
+
+    // Driver label at the rightmost data point. Helps legibility when
+    // 3-4 lines overlap.
+    const last = points[points.length - 1];
+    const labelHTML = `<text class="cmp-chart-line-label" x="${last.x + 6}" y="${last.y + 4}" fill="${safeHex}">${escapeHTML(_lastNameOf(d.driver.name))}</text>`;
+
+    return `
+      <g class="cmp-chart-line-group">
+        <path d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        ${dotsHTML}
+        ${labelHTML}
+      </g>
+    `;
+  }).join("");
+
+  // Y-axis label — small text rotated 90deg on the left edge
+  const metricLabel = COMPARE_CHART_METRICS.find(m => m.key === metricChoice)?.label || "";
+
+  return `
+    <div class="cmp-section">
+      <div class="cmp-section-head">
+        <span class="cmp-section-title">Career Trajectory · ${escapeHTML(metricLabel)} per season</span>
+      </div>
+      <div class="cmp-chart-controls">
+        <span class="cmp-chart-control-label">Series</span>
+        <div class="toggle-group mini" id="cmp-chart-series-toggle">${seriesToggleHTML}</div>
+        <span class="cmp-chart-control-label">Metric</span>
+        <div class="toggle-group mini" id="cmp-chart-metric-toggle">${metricToggleHTML}</div>
+      </div>
+      <div class="cmp-chart-host">
+        <svg class="cmp-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+          ${gridLines}
+          <line class="cmp-chart-axis" x1="${M.l}" x2="${M.l}" y1="${M.t}" y2="${H - M.b}"/>
+          <line class="cmp-chart-axis" x1="${M.l}" x2="${W - M.r}" y1="${H - M.b}" y2="${H - M.b}"/>
+          ${yTickLabels}
+          ${xTickLabels}
+          ${linesHTML}
+        </svg>
+      </div>
+      <div class="cmp-chart-footer">
+        <span class="ed-byline">One data point per season with 10+ starts. Lines colored to match each driver's current car. Hover dots for details.</span>
+      </div>
+    </div>
+  `;
+}
+
+// Helper: extract last name for chart labels
+function _lastNameOf(fullName) {
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  // Skip common suffixes (Jr, Sr, III) when picking the surname
+  const lastIsSuffix = /^(jr\.?|sr\.?|i{2,3}|iv)$/i.test(parts[parts.length - 1]);
+  return lastIsSuffix && parts.length >= 2 ? parts[parts.length - 2] : parts[parts.length - 1];
+}
+
 function renderCompareTrackTypeSection(drivers) {
   const series = "NCS";
   const types = [
@@ -12299,6 +12560,35 @@ function wireCompareEventHandlers() {
       history.replaceState(null, "", newUrl);
       input.value = "";
       results.hidden = true;
+      renderCompare();
+    });
+  }
+
+  // Career chart toggles. Click delegation per toggle group — we look
+  // up the clicked button by its dataset key. STATE.compare.chart
+  // persists across re-renders so the chart remembers what the user
+  // last selected.
+  const seriesToggle = document.getElementById("cmp-chart-series-toggle");
+  if (seriesToggle && !seriesToggle._wired) {
+    seriesToggle._wired = true;
+    seriesToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-cmp-chart-series]");
+      if (!btn) return;
+      const next = btn.dataset.cmpChartSeries;
+      if (!next || next === STATE.compare.chart.series) return;
+      STATE.compare.chart.series = next;
+      renderCompare();
+    });
+  }
+  const metricToggle = document.getElementById("cmp-chart-metric-toggle");
+  if (metricToggle && !metricToggle._wired) {
+    metricToggle._wired = true;
+    metricToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-cmp-chart-metric]");
+      if (!btn) return;
+      const next = btn.dataset.cmpChartMetric;
+      if (!next || next === STATE.compare.chart.metric) return;
+      STATE.compare.chart.metric = next;
       renderCompare();
     });
   }

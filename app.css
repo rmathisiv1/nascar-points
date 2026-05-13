@@ -10029,3 +10029,108 @@ body.lightbox-open {
   color: var(--accent);
   font-weight: 700;
 }
+
+/* ============================================================================
+   COMPARE: Career trajectory chart
+   ============================================================================ */
+.cmp-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.cmp-chart-control-label {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+}
+.cmp-chart-host {
+  padding: 14px 14px 6px;
+}
+.cmp-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  /* Reserve enough height even when laid out responsive; the viewBox
+     handles the actual aspect ratio. */
+  max-height: 360px;
+}
+
+/* Axis + grid styling */
+.cmp-chart-axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.cmp-chart-grid {
+  stroke: var(--border);
+  stroke-width: 0.5;
+  stroke-dasharray: 3 3;
+  opacity: 0.6;
+}
+.cmp-chart-tick {
+  font-family: var(--mono);
+  font-size: 10px;
+  fill: var(--muted);
+}
+
+/* Line label at the end of each driver's line — small italic name */
+.cmp-chart-line-label {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  font-weight: 500;
+  paint-order: stroke;
+  stroke: var(--card);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+/* Data point dots — slightly enlarge on hover for affordance */
+.cmp-chart-dot {
+  cursor: pointer;
+  transition: r 0.1s;
+}
+.cmp-chart-dot:hover {
+  r: 5;
+}
+
+.cmp-chart-empty {
+  padding: 24px 14px;
+  text-align: center;
+}
+.cmp-chart-footer {
+  padding: 0 14px 12px;
+}
+
+@media (max-width: 767.98px) {
+  .cmp-chart-controls {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .cmp-chart-control-label {
+    font-size: 11px;
+  }
+  /* Tighter button padding inside the toggle groups on mobile */
+  .cmp-chart-controls .toggle-group.mini button {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .cmp-chart-host {
+    padding: 10px 4px 4px;
+  }
+  .cmp-chart-svg {
+    max-height: 260px;
+  }
+  /* Trim tick density on narrow screens by hiding alternate ticks
+     when there are many — the viewBox handles scaling so this is
+     just to keep labels from overlapping. */
+  .cmp-chart-tick {
+    font-size: 9px;
+  }
+  .cmp-chart-line-label {
+    font-size: 10px;
+  }
+}
