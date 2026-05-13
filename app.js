@@ -9605,9 +9605,11 @@ function _renderFinishRow(p, i, series) {
       <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
       <span class="hp-name">${escapeHTML(p.driverName)}</span>
       <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
-      <span class="hp-stat-cell ${stageCls}">${p.predicted_stage_pts.toFixed(1)}</span>
-      <span class="hp-stat-cell ${totalCls}">${p.predicted_total_pts.toFixed(1)}</span>
-      <span class="hp-evidence-dots" title="Evidence: ${p.has_track_history ? "track ✓ " : ""}${p.has_type_history ? "track-type ✓ " : ""}form ✓ season ✓">${dots}</span>
+      <span class="hp-row-extras">
+        <span class="hp-extra-cell"><span class="hp-extra-label">stage</span><span class="hp-stat-cell ${stageCls}">${p.predicted_stage_pts.toFixed(1)}</span></span>
+        <span class="hp-extra-cell"><span class="hp-extra-label">total</span><span class="hp-stat-cell ${totalCls}">${p.predicted_total_pts.toFixed(1)}</span></span>
+        <span class="hp-extra-cell"><span class="hp-extra-label">evd</span><span class="hp-evidence-dots" title="Evidence: ${p.has_track_history ? "track ✓ " : ""}${p.has_type_history ? "track-type ✓ " : ""}form ✓ season ✓">${dots}</span></span>
+      </span>
     </a>
   `;
 }
@@ -12035,12 +12037,34 @@ function renderCompareCareerSection(drivers) {
           <span class="cmp-section-title">${SERIES_LABELS[s] || s} · Career</span>
         </div>
         <table class="cmp-table">
+          ${_renderCompareTableHeader(drivers)}
           <tbody>${rowsHTML}</tbody>
         </table>
       </div>
     `;
   }).join("");
   return sections;
+}
+
+// Build a sticky-style header row for any compare table. Each column
+// gets a chip showing the driver's car number (in their team color)
+// plus their last name. The first column is empty (the stat-name col).
+// Without this, after scrolling past the driver-header cards at the
+// top of the page users couldn't tell which number column belonged
+// to which driver — every cell is just bare digits.
+function _renderCompareTableHeader(drivers) {
+  const cells = drivers.map(d => {
+    const carHex = colorFor(d.series, d.entity.car_number);
+    const carTxt = contrastTextFor(carHex);
+    const lastName = _lastNameOf(d.name);
+    return `<th class="cmp-th-driver">
+      <span class="cmp-th-chip">
+        <span class="cmp-th-car" style="background:${carHex};color:${carTxt}">#${d.entity.car_number}</span>
+        <span class="cmp-th-name">${escapeHTML(lastName)}</span>
+      </span>
+    </th>`;
+  }).join("");
+  return `<thead class="cmp-thead"><tr><th></th>${cells}</tr></thead>`;
 }
 
 // Track-type splits — for each driver, avg finish on short/inter/super/road
@@ -12301,26 +12325,42 @@ function renderCompareCareerChart(drivers) {
        </circle>`;
     }).join("");
 
-    // Line label at the rightmost data point.
-    const last = points[points.length - 1];
-    const labelHTML = `<text class="cmp-chart-line-label" x="${last.svgX + 6}" y="${last.svgY + 4}" fill="${safeHex}">${escapeHTML(_lastNameOf(s.driver.name))}</text>`;
+    // No in-SVG line label — they clutter when lines cross, get covered
+    // by dots, and don't help when two drivers have lines that end at
+    // nearly the same coordinates. The bottom legend replaces them.
 
     return `
       <g class="cmp-chart-line-group">
         <path d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
         ${dotsHTML}
-        ${labelHTML}
       </g>
     `;
   }).join("");
 
-  // Section title + footer caption adapt to display mode
+  // Legend — colored swatch + driver name + their final (rightmost) value.
+  // Final value is "career total of this metric" in cumulative mode, or
+  // "most recent season's value" in per-season mode.
+  const legendHTML = driverSeries.map(s => {
+    const series = s.driver.series;
+    const carHex = colorFor(series, s.driver.entity.car_number);
+    const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
+    const lastPoint = s.points[s.points.length - 1];
+    const finalLabel = (displayMode === "cumulative")
+      ? `${lastPoint.val} career`
+      : `${lastPoint.val} in ${lastPoint.year}`;
+    return `
+      <div class="cmp-chart-legend-row">
+        <span class="cmp-chart-legend-swatch" style="background:${safeHex}"></span>
+        <span class="cmp-chart-legend-name">${escapeHTML(s.driver.name)}</span>
+        <span class="cmp-chart-legend-value">${escapeHTML(finalLabel)}</span>
+      </div>
+    `;
+  }).join("");
+
+  // Section title adapts to display mode
   const sectionTitle = (displayMode === "cumulative")
     ? `Career Trajectory · Cumulative ${escapeHTML(metricLabel)} by career year`
     : `Career Trajectory · ${escapeHTML(metricLabel)} per season`;
-  const footerText = (displayMode === "cumulative")
-    ? `Running total across full-time seasons (10+ starts). All drivers start at Year 1, so era differences are removed — useful for "how fast did A reach B's career total" reading. Lines colored to match each driver's current car. Hover dots for details.`
-    : `One data point per season with 10+ starts. Lines colored to match each driver's current car. Hover dots for details.`;
 
   return `
     <div class="cmp-section">
@@ -12338,9 +12378,7 @@ function renderCompareCareerChart(drivers) {
           ${linesHTML}
         </svg>
       </div>
-      <div class="cmp-chart-footer">
-        <span class="ed-byline">${footerText}</span>
-      </div>
+      <div class="cmp-chart-legend">${legendHTML}</div>
     </div>
   `;
 }
@@ -12398,6 +12436,7 @@ function renderCompareTrackTypeSection(drivers) {
         <span class="cmp-section-title">By Track Type · Avg Finish (career)</span>
       </div>
       <table class="cmp-table cmp-table-tt">
+        ${_renderCompareTableHeader(drivers)}
         <tbody>${rowsHTML}</tbody>
       </table>
     </div>
@@ -12529,6 +12568,7 @@ function renderCompareFormSection(drivers) {
         <span class="cmp-section-title">Current Season Form · ${STATE.season}</span>
       </div>
       <table class="cmp-table">
+        ${_renderCompareTableHeader(drivers)}
         <tbody>
           <tr><th>Avg Finish (last 5)</th>${cells}</tr>
           <tr><th>Avg Stage Pts (last 5)</th>${stageCells}</tr>

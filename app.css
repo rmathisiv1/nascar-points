@@ -9758,6 +9758,19 @@ body.lightbox-open {
 .rps-col-finish .hp-row-finish {
   grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px;
 }
+/* Desktop: .hp-row-extras is transparent — its three inner cells flow
+   directly into the parent grid as columns 5/6/7. The "stage / total /
+   evd" labels above each cell are hidden on desktop because we already
+   have column headers at the top of the table. */
+.hp-row-extras {
+  display: contents;
+}
+.hp-extra-cell {
+  display: contents;
+}
+.hp-extra-label {
+  display: none;
+}
 .rps-col-label {
   text-align: right;
 }
@@ -10005,10 +10018,23 @@ body.lightbox-open {
     padding: 4px;
   }
   .rps-col-finish .rps-col-table-head {
-    grid-template-columns: 22px 36px 1fr 38px 32px 36px 28px;
-    gap: 4px;
+    /* Mobile: collapse the column-header row to 4 visible cols (rank,
+       car, name, PRED FIN). The STAGE/TOTAL/EVD column headers are
+       hidden because they're inline-labeled in the extras sub-row of
+       each data row. */
+    grid-template-columns: 22px 38px 1fr 50px;
+    gap: 6px;
     padding: 4px;
-    font-size: 8px;
+    font-size: 9px;
+  }
+  /* Hide STAGE / TOTAL / EVD header cells on mobile — they'd dangle off
+     the 4-col grid. The extras sub-row in each data row provides the
+     same context with inline labels. */
+  .rps-col-finish .rps-col-table-head > .rps-col-label:nth-child(n+5) {
+    display: none;
+  }
+  .rps-full-table-head > .rps-col-label:nth-child(n+5) {
+    display: none;
   }
   .rps-stage-table-head {
     grid-template-columns: 22px 38px 1fr 50px !important;
@@ -10025,16 +10051,48 @@ body.lightbox-open {
     gap: 6px;
     padding: 5px 4px;
   }
+  /* Finish rows on mobile: main row is 4 cols, then the extras sub-row
+     wraps below at full width. .hp-row-extras flips from display:contents
+     (desktop) to a flex sub-row that spans across the parent grid via
+     grid-column: 1 / -1. */
   .hp-row-finish {
-    grid-template-columns: 22px 36px 1fr 38px 32px 36px 28px;
+    grid-template-columns: 22px 38px 1fr 50px;
+    gap: 6px;
+    padding: 6px 4px 5px;
+    row-gap: 4px;
+  }
+  .hp-row-finish .hp-row-extras {
+    display: flex;
+    grid-column: 1 / -1;          /* span entire row */
+    margin-left: 64px;            /* indent past rank + car columns */
+    gap: 14px;
+    align-items: baseline;
+  }
+  .hp-row-finish .hp-extra-cell {
+    display: inline-flex;
+    align-items: baseline;
     gap: 4px;
   }
-  .rps-full-table-head {
-    grid-template-columns: 22px 36px 1fr 38px 32px 36px 28px !important;
+  .hp-row-finish .hp-extra-label {
+    display: inline-block;
+    font-family: var(--mono);
     font-size: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .rps-full-table-head {
+    grid-template-columns: 22px 38px 1fr 50px !important;
+    font-size: 9px;
   }
   .hbt-name, .hp-name {
     font-size: 12px;
+    /* Restore full-width text on mobile — previously names were
+       ellipsis-truncated to fit a tight grid cell; now there's plenty
+       of horizontal room since stage/total/evd moved below. */
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
   }
   .hbt-stat-cell, .hp-stat-cell {
     font-size: 11px;
@@ -10167,5 +10225,98 @@ body.lightbox-open {
   }
   .cmp-chart-line-label {
     font-size: 10px;
+  }
+}
+
+/* ============================================================================
+   Compare table header — driver chips above the data rows
+   ============================================================================ */
+.cmp-thead {
+  background: var(--bg);
+}
+.cmp-thead th {
+  padding: 8px 12px !important;
+  border-bottom: 1px solid var(--border);
+}
+.cmp-th-driver {
+  text-align: center !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-family: var(--sans) !important;
+  font-size: 12px !important;
+}
+.cmp-th-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.cmp-th-car {
+  display: inline-block;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+.cmp-th-name {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+@media (max-width: 767.98px) {
+  .cmp-th-chip { gap: 4px; }
+  .cmp-th-car { font-size: 9px; padding: 2px 4px; }
+  .cmp-th-name { font-size: 11px; }
+  .cmp-thead th { padding: 6px 4px !important; }
+}
+
+/* ============================================================================
+   Compare chart legend — replaces the in-SVG line-end labels.
+   Layout: one row per driver with [color swatch] [name] [final value].
+   ============================================================================ */
+.cmp-chart-legend {
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px dashed var(--border);
+  margin-top: 4px;
+}
+.cmp-chart-legend-row {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.cmp-chart-legend-swatch {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.cmp-chart-legend-name {
+  font-weight: 500;
+  color: var(--text);
+}
+.cmp-chart-legend-value {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+  .cmp-chart-legend {
+    padding: 8px 10px 10px;
+    gap: 4px;
+  }
+  .cmp-chart-legend-row {
+    font-size: 11px;
+    gap: 8px;
   }
 }
