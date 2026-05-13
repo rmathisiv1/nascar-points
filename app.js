@@ -13110,11 +13110,6 @@ function renderRaceResultsTable(race, ctx) {
   const trHTML = rows.map(d => {
     const carHex = colorFor(series, d.car_number);
     const carTxt = contrastTextFor(carHex);
-    let finCls = "f-normal";
-    if (d.finish_pos === 1) finCls = "f-win";
-    else if (d.finish_pos <= 5) finCls = "f-t5";
-    else if (d.finish_pos <= 10) finCls = "f-t10";
-    else if (d.finish_pos > 25) finCls = "f-bad";
     const drvSlug = slugify(d.driver || "");
     const driverCell = drvSlug
       ? `<a class="profile-link" href="#/driver/${drvSlug}">${escapeHTML(d.driver || "")}</a>`
@@ -13132,7 +13127,7 @@ function renderRaceResultsTable(race, ctx) {
       : "";
     const seasonTotal = seasonPtsToDate.get(drvSlug);
     return `<tr>
-      <td class="num"><span class="finish-badge ${finCls}">${d.finish_pos}</span></td>
+      <td class="num">${d.finish_pos}</td>
       <td class="num">${d.start_pos ?? ""}</td>
       <td><span class="car-tag" style="background:${carHex};color:${carTxt}">${d.car_number}</span></td>
       <td>${driverCell}</td>

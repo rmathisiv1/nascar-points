@@ -2888,6 +2888,12 @@ td.neg { color: var(--neg); }
 .finish-badge.f-normal { color: var(--text-2); }
 .finish-badge.f-bad { background: rgba(255,70,70,0.20); color: #ffc2c2; }
 
+/* Light-mode overrides — the faint-tinted fills with light text became
+   illegible on cream. Use deeper fills with dark text instead. */
+[data-theme="light"] .finish-badge.f-t5  { background: rgba(50,150,70,0.35); color: #0a2410; }
+[data-theme="light"] .finish-badge.f-t10 { background: rgba(50,150,70,0.18); color: #1a3a1a; }
+[data-theme="light"] .finish-badge.f-bad { background: rgba(180,60,50,0.20); color: #5a1a14; }
+
 /* Teammate panel inside profile */
 .profile-tm-header {
   display: grid;
@@ -6714,6 +6720,10 @@ body.lightbox-open {
 .rc-results-table .finish-badge.f-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
 .rc-results-table .finish-badge.f-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
 .rc-results-table .finish-badge.f-bad  { background: rgba(255,70,70,0.30); color: #ffc2c2; }
+
+/* Light-mode override — same fix as the profile race table. */
+[data-theme="light"] .rc-results-table .finish-badge.f-t10 { background: rgba(50,150,70,0.22); color: #1a3a1a; }
+[data-theme="light"] .rc-results-table .finish-badge.f-bad { background: rgba(180,60,50,0.25); color: #5a1a14; }
 .rc-results-table .car-tag {
   display: inline-block;
   padding: 2px 6px;
