@@ -2153,6 +2153,9 @@ function applyModeToDom() {
   document.querySelectorAll("#topbar-mode-sw button").forEach(b => {
     b.classList.toggle("on", b.dataset.mode === STATE.mode);
   });
+  // Sync the mobile mode <select> to match.
+  const modeSel = document.getElementById("topbar-mode-sw-select");
+  if (modeSel && modeSel.value !== STATE.mode) modeSel.value = STATE.mode;
 }
 
 // Pull the persisted mode from localStorage on boot. Default to "present"
@@ -2288,38 +2291,42 @@ function wireUIControls() {
     if (typeof render === "function") render();
   });
 
-  // Historical/Present mode selector — explicit two-option switch (so both
-  // states are visible at once and users don't have to guess what clicking
-  // does). Persisted in localStorage so the choice survives reloads.
-  document.querySelectorAll("#topbar-mode-sw button").forEach(b => {
-    b.addEventListener("click", async () => {
-      const newMode = b.dataset.mode;
-      if (!newMode || newMode === STATE.mode) return;
-      STATE.mode = newMode;
-      try { localStorage.setItem("dc_mode", newMode); } catch (e) {}
-      // When entering Present mode, snap season + cursor back to current.
-      // Series stays where the user had it (it's freely switchable in both
-      // modes). When leaving Present mode, no state changes — just unlock
-      // the controls.
-      if (newMode === "present") {
-        const targetSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0])
-          || STATE.season;
-        if (targetSeason !== STATE.season) {
-          STATE.season = targetSeason;
-          STATE.throughRound = null;
-          await loadCurrentData();
-          resetRenderCache();
-          populateRacePicker();
-          renderTimeCursorBanner();
-        }
-        const sel = document.getElementById("season-picker");
-        if (sel) sel.value = String(STATE.season);
-        const mobileSel = document.getElementById("mobile-season-picker");
-        if (mobileSel) mobileSel.value = String(STATE.season);
+  // Historical/Present mode selector. Mobile uses a compact <select>;
+  // desktop uses a two-button pill. Both call the same handler and the
+  // applyModeToDom() helper keeps each in sync visually.
+  const applyModeChange = async (newMode) => {
+    if (!newMode || newMode === STATE.mode) return;
+    STATE.mode = newMode;
+    try { localStorage.setItem("dc_mode", newMode); } catch (e) {}
+    if (newMode === "present") {
+      const targetSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0])
+        || STATE.season;
+      if (targetSeason !== STATE.season) {
+        STATE.season = targetSeason;
+        STATE.throughRound = null;
+        await loadCurrentData();
+        resetRenderCache();
+        populateRacePicker();
+        renderTimeCursorBanner();
       }
-      applyModeToDom();
-      render();
-    });
+      const sel = document.getElementById("season-picker");
+      if (sel) sel.value = String(STATE.season);
+      const mobileSel = document.getElementById("mobile-season-picker");
+      if (mobileSel) mobileSel.value = String(STATE.season);
+    }
+    // Sync the mobile <select> to match (when called from the desktop
+    // buttons; harmless when called from the select itself since the
+    // value already matches).
+    const modeSel = document.getElementById("topbar-mode-sw-select");
+    if (modeSel && modeSel.value !== newMode) modeSel.value = newMode;
+    applyModeToDom();
+    render();
+  };
+  document.querySelectorAll("#topbar-mode-sw button").forEach(b => {
+    b.addEventListener("click", () => applyModeChange(b.dataset.mode));
+  });
+  document.getElementById("topbar-mode-sw-select")?.addEventListener("change", (e) => {
+    applyModeChange(e.target.value);
   });
 
   // Form view toggles
@@ -4609,11 +4616,12 @@ function renderBreakdown() {
 
   host.innerHTML = rows.map((r, i) => {
     if (mode === "teams") {
-      // Team row — use the team's primary color via teamLabelForEra,
-      // but fall back to a neutral accent if no color available.
+      // Team row — color from the team palette. teamLabelForEra doesn't
+      // carry a .color field (it's for label text); use orgColorForTeam
+      // which reads STATE.colors.teams[code].org.
       const lbl = teamLabelForEra(r.team_code, STATE.season);
-      const teamHex = (lbl && lbl.color) || "var(--accent)";
-      const txt = "#fff";
+      const teamHex = orgColorForTeam(r.team_code) || "var(--accent)";
+      const txt = contrastTextFor(teamHex);
       const pct = (r.stagePts / max) * 100;
       const fullName = (lbl && lbl.full) || r.team_code;
       return `<a class="sp-row profile-link" href="#/team/${encodeURIComponent(r.team_code)}">
@@ -6197,6 +6205,35 @@ function findLastActiveSeasonForDriver(slug) {
 
 function findEntityFromSlug() {
   if (!STATE.data || !STATE.profile.slug) return null;
+
+  // TEMP DIAG — show what's in allEntities() at the moment findEntityFromSlug
+  // runs for a driver route, so we can see why the resolver succeeds but the
+  // entity lookup fails.
+  if (STATE.profile.kind === "driver") {
+    const ents = allEntities();
+    const targetSlug = STATE.profile.slug;
+    console.log(`[findEntityFromSlug] slug="${targetSlug}" STATE.series=${STATE.series} STATE.data.season=${STATE.data && STATE.data.season} #entities=${ents.length} resolvedCarNumber="${STATE.profile.resolvedCarNumber}"`);
+    // List a few primary drivers so we can see if our target shows up
+    const matchesByPrimary = ents.filter(e =>
+      slugify(e.primaryDriver || e.driver) === targetSlug
+    );
+    console.log(`  primary slug matches: ${matchesByPrimary.length}`,
+      matchesByPrimary.map(e => `#${e.car_number} primary="${e.primaryDriver || e.driver}"`));
+    // List entities where target appears as a co-driver
+    const matchesByCo = ents.filter(e =>
+      (e.driversByStarts || []).some(dc => slugify(dc.name) === targetSlug)
+    );
+    console.log(`  co-driver slug matches: ${matchesByCo.length}`,
+      matchesByCo.map(e => `#${e.car_number}`));
+    // For Brandon Jones specifically, show the #20 entity if present
+    const car20 = ents.find(e => e.car_number === "20");
+    if (car20) {
+      console.log(`  #20 entity present: primary="${car20.primaryDriver}", driversByStarts=`,
+        (car20.driversByStarts || []).map(d => `"${d.name}"(${d.starts})`));
+    } else {
+      console.log(`  #20 entity NOT in allEntities()`);
+    }
+  }
 
   // Driver-centric route: we always render from the TARGET driver's
   // perspective — even when the underlying car was primarily driven by
