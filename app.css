@@ -9480,13 +9480,61 @@ body.lightbox-open {
   color: var(--dim);
   margin-left: 4px;
 }
+/* Compare table cell visual treatment:
+   - cmp-cell-best: highest (or lowest, for avg-finish/avg-start) value in
+     the row. Gets a background tint + bold color so it stands out clearly
+     against neighboring cells, not just slightly bolder weight.
+   - cmp-cell-worst: opposite — the cell furthest from the winner in the
+     row, when there are 3+ drivers. Subtler treatment.
+   - Tier classes (tier-good / tier-mid / tier-poor) layer on top for
+     avg-finish-style stats where absolute thresholds matter.
+*/
 .cmp-cell-best {
   color: var(--pos);
   font-weight: 700;
+  background: rgba(50, 230, 100, 0.10);
+  position: relative;
+}
+.cmp-cell-best::before {
+  content: "▲";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8px;
+  color: var(--pos);
+  opacity: 0.7;
+}
+.cmp-cell-worst {
+  color: var(--neg);
+  background: rgba(255, 70, 70, 0.06);
+  position: relative;
+}
+.cmp-cell-worst::before {
+  content: "▼";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8px;
+  color: var(--neg);
+  opacity: 0.6;
 }
 .cmp-cell-empty {
   color: var(--dim);
 }
+/* Light mode — deeper greens/reds with stronger background tints for
+   the cream surface (the dark-mode rgba values are too pale on cream). */
+[data-theme="light"] .cmp-cell-best {
+  background: rgba(50, 150, 70, 0.13);
+  color: #1f4d22;
+}
+[data-theme="light"] .cmp-cell-best::before { color: #1f4d22; opacity: 0.7; }
+[data-theme="light"] .cmp-cell-worst {
+  background: rgba(180, 60, 50, 0.08);
+  color: #6d1f1a;
+}
+[data-theme="light"] .cmp-cell-worst::before { color: #6d1f1a; opacity: 0.6; }
 
 /* Head-to-head cards */
 .cmp-h2h-grid {
@@ -9661,10 +9709,10 @@ body.lightbox-open {
 .rps-col-performers .rps-col-table-head {
   grid-template-columns: 24px 42px 1fr 48px 36px 50px;
 }
-/* Right column (Top 10 predicted finish): same 5-col grid as the
-   full-field details, since both render finish rows with evidence dots. */
+/* Right column (Top 10 predicted finish): 7-col grid including the 3
+   prediction columns (finish, stage, total) and the evidence dots. */
 .rps-col-finish .rps-col-table-head {
-  grid-template-columns: 24px 42px 1fr 60px 50px;
+  grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px;
 }
 /* Stage points details — 4 cols (no evidence dots column) */
 .rps-stage-table-head {
@@ -9673,7 +9721,7 @@ body.lightbox-open {
 /* Finish rows inside the right column inherit the same template as the
    full-field finish rows below. */
 .rps-col-finish .hp-row-finish {
-  grid-template-columns: 24px 42px 1fr 60px 50px;
+  grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px;
 }
 .rps-col-label {
   text-align: right;
@@ -9844,12 +9892,12 @@ body.lightbox-open {
   margin-top: 10px;
   padding-top: 8px;
 }
-/* Inside the full prediction list, rows have an extra evidence-dots column */
+/* Inside the full prediction list, rows have stage + total + evidence cols */
 .rps-full-table-head {
-  grid-template-columns: 24px 42px 1fr 60px 50px !important;
+  grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px !important;
 }
 .hp-row-finish {
-  grid-template-columns: 24px 42px 1fr 60px 50px;
+  grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px;
 }
 .hp-evidence-dots {
   font-family: var(--mono);
@@ -9922,9 +9970,10 @@ body.lightbox-open {
     padding: 4px;
   }
   .rps-col-finish .rps-col-table-head {
-    grid-template-columns: 22px 38px 1fr 50px 40px;
-    gap: 6px;
+    grid-template-columns: 22px 36px 1fr 38px 32px 36px 28px;
+    gap: 4px;
     padding: 4px;
+    font-size: 8px;
   }
   .rps-stage-table-head {
     grid-template-columns: 22px 38px 1fr 50px !important;
@@ -9942,10 +9991,12 @@ body.lightbox-open {
     padding: 5px 4px;
   }
   .hp-row-finish {
-    grid-template-columns: 22px 38px 1fr 50px 40px;
+    grid-template-columns: 22px 36px 1fr 38px 32px 36px 28px;
+    gap: 4px;
   }
   .rps-full-table-head {
-    grid-template-columns: 22px 38px 1fr 50px 40px !important;
+    grid-template-columns: 22px 36px 1fr 38px 32px 36px 28px !important;
+    font-size: 8px;
   }
   .hbt-name, .hp-name {
     font-size: 12px;

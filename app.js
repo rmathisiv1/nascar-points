@@ -3362,9 +3362,14 @@ function getDriverTrackStats(driverName, series, trackCode) {
   const finishes = atTrack.map(r => r.finish_pos).filter(n => n != null);
   const starts = atTrack.map(r => r.start_pos).filter(n => n != null);
   const stagePts = atTrack.map(r => r.stage_pts_total);
+  const racePts = atTrack.map(r => r.race_pts).filter(n => n != null);
   const sum = (arr) => arr.reduce((a, b) => a + b, 0);
   const lastNAvg = (n) => {
     const last = atTrack.slice(0, n).map(r => r.finish_pos).filter(v => v != null);
+    return last.length ? sum(last) / last.length : null;
+  };
+  const lastNRacePtsAvg = (n) => {
+    const last = atTrack.slice(0, n).map(r => r.race_pts).filter(v => v != null);
     return last.length ? sum(last) / last.length : null;
   };
   const stats = {
@@ -3375,6 +3380,8 @@ function getDriverTrackStats(driverName, series, trackCode) {
     avg_finish: finishes.length ? sum(finishes) / finishes.length : null,
     avg_start: starts.length ? sum(starts) / starts.length : null,
     avg_stage_pts: atTrack.length ? sum(stagePts) / atTrack.length : 0,
+    avg_race_pts: racePts.length ? sum(racePts) / racePts.length : null,
+    last4_race_pts_avg: lastNRacePtsAvg(4),
     best_finish: finishes.length ? Math.min(...finishes) : null,
     last5: atTrack.slice(0, 5),  // newest first
     last5_avg: lastNAvg(5),
@@ -3414,6 +3421,10 @@ function getDriverTrackTypeStats(driverName, series, trackTypeKey) {
     const last = atType.slice(0, n).map(r => r.stage_pts_total);
     return last.length ? last.reduce((a, b) => a + b, 0) / last.length : 0;
   };
+  const lastNStartsRacePtsAvg = (n) => {
+    const last = atType.slice(0, n).map(r => r.race_pts).filter(v => v != null);
+    return last.length ? last.reduce((a, b) => a + b, 0) / last.length : null;
+  };
   const stats = {
     starts: atType.length,
     wins: finishes.filter(f => f === 1).length,
@@ -3423,6 +3434,7 @@ function getDriverTrackTypeStats(driverName, series, trackTypeKey) {
     avg_stage_pts: atType.length ? sum(stagePts) / atType.length : 0,
     last5_avg: lastNStartsAvg(5),
     last5_stage_pts_avg: lastNStartsStageAvg(5),
+    last5_race_pts_avg: lastNStartsRacePtsAvg(5),
   };
   DRIVER_ANALYTICS_CACHE.typeStats.set(cacheKey, stats);
   return stats;
@@ -3446,6 +3458,10 @@ function getDriverRecentForm(driverName, series, lastN = 5) {
     avg_finish: finishes.reduce((a, b) => a + b, 0) / finishes.length,
     last_race_finish: finishes[0],
     avg_stage_pts: recent.reduce((s, r) => s + r.stage_pts_total, 0) / recent.length,
+    avg_race_pts: (() => {
+      const pts = recent.map(r => r.race_pts).filter(n => n != null);
+      return pts.length ? pts.reduce((a, b) => a + b, 0) / pts.length : null;
+    })(),
   };
 }
 
@@ -9537,6 +9553,16 @@ function _renderFinishRow(p, i, series) {
   const slug = slugify(p.driverName);
   const finishVal = p.predicted_finish;
   const tierCls = _finishTierClass(finishVal);
+  const stageCls = _stagePtsTierClass(p.predicted_stage_pts);
+  // Total points: tier thresholds match the NASCAR scoring curve. A
+  // "good" total points run is 35+ (race-winner-tier), "mid" is 20-35
+  // (steady top-15-ish driver who scored some stages), and "poor" is
+  // below 20 (back-half of the field, no stage points).
+  let totalCls = "";
+  const tp = p.predicted_total_pts || 0;
+  if (tp >= 35) totalCls = "tier-good";
+  else if (tp >= 20) totalCls = "tier-mid";
+  else totalCls = "tier-poor";
   // Evidence dots: small icons telling us how much confidence we have.
   // Both signals available = solid •••, missing one = ••○, missing both
   // (only form+season) = •○○. Keeps row visually clean compared to
@@ -9551,6 +9577,8 @@ function _renderFinishRow(p, i, series) {
       <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
       <span class="hp-name">${escapeHTML(p.driverName)}</span>
       <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
+      <span class="hp-stat-cell ${stageCls}">${p.predicted_stage_pts.toFixed(1)}</span>
+      <span class="hp-stat-cell ${totalCls}">${p.predicted_total_pts.toFixed(1)}</span>
       <span class="hp-evidence-dots" title="Evidence: ${p.has_track_history ? "track ✓ " : ""}${p.has_type_history ? "track-type ✓ " : ""}form ✓ season ✓">${dots}</span>
     </a>
   `;
@@ -9630,12 +9658,14 @@ function renderRacePredictionSection(opts) {
     <div class="rps-col rps-col-finish">
       <div class="rps-col-head">
         <div class="rps-col-title">Top 10 predicted finish</div>
-        <div class="ed-byline">Five-signal model · lower predicted = better</div>
+        <div class="ed-byline">With stage + total points predictions</div>
       </div>
       <div class="rps-col-table-head">
         <span></span><span></span><span></span>
         <span class="rps-col-label">PRED FIN</span>
-        <span class="rps-col-label">EVIDENCE</span>
+        <span class="rps-col-label">STAGE</span>
+        <span class="rps-col-label">TOTAL</span>
+        <span class="rps-col-label">EVD</span>
       </div>
       <div class="rps-list">
         ${finishTop10HTML}
@@ -9655,7 +9685,9 @@ function renderRacePredictionSection(opts) {
         <div class="rps-col-table-head rps-full-table-head">
           <span></span><span></span><span></span>
           <span class="rps-col-label">PRED FIN</span>
-          <span class="rps-col-label">EVIDENCE</span>
+          <span class="rps-col-label">STAGE</span>
+          <span class="rps-col-label">TOTAL</span>
+          <span class="rps-col-label">EVD</span>
         </div>
         <div class="rps-list">
           ${finishFullHTML}
@@ -9707,6 +9739,15 @@ function renderRacePredictionSection(opts) {
         <em>track-specific stage-points average</em> (40%),
         <em>last 5 starts at this track type</em> (30%),
         and <em>recent form across the last 8 races</em> (30%).
+        <br><br>
+        <strong>Total points</strong> is predicted directly from each driver's
+        average <em>race_pts</em> (NASCAR's combined finish-position + stage-points
+        scoring already baked into the source data) using the same 3-signal blend:
+        <em>last 4 starts at this track</em> (40%, falls back to all-time at track if &lt;4 starts),
+        <em>last 5 starts at this track type</em> (30%),
+        and <em>recent form across the last 8 races</em> (30%).
+        Predicting the post-race scoring line directly is more reliable than
+        applying a finish-position curve to our predicted finish.
         <br><br>
         <strong>Top performers</strong> ranks active full-time drivers by a recency-weighted "track strength" score across all their starts at this venue. For each start the driver gets:
         <ul class="rps-formula">
@@ -9848,9 +9889,29 @@ function predictDriverForRace(driverName, series, trackCode) {
     predictedStagePts = spAvail.reduce((sum, x) => sum + (x.w / spw) * x.val, 0);
   }
 
+  // ----- Total-points signals -----
+  // Total race points (race_pts) already include finish-position points
+  // AND stage points in the source data — it's the post-race "what
+  // showed up in the standings line" number. Predicting it directly
+  // sidesteps having to apply NASCAR's finish-position curve to our
+  // predicted_finish; instead we blend track/type/form averages of
+  // the all-in number itself. Same 3-signal structure as stage points.
+  const totalPtsSignals = [
+    { w: 0.40, val: trackStats?.last4_race_pts_avg ?? trackStats?.avg_race_pts ?? null },
+    { w: 0.30, val: typeStats?.last5_race_pts_avg ?? null },
+    { w: 0.30, val: form8?.avg_race_pts ?? null },
+  ];
+  const tpAvail = totalPtsSignals.filter(s => s.val != null);
+  let predictedTotalPts = 0;
+  if (tpAvail.length > 0) {
+    const tpw = tpAvail.reduce((s, x) => s + x.w, 0);
+    predictedTotalPts = tpAvail.reduce((sum, x) => sum + (x.w / tpw) * x.val, 0);
+  }
+
   return {
     predicted_finish: predicted,
     predicted_stage_pts: predictedStagePts,
+    predicted_total_pts: predictedTotalPts,
     breakdown: signals.map(s => ({
       ...s,
       used: s.val != null,
@@ -11916,13 +11977,21 @@ function renderCompareCareerSection(drivers) {
       const best = numericVals.length > 0
         ? (lowerBetter ? Math.min(...numericVals) : Math.max(...numericVals))
         : null;
+      // Worst is the OPPOSITE extreme. We only flag a worst when there
+      // are 3+ drivers in the row — with just 2, labeling one of them
+      // "worst" is silly (the non-best is the worst by definition).
+      const worst = (numericVals.length >= 3)
+        ? (lowerBetter ? Math.max(...numericVals) : Math.min(...numericVals))
+        : null;
 
       const cells = drivers.map((d, i) => {
         const v = vals[i];
         if (v == null) return `<td class="cmp-cell-empty">—</td>`;
         const isBest = (best != null && v === best && numericVals.length > 1);
+        const isWorst = (worst != null && v === worst && !isBest);
         const display = stat.fmt ? stat.fmt(v) : v;
-        return `<td class="${isBest ? "cmp-cell-best" : ""}">${display}</td>`;
+        const cls = isBest ? "cmp-cell-best" : (isWorst ? "cmp-cell-worst" : "");
+        return `<td class="${cls}">${display}</td>`;
       }).join("");
       return `<tr><th>${stat.label}</th>${cells}</tr>`;
     }).join("");
@@ -11961,10 +12030,18 @@ function renderCompareTrackTypeSection(drivers) {
     });
     if (vals.every(v => v == null)) return "";
 
+    // Determine best/worst avg_finish across drivers (lower = better).
+    const avgVals = vals.map(s => s?.avg_finish).filter(n => n != null);
+    const best = avgVals.length > 1 ? Math.min(...avgVals) : null;
+    const worst = avgVals.length >= 3 ? Math.max(...avgVals) : null;
+
     const finCells = drivers.map((d, i) => {
       const s = vals[i];
       if (!s || s.avg_finish == null) return `<td class="cmp-cell-empty">—</td>`;
-      return `<td>${s.avg_finish.toFixed(1)} <small>(${s.starts}st, ${s.wins}w)</small></td>`;
+      const isBest = (best != null && s.avg_finish === best);
+      const isWorst = (worst != null && s.avg_finish === worst && !isBest);
+      const cls = isBest ? "cmp-cell-best" : (isWorst ? "cmp-cell-worst" : "");
+      return `<td class="${cls}">${s.avg_finish.toFixed(1)} <small>(${s.starts}st, ${s.wins}w)</small></td>`;
     }).join("");
 
     return `<tr><th>${t.label}</th>${finCells}</tr>`;
@@ -12072,16 +12149,35 @@ function renderCompareFormSection(drivers) {
   }).filter(r => r.form);
   if (rows.length === 0) return "";
 
-  const cells = drivers.map(d => {
-    const form = getDriverRecentForm(d.name, series, 5);
+  // Precompute the form values for each driver so we can determine best/worst.
+  const forms = drivers.map(d => getDriverRecentForm(d.name, series, 5));
+
+  // Avg finish — lower is better
+  const finVals = forms.map(f => f?.avg_finish).filter(n => n != null);
+  const finBest = finVals.length > 1 ? Math.min(...finVals) : null;
+  const finWorst = finVals.length >= 3 ? Math.max(...finVals) : null;
+
+  const cells = drivers.map((d, i) => {
+    const form = forms[i];
     if (!form) return `<td class="cmp-cell-empty">—</td>`;
-    return `<td>${form.avg_finish.toFixed(1)} <small>(${form.starts}r)</small></td>`;
+    const isBest = (finBest != null && form.avg_finish === finBest);
+    const isWorst = (finWorst != null && form.avg_finish === finWorst && !isBest);
+    const cls = isBest ? "cmp-cell-best" : (isWorst ? "cmp-cell-worst" : "");
+    return `<td class="${cls}">${form.avg_finish.toFixed(1)} <small>(${form.starts}r)</small></td>`;
   }).join("");
 
-  const stageCells = drivers.map(d => {
-    const form = getDriverRecentForm(d.name, series, 5);
+  // Stage points — higher is better
+  const spVals = forms.map(f => f?.avg_stage_pts).filter(n => n != null);
+  const spBest = spVals.length > 1 ? Math.max(...spVals) : null;
+  const spWorst = spVals.length >= 3 ? Math.min(...spVals) : null;
+
+  const stageCells = drivers.map((d, i) => {
+    const form = forms[i];
     if (!form) return `<td class="cmp-cell-empty">—</td>`;
-    return `<td>${form.avg_stage_pts.toFixed(1)} <small>pts</small></td>`;
+    const isBest = (spBest != null && form.avg_stage_pts === spBest);
+    const isWorst = (spWorst != null && form.avg_stage_pts === spWorst && !isBest);
+    const cls = isBest ? "cmp-cell-best" : (isWorst ? "cmp-cell-worst" : "");
+    return `<td class="${cls}">${form.avg_stage_pts.toFixed(1)} <small>pts</small></td>`;
   }).join("");
 
   return `
