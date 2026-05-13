@@ -1097,7 +1097,15 @@ async function boot() {
       resetRenderCache();
       populateRacePicker();
       renderTimeCursorBanner();
+      // Series buttons in the topbar are tied to STATE.series. Any time
+      // navigation changes the series (resolveDriverRoute pulling us
+      // into a different series for a profile, or parseHash restoring
+      // the pre-takeover series), the toggle UI needs to follow.
+      syncSeriesUIGlobal(STATE.series);
     }
+    // Clear the restore flag — it's only there to signal parseHash's
+    // intent; the actual reload was handled by the guard above.
+    if (STATE.pendingSeriesRestore) delete STATE.pendingSeriesRestore;
     redirectLegacyCarRoute();
     render();
     markMobileNavActive();
@@ -1219,6 +1227,11 @@ async function resolveDriverRoute() {
     STATE.season = home.season;
     await loadCurrentData();
     resetRenderCache();
+    // Sync the topbar series buttons + mobile select to match the
+    // resolved series. Without this, after navigating to a Truck driver
+    // the topbar still shows NCS as active and the series toggle UI
+    // disagrees with STATE.series.
+    if (needSwitchSeries) syncSeriesUIGlobal(STATE.series);
   }
   STATE.profile.resolvedCarNumber = home.car_number;
   STATE.profile.resolvedDriver = home.driver;
@@ -1795,6 +1808,24 @@ function parseHash() {
     if (STATE.mode === "present") {
       const latest = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
       if (latest) STATE.season = latest;
+      // Restore the user's pre-takeover series. Profile pages flip
+      // STATE.series to match the driver's home series (a Truck driver
+      // pulls us into NTS); when the user clicks a top-level nav item
+      // we should return to whatever series they were viewing before
+      // diving into the profile. Falls back to STATE.lastPresentSeries
+      // (the topbar's canonical Present series) if no profile lock
+      // exists, then to NCS as a final default.
+      const prevSeries = (wasProfile && STATE.profile && STATE.profile.preLockSeries)
+        || STATE.lastPresentSeries
+        || "NCS";
+      if (prevSeries !== STATE.series) {
+        STATE.series = prevSeries;
+        // The actual data swap + render cache reset happen downstream
+        // when the route's handler runs (parseHash itself doesn't load).
+        // Flag the upstream listener so it triggers a reload — same
+        // mechanism used by the ?series= URL parameter.
+        STATE.pendingSeriesRestore = true;
+      }
     } else if (wasProfile) {
       if (STATE.profile.preLockSeries) STATE.series = STATE.profile.preLockSeries;
       if (STATE.profile.preLockSeason) STATE.season = STATE.profile.preLockSeason;
