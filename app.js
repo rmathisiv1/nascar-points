@@ -14882,7 +14882,7 @@ function renderTeamHistoryTable(rows, teamCode) {
       </tr>`;
     }).join("");
   }).join("");
-  return `<table class="data-table tm-history-table">
+  return `<div class="tm-history-scroll"><table class="data-table tm-history-table">
     <thead><tr>
       <th>Year</th><th>Series</th><th>Car</th><th>Driver</th>
       <th class="num">Wins</th>
@@ -14891,7 +14891,7 @@ function renderTeamHistoryTable(rows, teamCode) {
       <th class="num">Starts</th>
     </tr></thead>
     <tbody>${body}</tbody>
-  </table>`;
+  </table></div>`;
 }
 
 
@@ -15354,7 +15354,7 @@ function renderCrewChiefPage() {
         <span class="rc-card-sub">${ftSeasonCount} full-time season${ftSeasonCount === 1 ? "" : "s"}${partialCount > 0 ? ` · ${partialCount} partial` : ""}</span>
       </div>
       <div class="rc-card-body" style="padding:0;">
-        <table class="data-table tm-history-table">
+        <div class="tm-history-scroll"><table class="data-table tm-history-table">
           <thead><tr>
             <th>Year</th>
             <th>Series</th>
@@ -15367,7 +15367,7 @@ function renderCrewChiefPage() {
             <th class="num">T10</th>
           </tr></thead>
           <tbody>${yearRows}</tbody>
-        </table>
+        </table></div>
       </div>
     </div>
     <div class="card rc-card rc-card-wide">

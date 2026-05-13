@@ -9225,3 +9225,22 @@ body.lightbox-open {
   /* On mobile, hide the desktop topbar pickers (they're redundant with this row) */
   .topbar-right .season-select { display: none; }
 }
+
+/* ============================================================================
+   Historical drivers / season-by-season table — horizontal scroll wrapper.
+   Used on team pages and crew chief pages. Without this the table's
+   right-edge columns clip off-screen on mobile (the table has ~8-10 cols).
+   The wrapper keeps the table at its natural width and lets the user
+   horizontally swipe to see the rightmost columns.
+   ============================================================================ */
+.tm-history-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tm-history-scroll > .tm-history-table {
+  /* Force the table to its natural content width instead of compressing
+     into the container. Otherwise cells get squashed and contents wrap
+     into multiple rows, defeating the purpose of horizontal scroll. */
+  min-width: 100%;
+  width: max-content;
+}
