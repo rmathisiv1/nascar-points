@@ -1187,8 +1187,24 @@ async function resolveDriverRoute() {
   const slug = STATE.profile && STATE.profile.slug;
   if (!slug) return;
 
+  // TEMP DIAG — instrument the resolve flow so we can see exactly where
+  // it fails for non-Cup drivers. Remove once Brandon Jones et al. resolve.
+  const yearsInCache = Object.keys(SEASON_CACHE).map(Number).sort((a,b)=>b-a);
+  console.log(`[resolveDriverRoute] slug="${slug}"  STATE.series=${STATE.series} STATE.season=${STATE.season}  cached years=[${yearsInCache.join(",")}]`);
+  if (yearsInCache.length > 0) {
+    const y = yearsInCache[0];
+    const blocks = SEASON_CACHE[y];
+    ["NCS","NOS","NTS"].forEach(s => {
+      const b = blocks && blocks[s];
+      if (!b) { console.log(`  ${y}/${s}: no block`); return; }
+      const hit = scanSeriesBlockForDriver(b, slug);
+      console.log(`  ${y}/${s}: scanResult=${JSON.stringify(hit)}`);
+    });
+  }
+
   // First-pass home detection from already-cached seasons
   let home = findDriverHomeContext(slug);
+  console.log(`[resolveDriverRoute] home=${JSON.stringify(home)}`);
 
   // If not found, opportunistically try recent years that may not be cached.
   // Walks back to STATE.season - 8 to catch drivers who retired recently
@@ -1210,10 +1226,14 @@ async function resolveDriverRoute() {
     }
   }
 
-  if (!home.found) return;
+  if (!home.found) {
+    console.log(`[resolveDriverRoute] EXIT — driver not found anywhere`);
+    return;
+  }
 
   const needSwitchSeries = home.series !== STATE.series;
   const needSwitchSeason = home.season !== STATE.season;
+  console.log(`[resolveDriverRoute] needSwitchSeries=${needSwitchSeries} needSwitchSeason=${needSwitchSeason}`);
   if (needSwitchSeries || needSwitchSeason) {
     STATE.series = home.series;
     STATE.season = home.season;
@@ -1222,6 +1242,7 @@ async function resolveDriverRoute() {
   }
   STATE.profile.resolvedCarNumber = home.car_number;
   STATE.profile.resolvedDriver = home.driver;
+  console.log(`[resolveDriverRoute] DONE — STATE.series=${STATE.series} STATE.season=${STATE.season} resolvedCarNumber=${home.car_number}`);
 }
 
 // ============================================================
