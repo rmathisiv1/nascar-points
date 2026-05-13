@@ -1905,6 +1905,25 @@ function findDriverHomeContext(driverSlug, fallbackSeries, fallbackSeason) {
 // Returns the car they drove most often + their starts count, or null.
 function scanSeriesBlockForDriver(block, driverSlug) {
   if (!block || !block.races) return null;
+  // Match driver rows by slug OR normalized-name fallback. The strict
+  // slug check works for ~99% of drivers, but breaks when bio.full_name
+  // canonicalizes differently than the race-row driver string ("Brandon
+  // Jones" vs "Brandon Jones Jr.", etc). Normalized name is more
+  // forgiving — strips suffixes/punctuation/middle initials — and
+  // catches the rest.
+  const bio = STATE.driverBios && STATE.driverBios[driverSlug];
+  const bioName = bio && (bio.full_name || bio.name);
+  const targetNorms = [
+    bioName ? normalizeDriverName(bioName) : null,
+    normalizeDriverName(driverSlug.replace(/-/g, " ")),
+  ].filter(Boolean);
+  const matchesDriver = (rowDriver) => {
+    if (!rowDriver) return false;
+    if (slugify(rowDriver) === driverSlug) return true;
+    const n = normalizeDriverName(rowDriver);
+    return n && targetNorms.includes(n);
+  };
+
   const carStarts = {};   // car_number → { starts, driverName }
   block.races.forEach(race => {
     (race.results || []).forEach(d => {
@@ -1912,8 +1931,7 @@ function scanSeriesBlockForDriver(block, driverSlug) {
       // Without this, a Cup regular's 1-off Xfinity stint never shows in
       // their career history, breaking the chip strip and heatmap.
       if (!d.driver) return;
-      const drvSlug = slugify(d.driver);
-      if (drvSlug !== driverSlug) return;
+      if (!matchesDriver(d.driver)) return;
       const car = d.car_number;
       if (!carStarts[car]) carStarts[car] = { starts: 0, driverName: d.driver };
       carStarts[car].starts++;
@@ -6593,6 +6611,44 @@ function pickBestEntityForDriver(driverSlug) {
   ents.forEach(e => {
     (e.driversByStarts || []).forEach(dc => {
       if (slugify(dc.name) === driverSlug && dc.starts > bestStarts) {
+        best = e;
+        bestStarts = dc.starts;
+      }
+    });
+  });
+  if (best) return best;
+
+  // Slug-fallback. slugify is sensitive to suffixes / middle initials —
+  // "Brandon Jones" → "brandon-jones" but if a bio canonicalized the
+  // name to "Brandon Jones Jr." we'd produce "brandon-jones-jr" and miss
+  // the same person in the race data (or vice-versa). When the strict
+  // slug match fails we look up the driverBio for this slug to get its
+  // full_name, normalize that and the candidates with normalizeDriverName
+  // (which is more forgiving — strips suffixes, middle initials, etc.),
+  // and retry. Same dual-match the Compare tab uses for Kurt Busch.
+  const bio = STATE.driverBios && STATE.driverBios[driverSlug];
+  const bioName = bio && (bio.full_name || bio.name);
+  const bioNorm = bioName ? normalizeDriverName(bioName) : null;
+  // Always try a slug-derived candidate too — covers the case where the
+  // user landed on a slug we don't have a bio for. "brandon-jones" → "brandon jones".
+  const slugAsName = driverSlug.replace(/-/g, " ");
+  const slugNorm = normalizeDriverName(slugAsName);
+
+  const targets = [bioNorm, slugNorm].filter(Boolean);
+  if (targets.length === 0) return null;
+
+  // Primary match via normalized name
+  const primaryNorm = ents.find(e => {
+    const drvName = e.primaryDriver || e.driver || "";
+    const n = normalizeDriverName(drvName);
+    return n && targets.includes(n);
+  });
+  if (primaryNorm) return primaryNorm;
+  // Co-driver match via normalized name
+  ents.forEach(e => {
+    (e.driversByStarts || []).forEach(dc => {
+      const n = normalizeDriverName(dc.name);
+      if (n && targets.includes(n) && dc.starts > bestStarts) {
         best = e;
         bestStarts = dc.starts;
       }
