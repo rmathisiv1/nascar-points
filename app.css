@@ -9244,3 +9244,552 @@ body.lightbox-open {
   min-width: 100%;
   width: max-content;
 }
+
+/* ============================================================================
+   HOME: best-active-at-upcoming-track card
+   ============================================================================ */
+.home-best-card {
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.hbt-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.hbt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hbt-row {
+  display: grid;
+  grid-template-columns: 28px 44px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 6px;
+  border-radius: 3px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.hbt-row:hover {
+  background: var(--tint-1);
+}
+.hbt-rank {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+.hbt-car {
+  display: inline-block;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.hbt-name {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+}
+.hbt-stats {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.hbt-stats small {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-left: 3px;
+}
+.hbt-avg { font-weight: 700; color: var(--text); }
+.hbt-win { color: var(--pos); font-weight: 700; }
+.home-best-empty {
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+/* ============================================================================
+   HOME: race prediction card
+   ============================================================================ */
+.home-prediction-card {
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.hp-explainer {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.hp-explainer-body {
+  font-family: var(--serif);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.hp-explainer-body em {
+  color: var(--text);
+  font-style: italic;
+}
+.hp-cols {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 24px;
+}
+.hp-col-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.hp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hp-list-finish {
+  max-height: 480px;
+  overflow-y: auto;
+}
+.hp-row {
+  display: grid;
+  grid-template-columns: 22px 38px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 3px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.hp-col-finish .hp-row {
+  grid-template-columns: 22px 38px 1fr 60px auto;
+}
+.hp-row:hover {
+  background: var(--tint-1);
+}
+.hp-pos {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: right;
+}
+.hp-car {
+  display: inline-block;
+  padding: 2px 5px;
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+.hp-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+}
+.hp-pred {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.hp-pred small {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 400;
+  margin-left: 2px;
+}
+.hp-evidence {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 10px;
+  color: var(--dim);
+  text-align: right;
+}
+
+@media (max-width: 767.98px) {
+  .hp-cols {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .hp-list-finish {
+    max-height: 360px;
+  }
+  .hbt-row {
+    grid-template-columns: 24px 38px 1fr auto;
+    gap: 8px;
+  }
+  .hbt-stats {
+    gap: 10px;
+    font-size: 11px;
+  }
+  .hp-col-finish .hp-row {
+    grid-template-columns: 22px 36px 1fr auto;
+  }
+  .hp-evidence { display: none; }
+}
+
+/* ============================================================================
+   DRIVER COMPARE PAGE
+   ============================================================================ */
+.cmp-empty {
+  padding: 24px;
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-top: 12px;
+}
+
+/* Picker — chips above, search input below */
+.cmp-picker {
+  margin: 12px 0 20px;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.cmp-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  min-height: 26px;
+}
+.cmp-picker-chips:empty::before {
+  content: "No drivers selected";
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--dim);
+  font-size: 12px;
+}
+.cmp-pick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 10px;
+  background: var(--bg-2, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+.cmp-pick-chip-remove {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 50%;
+}
+.cmp-pick-chip-remove:hover {
+  color: var(--neg);
+  background: rgba(255, 70, 70, 0.1);
+}
+.cmp-picker-search {
+  position: relative;
+}
+.cmp-picker-search input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+.cmp-picker-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.cmp-picker-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-top: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.cmp-picker-result {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: 0;
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.cmp-picker-result:hover {
+  background: var(--tint-1);
+}
+.cmp-picker-noresult {
+  padding: 10px;
+  text-align: center;
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+/* Driver headers row — one card per selected driver */
+.cmp-headers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.cmp-header-card {
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cmp-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cmp-header-car {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+.cmp-header-remove {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.cmp-header-remove:hover { color: var(--neg); }
+.cmp-header-name {
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.2;
+}
+.cmp-header-name:hover { color: var(--accent); }
+.cmp-header-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--muted);
+}
+.cmp-header-season {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+/* Comparison sections — career, track types, etc */
+.cmp-section {
+  margin-bottom: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cmp-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.cmp-section-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.cmp-table th {
+  text-align: left;
+  padding: 8px 14px;
+  background: var(--bg);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  width: 35%;
+}
+.cmp-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.cmp-table tr:last-child th,
+.cmp-table tr:last-child td {
+  border-bottom: 0;
+}
+.cmp-table td small {
+  font-size: 10px;
+  color: var(--dim);
+  margin-left: 4px;
+}
+.cmp-cell-best {
+  color: var(--pos);
+  font-weight: 700;
+}
+.cmp-cell-empty {
+  color: var(--dim);
+}
+
+/* Head-to-head cards */
+.cmp-h2h-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+.cmp-h2h-card {
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.cmp-h2h-pair {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+.cmp-h2h-driver {
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--muted);
+}
+.cmp-h2h-driver.win {
+  color: var(--text);
+  font-weight: 600;
+}
+.cmp-h2h-driver strong {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+}
+.cmp-h2h-vs {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--dim);
+}
+.cmp-h2h-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--border);
+}
+.cmp-h2h-bar-a {
+  background: var(--accent);
+}
+.cmp-h2h-bar-b {
+  background: var(--pos);
+}
+.cmp-h2h-meta {
+  margin-top: 6px;
+  font-size: 11px;
+}
+.cmp-h2h-result {
+  padding: 8px 0;
+}
+
+/* Compare link on driver profile */
+.profile-compare-link {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  text-decoration: none;
+  transition: all 0.1s;
+}
+.profile-compare-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 767.98px) {
+  .cmp-headers {
+    grid-template-columns: 1fr 1fr;
+  }
+  .cmp-table th {
+    width: 40%;
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+  .cmp-table td {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+  .cmp-h2h-grid {
+    grid-template-columns: 1fr;
+  }
+}

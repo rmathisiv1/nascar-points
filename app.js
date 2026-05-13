@@ -56,6 +56,11 @@ const STATE = {
   // standings (per-car, subs accrue to the car); Manufacturer uses
   // NASCAR's modern (2011+) mfr point scale applied to all years.
   standings: { sortKey: "total", sortDir: "desc", view: "driver" },
+  // Driver Compare page — slugs currently in the comparison set. Cap of
+  // 4 to keep the side-by-side layout readable on mobile. Persisted in
+  // STATE only; not in localStorage (each visit should be a fresh slate
+  // unless the user lands via a ?with=... URL).
+  compare: { slugs: [] },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
   selectedCar: null,
@@ -85,7 +90,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
+const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -1642,6 +1647,20 @@ function parseHash() {
       return;
     }
   }
+  // Compare view: #/compare?with=slug pre-populates the compare slate
+  // with one driver (typically from a "Compare" link on a driver profile).
+  // The compare page also supports ?with=slug1,slug2 for shared URLs.
+  if (view === "compare" && firstSegmentQuery) {
+    const params = new URLSearchParams(firstSegmentQuery);
+    const withParam = params.get("with");
+    if (withParam) {
+      // Comma-separated list of slugs. Reset the compare set on each
+      // hash navigation so users get a clean state.
+      STATE.compare = STATE.compare || { slugs: [] };
+      STATE.compare.slugs = withParam.split(",").map(s => s.trim()).filter(Boolean);
+    }
+  }
+
   // Present mode invariant — STATE.season must always reflect the latest
   // available year EXCEPT during the brief window where renderProfile
   // needs a historical context (resolveDriverRoute runs AFTER parseHash
@@ -2680,7 +2699,7 @@ function renderTimeCursorBanner() {
 // RENDER
 // ============================================================
 // Views that live as tabs inside the center panel.
-const TAB_VIEWS = ["home", "arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "standings"];
+const TAB_VIEWS = ["home", "arc", "form", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings"];
 // Full-width takeovers — none currently. Reserved for future use.
 const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
@@ -2720,6 +2739,7 @@ function render() {
       teammates: "Teammate Delta",
       heatmap: "Heatmap",
       trackstats: "Track Stats",
+      compare: "Driver Compare",
       standings: "Standings",
       playoffs: "Playoff Picture",
       profile: "Driver Profile",
@@ -2858,6 +2878,7 @@ function render() {
         case "teammates":  renderTeammates(); break;
         case "heatmap":    renderHeatmap(); break;
         case "trackstats": renderTrackStats(); break;
+        case "compare":    renderCompare(); break;
         case "standings":  renderStandings(); break;
       }
     }
@@ -2888,6 +2909,11 @@ function resetRenderCache() {
   RENDER_CACHE.allRaces = null;
   RENDER_CACHE.entities = null;
   RENDER_CACHE.totals = null;
+  // Drop the cross-season driver analytics cache too — it's keyed on
+  // SEASON_CACHE shape which can change when a year is added/removed.
+  if (typeof resetDriverAnalyticsCache === "function") {
+    resetDriverAnalyticsCache();
+  }
 }
 
 function racesSorted() {
@@ -3242,6 +3268,205 @@ function isFullTime(entity) {
   // minus one.
   if (totalRaces < 10) return entity.races.length >= totalRaces - 1;
   return entity.races.length >= Math.ceil(totalRaces * 0.9);
+}
+
+// ============================================================
+// DRIVER ANALYTICS MODULE
+// ============================================================
+// Cross-season analytics functions used by:
+//   - Top-5 best-active-drivers home card (driverTrackScore)
+//   - Driver Compare page (multiple drivers at once)
+//   - Race Prediction home card (the full formula)
+//
+// All functions read SEASON_CACHE directly so they aggregate across
+// every season the user has loaded. Memoized by (driverName, series,
+// trackCode) tuples since they get called repeatedly in lists.
+// ============================================================
+
+// Module-scoped cache. Invalidated by resetRenderCache (which fires
+// whenever STATE.data changes — that covers season-switching).
+const DRIVER_ANALYTICS_CACHE = {
+  // Map<"driverName|series", { allStarts: [...races sorted by date DESC] }>
+  driverHistory: new Map(),
+  // Map<"driverName|series|trackCode", trackStats>
+  trackStats: new Map(),
+  // Map<"driverName|series|trackType", typeStats>
+  typeStats: new Map(),
+};
+
+function resetDriverAnalyticsCache() {
+  DRIVER_ANALYTICS_CACHE.driverHistory.clear();
+  DRIVER_ANALYTICS_CACHE.trackStats.clear();
+  DRIVER_ANALYTICS_CACHE.typeStats.clear();
+}
+
+// Walk SEASON_CACHE and collect every race a driver ran in a given
+// series, newest first. Returns [{year, round, track_code, finish_pos,
+// start_pos, race_pts, stage_pts_won, ...}].
+function getDriverRaceHistory(driverName, series) {
+  if (!driverName || !series) return [];
+  const cacheKey = `${driverName}|${series}`;
+  if (DRIVER_ANALYTICS_CACHE.driverHistory.has(cacheKey)) {
+    return DRIVER_ANALYTICS_CACHE.driverHistory.get(cacheKey);
+  }
+  const target = driverName.toLowerCase().trim();
+  const out = [];
+  // Walk every loaded year. Years iterate naturally; we sort the final
+  // array by (year, round) DESC so callers can take .slice(0, N) for
+  // "last N races" without further sorting.
+  for (const year of Object.keys(SEASON_CACHE)) {
+    const block = SEASON_CACHE[year] && SEASON_CACHE[year][series];
+    if (!block || !block.races) continue;
+    for (const race of block.races) {
+      if (!race.results || race.results.length === 0) continue;
+      for (const d of race.results) {
+        if (d.ineligible) continue;
+        const name = (d.driver || "").toLowerCase().trim();
+        if (name !== target) continue;
+        out.push({
+          year: parseInt(year, 10),
+          round: race.round,
+          track_code: race.track_code,
+          track: race.track,
+          finish_pos: d.finish_pos,
+          start_pos: d.start_pos,
+          race_pts: d.race_pts,
+          stage1_pts: d.stage1_pts || 0,
+          stage2_pts: d.stage2_pts || 0,
+          stage_pts_total: (d.stage1_pts || 0) + (d.stage2_pts || 0),
+          car_number: d.car_number,
+        });
+        break; // one row per race per driver
+      }
+    }
+  }
+  // Newest first
+  out.sort((a, b) => (b.year - a.year) || ((b.round || 0) - (a.round || 0)));
+  DRIVER_ANALYTICS_CACHE.driverHistory.set(cacheKey, out);
+  return out;
+}
+
+// Stats for a driver at a single track. Returns null if no starts.
+function getDriverTrackStats(driverName, series, trackCode) {
+  if (!driverName || !series || !trackCode) return null;
+  const cacheKey = `${driverName}|${series}|${trackCode}`;
+  if (DRIVER_ANALYTICS_CACHE.trackStats.has(cacheKey)) {
+    return DRIVER_ANALYTICS_CACHE.trackStats.get(cacheKey);
+  }
+  const history = getDriverRaceHistory(driverName, series);
+  const atTrack = history.filter(r => r.track_code === trackCode);
+  if (atTrack.length === 0) {
+    DRIVER_ANALYTICS_CACHE.trackStats.set(cacheKey, null);
+    return null;
+  }
+  const finishes = atTrack.map(r => r.finish_pos).filter(n => n != null);
+  const starts = atTrack.map(r => r.start_pos).filter(n => n != null);
+  const stagePts = atTrack.map(r => r.stage_pts_total);
+  const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+  const stats = {
+    starts: atTrack.length,
+    wins: finishes.filter(f => f === 1).length,
+    top5: finishes.filter(f => f <= 5).length,
+    top10: finishes.filter(f => f <= 10).length,
+    avg_finish: finishes.length ? sum(finishes) / finishes.length : null,
+    avg_start: starts.length ? sum(starts) / starts.length : null,
+    avg_stage_pts: atTrack.length ? sum(stagePts) / atTrack.length : 0,
+    best_finish: finishes.length ? Math.min(...finishes) : null,
+    last5: atTrack.slice(0, 5),  // newest first
+    last5_avg: (() => {
+      const last = atTrack.slice(0, 5).map(r => r.finish_pos).filter(n => n != null);
+      return last.length ? sum(last) / last.length : null;
+    })(),
+  };
+  DRIVER_ANALYTICS_CACHE.trackStats.set(cacheKey, stats);
+  return stats;
+}
+
+// Aggregate stats across all tracks of a given type (short/inter/super/road).
+// Used for "generalize this driver's performance at this kind of track."
+function getDriverTrackTypeStats(driverName, series, trackTypeKey) {
+  if (!driverName || !series || !trackTypeKey) return null;
+  const cacheKey = `${driverName}|${series}|${trackTypeKey}`;
+  if (DRIVER_ANALYTICS_CACHE.typeStats.has(cacheKey)) {
+    return DRIVER_ANALYTICS_CACHE.typeStats.get(cacheKey);
+  }
+  const history = getDriverRaceHistory(driverName, series);
+  const atType = history.filter(r => trackType(r.track_code) === trackTypeKey);
+  if (atType.length === 0) {
+    DRIVER_ANALYTICS_CACHE.typeStats.set(cacheKey, null);
+    return null;
+  }
+  const finishes = atType.map(r => r.finish_pos).filter(n => n != null);
+  const stagePts = atType.map(r => r.stage_pts_total);
+  const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+  const stats = {
+    starts: atType.length,
+    wins: finishes.filter(f => f === 1).length,
+    top5: finishes.filter(f => f <= 5).length,
+    top10: finishes.filter(f => f <= 10).length,
+    avg_finish: finishes.length ? sum(finishes) / finishes.length : null,
+    avg_stage_pts: atType.length ? sum(stagePts) / atType.length : 0,
+  };
+  DRIVER_ANALYTICS_CACHE.typeStats.set(cacheKey, stats);
+  return stats;
+}
+
+// Recent form: average finish over the last N races (default 5) in
+// the current season+series. This is the "is this driver hot right now"
+// signal that's separate from track-history signals.
+function getDriverRecentForm(driverName, series, lastN = 5) {
+  const history = getDriverRaceHistory(driverName, series);
+  // Filter to current STATE.season so "recent" is meaningful — a driver
+  // who ran R30 last year shouldn't count their last-year R30 as "recent"
+  // when we're at R3 this year.
+  const thisYear = history.filter(r => r.year === STATE.season);
+  const recent = thisYear.slice(0, lastN);
+  if (recent.length === 0) return null;
+  const finishes = recent.map(r => r.finish_pos).filter(n => n != null);
+  if (finishes.length === 0) return null;
+  return {
+    starts: recent.length,
+    avg_finish: finishes.reduce((a, b) => a + b, 0) / finishes.length,
+    last_race_finish: finishes[0],
+    avg_stage_pts: recent.reduce((s, r) => s + r.stage_pts_total, 0) / recent.length,
+  };
+}
+
+// "Best active drivers at THIS track" composite score. Higher = better.
+// Weighted by recency: a 2026 result counts more than a 2020 result.
+//
+// Score formula (recency-weighted):
+//   for each start at this track:
+//     w = 0.5 ** (years_ago)   // 1.0 this year, 0.5 last year, 0.25 two years ago...
+//     contribution = w * (
+//       3.0  if win (P1)
+//       + 1.5  if T5
+//       + 1.0  if T10
+//       - 0.05 * (finish_pos - 1)   // penalty grows with finish position
+//     )
+//   final_score = sum(contributions)
+//
+// Drivers with 0 starts at the track get a score of -Infinity so they
+// fall off the leaderboard naturally (no need for separate filtering).
+function driverTrackScore(driverName, series, trackCode) {
+  if (!driverName || !trackCode) return -Infinity;
+  const history = getDriverRaceHistory(driverName, series);
+  const atTrack = history.filter(r => r.track_code === trackCode);
+  if (atTrack.length === 0) return -Infinity;
+  const currentYear = STATE.season || new Date().getFullYear();
+  let score = 0;
+  for (const r of atTrack) {
+    if (r.finish_pos == null) continue;
+    const yearsAgo = Math.max(0, currentYear - r.year);
+    const w = Math.pow(0.5, yearsAgo);   // 1.0, 0.5, 0.25, 0.125 ...
+    let pts = 0;
+    if (r.finish_pos === 1) pts += 3.0;
+    if (r.finish_pos <= 5) pts += 1.5;
+    if (r.finish_pos <= 10) pts += 1.0;
+    pts -= 0.05 * (r.finish_pos - 1);    // a P20 contributes -0.95 before bonuses
+    score += w * pts;
+  }
+  return score;
 }
 
 // ============================================================
@@ -7052,6 +7277,7 @@ function renderProfile() {
         <div class="profile-rank-num" style="color:${carHex}">${rank}${rankSuffix(rank)}</div>
         <div class="profile-rank-label">${STATE.season} ${STATE.series}</div>
         <div class="profile-rank-pts">${summary.totalPts} pts</div>
+        <a class="profile-compare-link" href="#/compare?with=${encodeURIComponent(slugify(primaryDrv))}" title="Compare ${escapeHTML(primaryDrv)} with other drivers">Compare →</a>
       </div>
     </div>
 
@@ -9145,6 +9371,17 @@ function renderHome() {
   // ----- Section 2: three-series mini standings -----
   const standingsHTML = renderHomeStandingsTrio(latestYear);
 
+  // ----- Section 2b: best-active-drivers at upcoming track -----
+  // Surfaces the 5 active full-timers with the strongest recency-weighted
+  // history at the next race's venue. Falls back to nothing if no upcoming
+  // race is found (e.g., end of season).
+  const bestAtTrackHTML = renderHomeBestAtUpcoming(latestYear, series);
+
+  // ----- Section 2c: race prediction card -----
+  // Composite prediction model — ranks the full field for the upcoming race
+  // by predicted finish position, with stage point predictions broken out.
+  const predictionHTML = renderHomePrediction(latestYear, series);
+
   // ----- Section 3: stat cards + storylines -----
   const statsHTML = renderHomeStatCards(latestYear, series);
   const storylinesHTML = renderHomeStorylines(latestYear, series);
@@ -9154,6 +9391,8 @@ function renderHome() {
       ${heroHTML}
       <div class="home-section-h">Standings · Top 5 each series</div>
       <div class="home-standings-trio">${standingsHTML}</div>
+      ${bestAtTrackHTML}
+      ${predictionHTML}
       <div class="home-section-h">Season at a glance · ${series}</div>
       <div class="home-stat-row">${statsHTML}</div>
       ${storylinesHTML ? `
@@ -9165,6 +9404,285 @@ function renderHome() {
 
   restoreCtx();
 }
+
+// ============================================================
+// HOME: Best-active drivers at upcoming track
+// ============================================================
+// Composite, recency-weighted score across all loaded seasons.
+// See driverTrackScore() for the formula. Top 5 from drivers who are
+// currently full-time (this season). Returns "" if no upcoming race
+// exists (post-finale) — caller can drop the section cleanly.
+function renderHomeBestAtUpcoming(year, series) {
+  const races = allRacesSorted();
+  const upcoming = races.filter(r => !(r.results || []).some(d => d.finish_pos === 1));
+  const nextRace = upcoming[0];
+  if (!nextRace || !nextRace.track_code) return "";
+
+  const trackCode = nextRace.track_code;
+  const trackName = prettyTrack(trackCode, nextRace.track) || nextRace.track || "TBD";
+  const ttype = trackType(trackCode);
+  const ttypeLabel = ttype ? TRACK_TYPE_LABELS[ttype] : "";
+
+  // Active full-timers in the CURRENT series. We pull the entity list
+  // (which reflects STATE.data = current series block) and filter by
+  // isFullTime — the same standard that powers the heatmap and other
+  // FT-only views.
+  const ents = allEntities().filter(isFullTime);
+  if (ents.length === 0) return "";
+
+  // Score each driver. We use entity.primaryDriver (the driver who logged
+  // the most starts in this season's car) since that's who's actually
+  // running the car right now.
+  const scored = ents.map(e => {
+    const driverName = e.primaryDriver || e.driver;
+    if (!driverName) return null;
+    const score = driverTrackScore(driverName, series, trackCode);
+    if (score === -Infinity) return null;
+    const stats = getDriverTrackStats(driverName, series, trackCode);
+    return { entity: e, driverName, score, stats };
+  }).filter(Boolean);
+
+  if (scored.length === 0) {
+    // No active drivers have history at this track (new venue, debut year).
+    return `
+      <div class="home-section-h">Top performers at ${escapeHTML(trackName)}</div>
+      <div class="home-best-empty">
+        <span class="ed-byline">No active drivers have raced at ${escapeHTML(trackName)} in the loaded seasons.</span>
+      </div>
+    `;
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  const top5 = scored.slice(0, 5);
+
+  const rowsHTML = top5.map((row, i) => {
+    const carHex = colorFor(series, row.entity.car_number);
+    const carTxt = contrastTextFor(carHex);
+    const safeHex = safeContrastColor(carHex);
+    const slug = slugify(row.driverName);
+    const st = row.stats;
+    const winsHTML = st.wins > 0 ? `<span class="hbt-win">${st.wins} W</span>` : "";
+    return `
+      <a class="hbt-row profile-link" href="#/driver/${slug}">
+        <span class="hbt-rank">${i + 1}</span>
+        <span class="hbt-car" style="background:${carHex};color:${carTxt}">#${row.entity.car_number}</span>
+        <span class="hbt-name">${escapeHTML(row.driverName)}</span>
+        <span class="hbt-stats">
+          <span class="hbt-avg">${st.avg_finish != null ? st.avg_finish.toFixed(1) : "—"}<small>avg</small></span>
+          ${winsHTML}
+          <span class="hbt-starts">${st.starts}<small>starts</small></span>
+        </span>
+      </a>
+    `;
+  }).join("");
+
+  return `
+    <div class="home-section-h">Top performers at ${escapeHTML(trackName)}${ttypeLabel ? ` <span class="ed-byline" style="font-size:0.7em;">· ${escapeHTML(ttypeLabel)}</span>` : ""}</div>
+    <div class="home-best-card card">
+      <div class="hbt-head">
+        <span class="ed-kicker">Active ${series} drivers · recency-weighted</span>
+        <span class="ed-byline">Wins count 3×, top-5 1.5×, top-10 1.0×; weights halve per year</span>
+      </div>
+      <div class="hbt-list">
+        ${rowsHTML}
+      </div>
+    </div>
+  `;
+}
+
+
+// ============================================================
+// HOME: Race finish + stage points prediction
+// ============================================================
+// Composite prediction model. For each full-time driver, compute an
+// expected finish position by blending five signals:
+//
+//   predicted_finish =
+//       w1 * driver's last-5-starts avg at THIS track       (track recent)
+//     + w2 * driver's avg finish at this track TYPE         (type baseline)
+//     + w3 * driver's current-season last-5 form            (form)
+//     + w4 * driver's season YTD avg finish                 (season)
+//     + w5 * driver's all-time avg at THIS track            (long-term)
+//
+// Weights default to 0.30 / 0.25 / 0.20 / 0.15 / 0.10. When a signal
+// is unavailable (e.g., driver has 0 starts at this track), its weight
+// is redistributed proportionally to the other available signals so the
+// prediction stays well-defined.
+//
+// Stage points use a simpler 3-signal blend (track + type + season pace),
+// because variance is lower than finish position.
+function predictDriverForRace(driverName, series, trackCode) {
+  if (!driverName || !trackCode) return null;
+  const ttype = trackType(trackCode);
+
+  // ----- Finish signals -----
+  const trackStats = getDriverTrackStats(driverName, series, trackCode);
+  const typeStats = ttype ? getDriverTrackTypeStats(driverName, series, ttype) : null;
+  const form = getDriverRecentForm(driverName, series, 5);
+
+  // Season YTD average finish — read from current entity races
+  let seasonAvg = null;
+  const ent = allEntities().find(e =>
+    (e.primaryDriver || e.driver || "").toLowerCase() === driverName.toLowerCase()
+  );
+  if (ent && ent.races && ent.races.length > 0) {
+    const finishes = ent.races
+      .map(rr => rr.result && rr.result.finish_pos)
+      .filter(n => n != null);
+    if (finishes.length > 0) {
+      seasonAvg = finishes.reduce((a, b) => a + b, 0) / finishes.length;
+    }
+  }
+
+  // Five-signal blend with graceful fallback
+  const signals = [
+    { name: "track_recent", w: 0.30, val: trackStats?.last5_avg ?? null },
+    { name: "track_type",   w: 0.25, val: typeStats?.avg_finish ?? null },
+    { name: "form",         w: 0.20, val: form?.avg_finish ?? null },
+    { name: "season",       w: 0.15, val: seasonAvg },
+    { name: "track_all",    w: 0.10, val: trackStats?.avg_finish ?? null },
+  ];
+  const avail = signals.filter(s => s.val != null);
+  if (avail.length === 0) return null;
+  const wSum = avail.reduce((s, x) => s + x.w, 0);
+  const predicted = avail.reduce((sum, x) => sum + (x.w / wSum) * x.val, 0);
+
+  // ----- Stage points signals -----
+  const stagePtsSignals = [
+    { w: 0.40, val: trackStats?.avg_stage_pts ?? null },
+    { w: 0.30, val: typeStats?.avg_stage_pts ?? null },
+    { w: 0.30, val: form?.avg_stage_pts ?? null },
+  ];
+  const spAvail = stagePtsSignals.filter(s => s.val != null);
+  let predictedStagePts = 0;
+  if (spAvail.length > 0) {
+    const spw = spAvail.reduce((s, x) => s + x.w, 0);
+    predictedStagePts = spAvail.reduce((sum, x) => sum + (x.w / spw) * x.val, 0);
+  }
+
+  return {
+    predicted_finish: predicted,
+    predicted_stage_pts: predictedStagePts,
+    breakdown: signals.map(s => ({
+      ...s,
+      used: s.val != null,
+      effective_weight: s.val != null ? s.w / wSum : 0,
+    })),
+    has_track_history: trackStats != null,
+    has_type_history: typeStats != null,
+  };
+}
+
+function renderHomePrediction(year, series) {
+  const races = allRacesSorted();
+  const upcoming = races.filter(r => !(r.results || []).some(d => d.finish_pos === 1));
+  const nextRace = upcoming[0];
+  if (!nextRace || !nextRace.track_code) return "";
+
+  const trackCode = nextRace.track_code;
+  const trackName = prettyTrack(trackCode, nextRace.track) || nextRace.track || "TBD";
+
+  // Full-time field only
+  const ents = allEntities().filter(isFullTime);
+  if (ents.length === 0) return "";
+
+  // Run prediction for every full-timer
+  const predictions = ents.map(e => {
+    const driverName = e.primaryDriver || e.driver;
+    if (!driverName) return null;
+    const pred = predictDriverForRace(driverName, series, trackCode);
+    if (!pred) return null;
+    return {
+      entity: e,
+      driverName,
+      ...pred,
+    };
+  }).filter(Boolean);
+
+  if (predictions.length === 0) return "";
+
+  // Sorted by predicted_finish ASC (lowest = best)
+  const byFinish = [...predictions].sort((a, b) => a.predicted_finish - b.predicted_finish);
+  // Sorted by predicted_stage_pts DESC (highest = best)
+  const byStage = [...predictions].sort((a, b) => b.predicted_stage_pts - a.predicted_stage_pts);
+
+  // Build race-finish full-field rows
+  const finishRows = byFinish.map((p, i) => {
+    const slug = slugify(p.driverName);
+    const carHex = colorFor(series, p.entity.car_number);
+    const carTxt = contrastTextFor(carHex);
+    const predPos = i + 1;
+    const finishVal = p.predicted_finish.toFixed(1);
+    const evidence = [];
+    if (p.has_track_history) evidence.push("track");
+    if (p.has_type_history) evidence.push("track-type");
+    const ev = evidence.length ? evidence.join(" · ") : "form/season only";
+    return `
+      <a class="hp-row profile-link" href="#/driver/${slug}">
+        <span class="hp-pos">${predPos}</span>
+        <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
+        <span class="hp-name">${escapeHTML(p.driverName)}</span>
+        <span class="hp-pred">${finishVal} <small>raw</small></span>
+        <span class="hp-evidence">${ev}</span>
+      </a>
+    `;
+  }).join("");
+
+  // Top 10 stage points rows
+  const stageRows = byStage.slice(0, 10).map((p, i) => {
+    const slug = slugify(p.driverName);
+    const carHex = colorFor(series, p.entity.car_number);
+    const carTxt = contrastTextFor(carHex);
+    return `
+      <a class="hp-row profile-link" href="#/driver/${slug}">
+        <span class="hp-pos">${i + 1}</span>
+        <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
+        <span class="hp-name">${escapeHTML(p.driverName)}</span>
+        <span class="hp-pred">${p.predicted_stage_pts.toFixed(1)} <small>pts</small></span>
+      </a>
+    `;
+  }).join("");
+
+  return `
+    <div class="home-section-h">Prediction · R${nextRace.round} ${escapeHTML(trackName)}</div>
+    <div class="home-prediction-card card">
+      <div class="hp-explainer">
+        <div class="ed-kicker">How this works</div>
+        <div class="hp-explainer-body">
+          Each driver's predicted finish is a weighted blend of five signals: their
+          <em>last 5 starts at this track</em> (30%), their <em>average finish at this
+          track type</em> (25%), their <em>recent form across the last 5 races</em> (20%),
+          their <em>season YTD average</em> (15%), and their <em>all-time average at this track</em> (10%).
+          When a signal is unavailable (e.g., debut at a new venue) its weight redistributes to the others.
+          Full-time drivers only.
+        </div>
+      </div>
+
+      <div class="hp-cols">
+        <div class="hp-col hp-col-stage">
+          <div class="hp-col-head">
+            <span class="ed-kicker">Top 10 stage points</span>
+            <span class="ed-byline">Combined S1 + S2 expected</span>
+          </div>
+          <div class="hp-list">
+            ${stageRows}
+          </div>
+        </div>
+
+        <div class="hp-col hp-col-finish">
+          <div class="hp-col-head">
+            <span class="ed-kicker">Predicted finishing order</span>
+            <span class="ed-byline">${byFinish.length} full-time drivers · lower raw score = better</span>
+          </div>
+          <div class="hp-list hp-list-finish">
+            ${finishRows}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 
 // Renders the hero row: a countdown card on the left for the next race,
 // and a recap card on the right for the most recent completed race.
@@ -11032,6 +11550,485 @@ function renderTrackStats() {
     });
   });
 }
+
+// ============================================================
+// DRIVER COMPARE  (#/compare)
+// ============================================================
+// Side-by-side driver comparison. Pick 2-4 drivers and the page emits:
+//   - A header with each driver's identity (bio, car, team)
+//   - Per-series career stat grids (NCS / NOS / NTS) when relevant
+//   - Track-type splits (short / inter / super / road)
+//   - Head-to-head: in races where both drivers started, who finished
+//     better, how often
+//   - A season-form snapshot (this season's averages)
+// Driver list is held in STATE.compare.slugs and persists for the
+// session. Up to 4 drivers; below 2, the page shows the picker only.
+
+function renderCompare() {
+  const host = document.getElementById("compare-host");
+  if (!host) return;
+  const slugs = (STATE.compare && STATE.compare.slugs) || [];
+
+  // ----- Picker UI: shows all loaded driver bios as searchable chips -----
+  const allBios = STATE.driverBios || {};
+  const pickerHTML = renderComparePicker(slugs, allBios);
+
+  if (slugs.length < 2) {
+    host.innerHTML = `
+      <div class="view-head">
+        <h1>Driver Compare</h1>
+        <div class="view-sub">Pick 2-4 drivers to compare career stats, track-type splits, and head-to-head records.</div>
+      </div>
+      ${pickerHTML}
+      <div class="cmp-empty">
+        <span class="ed-byline">Add at least one more driver to start comparing.</span>
+      </div>
+    `;
+    wireCompareEventHandlers();
+    return;
+  }
+
+  // Resolve each slug to its bio + best entity across loaded data
+  const drivers = slugs.map(slug => resolveCompareDriver(slug)).filter(Boolean);
+  if (drivers.length < 2) {
+    host.innerHTML = `
+      <div class="view-head"><h1>Driver Compare</h1></div>
+      ${pickerHTML}
+      <div class="cmp-empty"><span class="ed-byline">Couldn't resolve one of the selected drivers in the loaded data.</span></div>
+    `;
+    wireCompareEventHandlers();
+    return;
+  }
+
+  // ----- Section: driver headers row -----
+  const headersHTML = drivers.map(d => renderCompareDriverHeader(d)).join("");
+
+  // ----- Section: career stats per series -----
+  const careerHTML = renderCompareCareerSection(drivers);
+
+  // ----- Section: track-type splits (NCS only — primary series for analysis) -----
+  const trackTypeHTML = renderCompareTrackTypeSection(drivers);
+
+  // ----- Section: head-to-head (pairwise, all series combined) -----
+  const h2hHTML = renderCompareHeadToHeadSection(drivers);
+
+  // ----- Section: current-season form -----
+  const formHTML = renderCompareFormSection(drivers);
+
+  host.innerHTML = `
+    <div class="view-head">
+      <h1>Driver Compare</h1>
+      <div class="view-sub">${drivers.length} drivers · ${drivers.map(d => escapeHTML(d.name)).join(" vs ")}</div>
+    </div>
+    ${pickerHTML}
+    <div class="cmp-headers">${headersHTML}</div>
+    ${careerHTML}
+    ${trackTypeHTML}
+    ${h2hHTML}
+    ${formHTML}
+  `;
+  wireCompareEventHandlers();
+}
+
+// ----- Helpers -----
+
+// Resolve a driver slug to a unified record { slug, name, bio, entity, series }.
+// Looks up the bio from STATE.driverBios, then finds the most recent entity
+// across SEASON_CACHE for display data (car, team, color).
+function resolveCompareDriver(slug) {
+  const bio = STATE.driverBios && STATE.driverBios[slug];
+  const name = (bio && bio.full_name) || slug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+  // Find the latest year+series in cache where this driver appears.
+  // Prioritizes current STATE.series, then walks others. The point is
+  // to get a recent car/team for the header display.
+  let entity = null;
+  let entitySeries = null;
+  let entitySeason = null;
+  const years = Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a);
+  const seriesPriority = [STATE.series, "NCS", "NOS", "NTS"];
+  outer: for (const year of years) {
+    for (const sCode of seriesPriority) {
+      const block = SEASON_CACHE[year] && SEASON_CACHE[year][sCode];
+      if (!block) continue;
+      const hit = scanSeriesBlockForDriver(block, slug);
+      if (hit) {
+        // Build a minimal entity-like object — enough for the header row.
+        entity = { car_number: hit.car_number, primaryDriver: hit.driver };
+        // Try to enrich with team_code from any race row
+        for (const race of (block.races || [])) {
+          for (const d of (race.results || [])) {
+            if (d.car_number === hit.car_number && d.team_code) {
+              entity.team_code = d.team_code;
+              entity.manufacturer = d.manufacturer || null;
+              break;
+            }
+          }
+          if (entity.team_code) break;
+        }
+        entitySeries = sCode;
+        entitySeason = year;
+        break outer;
+      }
+    }
+  }
+
+  if (!entity) return null;
+  return { slug, name, bio: bio || {}, entity, series: entitySeries, season: entitySeason };
+}
+
+// Driver header card — name, current car, team, bio strip
+function renderCompareDriverHeader(d) {
+  const carHex = colorFor(d.series, d.entity.car_number);
+  const carTxt = contrastTextFor(carHex);
+  const teamCode = d.entity.team_code || "";
+  const teamName = teamCode ? teamLabelForEra(teamCode, d.season).full : "—";
+  const bioStrip = [];
+  if (d.bio.dob) {
+    const age = calcAge(d.bio.dob);
+    if (age != null) bioStrip.push(`${age}y`);
+  }
+  if (d.bio.hometown) bioStrip.push(escapeHTML(d.bio.hometown));
+
+  return `
+    <div class="cmp-header-card">
+      <div class="cmp-header-top">
+        <span class="cmp-header-car" style="background:${carHex};color:${carTxt}">#${d.entity.car_number}</span>
+        <button class="cmp-header-remove" data-slug="${d.slug}" title="Remove from comparison" aria-label="Remove ${escapeHTML(d.name)}">×</button>
+      </div>
+      <a class="cmp-header-name profile-link" href="#/driver/${d.slug}">${escapeHTML(d.name)}</a>
+      <div class="cmp-header-meta">
+        <span class="cmp-header-team">${escapeHTML(teamName)}</span>
+        ${bioStrip.length ? `<span class="cmp-header-bio">${bioStrip.join(" · ")}</span>` : ""}
+        <span class="cmp-header-season">Most recent: ${d.season} ${d.series}</span>
+      </div>
+    </div>
+  `;
+}
+
+// Career stats per series — a grid of rows (Starts, Wins, T5, T10, Poles,
+// Avg Start, Avg Finish, Laps Led). One column per driver, one section
+// per series (NCS, NOS, NTS) that ANY driver has data for.
+function renderCompareCareerSection(drivers) {
+  // Pull career stats from driver bios (drivers.json has the canonical data)
+  const seriesOrder = ["NCS", "NOS", "NTS"];
+  const sections = seriesOrder.map(s => {
+    // Skip series where no driver has career stats
+    const haveAny = drivers.some(d => d.bio.career && d.bio.career[s]);
+    if (!haveAny) return "";
+
+    const statRows = [
+      { key: "starts", label: "Starts" },
+      { key: "wins", label: "Wins" },
+      { key: "top5", label: "Top 5" },
+      { key: "top10", label: "Top 10" },
+      { key: "poles", label: "Poles" },
+      { key: "avg_start", label: "Avg Start", fmt: v => v?.toFixed(1) },
+      { key: "avg_finish", label: "Avg Finish", fmt: v => v?.toFixed(1) },
+      { key: "laps_led", label: "Laps Led" },
+      { key: "years", label: "Seasons" },
+    ];
+
+    const rowsHTML = statRows.map(stat => {
+      const vals = drivers.map(d => d.bio.career?.[s]?.[stat.key]);
+      const numericVals = vals.filter(v => v != null && !isNaN(v));
+      // Highlight best per row: for avg-finish/avg-start lower is better; others higher.
+      const lowerBetter = (stat.key === "avg_finish" || stat.key === "avg_start");
+      const best = numericVals.length > 0
+        ? (lowerBetter ? Math.min(...numericVals) : Math.max(...numericVals))
+        : null;
+
+      const cells = drivers.map((d, i) => {
+        const v = vals[i];
+        if (v == null) return `<td class="cmp-cell-empty">—</td>`;
+        const isBest = (best != null && v === best && numericVals.length > 1);
+        const display = stat.fmt ? stat.fmt(v) : v;
+        return `<td class="${isBest ? "cmp-cell-best" : ""}">${display}</td>`;
+      }).join("");
+      return `<tr><th>${stat.label}</th>${cells}</tr>`;
+    }).join("");
+
+    return `
+      <div class="cmp-section">
+        <div class="cmp-section-head">
+          <span class="series-tag tag-${s}">${s}</span>
+          <span class="cmp-section-title">${SERIES_LABELS[s] || s} · Career</span>
+        </div>
+        <table class="cmp-table">
+          <tbody>${rowsHTML}</tbody>
+        </table>
+      </div>
+    `;
+  }).join("");
+  return sections;
+}
+
+// Track-type splits — for each driver, avg finish on short/inter/super/road
+// in NCS only. (Other series have less data and the splits are noisy.)
+function renderCompareTrackTypeSection(drivers) {
+  const series = "NCS";
+  const types = [
+    { key: "short", label: "Short", icon: "S" },
+    { key: "inter", label: "Inter", icon: "I" },
+    { key: "super", label: "Super", icon: "P" },
+    { key: "road",  label: "Road",  icon: "R" },
+  ];
+
+  // For each type and driver, compute via the analytics module.
+  const rowsHTML = types.map(t => {
+    const vals = drivers.map(d => {
+      const s = getDriverTrackTypeStats(d.name, series, t.key);
+      return s;
+    });
+    if (vals.every(v => v == null)) return "";
+
+    const finCells = drivers.map((d, i) => {
+      const s = vals[i];
+      if (!s || s.avg_finish == null) return `<td class="cmp-cell-empty">—</td>`;
+      return `<td>${s.avg_finish.toFixed(1)} <small>(${s.starts}st, ${s.wins}w)</small></td>`;
+    }).join("");
+
+    return `<tr><th>${t.label}</th>${finCells}</tr>`;
+  }).filter(Boolean).join("");
+
+  if (!rowsHTML) return "";
+
+  return `
+    <div class="cmp-section">
+      <div class="cmp-section-head">
+        <span class="series-tag tag-NCS">NCS</span>
+        <span class="cmp-section-title">By Track Type · Avg Finish (career)</span>
+      </div>
+      <table class="cmp-table cmp-table-tt">
+        <tbody>${rowsHTML}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// Head-to-head: for each pair of drivers, walk SEASON_CACHE and find
+// races where BOTH started. Tally who finished better. Reports as
+// "Larson 23-14 vs Hamlin" style records.
+function renderCompareHeadToHeadSection(drivers) {
+  if (drivers.length < 2) return "";
+
+  // For each pair, build the record. We don't show all N*(N-1)/2 pairs
+  // for >2 drivers — that's too dense. Just show each driver vs each
+  // other in a triangular matrix.
+  const series = "NCS"; // most data-rich; can extend later
+  const pairs = [];
+  for (let i = 0; i < drivers.length; i++) {
+    for (let j = i + 1; j < drivers.length; j++) {
+      pairs.push([drivers[i], drivers[j]]);
+    }
+  }
+
+  const pairCards = pairs.map(([a, b]) => {
+    // Walk both drivers' race histories, find shared (year, round, series)
+    const aHist = getDriverRaceHistory(a.name, series);
+    const bHist = getDriverRaceHistory(b.name, series);
+    const bMap = new Map();
+    bHist.forEach(r => bMap.set(`${r.year}|${r.round}`, r));
+    let aWins = 0;  // a finished better
+    let bWins = 0;  // b finished better
+    let ties = 0;
+    for (const ra of aHist) {
+      const rb = bMap.get(`${ra.year}|${ra.round}`);
+      if (!rb) continue;
+      if (ra.finish_pos == null || rb.finish_pos == null) continue;
+      if (ra.finish_pos < rb.finish_pos) aWins++;
+      else if (ra.finish_pos > rb.finish_pos) bWins++;
+      else ties++;
+    }
+    const total = aWins + bWins + ties;
+    if (total === 0) {
+      return `
+        <div class="cmp-h2h-card">
+          <div class="cmp-h2h-pair">
+            <span class="cmp-h2h-driver">${escapeHTML(a.name)}</span>
+            <span class="cmp-h2h-vs">vs</span>
+            <span class="cmp-h2h-driver">${escapeHTML(b.name)}</span>
+          </div>
+          <div class="cmp-h2h-result"><span class="ed-byline">No shared races in loaded data</span></div>
+        </div>
+      `;
+    }
+    const aPct = total > 0 ? (aWins / total * 100) : 0;
+    const bPct = total > 0 ? (bWins / total * 100) : 0;
+    return `
+      <div class="cmp-h2h-card">
+        <div class="cmp-h2h-pair">
+          <span class="cmp-h2h-driver ${aWins > bWins ? "win" : ""}">${escapeHTML(a.name)} <strong>${aWins}</strong></span>
+          <span class="cmp-h2h-vs">vs</span>
+          <span class="cmp-h2h-driver ${bWins > aWins ? "win" : ""}"><strong>${bWins}</strong> ${escapeHTML(b.name)}</span>
+        </div>
+        <div class="cmp-h2h-bar">
+          <div class="cmp-h2h-bar-a" style="width:${aPct}%" title="${aWins} better finishes"></div>
+          <div class="cmp-h2h-bar-b" style="width:${bPct}%" title="${bWins} better finishes"></div>
+        </div>
+        <div class="cmp-h2h-meta">
+          <span class="ed-byline">${total} shared NCS race${total === 1 ? "" : "s"}${ties > 0 ? ` · ${ties} tied` : ""}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="cmp-section">
+      <div class="cmp-section-head">
+        <span class="cmp-section-title">Head-to-Head · NCS</span>
+        <span class="ed-byline">Races where both drivers started · who finished higher</span>
+      </div>
+      <div class="cmp-h2h-grid">${pairCards}</div>
+    </div>
+  `;
+}
+
+// Current-season form — last 5 races for each driver, plus YTD averages.
+function renderCompareFormSection(drivers) {
+  const series = STATE.series;
+  const rows = drivers.map(d => {
+    const form = getDriverRecentForm(d.name, series, 5);
+    return { d, form };
+  }).filter(r => r.form);
+  if (rows.length === 0) return "";
+
+  const cells = drivers.map(d => {
+    const form = getDriverRecentForm(d.name, series, 5);
+    if (!form) return `<td class="cmp-cell-empty">—</td>`;
+    return `<td>${form.avg_finish.toFixed(1)} <small>(${form.starts}r)</small></td>`;
+  }).join("");
+
+  const stageCells = drivers.map(d => {
+    const form = getDriverRecentForm(d.name, series, 5);
+    if (!form) return `<td class="cmp-cell-empty">—</td>`;
+    return `<td>${form.avg_stage_pts.toFixed(1)} <small>pts</small></td>`;
+  }).join("");
+
+  return `
+    <div class="cmp-section">
+      <div class="cmp-section-head">
+        <span class="series-tag tag-${series}">${series}</span>
+        <span class="cmp-section-title">Current Season Form · ${STATE.season}</span>
+      </div>
+      <table class="cmp-table">
+        <tbody>
+          <tr><th>Avg Finish (last 5)</th>${cells}</tr>
+          <tr><th>Avg Stage Pts (last 5)</th>${stageCells}</tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// The picker — search + chip cloud. Shows currently-selected drivers as
+// chips at the top and an "Add" search box below. Cap of 4.
+function renderComparePicker(selectedSlugs, allBios) {
+  const max = 4;
+  const remaining = max - selectedSlugs.length;
+  const chipsHTML = selectedSlugs.map(slug => {
+    const bio = allBios[slug];
+    const name = (bio && bio.full_name) || slug.replace(/-/g, " ");
+    return `<span class="cmp-pick-chip" data-slug="${slug}">
+      ${escapeHTML(name)}
+      <button class="cmp-pick-chip-remove" data-slug="${slug}" aria-label="Remove">×</button>
+    </span>`;
+  }).join("");
+
+  const inputDisabled = remaining <= 0;
+  const inputPlaceholder = inputDisabled
+    ? `Maximum ${max} drivers reached`
+    : `Add driver${remaining < max ? ` (${remaining} more)` : ""}…`;
+
+  return `
+    <div class="cmp-picker">
+      <div class="cmp-picker-chips">${chipsHTML}</div>
+      <div class="cmp-picker-search">
+        <input type="text" id="cmp-picker-input" placeholder="${inputPlaceholder}" ${inputDisabled ? "disabled" : ""} autocomplete="off">
+        <div class="cmp-picker-results" id="cmp-picker-results" hidden></div>
+      </div>
+    </div>
+  `;
+}
+
+// Wire chip removal + search-add. Idempotent — guarded by data-wired.
+function wireCompareEventHandlers() {
+  // Chip remove buttons
+  document.querySelectorAll(".cmp-pick-chip-remove, .cmp-header-remove").forEach(btn => {
+    if (btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const slug = btn.dataset.slug;
+      STATE.compare.slugs = STATE.compare.slugs.filter(s => s !== slug);
+      // Reflect the new state in the URL (without triggering a hashchange
+      // round-trip — replaceState is silent).
+      const newSlugs = STATE.compare.slugs;
+      const newUrl = newSlugs.length
+        ? `#/compare?with=${encodeURIComponent(newSlugs.join(","))}`
+        : `#/compare`;
+      history.replaceState(null, "", newUrl);
+      renderCompare();
+    });
+  });
+
+  // Search input
+  const input = document.getElementById("cmp-picker-input");
+  const results = document.getElementById("cmp-picker-results");
+  if (input && !input._wired) {
+    input._wired = true;
+    const showResults = (q) => {
+      const allBios = STATE.driverBios || {};
+      const qLow = (q || "").trim().toLowerCase();
+      if (qLow.length < 2) {
+        results.hidden = true;
+        results.innerHTML = "";
+        return;
+      }
+      const selected = new Set(STATE.compare.slugs);
+      const matches = [];
+      for (const [slug, bio] of Object.entries(allBios)) {
+        if (selected.has(slug)) continue;
+        const name = ((bio && bio.full_name) || slug.replace(/-/g, " ")).toLowerCase();
+        if (name.includes(qLow) || slug.includes(qLow)) {
+          matches.push({ slug, name: (bio && bio.full_name) || slug });
+          if (matches.length >= 12) break;
+        }
+      }
+      if (matches.length === 0) {
+        results.innerHTML = `<div class="cmp-picker-noresult">No matches</div>`;
+      } else {
+        results.innerHTML = matches.map(m =>
+          `<button class="cmp-picker-result" data-slug="${m.slug}">${escapeHTML(m.name)}</button>`
+        ).join("");
+      }
+      results.hidden = false;
+    };
+    input.addEventListener("input", () => showResults(input.value));
+    input.addEventListener("focus", () => { if (input.value) showResults(input.value); });
+    input.addEventListener("blur", () => {
+      // Delay so click handlers on results can fire first
+      setTimeout(() => { results.hidden = true; }, 200);
+    });
+    // Result clicks (delegated)
+    results.addEventListener("mousedown", (e) => {
+      const btn = e.target.closest(".cmp-picker-result");
+      if (!btn) return;
+      e.preventDefault();
+      const slug = btn.dataset.slug;
+      if (STATE.compare.slugs.length >= 4) return;
+      if (STATE.compare.slugs.includes(slug)) return;
+      STATE.compare.slugs.push(slug);
+      const newUrl = `#/compare?with=${encodeURIComponent(STATE.compare.slugs.join(","))}`;
+      history.replaceState(null, "", newUrl);
+      input.value = "";
+      results.hidden = true;
+      renderCompare();
+    });
+  }
+}
+
 
 // ============================================================
 // HEATMAP
