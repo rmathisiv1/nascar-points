@@ -2242,6 +2242,11 @@ function wireUIControls() {
   document.getElementById("theme-toggle")?.addEventListener("click", () => {
     const current = document.documentElement.getAttribute("data-theme") || "light";
     applyTheme(current === "light" ? "dark" : "light");
+    // Re-render any views that bake theme-sensitive colors into the DOM
+    // via inline style (mostly heatmaps where each cell's text color
+    // depends on the active theme). A blanket render() call is the
+    // simplest way to refresh everything.
+    if (typeof render === "function") render();
   });
 
   // Historical/Present mode selector — explicit two-option switch (so both
@@ -3215,6 +3220,42 @@ function contrastTextFor(hex) {
   const b = parseInt(hex.substr(5,2), 16);
   const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
   return lum > 0.6 ? "#000" : "#fff";
+}
+
+// Pick a stroke/dot color that won't disappear into the page background
+// for the current theme. Light cars (#fff, #eaeaea) vanish on cream; dark
+// cars vanish on charcoal. If a color is "too close" to the page bg we
+// scale it toward black (in light mode) or white (in dark mode). Used for
+// chart lines, sparklines, and other on-canvas elements that would
+// otherwise blend in. Solid pill backgrounds DON'T need this — they
+// supply their own contrast against the page through the fill itself.
+function safeContrastColor(hex) {
+  if (!hex || !hex.startsWith("#") || hex.length < 7) return hex;
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+  const r = parseInt(hex.substr(1,2), 16);
+  const g = parseInt(hex.substr(3,2), 16);
+  const b = parseInt(hex.substr(5,2), 16);
+  const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+  // Threshold: in light mode anything brighter than ~0.78 luminance is
+  // washing into the cream. In dark mode anything darker than ~0.18 is
+  // disappearing into the charcoal.
+  if (isLight && lum > 0.78) {
+    // Darken to roughly 50% luminance while preserving hue.
+    const factor = 0.55 / lum;
+    const nr = Math.round(r * factor);
+    const ng = Math.round(g * factor);
+    const nb = Math.round(b * factor);
+    return `#${nr.toString(16).padStart(2,"0")}${ng.toString(16).padStart(2,"0")}${nb.toString(16).padStart(2,"0")}`;
+  }
+  if (!isLight && lum < 0.18) {
+    // Brighten dark cars toward mid-tone in dark mode.
+    const factor = 0.45 / Math.max(lum, 0.05);
+    const nr = Math.min(255, Math.round(r * factor));
+    const ng = Math.min(255, Math.round(g * factor));
+    const nb = Math.min(255, Math.round(b * factor));
+    return `#${nr.toString(16).padStart(2,"0")}${ng.toString(16).padStart(2,"0")}${nb.toString(16).padStart(2,"0")}`;
+  }
+  return hex;
 }
 
 // ============================================================
@@ -5718,10 +5759,13 @@ function renderTeammates() {
     const rows = members.map(d => {
       const carHex = colorFor(STATE.series, d.car_number);
       const carTxt = contrastTextFor(carHex);
+      // For the sparkline ink, use a contrast-safe version so near-white
+      // cars (Gragson #4, Hocevar #77) stay visible on cream pages.
+      const sparkHex = safeContrastColor(carHex);
       const avg = d[avgKey];
       const avgCls = tmDeltaClass(metric, avg);
       const sparkPts = d.series.map(s => ({ v: s[deltaField], tl: s.tl_fin, round: s.round }));
-      const svg = tmSparkline(sparkPts, carHex, metric, d.car_number);
+      const svg = tmSparkline(sparkPts, sparkHex, metric, d.car_number);
       const isShared = (d.all_driver_count || d.drivers.length) > 1;
       const showWbrTag = (d.team !== d.group);
       const ptTag = d.car_full_time ? "" : ` <span class="tm-pt-tag">PT</span>`;
@@ -7780,12 +7824,18 @@ function paintProfileRatingChart(driverName) {
     const pathD = allPts.map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(i)} ${yScale(p.rating)}`).join(" ");
     const pathHTML = `<path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/>`;
 
-    // Points — colored by series. Each gets a larger transparent hit
-    // target underneath (r=8 invisible) so hovering is forgiving.
-    const seriesColors = {
-      NCS: "#f0c558",   // gold
-      NOS: "#6fdd96",   // green
-      NTS: "#f08c8c",   // red-ish
+    // Points — colored by series. The light tones below work on dark
+    // backgrounds; in light mode we shift to deeper series tones so the
+    // dots don't disappear into cream.
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    const seriesColors = isLight ? {
+      NCS: "#8a6500",   // deep gold
+      NOS: "#1a6a2a",   // deep green
+      NTS: "#962222",   // deep red
+    } : {
+      NCS: "#f0c558",   // light gold
+      NOS: "#6fdd96",   // light green
+      NTS: "#f08c8c",   // light red
     };
     const dots = allPts.map((p, i) => {
       const cx = xScale(i);
@@ -10923,13 +10973,18 @@ function heatmapColor(finish) {
 }
 function heatmapText(finish) {
   if (finish == null) return "var(--dim)";
-  // Wins use a dark slate text against the gold background for max contrast
+  // Wins use dark slate text against the gold background for max contrast
   if (finish === 1) return "#1a1300";
   if (finish <= 5) return "#00140a";
   if (finish >= 35) return "#230707";
-  if (finish <= 10) return "#cef5d9";
-  if (finish >= 25) return "#ffd2d2";
-  return "#eef0f5";
+  // The middle bands (6-10 light green, 11-24 neutral, 25-34 light red)
+  // are translucent fills; their text needs to match the page theme so
+  // it stays legible against cream OR charcoal. Read the active theme
+  // off <html> and pick the contrast direction accordingly.
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+  if (finish <= 10) return isLight ? "#1a3a1a" : "#cef5d9";
+  if (finish >= 25) return isLight ? "#5a1a14" : "#ffd2d2";
+  return isLight ? "#1a1612" : "#eef0f5";
 }
 
 // ============================================================

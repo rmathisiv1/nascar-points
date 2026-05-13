@@ -2724,8 +2724,10 @@ td.neg { color: var(--neg); }
 .profile-heat-cell.heat-dns { cursor: default; }
 .profile-heat-cell .r { font-size: 8px; opacity: 0.6; font-weight: 500; }
 .profile-heat-cell:hover { outline: 1px solid rgba(255,255,255,0.3); }
-/* New tier scheme — wins are gold/celebratory, T5 bright green, T10 muted
-   green, 11-20 neutral, 21-30 warm orange, 31+ deep red. */
+/* Heat cells. Background ramps stay constant across themes (the
+   meaning of "gold = win, red = bad" doesn't change), but the text
+   color needs to flip: light text on translucent fills reads on dark
+   but evaporates on cream. We use solid contrast text in light mode. */
 .profile-heat-cell.heat-win  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45), 0 0 8px rgba(255,200,50,0.35); }
 .profile-heat-cell.heat-t5   { background: rgba(50,230,100,0.55); color: #00140a; }
 .profile-heat-cell.heat-t10  { background: rgba(50,230,100,0.18); color: #a7f0bc; }
@@ -2736,6 +2738,11 @@ td.neg { color: var(--neg); }
 /* Backward-compat aliases */
 .profile-heat-cell.heat-top  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45), 0 0 8px rgba(255,200,50,0.35); }
 .profile-heat-cell.heat-up   { background: rgba(50,230,100,0.55); color: #00140a; }
+
+/* In light mode, swap the faint-text cells (t10 and down) to dark text
+   so they read against the cream-tinted translucent fills. */
+[data-theme="light"] .profile-heat-cell.heat-t10  { background: rgba(50,150,70,0.22); color: #1a3a1a; }
+[data-theme="light"] .profile-heat-cell.heat-down { background: rgba(180,60,50,0.18); color: #5a1a14; }
 
 /* Track Splits panel */
 .profile-panel-head-right {
@@ -6063,6 +6070,13 @@ a.rc-sched-winner:hover {
 .ph-cell.ph-top  { background: rgba(255, 200, 50, 0.85); color: #2a1d00; box-shadow: inset 0 0 0 1px rgba(255,220,100,0.45); }
 .ph-cell.ph-up   { background: rgba(50,230,100,0.55); color: #00140a; }
 
+/* Light-mode overrides for the faint cells whose text was light-on-translucent.
+   Keeps the meaning ("green = top, red = bad") but makes the digits legible
+   against cream-tinted backgrounds. */
+[data-theme="light"] .ph-cell.ph-t10  { background: rgba(50,150,70,0.22); color: #1a3a1a; }
+[data-theme="light"] .ph-cell.ph-down { background: rgba(180,60,50,0.18); color: #5a1a14; }
+[data-theme="light"] .ph-cell:hover   { outline: 1px solid rgba(0,0,0,0.3); }
+
 @media (max-width: 767.98px) {
   .ph-grid {
     /* On mobile we want fixed cell widths so the grid stays readable;
@@ -6299,6 +6313,16 @@ body.lightbox-open {
   opacity: 0.85;
 }
 
+/* Light-mode override — the translucent gold/cream stack washes out
+   on cream backgrounds. Solid muted gold with dark text reads cleanly. */
+[data-theme="light"] .profile-hero-champ {
+  background: #f5e2a0;
+  border-color: #c9a83b;
+  color: #4a3306;
+}
+[data-theme="light"] .profile-hero-champ .champ-count { color: #2e1f00; }
+[data-theme="light"] .profile-hero-champ .champ-trophy { filter: none; color: #8a5a00; }
+
 /* Team-hero championship pill — slightly larger, sits in top-right of hero */
 .tm-hero-champ {
   position: absolute;
@@ -6326,6 +6350,13 @@ body.lightbox-open {
   font-size: 14px;
   color: #ffe293;
 }
+[data-theme="light"] .tm-hero-champ {
+  background: #f5e2a0;
+  border-color: #c9a83b;
+  color: #4a3306;
+}
+[data-theme="light"] .tm-hero-champ .champ-count { color: #2e1f00; }
+[data-theme="light"] .tm-hero-champ .champ-trophy { filter: none; color: #8a5a00; }
 .tm-hero {
   position: relative;   /* anchor for the absolute champ pill */
 }
@@ -7552,10 +7583,13 @@ body.lightbox-open {
   margin-right: 8px;
   vertical-align: 1px;
 }
-.home-storyline-tag.tag-ncs { background: rgba(212, 161, 0, 0.18);  color: #f0c558; }
-.home-storyline-tag.tag-nos { background: rgba(41, 196, 107, 0.18); color: #6fdd96; }
-.home-storyline-tag.tag-nts { background: rgba(224, 72, 72, 0.18);  color: #f08c8c; }
-.home-storyline-tag.tag-cc  { background: rgba(64, 132, 224, 0.20); color: #8ab4ee; }
+/* Solid-fill series tags. Translucent-overlay variants worked on dark
+   surfaces but became invisible on cream, so we mirror the .series-tag
+   palette (gold/dark, green/white, red/white, blue/white). */
+.home-storyline-tag.tag-ncs { background: #d4a017; color: #1a1100; }
+.home-storyline-tag.tag-nos { background: #2e7d32; color: #fff; }
+.home-storyline-tag.tag-nts { background: #c62828; color: #fff; }
+.home-storyline-tag.tag-cc  { background: #2c5fa8; color: #fff; }
 .home-storyline-h {
   font-size: 15px;
   font-weight: 600;
@@ -8369,9 +8403,9 @@ body.lightbox-open {
   border-radius: 3px;
   text-align: center;
 }
-.hw-series-pill.hw-ncs { background: rgba(212, 161, 0, 0.18);  color: #f0c558; }
-.hw-series-pill.hw-nos { background: rgba(41, 196, 107, 0.18); color: #6fdd96; }
-.hw-series-pill.hw-nts { background: rgba(224, 72, 72, 0.18);  color: #f08c8c; }
+.hw-series-pill.hw-ncs { background: #d4a017; color: #1a1100; }
+.hw-series-pill.hw-nos { background: #2e7d32; color: #fff; }
+.hw-series-pill.hw-nts { background: #c62828; color: #fff; }
 .hw-track {
   font-size: 15px;
   font-weight: 600;
@@ -8930,4 +8964,56 @@ body.lightbox-open {
   .tm-best-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================================
+   Team / CC takeover hero. Earlier the team page rendered a bare h1 + sub
+   floating against the page background; driver profiles by contrast have a
+   contained hero card. Pull team + CC headers into the same visual treatment
+   so all takeovers share a consistent masthead style.
+   ============================================================================ */
+#view-team .view-head,
+#view-cc   .view-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 18px;
+  padding: 14px 18px 16px;
+  margin-bottom: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+}
+#view-team .view-head h1,
+#view-cc   .view-head h1 {
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  margin: 0;
+}
+#view-team .view-head .view-sub,
+#view-cc   .view-head .view-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.4;
+  justify-self: end;
+}
+@media (max-width: 767.98px) {
+  #view-team .view-head,
+  #view-cc   .view-head {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  #view-team .view-head .view-sub,
+  #view-cc   .view-head .view-sub {
+    justify-self: start;
+  }
+  #view-team .view-head h1,
+  #view-cc   .view-head h1 { font-size: 24px; }
 }
