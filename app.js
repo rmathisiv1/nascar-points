@@ -13932,28 +13932,128 @@ function renderTeamPage() {
   // numbers tie back to the user's pre-takeover context.
   const allSeriesCurrentCars = computeAllSeriesCurrentCars(teamCode);
 
+  // All-time career stats — walks every loaded year and aggregates
+  // starts/wins/T5/T10/poles/lapsLed plus per-driver and per-car-number
+  // breakdowns. SEASON_CACHE may be partial (opportunistic load below
+  // fills more years and re-renders), so these numbers grow over the
+  // first few seconds on a cold page load.
+  const career = computeTeamCareerStats(teamCode);
+  const bestDriver = career.byDriver.length ? career.byDriver[0] : null;
+  const bestCar    = career.byCarNumber.length ? career.byCarNumber[0] : null;
+  const yearsRange = career.yearsActive
+    ? (career.yearsActive[0] === career.yearsActive[1]
+        ? `${career.yearsActive[0]}`
+        : `${career.yearsActive[0]} – ${career.yearsActive[1]}`)
+    : "—";
+
+  // Renderer for a single career-stat tile (label + display-serif number).
+  // Inline to keep the template self-contained; we re-use the editorial
+  // vocabulary classes (.ed-kicker, .ed-number) declared in app.css.
+  const tile = (label, value, sub) => `<div class="tm-career-stat">
+    <span class="tm-career-stat-k ed-kicker">${escapeHTML(label)}</span>
+    <span class="tm-career-stat-v ed-number">${value}</span>
+    ${sub ? `<span class="tm-career-stat-sub">${sub}</span>` : ""}
+  </div>`;
+
+  // Pretty per-series sub-line for the wins tile, e.g. "Cup 12 · Xfinity 3".
+  // Shows only series with non-zero wins. Used as the small line beneath the
+  // big Wins number to give the user a breakdown without clutter.
+  const winsBreakdown = (() => {
+    const parts = [];
+    ["NCS", "NOS", "NTS"].forEach(s => {
+      const n = career.bySeries[s].wins;
+      if (n > 0) parts.push(`${s} ${n}`);
+    });
+    return parts.join(" · ");
+  })();
+
+  const careerStripHTML = career.starts > 0 ? `
+    <section class="tm-career-strip">
+      <div class="tm-career-strip-head">
+        <div class="ed-kicker">all-time</div>
+        <h2 class="ed-hero ed-hero-sm">Career totals</h2>
+      </div>
+      <div class="tm-career-tiles">
+        ${tile("Years", yearsRange, career.seasonsRun ? `${career.seasonsRun} season${career.seasonsRun === 1 ? "" : "s"}` : "")}
+        ${tile("Starts", career.starts.toLocaleString(), "")}
+        ${tile("Wins",  career.wins.toLocaleString(), winsBreakdown)}
+        ${tile("Top 5", career.top5.toLocaleString(), "")}
+        ${tile("Top 10", career.top10.toLocaleString(), "")}
+        ${tile("Poles", career.poles.toLocaleString(), "")}
+        ${tile("Laps led", career.lapsLed.toLocaleString(), "")}
+      </div>
+    </section>
+  ` : "";
+
+  // Best driver / best car editorial panels. Hide when career has no
+  // data (very fresh team, brand-new alliance code, etc.).
+  const bestPanelsHTML = (bestDriver || bestCar) ? `
+    <section class="tm-best-row">
+      ${bestDriver ? `
+        <div class="tm-best-panel">
+          <div class="ed-kicker">most successful driver</div>
+          <div class="tm-best-name ed-hero ed-hero-sm">${escapeHTML(bestDriver.driver)}</div>
+          <div class="tm-best-meta">
+            <span class="tm-best-meta-pair"><span class="ed-number">${bestDriver.wins}</span> wins</span>
+            <span class="tm-best-meta-sep">·</span>
+            <span class="tm-best-meta-pair"><span class="ed-number">${bestDriver.starts}</span> starts</span>
+            <span class="tm-best-meta-sep">·</span>
+            <span class="tm-best-meta-pair"><span class="ed-number">${bestDriver.top10}</span> top-10s</span>
+          </div>
+          <a class="tm-best-link" href="#/driver/${slugify(bestDriver.driver)}">view profile →</a>
+        </div>` : ""}
+      ${bestCar ? `
+        <div class="tm-best-panel">
+          <div class="ed-kicker">most successful car</div>
+          <div class="tm-best-name ed-hero ed-hero-sm">#${escapeHTML(bestCar.car_number)}</div>
+          <div class="tm-best-meta">
+            <span class="tm-best-meta-pair"><span class="ed-number">${bestCar.wins}</span> wins</span>
+            <span class="tm-best-meta-sep">·</span>
+            <span class="tm-best-meta-pair"><span class="ed-number">${bestCar.starts}</span> starts</span>
+            ${bestCar.primary_driver ? `<span class="tm-best-meta-sep">·</span>
+            <span class="tm-best-meta-pair">primarily <em>${escapeHTML(bestCar.primary_driver)}</em></span>` : ""}
+          </div>
+        </div>` : ""}
+    </section>
+  ` : "";
+
+  // Current-season block — kicker plus the per-series cards. Demoted
+  // visually below the all-time strip but still prominent on the page
+  // since it's "what they're doing right now."
+  const currentSeasonHTML = `
+    <section class="tm-current-section">
+      <div class="ed-kicker">${STATE.season} season</div>
+      <h2 class="ed-hero ed-hero-sm">Right now</h2>
+      <div class="tm-stats-multi">
+        ${["NCS", "NOS", "NTS"].map(s => {
+          const stats = teamStatsBySeries[s];
+          if (!stats || stats.cars === 0) return "";
+          return `<div class="tm-stats-card tm-stats-${s.toLowerCase()}">
+            <div class="tm-stats-card-head">
+              <span class="series-tag series-${s.toLowerCase()}">${s}</span>
+              <span class="tm-stats-card-cars">${stats.cars} car${stats.cars === 1 ? "" : "s"}</span>
+            </div>
+            <div class="tm-stats-card-body">
+              <div class="tm-stat"><span class="k">Wins</span><span class="v">${stats.wins}</span></div>
+              <div class="tm-stat"><span class="k">Top 5</span><span class="v">${stats.top5}</span></div>
+              <div class="tm-stat"><span class="k">Top 10</span><span class="v">${stats.top10}</span></div>
+              <div class="tm-stat"><span class="k">Poles</span><span class="v">${stats.poles}</span></div>
+              <div class="tm-stat"><span class="k">Laps led</span><span class="v">${stats.lapsLed.toLocaleString()}</span></div>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+    </section>
+  `;
+
   host.innerHTML = `
     ${champLine ? `<div class="tm-hero-champ-row">${champLine}</div>` : ""}
 
-    <div class="tm-stats-multi">
-      ${["NCS", "NOS", "NTS"].map(s => {
-        const stats = teamStatsBySeries[s];
-        if (!stats || stats.cars === 0) return "";
-        return `<div class="tm-stats-card tm-stats-${s.toLowerCase()}">
-          <div class="tm-stats-card-head">
-            <span class="series-tag series-${s.toLowerCase()}">${s}</span>
-            <span class="tm-stats-card-cars">${stats.cars} car${stats.cars === 1 ? "" : "s"}</span>
-          </div>
-          <div class="tm-stats-card-body">
-            <div class="tm-stat"><span class="k">Wins</span><span class="v">${stats.wins}</span></div>
-            <div class="tm-stat"><span class="k">Top 5</span><span class="v">${stats.top5}</span></div>
-            <div class="tm-stat"><span class="k">Top 10</span><span class="v">${stats.top10}</span></div>
-            <div class="tm-stat"><span class="k">Poles</span><span class="v">${stats.poles}</span></div>
-            <div class="tm-stat"><span class="k">Laps led</span><span class="v">${stats.lapsLed.toLocaleString()}</span></div>
-          </div>
-        </div>`;
-      }).join("")}
-    </div>
+    ${careerStripHTML}
+
+    ${bestPanelsHTML}
+
+    ${currentSeasonHTML}
 
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-head">
@@ -13992,6 +14092,147 @@ function renderTeamPage() {
 // keyed by series code with { wins, top5, top10, poles, lapsLed, cars }.
 // Used by the team page's multi-series stats block so the user can see
 // the team's performance across NCS/NOS/NTS in one view.
+// All-time team stats — walks every loaded year in SEASON_CACHE and
+// aggregates starts/wins/T5/T10/poles/lapsLed for every car this team
+// fielded across all series. Returns:
+//   {
+//     yearsActive: [first, last],
+//     seasonsRun:  N,
+//     starts, wins, top5, top10, poles, lapsLed,
+//     byDriver:    [{driver, starts, wins, top5, top10}, ...] sorted by wins desc
+//     byCarNumber: [{car_number, starts, wins, top5, top10, primary_driver}, ...]
+//     bySeries:    { NCS: {starts, wins, ...}, NOS: ..., NTS: ... }
+//   }
+// Alliance groups (WBR-PEN 2015+, JTG-Wood, etc.) honored via teamGroup.
+// Years where the team didn't appear contribute nothing; years missing
+// from SEASON_CACHE simply aren't counted (caller should kick off an
+// opportunistic backfill if completeness matters).
+function computeTeamCareerStats(teamCode) {
+  const empty = {
+    yearsActive: null, seasonsRun: 0,
+    starts: 0, wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0,
+    byDriver: [], byCarNumber: [],
+    bySeries: {
+      NCS: { starts: 0, wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0 },
+      NOS: { starts: 0, wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0 },
+      NTS: { starts: 0, wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0 },
+    },
+  };
+  if (!teamCode) return empty;
+
+  // Per-driver accumulator. Key = normalized driver name; we hold display
+  // name (latest seen variant), starts, and rolled-up finish buckets.
+  const driverMap = new Map();
+  // Per-car-number accumulator. Key = String(car_number). Same fields,
+  // plus a primary-driver-name field (driver with the most starts in this car).
+  const carMap = new Map();
+  const seasonsTouched = new Set();
+  let firstYear = null, lastYear = null;
+
+  Object.keys(SEASON_CACHE).map(Number).forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    ["NCS", "NOS", "NTS"].forEach(sCode => {
+      const block = blocks[sCode];
+      if (!block || !block.races) return;
+      // Walk per-race results so we can correctly attribute starts to
+      // the actual driver of each race (subs count for their own stats,
+      // not the regular driver's).
+      let teamRanThisSeries = false;
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible) return;
+          const code = d.team_code
+            || teamCodeFromName(d.team, SERIES_TO_KEY[sCode], d.car_number);
+          if (!code) return;
+          // teamGroup handles alliance/rename consolidation just like the
+          // current-season code path does.
+          if (teamGroup(code, year) !== teamCode && code !== teamCode) return;
+
+          teamRanThisSeries = true;
+          // Global / series totals
+          empty.starts += 1;
+          empty.bySeries[sCode].starts += 1;
+          if (d.finish_pos === 1)        { empty.wins  += 1; empty.bySeries[sCode].wins  += 1; }
+          if (d.finish_pos <= 5)         { empty.top5  += 1; empty.bySeries[sCode].top5  += 1; }
+          if (d.finish_pos <= 10)        { empty.top10 += 1; empty.bySeries[sCode].top10 += 1; }
+          if (d.qualifying_pos === 1 || d.pole === true) {
+            empty.poles += 1; empty.bySeries[sCode].poles += 1;
+          }
+          empty.lapsLed += d.laps_led || 0;
+          empty.bySeries[sCode].lapsLed += d.laps_led || 0;
+
+          // Per-driver
+          const dKey = normalizeDriverName(d.driver || "");
+          if (dKey) {
+            if (!driverMap.has(dKey)) {
+              driverMap.set(dKey, {
+                driver: d.driver, starts: 0,
+                wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0,
+              });
+            }
+            const e = driverMap.get(dKey);
+            e.driver = d.driver;  // refresh to latest seen variant
+            e.starts += 1;
+            if (d.finish_pos === 1)  e.wins  += 1;
+            if (d.finish_pos <= 5)   e.top5  += 1;
+            if (d.finish_pos <= 10)  e.top10 += 1;
+            if (d.qualifying_pos === 1 || d.pole === true) e.poles += 1;
+            e.lapsLed += d.laps_led || 0;
+          }
+
+          // Per-car-number
+          const cKey = String(d.car_number);
+          if (cKey) {
+            if (!carMap.has(cKey)) {
+              carMap.set(cKey, {
+                car_number: cKey, starts: 0,
+                wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0,
+                driverStarts: {},
+              });
+            }
+            const e = carMap.get(cKey);
+            e.starts += 1;
+            if (d.finish_pos === 1)  e.wins  += 1;
+            if (d.finish_pos <= 5)   e.top5  += 1;
+            if (d.finish_pos <= 10)  e.top10 += 1;
+            if (d.qualifying_pos === 1 || d.pole === true) e.poles += 1;
+            e.lapsLed += d.laps_led || 0;
+            if (d.driver) {
+              e.driverStarts[d.driver] = (e.driverStarts[d.driver] || 0) + 1;
+            }
+          }
+        });
+      });
+      if (teamRanThisSeries) {
+        seasonsTouched.add(year);
+        if (firstYear == null || year < firstYear) firstYear = year;
+        if (lastYear  == null || year > lastYear)  lastYear  = year;
+      }
+    });
+  });
+
+  // Resolve each car's primary driver = whoever has the most starts in it.
+  carMap.forEach(c => {
+    let best = null, max = 0;
+    for (const [name, n] of Object.entries(c.driverStarts || {})) {
+      if (n > max) { best = name; max = n; }
+    }
+    c.primary_driver = best;
+    delete c.driverStarts;
+  });
+
+  empty.yearsActive = firstYear != null ? [firstYear, lastYear] : null;
+  empty.seasonsRun  = seasonsTouched.size;
+  // Sort: wins desc, ties broken by starts desc.
+  empty.byDriver = Array.from(driverMap.values())
+    .sort((a, b) => b.wins - a.wins || b.starts - a.starts);
+  empty.byCarNumber = Array.from(carMap.values())
+    .sort((a, b) => b.wins - a.wins || b.starts - a.starts);
+
+  return empty;
+}
+
 function computeTeamStatsBySeries(teamCode) {
   const out = { NCS: null, NOS: null, NTS: null };
   if (!teamCode) return out;

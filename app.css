@@ -8791,3 +8791,143 @@ body.lightbox-open {
   padding: 4px 8px 0 0;
   color: var(--accent);
 }
+
+/* ============================================================================
+   Team page — editorial Pass 2 layout
+   ============================================================================
+   Hierarchy: championship trophy row → all-time strip → best driver/car
+   panels → current-season block → current cars → crew chiefs → historical
+   drivers table. Each section uses the .ed-kicker / .ed-hero / .ed-number
+   vocabulary for consistency with the rest of the editorial pass.
+   ============================================================================ */
+
+.tm-career-strip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 16px 20px 18px;
+  margin-bottom: 14px;
+}
+.tm-career-strip-head {
+  margin-bottom: 14px;
+}
+.tm-career-strip-head .ed-hero {
+  margin-top: 2px;
+}
+.tm-career-tiles {
+  display: grid;
+  /* Seven tiles by default; auto-fit lets the row wrap on narrow viewports
+     while keeping each tile readable (minmax floor keeps a number from
+     squashing on a phone). */
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.tm-career-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 4px 0;
+  /* Subtle vertical rule between tiles — taupe in light, dark grey in dark.
+     Last child drops it so the strip closes cleanly. */
+  border-right: 1px solid var(--border);
+}
+.tm-career-stat:last-child { border-right: 0; }
+.tm-career-stat-k {
+  /* ed-kicker already styles font-family + italics; just size for tile use. */
+  font-size: 11px;
+}
+.tm-career-stat-v {
+  font-size: 28px;
+  line-height: 1.05;
+  color: var(--text);
+}
+.tm-career-stat-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+/* Best-driver / best-car editorial pair. Two equal columns on desktop,
+   stack on mobile. Each panel reads like a print sidebar — kicker on top,
+   serif name below, run of stats in a single line. */
+.tm-best-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tm-best-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 16px 20px 18px;
+}
+.tm-best-name {
+  margin: 2px 0 8px;
+  color: var(--text);
+}
+.tm-best-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--text-2);
+}
+.tm-best-meta-pair { font-style: normal; }
+.tm-best-meta-pair .ed-number {
+  font-size: 16px;
+  color: var(--text);
+  margin-right: 2px;
+}
+.tm-best-meta em {
+  font-style: italic;
+  color: var(--accent);
+}
+.tm-best-meta-sep {
+  color: var(--dim);
+  font-family: var(--serif);
+}
+.tm-best-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.tm-best-link:hover { text-decoration: underline; }
+
+/* Current-season section. Demoted from the dominant row it used to be —
+   now sits below the all-time strip with its own kicker + small headline. */
+.tm-current-section {
+  margin-bottom: 14px;
+}
+.tm-current-section .ed-hero {
+  margin-top: 2px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 767.98px) {
+  .tm-career-tiles {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 14px;
+  }
+  .tm-career-stat {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .tm-career-stat:nth-last-child(-n+2) { border-bottom: 0; }
+  .tm-career-stat-v { font-size: 22px; }
+  .tm-best-row {
+    grid-template-columns: 1fr;
+  }
+}
