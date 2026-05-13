@@ -5791,6 +5791,12 @@ a.rc-sched-winner:hover {
   font-size: 11px;
   opacity: 0.7;
 }
+/* Close (×) button — hidden by default; the mobile-expanded rule below
+   shows it. Desktop never shows the button — users have Escape and
+   click-outside, neither of which is reliable on touch. */
+.topbar-search-close {
+  display: none;
+}
 
 /* Dropdown panel — anchored to input bottom edge */
 .search-dropdown {
@@ -5953,7 +5959,8 @@ a.rc-sched-winner:hover {
     color: var(--text);
     cursor: text;
     text-align: left;
-    padding: 6px 8px 6px 26px;
+    /* Right padding leaves room for the close (×) button overlay */
+    padding: 6px 32px 6px 26px;
     background: var(--card);
     border: 0;
   }
@@ -5965,6 +5972,34 @@ a.rc-sched-winner:hover {
   .topbar-search.expanded input::placeholder {
     color: var(--muted);
     font-size: 10px;
+  }
+  /* Close (×) button — visible only when expanded. Acts as the
+     dismiss affordance for mobile users (no Escape key on touch
+     keyboards). Tap clears the input and collapses the bar. */
+  .topbar-search.expanded .topbar-search-close {
+    display: flex;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    color: var(--muted);
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 50%;
+    padding: 0;
+  }
+  .topbar-search.expanded .topbar-search-close:hover,
+  .topbar-search.expanded .topbar-search-close:active {
+    color: var(--text);
+    background: var(--tint-1);
   }
   .search-dropdown {
     /* Pin to right edge so it doesn't overflow off-screen */

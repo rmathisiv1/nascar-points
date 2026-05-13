@@ -574,18 +574,36 @@ function wireSearch() {
   if (wrap) {
     wrap.addEventListener("click", (e) => {
       // Don't re-expand if already expanded; the input handles its own
-      // focus inside that state.
+      // focus inside that state. Also: clicking the close button
+      // (rendered when expanded) explicitly collapses regardless of
+      // input content.
+      if (e.target.closest(".topbar-search-close")) {
+        e.preventDefault();
+        e.stopPropagation();
+        input.value = "";
+        drop.hidden = true;
+        drop.innerHTML = "";
+        collapseSearch();
+        input.blur();
+        return;
+      }
       if (!wrap.classList.contains("expanded")) {
         e.stopPropagation();
         expandSearch();
       }
     });
   }
-  // Click outside closes the expanded search (only relevant on mobile).
+  // Click outside ALWAYS closes the expanded search on mobile. Previously
+  // we only collapsed when the input was empty, which meant a user who
+  // typed a query had no way to dismiss the bar on mobile (no Escape key
+  // on touch keyboards). Now we clear and close on any outside tap.
   document.addEventListener("click", (e) => {
     if (!wrap || !wrap.classList.contains("expanded")) return;
     if (wrap.contains(e.target)) return;
-    if (input.value.trim() === "") collapseSearch();
+    input.value = "";
+    drop.hidden = true;
+    drop.innerHTML = "";
+    collapseSearch();
   });
   // Escape collapses it too.
   input.addEventListener("keydown", (e) => {
