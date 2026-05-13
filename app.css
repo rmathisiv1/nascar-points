@@ -128,7 +128,12 @@ html, body {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 6px 18px;
+  /* iOS PWA safe-area: when installed as a standalone app, the status
+     bar (clock/battery) overlays the top of the page. env() returns
+     the inset height; we add it to the normal top padding so the
+     content stays clear of the notch / dynamic island. Browsers that
+     don't support env() get 0 + the base 6px from the fallback. */
+  padding: max(6px, env(safe-area-inset-top, 6px)) max(18px, env(safe-area-inset-right, 18px)) 6px max(18px, env(safe-area-inset-left, 18px));
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   position: sticky; top: 0; z-index: 50;
@@ -3190,28 +3195,28 @@ a.driver-cell.profile-link:hover .car-tag {
     background-position: right 4px center;
     background-size: 8px 5px;
   }
-  /* Series-colored fills — matches the desktop .series-sw button.on
-     palette (gold/dark, green/white, red/white). The data-series attr
-     is set by JS in syncSeriesUIGlobal whenever the active series changes. */
+  /* Series indicator — a colored left edge bar on the closed select head.
+     This replaced an earlier "full colored fill" approach because iOS
+     Safari refuses to honor `option { background }` reliably; the parent
+     select's color would bleed into the option panel and make it look
+     like a tinted sheet. A left edge stripe keeps the visual cue (you can
+     see at a glance which series is active) but leaves the dropdown panel
+     itself on a neutral card surface where iOS can't fight us. */
+  .series-sw select.series-sw-select {
+    border-left-width: 6px;
+    padding-left: 10px;
+  }
   .series-sw select.series-sw-select[data-series="NCS"] {
-    background-color: #d4a017;
-    color: #1a1100;
-    border-color: #d4a017;
+    border-left-color: #d4a017;
   }
   .series-sw select.series-sw-select[data-series="NOS"] {
-    background-color: #2e7d32;
-    color: #fff;
-    border-color: #2e7d32;
+    border-left-color: #2e7d32;
   }
   .series-sw select.series-sw-select[data-series="NTS"] {
-    background-color: #c62828;
-    color: #fff;
-    border-color: #c62828;
+    border-left-color: #c62828;
   }
   /* Reset the OPEN dropdown panel options to neutral surface tones —
-     the option list inherits the colored background from the select
-     by default in most engines, which looks like a giant solid panel.
-     We want a normal dropdown where only the closed head is colored. */
+     belt-and-suspenders alongside the colored-edge approach above. */
   .series-sw select.series-sw-select option {
     background-color: var(--card);
     color: var(--text);
