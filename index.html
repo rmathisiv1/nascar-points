@@ -12,7 +12,13 @@
        standard manifest, so these legacy tags are still needed for a
        proper "Add to Home Screen" experience on iPhone/iPad. -->
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- Status bar style: "default" makes iOS reserve space for the status bar
+       and start your content below it. We previously used "black-translucent"
+       which overlays the status bar on top of your content (requiring padding
+       to compensate) — that approach was glitchy when env(safe-area-inset-top)
+       returned 0 in some PWA contexts. The "default" style sidesteps the issue
+       entirely; iOS adapts the status bar icon colors to match the page. */ -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Racecar">
   <link rel="apple-touch-icon" href="icon-180.png">
 
