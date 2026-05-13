@@ -3363,6 +3363,10 @@ function getDriverTrackStats(driverName, series, trackCode) {
   const starts = atTrack.map(r => r.start_pos).filter(n => n != null);
   const stagePts = atTrack.map(r => r.stage_pts_total);
   const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+  const lastNAvg = (n) => {
+    const last = atTrack.slice(0, n).map(r => r.finish_pos).filter(v => v != null);
+    return last.length ? sum(last) / last.length : null;
+  };
   const stats = {
     starts: atTrack.length,
     wins: finishes.filter(f => f === 1).length,
@@ -3373,10 +3377,9 @@ function getDriverTrackStats(driverName, series, trackCode) {
     avg_stage_pts: atTrack.length ? sum(stagePts) / atTrack.length : 0,
     best_finish: finishes.length ? Math.min(...finishes) : null,
     last5: atTrack.slice(0, 5),  // newest first
-    last5_avg: (() => {
-      const last = atTrack.slice(0, 5).map(r => r.finish_pos).filter(n => n != null);
-      return last.length ? sum(last) / last.length : null;
-    })(),
+    last5_avg: lastNAvg(5),
+    last4_avg: lastNAvg(4),
+    last3_avg: lastNAvg(3),
   };
   DRIVER_ANALYTICS_CACHE.trackStats.set(cacheKey, stats);
   return stats;
@@ -3399,6 +3402,18 @@ function getDriverTrackTypeStats(driverName, series, trackTypeKey) {
   const finishes = atType.map(r => r.finish_pos).filter(n => n != null);
   const stagePts = atType.map(r => r.stage_pts_total);
   const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+  // Recency-scoped slice — most recent N starts at this track type only.
+  // Used by the prediction model as a "current form at this kind of track"
+  // signal (cleaner than the career-wide avg, which weights 10-year-old
+  // results equally with last month's).
+  const lastNStartsAvg = (n) => {
+    const last = atType.slice(0, n).map(r => r.finish_pos).filter(v => v != null);
+    return last.length ? sum(last) / last.length : null;
+  };
+  const lastNStartsStageAvg = (n) => {
+    const last = atType.slice(0, n).map(r => r.stage_pts_total);
+    return last.length ? last.reduce((a, b) => a + b, 0) / last.length : 0;
+  };
   const stats = {
     starts: atType.length,
     wins: finishes.filter(f => f === 1).length,
@@ -3406,6 +3421,8 @@ function getDriverTrackTypeStats(driverName, series, trackTypeKey) {
     top10: finishes.filter(f => f <= 10).length,
     avg_finish: finishes.length ? sum(finishes) / finishes.length : null,
     avg_stage_pts: atType.length ? sum(stagePts) / atType.length : 0,
+    last5_avg: lastNStartsAvg(5),
+    last5_stage_pts_avg: lastNStartsStageAvg(5),
   };
   DRIVER_ANALYTICS_CACHE.typeStats.set(cacheKey, stats);
   return stats;
@@ -9651,13 +9668,20 @@ function renderRacePredictionSection(opts) {
         <span class="rps-explainer-cta">methodology →</span>
       </summary>
       <div class="rps-explainer-body">
-        <strong>Finish prediction</strong> blends five signals per driver, weighted: their last 5 starts at this track
-        (30%), their average finish at this track type (25%), their recent form across the last 5 races (20%),
-        their season YTD average (15%), and their all-time average at this track (10%). Missing signals redistribute.
+        <strong>Finish prediction</strong> blends five signals per driver, weighted:
+        their <em>last 4 starts at this track</em> (30%),
+        their <em>last 5 starts at this track type</em> (30%),
+        their <em>form across the last 8 races</em> this season (15%),
+        their <em>all-time average at this track</em> (15%),
+        and their <em>season YTD average</em> (10%).
+        When a signal is unavailable (e.g., debut at a new venue, fewer than 8 races run this year) its weight is redistributed proportionally to the others.
         <br><br>
-        <strong>Stage points</strong> blend three signals: track-specific avg (40%), track-type avg (30%), and recent form (30%).
+        <strong>Stage points</strong> blend three signals:
+        <em>track-specific stage-points average</em> (40%),
+        <em>last 5 starts at this track type</em> (30%),
+        and <em>recent form across the last 8 races</em> (30%).
         <br><br>
-        <strong>Top performers</strong> uses a recency-weighted score: wins count 3×, top-5 1.5×, top-10 1.0×, with each
+        <strong>Top performers</strong> uses a separate recency-weighted score: wins count 3×, top-5 1.5×, top-10 1.0×, with each
         contribution halving for each year prior. A finish-position penalty (0.05 per place below P1) discourages
         rewarding lots of mid-pack finishes over a single win.
         <br><br>
@@ -9730,10 +9754,10 @@ function predictDriverForRace(driverName, series, trackCode) {
   if (!driverName || !trackCode) return null;
   const ttype = trackType(trackCode);
 
-  // ----- Finish signals -----
+  // ----- Signal extraction -----
   const trackStats = getDriverTrackStats(driverName, series, trackCode);
   const typeStats = ttype ? getDriverTrackTypeStats(driverName, series, ttype) : null;
-  const form = getDriverRecentForm(driverName, series, 5);
+  const form8 = getDriverRecentForm(driverName, series, 8);  // 15% slot
 
   // Season YTD average finish — read from current entity races
   let seasonAvg = null;
@@ -9749,24 +9773,40 @@ function predictDriverForRace(driverName, series, trackCode) {
     }
   }
 
-  // Five-signal blend with graceful fallback
+  // ----- Five-signal blend (finish position) -----
+  // Weights per the model spec:
+  //   30% last 4 starts at THIS track
+  //   30% last 5 starts at this TRACK TYPE
+  //   15% form across last 8 season races (any track)
+  //   15% all-time avg at THIS track
+  //   10% season YTD average
+  //
+  // Missing signals (e.g., debut at a venue) have their weight
+  // redistributed proportionally across the remaining available signals.
   const signals = [
-    { name: "track_recent", w: 0.30, val: trackStats?.last5_avg ?? null },
-    { name: "track_type",   w: 0.25, val: typeStats?.avg_finish ?? null },
-    { name: "form",         w: 0.20, val: form?.avg_finish ?? null },
-    { name: "season",       w: 0.15, val: seasonAvg },
-    { name: "track_all",    w: 0.10, val: trackStats?.avg_finish ?? null },
+    { name: "track_last4",   label: "Last 4 here",        w: 0.30, val: trackStats?.last4_avg ?? null },
+    { name: "type_last5",    label: "Last 5 same type",   w: 0.30, val: typeStats?.last5_avg ?? null },
+    { name: "form_last8",    label: "Form (last 8)",      w: 0.15, val: form8?.avg_finish ?? null },
+    { name: "track_alltime", label: "All-time here",      w: 0.15, val: trackStats?.avg_finish ?? null },
+    { name: "season_ytd",    label: "Season YTD",         w: 0.10, val: seasonAvg },
   ];
   const avail = signals.filter(s => s.val != null);
   if (avail.length === 0) return null;
   const wSum = avail.reduce((s, x) => s + x.w, 0);
   const predicted = avail.reduce((sum, x) => sum + (x.w / wSum) * x.val, 0);
 
-  // ----- Stage points signals -----
+  // ----- Stage-points signals (separate model) -----
+  // Stage points have lower variance than finish position so the simpler
+  // 3-signal blend works well. Same ranking of importance:
+  //   40% recent at THIS track (last 5)
+  //   30% recent at this TRACK TYPE (last 5)
+  //   30% recent form across last 8 races
+  // Using "recent" everywhere keeps stage-point predictions reactive to
+  // current form rather than a career stage-points reputation.
   const stagePtsSignals = [
     { w: 0.40, val: trackStats?.avg_stage_pts ?? null },
-    { w: 0.30, val: typeStats?.avg_stage_pts ?? null },
-    { w: 0.30, val: form?.avg_stage_pts ?? null },
+    { w: 0.30, val: typeStats?.last5_stage_pts_avg ?? null },
+    { w: 0.30, val: form8?.avg_stage_pts ?? null },
   ];
   const spAvail = stagePtsSignals.filter(s => s.val != null);
   let predictedStagePts = 0;
