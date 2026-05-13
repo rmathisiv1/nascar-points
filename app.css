@@ -10320,3 +10320,38 @@ body.lightbox-open {
     gap: 8px;
   }
 }
+
+/* ============================================================================
+   Compare view header — give the title proper breathing room. The default
+   .view-head is a flex row that puts the subtitle beside the title; on
+   compare with 3-4 drivers the subtitle gets very long ("4 drivers · X vs
+   Y vs Z vs W") and either crowds the title or pushes near the right edge.
+   We stack here instead, and add comfortable top padding so the headline
+   isn't visually pressed against the topbar / metricbar above.
+   ============================================================================ */
+#view-compare .view-head {
+  display: block;
+  padding-top: 8px;
+  margin-bottom: 14px;
+}
+#view-compare .view-head h1 {
+  margin-bottom: 6px;
+  line-height: 1.15;        /* a touch more room for descenders */
+}
+#view-compare .view-sub {
+  display: block;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+@media (max-width: 767.98px) {
+  #view-compare .view-head {
+    padding-top: 4px;
+    margin-bottom: 10px;
+  }
+  #view-compare .view-sub {
+    font-size: 12px;
+  }
+}
