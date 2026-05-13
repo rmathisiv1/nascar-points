@@ -9245,213 +9245,6 @@ body.lightbox-open {
   width: max-content;
 }
 
-/* ============================================================================
-   HOME: best-active-at-upcoming-track card
-   ============================================================================ */
-.home-best-card {
-  padding: 14px 16px;
-  margin-bottom: 18px;
-}
-.hbt-head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-.hbt-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.hbt-row {
-  display: grid;
-  grid-template-columns: 28px 44px 1fr auto;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 6px;
-  border-radius: 3px;
-  text-decoration: none;
-  color: var(--text);
-  transition: background 0.1s;
-}
-.hbt-row:hover {
-  background: var(--tint-1);
-}
-.hbt-rank {
-  font-family: var(--serif);
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--muted);
-  text-align: center;
-}
-.hbt-car {
-  display: inline-block;
-  padding: 3px 6px;
-  border-radius: 3px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  text-align: center;
-  letter-spacing: 0.02em;
-}
-.hbt-name {
-  font-family: var(--sans);
-  font-size: 14px;
-  font-weight: 600;
-}
-.hbt-stats {
-  display: flex;
-  gap: 14px;
-  align-items: baseline;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted);
-}
-.hbt-stats small {
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--dim);
-  margin-left: 3px;
-}
-.hbt-avg { font-weight: 700; color: var(--text); }
-.hbt-win { color: var(--pos); font-weight: 700; }
-.home-best-empty {
-  padding: 14px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  margin-bottom: 14px;
-  text-align: center;
-}
-
-/* ============================================================================
-   HOME: race prediction card
-   ============================================================================ */
-.home-prediction-card {
-  padding: 14px 16px;
-  margin-bottom: 18px;
-}
-.hp-explainer {
-  margin-bottom: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.hp-explainer-body {
-  font-family: var(--serif);
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--muted);
-  margin-top: 4px;
-}
-.hp-explainer-body em {
-  color: var(--text);
-  font-style: italic;
-}
-.hp-cols {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 24px;
-}
-.hp-col-head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 8px;
-}
-.hp-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.hp-list-finish {
-  max-height: 480px;
-  overflow-y: auto;
-}
-.hp-row {
-  display: grid;
-  grid-template-columns: 22px 38px 1fr auto;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 4px;
-  border-radius: 3px;
-  text-decoration: none;
-  color: var(--text);
-  transition: background 0.1s;
-}
-.hp-col-finish .hp-row {
-  grid-template-columns: 22px 38px 1fr 60px auto;
-}
-.hp-row:hover {
-  background: var(--tint-1);
-}
-.hp-pos {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
-  text-align: right;
-}
-.hp-car {
-  display: inline-block;
-  padding: 2px 5px;
-  border-radius: 2px;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 700;
-  text-align: center;
-}
-.hp-name {
-  font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 500;
-}
-.hp-pred {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
-}
-.hp-pred small {
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--dim);
-  font-weight: 400;
-  margin-left: 2px;
-}
-.hp-evidence {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 10px;
-  color: var(--dim);
-  text-align: right;
-}
-
-@media (max-width: 767.98px) {
-  .hp-cols {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  .hp-list-finish {
-    max-height: 360px;
-  }
-  .hbt-row {
-    grid-template-columns: 24px 38px 1fr auto;
-    gap: 8px;
-  }
-  .hbt-stats {
-    gap: 10px;
-    font-size: 11px;
-  }
-  .hp-col-finish .hp-row {
-    grid-template-columns: 22px 36px 1fr auto;
-  }
-  .hp-evidence { display: none; }
-}
 
 /* ============================================================================
    DRIVER COMPARE PAGE
@@ -9791,5 +9584,344 @@ body.lightbox-open {
   }
   .cmp-h2h-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   RACE PREDICTION SECTION (RPS)
+   Single card with two side-by-side columns: top performers (left) and
+   top 10 predicted stage points (right). Below the card: a collapsible
+   <details> with the full-field predicted finishing order, and another
+   <details> with the methodology. Used on both Home and Track pages.
+   ============================================================================ */
+.rps-card {
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+/* Section title — on home, it's a link to the track page */
+.rps-section-link {
+  color: var(--text);
+  text-decoration: none;
+}
+.rps-section-link:hover {
+  color: var(--accent);
+}
+.rps-section-link-arrow {
+  font-family: var(--mono);
+  font-size: 0.8em;
+  color: var(--muted);
+  transition: transform 0.1s, color 0.1s;
+  display: inline-block;
+}
+.rps-section-link:hover .rps-section-link-arrow {
+  color: var(--accent);
+  transform: translateX(3px);
+}
+
+/* Two-column layout: performers on the left, stage on the right.
+   They share a grid template so the rank/car/name columns line up
+   visually between the two side-by-side tables. */
+.rps-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.rps-col {
+  display: flex;
+  flex-direction: column;
+}
+.rps-col-head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.rps-col-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+/* Column headers row — aligned with the data rows below via matching grid */
+.rps-col-table-head {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border-bottom: 1px dashed var(--border);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+.rps-col-performers .rps-col-table-head {
+  grid-template-columns: 24px 42px 1fr 48px 36px 50px;
+}
+.rps-col-stage .rps-col-table-head {
+  grid-template-columns: 24px 42px 1fr 60px;
+}
+.rps-col-label {
+  text-align: right;
+}
+.rps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* PERFORMER ROW (left column) */
+.hbt-row {
+  display: grid;
+  grid-template-columns: 24px 42px 1fr 48px 36px 50px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 3px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.hbt-row:hover { background: var(--tint-1); }
+.hbt-rank {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1;
+}
+.hbt-car {
+  display: inline-block;
+  padding: 3px 5px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.hbt-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hbt-stat-cell {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  color: var(--text);
+}
+
+/* PREDICTION ROW (right column — top 10 stage pts) */
+.hp-row {
+  display: grid;
+  grid-template-columns: 24px 42px 1fr 60px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 3px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.hp-row:hover { background: var(--tint-1); }
+.hp-pos {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+}
+.hp-car {
+  display: inline-block;
+  padding: 3px 5px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.hp-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hp-stat-cell {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Tier classes — applied to numeric cells. Subtle backgrounds + bolder
+   text on the "good" tiers to visually highlight standouts. */
+.tier-good {
+  color: var(--pos);
+}
+.tier-mid {
+  color: var(--text);
+}
+.tier-poor {
+  color: var(--neg);
+  opacity: 0.85;
+}
+
+/* Light-mode tier overrides — the dark-mode greens/reds are too vibrant
+   on cream; use deeper, more legible hues. */
+[data-theme="light"] .tier-good { color: #2d5e2f; }
+[data-theme="light"] .tier-poor { color: #8c2820; }
+
+/* Full-field prediction <details> — collapsed by default */
+.rps-full-details {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.rps-full-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0;
+}
+.rps-full-summary::-webkit-details-marker { display: none; }
+.rps-full-summary-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text);
+}
+.rps-full-summary-cta {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--accent);
+  transition: transform 0.1s;
+}
+.rps-full-details[open] .rps-full-summary-cta {
+  transform: rotate(90deg);
+  display: inline-block;
+}
+.rps-full-body {
+  margin-top: 10px;
+  padding-top: 8px;
+}
+/* Inside the full prediction list, rows have an extra evidence-dots column */
+.rps-full-table-head {
+  grid-template-columns: 24px 42px 1fr 60px 50px !important;
+}
+.hp-row-finish {
+  grid-template-columns: 24px 42px 1fr 60px 50px;
+}
+.hp-evidence-dots {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+  letter-spacing: 1px;
+  text-align: center;
+}
+.rps-evidence-legend {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 11px;
+}
+.rps-evidence-legend strong {
+  font-family: var(--mono);
+  color: var(--text);
+  letter-spacing: 1px;
+}
+
+/* Methodology <details> — collapsed by default */
+.rps-explainer-details {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.rps-explainer-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+}
+.rps-explainer-summary::-webkit-details-marker { display: none; }
+.rps-explainer-cta {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+}
+.rps-explainer-body {
+  margin-top: 8px;
+  padding-top: 6px;
+  font-family: var(--serif);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.rps-explainer-body strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Empty state */
+.rps-empty {
+  padding: 14px 8px;
+  text-align: center;
+}
+
+/* MOBILE: stack the two columns */
+@media (max-width: 767.98px) {
+  .rps-cols {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .rps-col-performers .rps-col-table-head {
+    grid-template-columns: 22px 38px 1fr 40px 30px 42px;
+    gap: 6px;
+    padding: 4px;
+  }
+  .rps-col-stage .rps-col-table-head {
+    grid-template-columns: 22px 38px 1fr 50px;
+    gap: 6px;
+    padding: 4px;
+  }
+  .hbt-row {
+    grid-template-columns: 22px 38px 1fr 40px 30px 42px;
+    gap: 6px;
+    padding: 5px 4px;
+  }
+  .hp-row {
+    grid-template-columns: 22px 38px 1fr 50px;
+    gap: 6px;
+    padding: 5px 4px;
+  }
+  .hp-row-finish {
+    grid-template-columns: 22px 38px 1fr 50px 40px;
+  }
+  .rps-full-table-head {
+    grid-template-columns: 22px 38px 1fr 50px 40px !important;
+  }
+  .hbt-name, .hp-name {
+    font-size: 12px;
+  }
+  .hbt-stat-cell, .hp-stat-cell {
+    font-size: 11px;
   }
 }

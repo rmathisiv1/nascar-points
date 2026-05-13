@@ -3331,9 +3331,9 @@ function getDriverRaceHistory(driverName, series) {
           finish_pos: d.finish_pos,
           start_pos: d.start_pos,
           race_pts: d.race_pts,
-          stage1_pts: d.stage1_pts || 0,
-          stage2_pts: d.stage2_pts || 0,
-          stage_pts_total: (d.stage1_pts || 0) + (d.stage2_pts || 0),
+          stage1_pts: d.stage_1_pts || 0,
+          stage2_pts: d.stage_2_pts || 0,
+          stage_pts_total: (d.stage_1_pts || 0) + (d.stage_2_pts || 0),
           car_number: d.car_number,
         });
         break; // one row per race per driver
@@ -9412,27 +9412,40 @@ function renderHome() {
 // See driverTrackScore() for the formula. Top 5 from drivers who are
 // currently full-time (this season). Returns "" if no upcoming race
 // exists (post-finale) — caller can drop the section cleanly.
-function renderHomeBestAtUpcoming(year, series) {
-  const races = allRacesSorted();
-  const upcoming = races.filter(r => !(r.results || []).some(d => d.finish_pos === 1));
-  const nextRace = upcoming[0];
-  if (!nextRace || !nextRace.track_code) return "";
+// ============================================================
+// HOME / TRACK PAGE: Combined "next race" prediction module
+// ============================================================
+// Single section with two side-by-side columns:
+//   LEFT  — Top performers at this track (recency-weighted, 5 drivers)
+//   RIGHT — Top 10 predicted stage-point scorers
+// Below the card sits a collapsible <details> panel that holds the full
+// field's predicted finishing order. Keeping it collapsed by default
+// preserves vertical space on the home page; users who want the full
+// model output click to expand.
+//
+// The same renderer powers both Home (#/home) and Track pages (#/track),
+// driven by the parameters passed in.
 
-  const trackCode = nextRace.track_code;
-  const trackName = prettyTrack(trackCode, nextRace.track) || nextRace.track || "TBD";
-  const ttype = trackType(trackCode);
-  const ttypeLabel = ttype ? TRACK_TYPE_LABELS[ttype] : "";
+// Format a finish value with a tier class for color tinting.
+//   tier-good (< 12), tier-mid (12-18), tier-poor (> 18)
+function _finishTierClass(avgFin) {
+  if (avgFin == null) return "";
+  if (avgFin < 12) return "tier-good";
+  if (avgFin <= 18) return "tier-mid";
+  return "tier-poor";
+}
+// Stage points: higher is better. <4 is poor, >8 is good.
+function _stagePtsTierClass(sp) {
+  if (sp == null) return "";
+  if (sp >= 8) return "tier-good";
+  if (sp >= 4) return "tier-mid";
+  return "tier-poor";
+}
 
-  // Active full-timers in the CURRENT series. We pull the entity list
-  // (which reflects STATE.data = current series block) and filter by
-  // isFullTime — the same standard that powers the heatmap and other
-  // FT-only views.
+// Score & sort full-time drivers at a track. Returns rows for top-5 view.
+function _computeTrackPerformers(series, trackCode) {
   const ents = allEntities().filter(isFullTime);
-  if (ents.length === 0) return "";
-
-  // Score each driver. We use entity.primaryDriver (the driver who logged
-  // the most starts in this season's car) since that's who's actually
-  // running the car right now.
+  if (ents.length === 0) return [];
   const scored = ents.map(e => {
     const driverName = e.primaryDriver || e.driver;
     if (!driverName) return null;
@@ -9441,54 +9454,256 @@ function renderHomeBestAtUpcoming(year, series) {
     const stats = getDriverTrackStats(driverName, series, trackCode);
     return { entity: e, driverName, score, stats };
   }).filter(Boolean);
-
-  if (scored.length === 0) {
-    // No active drivers have history at this track (new venue, debut year).
-    return `
-      <div class="home-section-h">Top performers at ${escapeHTML(trackName)}</div>
-      <div class="home-best-empty">
-        <span class="ed-byline">No active drivers have raced at ${escapeHTML(trackName)} in the loaded seasons.</span>
-      </div>
-    `;
-  }
-
   scored.sort((a, b) => b.score - a.score);
-  const top5 = scored.slice(0, 5);
+  return scored;
+}
 
-  const rowsHTML = top5.map((row, i) => {
-    const carHex = colorFor(series, row.entity.car_number);
-    const carTxt = contrastTextFor(carHex);
-    const safeHex = safeContrastColor(carHex);
-    const slug = slugify(row.driverName);
-    const st = row.stats;
-    const winsHTML = st.wins > 0 ? `<span class="hbt-win">${st.wins} W</span>` : "";
-    return `
-      <a class="hbt-row profile-link" href="#/driver/${slug}">
-        <span class="hbt-rank">${i + 1}</span>
-        <span class="hbt-car" style="background:${carHex};color:${carTxt}">#${row.entity.car_number}</span>
-        <span class="hbt-name">${escapeHTML(row.driverName)}</span>
-        <span class="hbt-stats">
-          <span class="hbt-avg">${st.avg_finish != null ? st.avg_finish.toFixed(1) : "—"}<small>avg</small></span>
-          ${winsHTML}
-          <span class="hbt-starts">${st.starts}<small>starts</small></span>
-        </span>
-      </a>
-    `;
-  }).join("");
+// Run the full prediction model on every full-time driver for one race.
+// Returns sorted arrays for stage-points (DESC) and finish (ASC).
+function _computeRacePredictions(series, trackCode) {
+  const ents = allEntities().filter(isFullTime);
+  const predictions = ents.map(e => {
+    const driverName = e.primaryDriver || e.driver;
+    if (!driverName) return null;
+    const pred = predictDriverForRace(driverName, series, trackCode);
+    if (!pred) return null;
+    return { entity: e, driverName, ...pred };
+  }).filter(Boolean);
+  return {
+    byFinish: [...predictions].sort((a, b) => a.predicted_finish - b.predicted_finish),
+    byStage: [...predictions].sort((a, b) => b.predicted_stage_pts - a.predicted_stage_pts),
+    total: predictions.length,
+  };
+}
 
+// Render a single performer row for the Top Performers column.
+function _renderPerformerRow(row, i, series) {
+  const carHex = colorFor(series, row.entity.car_number);
+  const carTxt = contrastTextFor(carHex);
+  const slug = slugify(row.driverName);
+  const st = row.stats;
+  const avgFin = st.avg_finish;
+  const tierCls = _finishTierClass(avgFin);
   return `
-    <div class="home-section-h">Top performers at ${escapeHTML(trackName)}${ttypeLabel ? ` <span class="ed-byline" style="font-size:0.7em;">· ${escapeHTML(ttypeLabel)}</span>` : ""}</div>
-    <div class="home-best-card card">
-      <div class="hbt-head">
-        <span class="ed-kicker">Active ${series} drivers · recency-weighted</span>
-        <span class="ed-byline">Wins count 3×, top-5 1.5×, top-10 1.0×; weights halve per year</span>
+    <a class="hbt-row profile-link" href="#/driver/${slug}">
+      <span class="hbt-rank">${i + 1}</span>
+      <span class="hbt-car" style="background:${carHex};color:${carTxt}">#${row.entity.car_number}</span>
+      <span class="hbt-name">${escapeHTML(row.driverName)}</span>
+      <span class="hbt-stat-cell hbt-avg ${tierCls}">${avgFin != null ? avgFin.toFixed(1) : "—"}</span>
+      <span class="hbt-stat-cell hbt-wins ${st.wins > 0 ? "tier-good" : ""}">${st.wins}</span>
+      <span class="hbt-stat-cell hbt-starts">${st.starts}</span>
+    </a>
+  `;
+}
+
+// Render a single stage-points-prediction row.
+function _renderStagePtsRow(p, i, series) {
+  const carHex = colorFor(series, p.entity.car_number);
+  const carTxt = contrastTextFor(carHex);
+  const slug = slugify(p.driverName);
+  const sp = p.predicted_stage_pts;
+  const tierCls = _stagePtsTierClass(sp);
+  return `
+    <a class="hp-row profile-link" href="#/driver/${slug}">
+      <span class="hp-pos">${i + 1}</span>
+      <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
+      <span class="hp-name">${escapeHTML(p.driverName)}</span>
+      <span class="hp-stat-cell hp-pred ${tierCls}">${sp.toFixed(1)}</span>
+    </a>
+  `;
+}
+
+// Render a single predicted-finish row (used inside the full-field <details>).
+function _renderFinishRow(p, i, series) {
+  const carHex = colorFor(series, p.entity.car_number);
+  const carTxt = contrastTextFor(carHex);
+  const slug = slugify(p.driverName);
+  const finishVal = p.predicted_finish;
+  const tierCls = _finishTierClass(finishVal);
+  // Evidence dots: small icons telling us how much confidence we have.
+  // Both signals available = solid •••, missing one = ••○, missing both
+  // (only form+season) = •○○. Keeps row visually clean compared to
+  // the spelled-out track/track-type tags from v1.
+  let dots = "";
+  if (p.has_track_history && p.has_type_history) dots = "•••";
+  else if (p.has_track_history || p.has_type_history) dots = "••○";
+  else dots = "•○○";
+  return `
+    <a class="hp-row hp-row-finish profile-link" href="#/driver/${slug}">
+      <span class="hp-pos">${i + 1}</span>
+      <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
+      <span class="hp-name">${escapeHTML(p.driverName)}</span>
+      <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
+      <span class="hp-evidence-dots" title="Evidence: ${p.has_track_history ? "track ✓ " : ""}${p.has_type_history ? "track-type ✓ " : ""}form ✓ season ✓">${dots}</span>
+    </a>
+  `;
+}
+
+// The unified rendering function. opts:
+//   series, trackCode, trackName, roundNum (or null for non-home contexts)
+function renderRacePredictionSection(opts) {
+  const { series, trackCode, trackName, roundNum, headerStyle = "home" } = opts;
+  const ttype = trackType(trackCode);
+  const ttypeLabel = ttype ? TRACK_TYPE_LABELS[ttype] : "";
+
+  const performers = _computeTrackPerformers(series, trackCode);
+  const predictions = _computeRacePredictions(series, trackCode);
+
+  // If we have NO performers AND no predictions, render nothing — common
+  // on a brand-new venue with no historical data and no full-timers yet.
+  if (performers.length === 0 && predictions.total === 0) return "";
+
+  const top5HTML = performers.slice(0, 5)
+    .map((row, i) => _renderPerformerRow(row, i, series))
+    .join("");
+  const stageTop10HTML = predictions.byStage.slice(0, 10)
+    .map((p, i) => _renderStagePtsRow(p, i, series))
+    .join("");
+  const finishFullHTML = predictions.byFinish
+    .map((p, i) => _renderFinishRow(p, i, series))
+    .join("");
+
+  // Header text varies depending on context — on Home we already have a
+  // "Prediction · R12 Charlotte" section heading; on Track page we want
+  // "Next race here" since the track name is already in the page chrome.
+  // On Home, the title also links to the track page so users can dig into
+  // the full context (history, all-races table, etc.) for that venue.
+  const trackHref = `#/track/${encodeURIComponent(trackCode)}`;
+  const sectionTitle = headerStyle === "home"
+    ? `<a class="rps-section-link" href="${trackHref}">Next race · ${roundNum ? `R${roundNum} ` : ""}${escapeHTML(trackName)} <span class="rps-section-link-arrow">→</span></a>`
+    : `Next race here${roundNum ? ` · R${roundNum}` : ""}`;
+
+  // Build columns. Top performers may be empty (new track) — in that case
+  // we render a placeholder card so the layout doesn't collapse.
+  const performersCol = top5HTML ? `
+    <div class="rps-col rps-col-performers">
+      <div class="rps-col-head">
+        <div class="rps-col-title">Top performers</div>
+        <div class="ed-byline">Active ${series} drivers · recency-weighted</div>
       </div>
-      <div class="hbt-list">
-        ${rowsHTML}
+      <div class="rps-col-table-head">
+        <span></span><span></span><span></span>
+        <span class="rps-col-label">AVG FIN</span>
+        <span class="rps-col-label">WINS</span>
+        <span class="rps-col-label">STARTS</span>
+      </div>
+      <div class="rps-list">
+        ${top5HTML}
+      </div>
+    </div>
+  ` : `
+    <div class="rps-col rps-col-performers">
+      <div class="rps-col-head">
+        <div class="rps-col-title">Top performers</div>
+      </div>
+      <div class="rps-empty">
+        <span class="ed-byline">No active drivers have raced at ${escapeHTML(trackName)} in loaded seasons.</span>
       </div>
     </div>
   `;
+
+  const stageCol = stageTop10HTML ? `
+    <div class="rps-col rps-col-stage">
+      <div class="rps-col-head">
+        <div class="rps-col-title">Top 10 predicted stage points</div>
+        <div class="ed-byline">Combined S1 + S2 expected</div>
+      </div>
+      <div class="rps-col-table-head">
+        <span></span><span></span><span></span>
+        <span class="rps-col-label">PRED PTS</span>
+      </div>
+      <div class="rps-list">
+        ${stageTop10HTML}
+      </div>
+    </div>
+  ` : "";
+
+  // Full-field predictions go in a <details>. Renders inline below the
+  // two-column card and starts collapsed. Click to expand.
+  const finishDetails = finishFullHTML ? `
+    <details class="rps-full-details">
+      <summary class="rps-full-summary">
+        <span class="rps-full-summary-title">Predicted finishing order · ${predictions.total} full-time drivers</span>
+        <span class="rps-full-summary-cta">View full prediction →</span>
+      </summary>
+      <div class="rps-full-body">
+        <div class="rps-col-table-head rps-full-table-head">
+          <span></span><span></span><span></span>
+          <span class="rps-col-label">PRED FIN</span>
+          <span class="rps-col-label">EVIDENCE</span>
+        </div>
+        <div class="rps-list">
+          ${finishFullHTML}
+        </div>
+        <div class="rps-evidence-legend">
+          <span class="ed-byline">Evidence: <strong>•••</strong> track + track-type data · <strong>••○</strong> one of the two · <strong>•○○</strong> form/season only</span>
+        </div>
+      </div>
+    </details>
+  ` : "";
+
+  // "How this works" explainer is condensed and lives BELOW the columns,
+  // in another <details> so it doesn't eat space on a quick glance.
+  const explainerDetails = `
+    <details class="rps-explainer-details">
+      <summary class="rps-explainer-summary">
+        <span class="ed-kicker">How this works</span>
+        <span class="rps-explainer-cta">methodology →</span>
+      </summary>
+      <div class="rps-explainer-body">
+        <strong>Finish prediction</strong> blends five signals per driver, weighted: their last 5 starts at this track
+        (30%), their average finish at this track type (25%), their recent form across the last 5 races (20%),
+        their season YTD average (15%), and their all-time average at this track (10%). Missing signals redistribute.
+        <br><br>
+        <strong>Stage points</strong> blend three signals: track-specific avg (40%), track-type avg (30%), and recent form (30%).
+        <br><br>
+        <strong>Top performers</strong> uses a recency-weighted score: wins count 3×, top-5 1.5×, top-10 1.0×, with each
+        contribution halving for each year prior. A finish-position penalty (0.05 per place below P1) discourages
+        rewarding lots of mid-pack finishes over a single win.
+        <br><br>
+        Full-time drivers only.
+      </div>
+    </details>
+  `;
+
+  return `
+    <div class="home-section-h">${sectionTitle}${ttypeLabel ? ` <span class="ed-byline" style="font-size:0.7em;">· ${escapeHTML(ttypeLabel)}</span>` : ""}</div>
+    <div class="rps-card card">
+      <div class="rps-cols">
+        ${performersCol}
+        ${stageCol}
+      </div>
+      ${finishDetails}
+      ${explainerDetails}
+    </div>
+  `;
 }
+
+// Backward-compat wrappers for renderHome's existing call sites
+function renderHomeBestAtUpcoming(year, series) {
+  // We now bundle Top performers + Stage prediction + full-finish into
+  // ONE section, so this function returns "" (the unified section is
+  // produced by renderHomePrediction below). Kept as a no-op for
+  // call-site stability; renderHome calls both and we just consolidated
+  // into the second one.
+  return "";
+}
+
+function renderHomePrediction(year, series) {
+  const races = allRacesSorted();
+  const upcoming = races.filter(r => !(r.results || []).some(d => d.finish_pos === 1));
+  const nextRace = upcoming[0];
+  if (!nextRace || !nextRace.track_code) return "";
+  return renderRacePredictionSection({
+    series,
+    trackCode: nextRace.track_code,
+    trackName: prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD",
+    roundNum: nextRace.round,
+    headerStyle: "home",
+  });
+}
+
+
 
 
 // ============================================================
@@ -9573,115 +9788,6 @@ function predictDriverForRace(driverName, series, trackCode) {
   };
 }
 
-function renderHomePrediction(year, series) {
-  const races = allRacesSorted();
-  const upcoming = races.filter(r => !(r.results || []).some(d => d.finish_pos === 1));
-  const nextRace = upcoming[0];
-  if (!nextRace || !nextRace.track_code) return "";
-
-  const trackCode = nextRace.track_code;
-  const trackName = prettyTrack(trackCode, nextRace.track) || nextRace.track || "TBD";
-
-  // Full-time field only
-  const ents = allEntities().filter(isFullTime);
-  if (ents.length === 0) return "";
-
-  // Run prediction for every full-timer
-  const predictions = ents.map(e => {
-    const driverName = e.primaryDriver || e.driver;
-    if (!driverName) return null;
-    const pred = predictDriverForRace(driverName, series, trackCode);
-    if (!pred) return null;
-    return {
-      entity: e,
-      driverName,
-      ...pred,
-    };
-  }).filter(Boolean);
-
-  if (predictions.length === 0) return "";
-
-  // Sorted by predicted_finish ASC (lowest = best)
-  const byFinish = [...predictions].sort((a, b) => a.predicted_finish - b.predicted_finish);
-  // Sorted by predicted_stage_pts DESC (highest = best)
-  const byStage = [...predictions].sort((a, b) => b.predicted_stage_pts - a.predicted_stage_pts);
-
-  // Build race-finish full-field rows
-  const finishRows = byFinish.map((p, i) => {
-    const slug = slugify(p.driverName);
-    const carHex = colorFor(series, p.entity.car_number);
-    const carTxt = contrastTextFor(carHex);
-    const predPos = i + 1;
-    const finishVal = p.predicted_finish.toFixed(1);
-    const evidence = [];
-    if (p.has_track_history) evidence.push("track");
-    if (p.has_type_history) evidence.push("track-type");
-    const ev = evidence.length ? evidence.join(" · ") : "form/season only";
-    return `
-      <a class="hp-row profile-link" href="#/driver/${slug}">
-        <span class="hp-pos">${predPos}</span>
-        <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
-        <span class="hp-name">${escapeHTML(p.driverName)}</span>
-        <span class="hp-pred">${finishVal} <small>raw</small></span>
-        <span class="hp-evidence">${ev}</span>
-      </a>
-    `;
-  }).join("");
-
-  // Top 10 stage points rows
-  const stageRows = byStage.slice(0, 10).map((p, i) => {
-    const slug = slugify(p.driverName);
-    const carHex = colorFor(series, p.entity.car_number);
-    const carTxt = contrastTextFor(carHex);
-    return `
-      <a class="hp-row profile-link" href="#/driver/${slug}">
-        <span class="hp-pos">${i + 1}</span>
-        <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
-        <span class="hp-name">${escapeHTML(p.driverName)}</span>
-        <span class="hp-pred">${p.predicted_stage_pts.toFixed(1)} <small>pts</small></span>
-      </a>
-    `;
-  }).join("");
-
-  return `
-    <div class="home-section-h">Prediction · R${nextRace.round} ${escapeHTML(trackName)}</div>
-    <div class="home-prediction-card card">
-      <div class="hp-explainer">
-        <div class="ed-kicker">How this works</div>
-        <div class="hp-explainer-body">
-          Each driver's predicted finish is a weighted blend of five signals: their
-          <em>last 5 starts at this track</em> (30%), their <em>average finish at this
-          track type</em> (25%), their <em>recent form across the last 5 races</em> (20%),
-          their <em>season YTD average</em> (15%), and their <em>all-time average at this track</em> (10%).
-          When a signal is unavailable (e.g., debut at a new venue) its weight redistributes to the others.
-          Full-time drivers only.
-        </div>
-      </div>
-
-      <div class="hp-cols">
-        <div class="hp-col hp-col-stage">
-          <div class="hp-col-head">
-            <span class="ed-kicker">Top 10 stage points</span>
-            <span class="ed-byline">Combined S1 + S2 expected</span>
-          </div>
-          <div class="hp-list">
-            ${stageRows}
-          </div>
-        </div>
-
-        <div class="hp-col hp-col-finish">
-          <div class="hp-col-head">
-            <span class="ed-kicker">Predicted finishing order</span>
-            <span class="ed-byline">${byFinish.length} full-time drivers · lower raw score = better</span>
-          </div>
-          <div class="hp-list hp-list-finish">
-            ${finishRows}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
 
 
 // Renders the hero row: a countdown card on the left for the next race,
@@ -14926,8 +15032,35 @@ function renderTrackPage() {
     </table>
   ` : `<div class="rc-empty">No history at this track in loaded years.</div>`;
 
+  // ----- Predictions for the next race at this track, when applicable -----
+  // The home page shows predictions for the very next race on the schedule.
+  // For the Track page we want a similar block IF this track has an
+  // upcoming race anywhere in the schedule (loaded current season only —
+  // historical years don't have an "upcoming race" semantically).
+  let trackPredictionHTML = "";
+  const upcomingAtTrack = (STATE.data?.races || [])
+    .filter(r => r.track_code === code)
+    .filter(r => !(r.results || []).some(d => d.finish_pos === 1));
+  const nextAtTrack = upcomingAtTrack[0];
+  if (nextAtTrack) {
+    // Force STATE.series to tSeries temporarily so getDriverRaceHistory
+    // and the entity list reflect the track-page's series view. Without
+    // this, predictions would be biased toward STATE.series even when the
+    // user is viewing this track in a different series.
+    // Note: _computeRacePredictions/_computeTrackPerformers read STATE.series
+    // implicitly via allEntities/SEASON_CACHE. We pass tSeries explicitly.
+    trackPredictionHTML = renderRacePredictionSection({
+      series: tSeries,
+      trackCode: code,
+      trackName: trackName,
+      roundNum: nextAtTrack.round,
+      headerStyle: "track",
+    });
+  }
+
   host.innerHTML = `
     ${renderTrackThisSeason(history)}
+    ${trackPredictionHTML}
 
     <div class="rc-grid tk-grid-3">
       <div class="card rc-card">
