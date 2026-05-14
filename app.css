@@ -10426,3 +10426,20 @@ body.lightbox-open {
     font-size: 12px;
   }
 }
+
+/* Picker result badge for drivers without a bio entry yet — usually
+   rookies / brand-new debuts. Subtle italic muted tag, sized small so
+   it doesn't dominate the option. */
+.cmp-picker-no-bio {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 10px;
+  color: var(--dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  vertical-align: middle;
+}

@@ -12646,8 +12646,44 @@ function wireCompareEventHandlers() {
   const results = document.getElementById("cmp-picker-results");
   if (input && !input._wired) {
     input._wired = true;
+    // Build the candidates map ONCE per search: union of bios + drivers
+    // who appear in any loaded race results. Cache-only drivers (no bio
+    // yet, typical for rookies whose first start is this season) are
+    // marked so we can sort them after bio'd drivers and label them
+    // visually. Recomputed on each input event because SEASON_CACHE may
+    // have grown (e.g., user just loaded a historical year).
+    const buildCandidates = () => {
+      const bios = STATE.driverBios || {};
+      const candidates = new Map(); // slug -> { slug, name, hasBio, starts }
+      // Bios first
+      for (const [slug, bio] of Object.entries(bios)) {
+        const name = (bio && bio.full_name) || slug.replace(/-/g, " ");
+        candidates.set(slug, { slug, name, hasBio: true, starts: 0 });
+      }
+      // SEASON_CACHE next — scan all loaded series/years for unique driver
+      // names. Records start-count so we can sort high-volume drivers
+      // first within the bio-less pool (one-race fill-ins shouldn't beat
+      // a debut full-timer in search ranking).
+      for (const year of Object.keys(SEASON_CACHE)) {
+        for (const sCode of Object.keys(SEASON_CACHE[year] || {})) {
+          const block = SEASON_CACHE[year][sCode];
+          for (const race of (block.races || [])) {
+            for (const d of (race.results || [])) {
+              if (!d.driver) continue;
+              const slug = slugify(d.driver);
+              if (candidates.has(slug)) {
+                candidates.get(slug).starts++;
+              } else {
+                candidates.set(slug, { slug, name: d.driver, hasBio: false, starts: 1 });
+              }
+            }
+          }
+        }
+      }
+      return candidates;
+    };
     const showResults = (q) => {
-      const allBios = STATE.driverBios || {};
+      const candidates = buildCandidates();
       const qLow = (q || "").trim().toLowerCase();
       if (qLow.length < 2) {
         results.hidden = true;
@@ -12656,19 +12692,29 @@ function wireCompareEventHandlers() {
       }
       const selected = new Set(STATE.compare.slugs);
       const matches = [];
-      for (const [slug, bio] of Object.entries(allBios)) {
-        if (selected.has(slug)) continue;
-        const name = ((bio && bio.full_name) || slug.replace(/-/g, " ")).toLowerCase();
-        if (name.includes(qLow) || slug.includes(qLow)) {
-          matches.push({ slug, name: (bio && bio.full_name) || slug });
-          if (matches.length >= 12) break;
+      for (const cand of candidates.values()) {
+        if (selected.has(cand.slug)) continue;
+        const nameLow = cand.name.toLowerCase();
+        if (nameLow.includes(qLow) || cand.slug.includes(qLow)) {
+          matches.push(cand);
         }
       }
-      if (matches.length === 0) {
+      // Sort: bio'd drivers first (more complete data), then by start
+      // count desc (a brand-new rookie with 1 start ranks below an
+      // active full-timer if both match the query — though for unique
+      // names like "Brent Crews" only one match exists either way).
+      matches.sort((a, b) => {
+        if (a.hasBio !== b.hasBio) return a.hasBio ? -1 : 1;
+        return b.starts - a.starts;
+      });
+      const top = matches.slice(0, 12);
+      if (top.length === 0) {
         results.innerHTML = `<div class="cmp-picker-noresult">No matches</div>`;
       } else {
-        results.innerHTML = matches.map(m =>
-          `<button class="cmp-picker-result" data-slug="${m.slug}">${escapeHTML(m.name)}</button>`
+        results.innerHTML = top.map(m =>
+          `<button class="cmp-picker-result" data-slug="${m.slug}">
+            ${escapeHTML(m.name)}${m.hasBio ? "" : `<span class="cmp-picker-no-bio">no bio</span>`}
+          </button>`
         ).join("");
       }
       results.hidden = false;
