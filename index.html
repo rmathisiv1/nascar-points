@@ -113,24 +113,21 @@
   <a href="#/standings"  class="mobile-nav-link" data-view="standings">Standings</a>
   <a href="#/playoffs"   class="mobile-nav-link" data-view="playoffs">Playoffs</a>
 
-  <!-- Trending — single page, matches the desktop top-level tab -->
-  <div class="mobile-nav-section">Form</div>
-  <a href="#/form"       class="mobile-nav-link" data-view="form">Trending</a>
-
   <!-- Analytics group (matches desktop Analytics ▾ dropdown) -->
   <div class="mobile-nav-section">Analytics</div>
+  <a href="#/form"       class="mobile-nav-link" data-view="form">Trending</a>
   <a href="#/arc"        class="mobile-nav-link" data-view="arc">Cumulative Season</a>
   <a href="#/heatmap"    class="mobile-nav-link" data-view="heatmap">Heatmap</a>
   <a href="#/teammates"  class="mobile-nav-link" data-view="teammates">Teammate Delta</a>
   <a href="#/trajectory" class="mobile-nav-link" data-view="trajectory">Stage vs Finish</a>
   <a href="#/breakdown"  class="mobile-nav-link" data-view="breakdown">Stage Points</a>
-  <a href="#/trackstats" class="mobile-nav-link" data-view="trackstats">Track Stats</a>
   <a href="#/compare"    class="mobile-nav-link" data-view="compare">Driver Compare</a>
 
   <!-- Data group (matches desktop Data ▾ dropdown) -->
   <div class="mobile-nav-section">Data</div>
   <a href="#/drivers"    class="mobile-nav-link" data-view="drivers">Drivers</a>
   <a href="#/teams"      class="mobile-nav-link" data-view="teams">Teams</a>
+  <a href="#/trackstats" class="mobile-nav-link" data-view="trackstats">Tracks</a>
   <a href="#/crewchiefs" class="mobile-nav-link" data-view="crewchiefs">Crew Chiefs</a>
 </nav>
 
@@ -168,28 +165,29 @@
         </div>
       </div>
 
-      <a href="#/form"       class="dash-tab" data-view="form">Trending</a>
-
-      <!-- Analytics group: container only (no own view); hover reveals analysis tabs -->
+      <!-- Analytics group: container only (no own view); hover reveals analysis tabs.
+           Trending lives here now (was a top-level tab); Track Stats moved out
+           to the Data group and renamed Tracks. -->
       <div class="dash-tab-group" data-group="analytics">
-        <a href="#/arc" class="dash-tab dash-tab-parent" data-view="analytics" data-fallback-view="arc">Analytics <span class="dash-caret">▾</span></a>
+        <a href="#/form" class="dash-tab dash-tab-parent" data-view="analytics" data-fallback-view="form">Analytics <span class="dash-caret">▾</span></a>
         <div class="dash-submenu">
+          <a href="#/form"       class="dash-subitem" data-view="form">Trending</a>
           <a href="#/arc"        class="dash-subitem" data-view="arc">Cumulative Season</a>
           <a href="#/heatmap"    class="dash-subitem" data-view="heatmap">Heatmap</a>
           <a href="#/teammates"  class="dash-subitem" data-view="teammates">Teammate</a>
           <a href="#/trajectory" class="dash-subitem" data-view="trajectory">Stage vs Finish</a>
           <a href="#/breakdown"  class="dash-subitem" data-view="breakdown">Stage Points</a>
-          <a href="#/trackstats" class="dash-subitem" data-view="trackstats">Track Stats</a>
           <a href="#/compare"    class="dash-subitem" data-view="compare">Driver Compare</a>
         </div>
       </div>
 
-      <!-- Data group: all-time database tabs -->
+      <!-- Data group: all-time database tabs + per-track stats (was in Analytics) -->
       <div class="dash-tab-group" data-group="more">
         <a href="#/drivers" class="dash-tab dash-tab-parent" data-view="more" data-fallback-view="drivers">Data <span class="dash-caret">▾</span></a>
         <div class="dash-submenu">
           <a href="#/drivers"     class="dash-subitem" data-view="drivers">Drivers</a>
           <a href="#/teams"       class="dash-subitem" data-view="teams">Teams</a>
+          <a href="#/trackstats"  class="dash-subitem" data-view="trackstats">Tracks</a>
           <a href="#/crewchiefs"  class="dash-subitem" data-view="crewchiefs">Crew Chiefs</a>
         </div>
       </div>

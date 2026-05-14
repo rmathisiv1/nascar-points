@@ -2885,7 +2885,7 @@ function render() {
       trajectory: "Stage vs Finish",
       teammates: "Teammate Delta",
       heatmap: "Heatmap",
-      trackstats: "Track Stats",
+      trackstats: "Tracks",
       compare: "Driver Compare",
       standings: "Standings",
       playoffs: "Playoff Picture",
