@@ -10733,3 +10733,72 @@ body.lightbox-open {
     font-size: 11px;
   }
 }
+
+/* ============================================================================
+   Profile: Year-over-Year trajectory panel
+   ============================================================================ */
+.profile-yoy-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.profile-yoy-line.yoy-current {
+  /* Current-year line gets a subtle drop shadow so it pops against
+     faded prior years. Pure visual emphasis — no interaction change. */
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.12));
+}
+
+.profile-yoy-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  padding: 10px 14px 0;
+  margin-top: 6px;
+  border-top: 1px dashed var(--border);
+  font-family: var(--sans);
+  font-size: 11px;
+}
+.profile-yoy-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.profile-yoy-legend-item.is-current {
+  color: var(--text);
+  font-weight: 600;
+}
+.profile-yoy-legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+}
+.profile-yoy-legend-year {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.profile-yoy-legend-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  margin-left: 2px;
+}
+
+@media (max-width: 767.98px) {
+  .profile-yoy-controls {
+    margin-left: 0;
+    margin-top: 6px;
+    flex-basis: 100%;
+  }
+  .profile-yoy-legend {
+    gap: 8px 12px;
+    font-size: 10px;
+    padding: 8px 10px 0;
+  }
+  .profile-yoy-legend-swatch {
+    width: 12px;
+  }
+}

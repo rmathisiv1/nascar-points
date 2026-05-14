@@ -42,7 +42,14 @@ const STATE = {
   trajectory: { mode: "season", show: "all", labels: "top12", tracks: "all",
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
-  profile: { kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all", trackPicker: { code: null, series: "all", gens: new Set() } },
+  profile: {
+    kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all",
+    trackPicker: { code: null, series: "all", gens: new Set() },
+    // Year-over-year panel: which metric to plot across all loaded years
+    // overlaid as faint lines + current year bold. "points" = cumulative
+    // championship points; "standings" = championship rank (inverted Y).
+    yearOverYear: { metric: "points" },
+  },
   // Analytics → Track Stats: pick a track, see all-time driver stats there.
   // sortKey/sortDir control the table; gens/series are filters; minStarts
   // hides drivers with low samples (3+ default).
@@ -7472,6 +7479,24 @@ function renderProfile() {
         </div>
       </div>
 
+      <div class="profile-panel" id="profile-yoy-panel">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">Year-over-Year Trajectory</span>
+          <span class="profile-panel-sub" id="profile-yoy-sub">Current season vs every loaded prior year</span>
+          <span class="profile-yoy-controls">
+            <span class="cmp-chart-control-label">Show</span>
+            <div class="toggle-group mini" id="profile-yoy-toggle">
+              <button data-yoy-metric="points" data-val="points" class="${STATE.profile.yearOverYear.metric === "points" ? "on" : ""}">Points</button>
+              <button data-yoy-metric="standings" data-val="standings" class="${STATE.profile.yearOverYear.metric === "standings" ? "on" : ""}">Standings</button>
+            </div>
+          </span>
+        </div>
+        <div class="profile-panel-body">
+          <svg id="profile-yoy-chart" style="width:100%;height:280px;display:block;"></svg>
+          <div class="profile-yoy-legend" id="profile-yoy-legend"></div>
+        </div>
+      </div>
+
       <div class="profile-panel">
         <div class="profile-panel-head">
           <span class="profile-panel-title">Performance Profile</span>
@@ -7584,6 +7609,7 @@ function renderProfile() {
 
   // --- Fill in the chart ---
   paintProfileChart(entity, rows);
+  paintProfileYearOverYear(primaryDrv);
   paintProfileHeatStrip(rows);
   paintProfileTrackSplits(entity);
   paintProfileRaceTable(rows, kind);
@@ -7992,6 +8018,322 @@ function paintProfileChart(entity, rows) {
     svg._chartOut  = hideChartTip;
     svg.addEventListener("mousemove", svg._chartMove);
     svg.addEventListener("mouseout",  svg._chartOut);
+  }
+}
+
+function paintProfileChart_yoyAnchor() { /* anchor placeholder so the
+   following YoY section sits between paintProfileChart and the real
+   paintProfileHeatStrip. Replaced by paintProfileYearOverYear below;
+   kept as a no-op for safety. */ }
+
+// ============================================================
+// Profile: Year-over-Year overlay chart
+// ============================================================
+// Cumulative points (or championship-standings rank) by race, for every
+// loaded historical year overlaid on top of the current year. Lets a
+// driver compare themselves to past seasons at the same point on the
+// schedule.
+//
+// One line per loaded year. Current year = bold with the driver's car
+// color. Past years = thin/faded, color-rotated for distinction.
+// Standings mode inverts the Y axis (P1 at top, P40 at bottom) and uses
+// rank-by-points-among-eligible-drivers computed live from the cache.
+
+// Build per-year, per-round metrics for one driver in the current series.
+// Returns: [{year, points: [{round, cum, finish}, ...], standings: [{round, pos}, ...], lastRound}, ...]
+// Sorted ascending by year.
+function _profileYearOverYearData(driverName, series) {
+  const slug = slugify(driverName);
+  const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+  const out = [];
+  for (const yearStr of Object.keys(cache).sort()) {
+    const year = Number(yearStr);
+    const block = cache[year] && cache[year][series];
+    if (!block) continue;
+    const races = (block.races || []).slice().sort((a, b) => (a.round || 0) - (b.round || 0));
+    if (races.length === 0) continue;
+
+    // First pass: did this driver start ANY race this year? If not, skip
+    // the year entirely so we don't draw a flat-zero line for a year
+    // they weren't in the series.
+    let driverRan = false;
+    for (const r of races) {
+      for (const d of (r.results || [])) {
+        if (slugify(d.driver) === slug) { driverRan = true; break; }
+      }
+      if (driverRan) break;
+    }
+    if (!driverRan) continue;
+
+    // Walk races in order. For each completed race (has at least one
+    // P1 finisher in results), compute:
+    //   - this driver's cumulative championship points (sum of race_pts
+    //     across all races run through this round; respects ineligibility:
+    //     ineligible drivers' race_pts are 0 in the data, so they
+    //     naturally don't contribute)
+    //   - this driver's standings position = rank of their cum_pts
+    //     among all eligible (non-ineligible) drivers who started ≥1 race
+    let driverCum = 0;
+    let driverFinish = null;
+    const pointsByDriver = new Map();  // slug -> cum points
+    const points = [];
+    const standings = [];
+    let lastCompletedRound = 0;
+
+    for (const race of races) {
+      // Skip races without results (future / cancelled)
+      const completed = (race.results || []).some(d => d.finish_pos === 1);
+      if (!completed) continue;
+      lastCompletedRound = race.round || lastCompletedRound;
+
+      // Add this race's contributions
+      driverFinish = null;
+      for (const d of (race.results || [])) {
+        if (d.ineligible) continue;  // ineligible drivers don't contribute to championship totals
+        const dSlug = slugify(d.driver);
+        const pts = d.race_pts || 0;
+        pointsByDriver.set(dSlug, (pointsByDriver.get(dSlug) || 0) + pts);
+        if (dSlug === slug) {
+          driverCum = pointsByDriver.get(dSlug);
+          driverFinish = d.finish_pos;
+        }
+      }
+
+      // Skip rounds where this driver didn't enter the race (would
+      // produce a flat segment that's misleading). When the driver
+      // sat out, leave a gap rather than drawing a horizontal stretch.
+      if (driverFinish == null && driverCum === (points.length ? points[points.length-1].cum : 0)) {
+        // Did the driver actually run this race? We need to distinguish
+        // "ran and got 0 points" from "didn't run at all". Check the
+        // race's results directly.
+        const ran = (race.results || []).some(d => slugify(d.driver) === slug);
+        if (!ran) continue;
+      }
+
+      // Rank by cum points (descending). Driver's rank = 1 + count of
+      // drivers with strictly more points.
+      let rank = 1;
+      for (const [k, v] of pointsByDriver) {
+        if (k === slug) continue;
+        if (v > driverCum) rank++;
+      }
+
+      points.push({ round: race.round, cum: driverCum, finish: driverFinish });
+      standings.push({ round: race.round, pos: rank });
+    }
+
+    if (points.length === 0) continue;
+    out.push({ year, points, standings, lastRound: lastCompletedRound });
+  }
+  return out;
+}
+
+function paintProfileYearOverYear(driverName) {
+  const svg = document.getElementById("profile-yoy-chart");
+  const legendHost = document.getElementById("profile-yoy-legend");
+  const sub = document.getElementById("profile-yoy-sub");
+  if (!svg) return;
+  const series = STATE.series;
+  const metric = (STATE.profile.yearOverYear && STATE.profile.yearOverYear.metric) || "points";
+
+  const data = _profileYearOverYearData(driverName, series);
+
+  // Wire the metric toggle (idempotent — guarded by _wired)
+  const toggle = document.getElementById("profile-yoy-toggle");
+  if (toggle && !toggle._wired) {
+    toggle._wired = true;
+    toggle.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-yoy-metric]");
+      if (!btn) return;
+      const next = btn.dataset.yoyMetric;
+      if (!next || next === STATE.profile.yearOverYear.metric) return;
+      STATE.profile.yearOverYear.metric = next;
+      // Update button state visually without re-rendering everything
+      toggle.querySelectorAll("button").forEach(b =>
+        b.classList.toggle("on", b.dataset.yoyMetric === next));
+      paintProfileYearOverYear(driverName);
+    });
+  }
+
+  if (data.length === 0) {
+    svg.innerHTML = "";
+    if (legendHost) legendHost.innerHTML = "";
+    if (sub) sub.textContent = "No prior seasons loaded for this driver.";
+    return;
+  }
+
+  if (sub) {
+    sub.textContent = data.length === 1
+      ? `Only ${STATE.season} loaded — load prior seasons for year-over-year comparison.`
+      : `Current season vs ${data.length - 1} prior year${data.length === 2 ? "" : "s"}`;
+  }
+
+  // X axis: race round 1..36 (NCS season length; works for shorter
+  // schedules in other series since we draw to whichever year had the
+  // most rounds). Y axis depends on metric.
+  const maxRound = Math.max(...data.map(d =>
+    Math.max(...(metric === "points" ? d.points : d.standings).map(p => p.round))
+  ));
+
+  // Y-axis: for points use ceiling of max points (rounded to nice 50);
+  // for standings use the max position any year reached, capped at ~40
+  // (most series have ~40 cars).
+  let yMin = 1, yMax = 1;
+  if (metric === "points") {
+    const rawMax = Math.max(...data.flatMap(d => d.points.map(p => p.cum)));
+    yMax = Math.max(50, Math.ceil((rawMax * 1.08) / 50) * 50);
+    yMin = 0;
+  } else {
+    const maxRank = Math.max(...data.flatMap(d => d.standings.map(p => p.pos)));
+    yMax = Math.max(20, Math.ceil(maxRank * 1.1));  // round-trip up a bit
+    yMin = 1;
+  }
+
+  // Compute SVG dims
+  const rect = svg.getBoundingClientRect();
+  const W = Math.max(320, Math.floor(rect.width));
+  const H = 280;
+  const pad = { t: 16, r: 56, b: 32, l: 56 };
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.removeAttribute("preserveAspectRatio");
+
+  // X scale: round 1..maxRound
+  const xScale = round => pad.l + ((round - 1) / Math.max(1, maxRound - 1)) * innerW;
+  // Y scale — inverted for standings (P1 at top)
+  const yScale = v => {
+    if (metric === "standings") {
+      // P1 (best) at top of plot
+      return pad.t + ((v - yMin) / (yMax - yMin)) * innerH;
+    }
+    return pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+  };
+
+  // Grid lines + Y axis labels
+  const gridLines = [];
+  const nTicks = 5;
+  for (let i = 0; i <= nTicks; i++) {
+    const t = i / nTicks;
+    const y = pad.t + t * innerH;
+    let v;
+    if (metric === "standings") {
+      v = Math.round(yMin + t * (yMax - yMin));
+    } else {
+      v = Math.round(yMax * (1 - t));
+    }
+    const label = metric === "standings" ? `P${v}` : v;
+    gridLines.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
+    gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${label}</text>`);
+  }
+
+  // X axis labels — same adaptive logic as the season chart
+  const minLabelPx = 32;
+  const racesPerPx = maxRound / Math.max(1, innerW);
+  const labelStep = Math.max(1, Math.ceil(minLabelPx * racesPerPx));
+  const xLabels = [];
+  for (let r = 1; r <= maxRound; r++) {
+    const isFirst = r === 1;
+    const isLast = r === maxRound;
+    const onStep = (r - 1) % labelStep === 0;
+    const tooCloseToLast = !isLast && (maxRound - r) < labelStep;
+    if (!isFirst && !isLast && (!onStep || tooCloseToLast)) continue;
+    xLabels.push(`<text class="axis-label" x="${xScale(r)}" y="${H - 10}" text-anchor="middle">R${r}</text>`);
+  }
+
+  // Color rotation for prior years. Current year uses the car color
+  // (bold). Prior years cycle through a muted palette — enough variety
+  // for ~6-7 distinct lines before colors repeat. These are picked to
+  // sit comfortably alongside any car color without clashing.
+  const PRIOR_YEAR_PALETTE = [
+    "#7a8fa6",  // slate blue
+    "#a67a5e",  // ochre brown
+    "#6f8a72",  // dusty sage
+    "#9c6e8c",  // muted plum
+    "#8a8a5e",  // olive
+    "#6a90a8",  // steel
+    "#a87a7a",  // dusty rose
+  ];
+
+  // Resolve current driver's car color (for the current-year line).
+  const currentEnt = allEntities().find(e =>
+    (e.primaryDriver || e.driver || "").toLowerCase() === driverName.toLowerCase()
+  );
+  const carHex = currentEnt
+    ? colorFor(series, currentEnt.car_number)
+    : "var(--accent)";
+  const currentHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
+
+  // Build one path per year. Most recent year (current) drawn last so it
+  // sits on top of older lines visually.
+  const sortedData = data.slice().sort((a, b) => a.year - b.year);
+  const lines = sortedData.map((yd, idx) => {
+    const isCurrent = (yd.year === STATE.season);
+    const seriesPoints = metric === "points" ? yd.points : yd.standings;
+    if (seriesPoints.length === 0) return { yd, paths: "" };
+    // Color: current = bright car color; prior = muted palette cycling
+    // by recency (more recent prior years get earlier palette entries).
+    const color = isCurrent
+      ? currentHex
+      : PRIOR_YEAR_PALETTE[(sortedData.length - 1 - idx - 1) % PRIOR_YEAR_PALETTE.length];
+
+    const strokeWidth = isCurrent ? 2.5 : 1.5;
+    const opacity = isCurrent ? 1.0 : 0.45;
+
+    // Path with breakage at gaps (rounds the driver missed)
+    let d = "";
+    let lastRound = null;
+    for (const p of seriesPoints) {
+      const val = metric === "points" ? p.cum : p.pos;
+      const cmd = (lastRound != null && p.round === lastRound + 1) ? "L" : "M";
+      d += `${cmd}${xScale(p.round).toFixed(1)},${yScale(val).toFixed(1)} `;
+      lastRound = p.round;
+    }
+
+    // Endpoint label — year + final value, anchored at last point
+    const last = seriesPoints[seriesPoints.length - 1];
+    const lastVal = metric === "points" ? last.cum : last.pos;
+    const lx = xScale(last.round);
+    const ly = yScale(lastVal);
+
+    return {
+      yd, color, isCurrent, strokeWidth, opacity, d, lx, ly,
+      labelText: `${yd.year}`,
+      valText: metric === "points" ? `${last.cum} pts` : `P${last.pos}`,
+    };
+  });
+
+  // Render: grid first, then path (older years), then current year on top
+  const linesHTML = lines.map(l => {
+    if (!l.d) return "";
+    return `
+      <g class="profile-yoy-line ${l.isCurrent ? "yoy-current" : "yoy-prior"}" data-year="${l.yd.year}">
+        <path d="${l.d}" fill="none" stroke="${l.color}"
+              stroke-width="${l.strokeWidth}" opacity="${l.opacity}"
+              stroke-linejoin="round" stroke-linecap="round"/>
+      </g>
+    `;
+  }).join("");
+
+  svg.innerHTML = `
+    ${gridLines.join("")}
+    ${xLabels.join("")}
+    ${linesHTML}
+  `;
+
+  // Legend below the chart — sorted by year descending (newest first)
+  if (legendHost) {
+    const legendItems = lines.slice().reverse().map(l => {
+      if (!l.d) return "";
+      return `
+        <span class="profile-yoy-legend-item ${l.isCurrent ? "is-current" : ""}">
+          <span class="profile-yoy-legend-swatch" style="background:${l.color};${l.isCurrent ? "" : "opacity:0.6;"}"></span>
+          <span class="profile-yoy-legend-year">${l.yd.year}${l.isCurrent ? " (current)" : ""}</span>
+          <span class="profile-yoy-legend-val">${l.valText}</span>
+        </span>
+      `;
+    }).join("");
+    legendHost.innerHTML = legendItems;
   }
 }
 
