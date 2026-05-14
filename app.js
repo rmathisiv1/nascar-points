@@ -45,10 +45,6 @@ const STATE = {
   profile: {
     kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all",
     trackPicker: { code: null, series: "all", gens: new Set() },
-    // Year-over-year panel: which metric to plot across all loaded years
-    // overlaid as faint lines + current year bold. "points" = cumulative
-    // championship points; "standings" = championship rank (inverted Y).
-    yearOverYear: { metric: "points" },
   },
   // Analytics → Track Stats: pick a track, see all-time driver stats there.
   // sortKey/sortDir control the table; gens/series are filters; minStarts
@@ -1855,10 +1851,6 @@ function parseHash() {
       splitsRange: STATE.profile.splitsRange || "season",
       splitsSeries: STATE.profile.splitsSeries || "all",
       heatmapSeries: STATE.profile.heatmapSeries || "all",
-      // Preserve the year-over-year panel's toggle state across
-      // navigation so the user's preference for points vs standings
-      // doesn't reset every time they open a new profile.
-      yearOverYear: (STATE.profile && STATE.profile.yearOverYear) || { metric: "points" },
       // Reset track picker to defaults on each driver navigation so a
       // selection made on Driver A doesn't bleed into Driver B (where the
       // picked track might not exist in their cache).
@@ -1906,8 +1898,6 @@ function parseHash() {
       splitsRange: STATE.profile.splitsRange || "season",
       splitsSeries: STATE.profile.splitsSeries || "all",
       heatmapSeries: STATE.profile.heatmapSeries || "all",
-      // Preserve year-over-year toggle state — see comment in driver branch above.
-      yearOverYear: (STATE.profile && STATE.profile.yearOverYear) || { metric: "points" },
       trackPicker: { code: null, series: "all", gens: new Set() },
       locked: true,
     };
@@ -7478,7 +7468,7 @@ function renderProfile() {
       <div class="profile-panel">
         <div class="profile-panel-head">
           <span class="profile-panel-title">${STATE.season} Season Cumulative</span>
-          <span class="profile-panel-sub">Points accrued by race</span>
+          <span class="profile-panel-sub">Points by race · last year faded behind</span>
         </div>
         <div class="profile-panel-body">
           <svg id="profile-chart" style="width:100%;height:260px;display:block;"></svg>
@@ -7487,19 +7477,11 @@ function renderProfile() {
 
       <div class="profile-panel" id="profile-yoy-panel">
         <div class="profile-panel-head">
-          <span class="profile-panel-title">Year-over-Year Trajectory</span>
-          <span class="profile-panel-sub" id="profile-yoy-sub">Current season vs every loaded prior year</span>
-          <span class="profile-yoy-controls">
-            <span class="cmp-chart-control-label">Show</span>
-            <div class="toggle-group mini" id="profile-yoy-toggle">
-              <button data-yoy-metric="points" data-val="points" class="${(STATE.profile?.yearOverYear?.metric || "points") === "points" ? "on" : ""}">Points</button>
-              <button data-yoy-metric="standings" data-val="standings" class="${(STATE.profile?.yearOverYear?.metric || "points") === "standings" ? "on" : ""}">Standings</button>
-            </div>
-          </span>
+          <span class="profile-panel-title">Standings Position</span>
+          <span class="profile-panel-sub" id="profile-yoy-sub">${STATE.season} championship rank by race · last year faded behind</span>
         </div>
         <div class="profile-panel-body">
           <svg id="profile-yoy-chart" style="width:100%;height:280px;display:block;"></svg>
-          <div class="profile-yoy-legend" id="profile-yoy-legend"></div>
         </div>
       </div>
 
@@ -7894,24 +7876,74 @@ function paintProfileChart(entity, rows) {
   const svg = document.getElementById("profile-chart");
   if (!svg) return;
   const carHex = colorFor(STATE.series, entity.car_number);
+  const driverName = entity.primaryDriver || entity.driver || "";
 
-  // Cumulative
+  // Cumulative for current season
   let cum = 0;
   const pts = rows.filter(r => !r.dns).map(r => { cum += r.total || 0; return { round: r.round, cum, finish: r.finish, track_code: r.track_code, track: r.track }; });
   if (pts.length === 0) { svg.innerHTML = ""; return; }
   const rawMax = pts[pts.length - 1].cum;
-  const maxPts = Math.max(50, Math.ceil((rawMax * 1.08) / 50) * 50);
+
+  // Prior-year cumulative trace: pick the closest prior season this driver
+  // ran in the current series, build per-round cumulative pts. Used as a
+  // faint underlay so the user can see whether they're tracking ahead or
+  // behind their previous year at the same point on the schedule.
+  // Returns { year, points: [{round, cum}], lastCum } or null if none found.
+  const priorYear = (() => {
+    const slug = slugify(driverName);
+    const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+    const years = Object.keys(cache)
+      .map(Number)
+      .filter(y => y < STATE.season)
+      .sort((a, b) => b - a);
+    for (const year of years) {
+      const block = cache[year] && cache[year][STATE.series];
+      if (!block) continue;
+      const races = (block.races || []).slice().sort((a, b) => (a.round || 0) - (b.round || 0));
+      let pyCum = 0;
+      let ran = false;
+      const trace = [];
+      for (const r of races) {
+        if (!(r.results && r.results.length)) continue;  // skip uncompleted
+        const myResult = r.results.find(d => slugify(d.driver) === slug);
+        if (myResult) {
+          ran = true;
+          pyCum += (myResult.race_pts || 0);
+        }
+        // Push a point at every completed round (whether driver ran or
+        // not) — so the line extends across the full schedule even
+        // through missed weeks (flat segments through missed rounds
+        // are the correct visualization for "no points scored").
+        trace.push({ round: r.round, cum: pyCum });
+      }
+      if (ran && trace.length > 0) {
+        return { year, points: trace, lastCum: pyCum };
+      }
+    }
+    return null;
+  })();
+
+  // Y-axis max accounts for BOTH lines so neither gets clipped.
+  const overallMax = priorYear ? Math.max(rawMax, priorYear.lastCum) : rawMax;
+  const maxPts = Math.max(50, Math.ceil((overallMax * 1.08) / 50) * 50);
 
   function draw() {
     const rect = svg.getBoundingClientRect();
     const W = Math.max(320, Math.floor(rect.width));
     const H = 260;
-    const pad = { t: 16, r: 48, b: 32, l: 52 };
+    const pad = { t: 16, r: 56, b: 32, l: 52 };
     const innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.removeAttribute("preserveAspectRatio");
 
-    const xScale = i => pad.l + (pts.length === 1 ? innerW / 2 : (i / (pts.length - 1)) * innerW);
+    // X axis spans the full prior-year schedule when present (so the
+    // current year's partial schedule appears in correct proportion);
+    // otherwise just spans the current year's rounds.
+    const maxRound = Math.max(
+      pts[pts.length - 1].round || pts.length,
+      priorYear ? (priorYear.points[priorYear.points.length - 1].round || 0) : 0
+    );
+    const xScale = round => pad.l + ((round - 1) / Math.max(1, maxRound - 1)) * innerW;
     const yScale = v => pad.t + (1 - v / maxPts) * innerH;
 
     const gridY = [];
@@ -7921,31 +7953,49 @@ function paintProfileChart(entity, rows) {
       gridY.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
       gridY.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
     }
-    // Adaptive x-axis: with 36 races and ~600px of chart width, drawing
-    // every label crams them together unreadably. Compute a label step
-    // such that each label has at least ~28px of horizontal room. Always
-    // include the first and last round so the user sees the boundaries.
+    // Adaptive x-axis labels — based on max round (longer of the two
+    // seasons) so the label density looks right.
     const minLabelPx = 28;
-    const racesPerPx = pts.length / Math.max(1, innerW);
+    const racesPerPx = maxRound / Math.max(1, innerW);
     const labelStep = Math.max(1, Math.ceil(minLabelPx * racesPerPx));
-    const xLabels = pts.map((p, i) => {
-      const isFirst = i === 0;
-      const isLast = i === pts.length - 1;
-      const onStep = i % labelStep === 0;
-      // Skip the on-step label adjacent to "last" so they don't collide
-      const tooCloseToLast = !isLast && (pts.length - 1 - i) < labelStep;
-      if (!isFirst && !isLast && (!onStep || tooCloseToLast)) return "";
-      return `<text class="axis-label" x="${xScale(i)}" y="${H - 10}" text-anchor="middle">R${p.round}</text>`;
-    }).join("");
+    const xLabels = [];
+    for (let r = 1; r <= maxRound; r++) {
+      const isFirst = r === 1;
+      const isLast = r === maxRound;
+      const onStep = (r - 1) % labelStep === 0;
+      const tooCloseToLast = !isLast && (maxRound - r) < labelStep;
+      if (!isFirst && !isLast && (!onStep || tooCloseToLast)) continue;
+      xLabels.push(`<text class="axis-label" x="${xScale(r)}" y="${H - 10}" text-anchor="middle">R${r}</text>`);
+    }
 
-    const lineD = pts.map((p, i) => `${xScale(i)},${yScale(p.cum)}`).join(" ");
-    const areaD = `M${xScale(0)},${pad.t + innerH} L${pts.map((p, i) => `${xScale(i)},${yScale(p.cum)}`).join(" L")} L${xScale(pts.length - 1)},${pad.t + innerH} Z`;
+    // Prior year line — drawn first so it sits behind. Subtle muted
+    // tone, dashed-ish (not literally dashed; just thin + faded) so
+    // it reads as background context without competing with the
+    // current-year line.
+    let priorPath = "";
+    let priorLabel = "";
+    if (priorYear && priorYear.points.length > 0) {
+      const d = priorYear.points.map((p, i) =>
+        `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
+      ).join(" ");
+      priorPath = `<path d="${d}" fill="none" stroke="var(--muted)" stroke-width="1.5" opacity="0.45"/>`;
+      // Year + final-cum endpoint label
+      const last = priorYear.points[priorYear.points.length - 1];
+      const lx = xScale(last.round);
+      const ly = yScale(last.cum);
+      priorLabel = `
+        <text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="10" font-weight="600" fill="var(--muted)" opacity="0.7">${priorYear.year}: ${last.cum}</text>
+      `;
+    }
 
-    const dots = pts.map((p, i) => {
+    const lineD = pts.map(p => `${xScale(p.round)},${yScale(p.cum)}`).join(" ");
+    const areaD = `M${xScale(pts[0].round)},${pad.t + innerH} L${pts.map(p => `${xScale(p.round)},${yScale(p.cum)}`).join(" L")} L${xScale(pts[pts.length-1].round)},${pad.t + innerH} Z`;
+
+    const dots = pts.map(p => {
       const isWin = p.finish === 1;
       const r = isWin ? 5 : 3.5;
       const stroke = isWin ? "#fff" : "none";
-      const x = xScale(i), y = yScale(p.cum);
+      const x = xScale(p.round), y = yScale(p.cum);
       return `<g class="profile-chart-hit" data-round="${p.round}" data-finish="${p.finish ?? ''}" data-track="${escapeHTML(p.track || '')}" data-track-code="${escapeHTML(p.track_code || '')}" data-cum="${p.cum}">
         <circle cx="${x}" cy="${y}" r="10" fill="transparent"/>
         <circle cx="${x}" cy="${y}" r="${r}" fill="${carHex}" stroke="${stroke}" stroke-width="${isWin ? 1.5 : 0}"/>
@@ -7953,8 +8003,8 @@ function paintProfileChart(entity, rows) {
     }).join("");
 
     const last = pts[pts.length - 1];
-    const lastX = xScale(pts.length - 1), lastY = yScale(last.cum);
-    const labelTotal = `<text x="${lastX + 8}" y="${lastY + 4}" font-family="var(--mono)" font-size="12" font-weight="700" fill="${carHex}">${last.cum}</text>`;
+    const lastX = xScale(last.round), lastY = yScale(last.cum);
+    const labelTotal = `<text x="${lastX + 6}" y="${lastY - 6}" font-family="var(--mono)" font-size="12" font-weight="700" fill="${carHex}">${STATE.season}: ${last.cum}</text>`;
 
     svg.innerHTML = `
       <defs>
@@ -7964,10 +8014,12 @@ function paintProfileChart(entity, rows) {
         </linearGradient>
       </defs>
       ${gridY.join("")}
-      ${xLabels}
+      ${xLabels.join("")}
+      ${priorPath}
       <path d="${areaD}" fill="url(#profile-grad)" opacity="0.4"/>
       <polyline points="${lineD}" fill="none" stroke="${carHex}" stroke-width="2"/>
       ${dots}
+      ${priorLabel}
       ${labelTotal}
     `;
   }
@@ -8136,108 +8188,76 @@ function _profileYearOverYearData(driverName, series) {
 
 function paintProfileYearOverYear(driverName) {
   const svg = document.getElementById("profile-yoy-chart");
-  const legendHost = document.getElementById("profile-yoy-legend");
   const sub = document.getElementById("profile-yoy-sub");
   if (!svg) return;
   const series = STATE.series;
-  const metric = (STATE.profile && STATE.profile.yearOverYear && STATE.profile.yearOverYear.metric) || "points";
 
-  const data = _profileYearOverYearData(driverName, series);
+  // Get current + closest prior year only. The full data helper returns
+  // every loaded year; we filter down to [current, closestPrior].
+  const allYearsData = _profileYearOverYearData(driverName, series);
+  const currentYearData = allYearsData.find(d => d.year === STATE.season) || null;
+  const priorYearsData = allYearsData
+    .filter(d => d.year < STATE.season)
+    .sort((a, b) => b.year - a.year);   // newest first
+  const priorYearData = priorYearsData[0] || null;
 
-  // Wire the metric toggle (idempotent — guarded by _wired)
-  const toggle = document.getElementById("profile-yoy-toggle");
-  if (toggle && !toggle._wired) {
-    toggle._wired = true;
-    toggle.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-yoy-metric]");
-      if (!btn) return;
-      const next = btn.dataset.yoyMetric;
-      // Defensive: ensure the sub-state object exists. If a future
-      // state reset clears it (or if older session storage drops it),
-      // we re-create it here rather than crashing.
-      if (!STATE.profile.yearOverYear) STATE.profile.yearOverYear = { metric: "points" };
-      if (!next || next === STATE.profile.yearOverYear.metric) return;
-      STATE.profile.yearOverYear.metric = next;
-      // Update button state visually without re-rendering everything
-      toggle.querySelectorAll("button").forEach(b =>
-        b.classList.toggle("on", b.dataset.yoyMetric === next));
-      paintProfileYearOverYear(driverName);
-    });
-  }
-
-  if (data.length === 0) {
+  if (!currentYearData && !priorYearData) {
     svg.innerHTML = "";
-    if (legendHost) legendHost.innerHTML = "";
-    if (sub) sub.textContent = "No prior seasons loaded for this driver.";
+    if (sub) sub.textContent = "No standings data available for this driver.";
     return;
   }
 
   if (sub) {
-    sub.textContent = data.length === 1
-      ? `Only ${STATE.season} loaded — load prior seasons for year-over-year comparison.`
-      : `Current season vs ${data.length - 1} prior year${data.length === 2 ? "" : "s"}`;
+    if (!priorYearData) {
+      sub.textContent = `${STATE.season} championship rank by race · no prior season loaded for comparison`;
+    } else if (!currentYearData) {
+      sub.textContent = `${priorYearData.year} championship rank by race · driver hasn't run ${STATE.season} yet`;
+    } else {
+      sub.textContent = `${STATE.season} championship rank by race · ${priorYearData.year} faded behind`;
+    }
   }
 
-  // X axis: race round 1..36 (NCS season length; works for shorter
-  // schedules in other series since we draw to whichever year had the
-  // most rounds). Y axis depends on metric.
-  const maxRound = Math.max(...data.map(d =>
-    Math.max(...(metric === "points" ? d.points : d.standings).map(p => p.round))
-  ));
+  // X axis: spans the longer of the two seasons (so a 12-round current
+  // year next to a 36-round prior year displays in correct proportion).
+  const maxRound = Math.max(
+    currentYearData ? Math.max(...currentYearData.standings.map(p => p.round)) : 0,
+    priorYearData   ? Math.max(...priorYearData.standings.map(p => p.round)) : 0
+  );
 
-  // Y-axis: for points use ceiling of max points (rounded to nice 50);
-  // for standings use the max position any year reached, capped at ~40
-  // (most series have ~40 cars).
-  let yMin = 1, yMax = 1;
-  if (metric === "points") {
-    const rawMax = Math.max(...data.flatMap(d => d.points.map(p => p.cum)));
-    yMax = Math.max(50, Math.ceil((rawMax * 1.08) / 50) * 50);
-    yMin = 0;
-  } else {
-    const maxRank = Math.max(...data.flatMap(d => d.standings.map(p => p.pos)));
-    yMax = Math.max(20, Math.ceil(maxRank * 1.1));  // round-trip up a bit
-    yMin = 1;
-  }
+  // Y axis: max standings position from either year (capped reasonably)
+  const maxRank = Math.max(
+    currentYearData ? Math.max(...currentYearData.standings.map(p => p.pos)) : 1,
+    priorYearData   ? Math.max(...priorYearData.standings.map(p => p.pos))   : 1
+  );
+  const yMin = 1;
+  const yMax = Math.max(20, Math.ceil(maxRank * 1.1));
 
-  // Compute SVG dims
+  // SVG dims
   const rect = svg.getBoundingClientRect();
   const W = Math.max(320, Math.floor(rect.width));
   const H = 280;
-  const pad = { t: 16, r: 56, b: 32, l: 56 };
+  const pad = { t: 16, r: 64, b: 32, l: 56 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.removeAttribute("preserveAspectRatio");
 
-  // X scale: round 1..maxRound
   const xScale = round => pad.l + ((round - 1) / Math.max(1, maxRound - 1)) * innerW;
-  // Y scale — inverted for standings (P1 at top)
-  const yScale = v => {
-    if (metric === "standings") {
-      // P1 (best) at top of plot
-      return pad.t + ((v - yMin) / (yMax - yMin)) * innerH;
-    }
-    return pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
-  };
+  // Standings: P1 at TOP of chart (lower rank value = better = higher on screen)
+  const yScale = v => pad.t + ((v - yMin) / (yMax - yMin)) * innerH;
 
-  // Grid lines + Y axis labels
+  // Grid + Y labels
   const gridLines = [];
   const nTicks = 5;
   for (let i = 0; i <= nTicks; i++) {
     const t = i / nTicks;
     const y = pad.t + t * innerH;
-    let v;
-    if (metric === "standings") {
-      v = Math.round(yMin + t * (yMax - yMin));
-    } else {
-      v = Math.round(yMax * (1 - t));
-    }
-    const label = metric === "standings" ? `P${v}` : v;
+    const v = Math.round(yMin + t * (yMax - yMin));
     gridLines.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
-    gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${label}</text>`);
+    gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">P${v}</text>`);
   }
 
-  // X axis labels — same adaptive logic as the season chart
+  // X labels — adaptive
   const minLabelPx = 32;
   const racesPerPx = maxRound / Math.max(1, innerW);
   const labelStep = Math.max(1, Math.ceil(minLabelPx * racesPerPx));
@@ -8251,21 +8271,7 @@ function paintProfileYearOverYear(driverName) {
     xLabels.push(`<text class="axis-label" x="${xScale(r)}" y="${H - 10}" text-anchor="middle">R${r}</text>`);
   }
 
-  // Color rotation for prior years. Current year uses the car color
-  // (bold). Prior years cycle through a muted palette — enough variety
-  // for ~6-7 distinct lines before colors repeat. These are picked to
-  // sit comfortably alongside any car color without clashing.
-  const PRIOR_YEAR_PALETTE = [
-    "#7a8fa6",  // slate blue
-    "#a67a5e",  // ochre brown
-    "#6f8a72",  // dusty sage
-    "#9c6e8c",  // muted plum
-    "#8a8a5e",  // olive
-    "#6a90a8",  // steel
-    "#a87a7a",  // dusty rose
-  ];
-
-  // Resolve current driver's car color (for the current-year line).
+  // Resolve current driver's car color
   const currentEnt = allEntities().find(e =>
     (e.primaryDriver || e.driver || "").toLowerCase() === driverName.toLowerCase()
   );
@@ -8274,77 +8280,51 @@ function paintProfileYearOverYear(driverName) {
     : "var(--accent)";
   const currentHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
 
-  // Build one path per year. Most recent year (current) drawn last so it
-  // sits on top of older lines visually.
-  const sortedData = data.slice().sort((a, b) => a.year - b.year);
-  const lines = sortedData.map((yd, idx) => {
-    const isCurrent = (yd.year === STATE.season);
-    const seriesPoints = metric === "points" ? yd.points : yd.standings;
-    if (seriesPoints.length === 0) return { yd, paths: "" };
-    // Color: current = bright car color; prior = muted palette cycling
-    // by recency (more recent prior years get earlier palette entries).
-    const color = isCurrent
-      ? currentHex
-      : PRIOR_YEAR_PALETTE[(sortedData.length - 1 - idx - 1) % PRIOR_YEAR_PALETTE.length];
-
-    const strokeWidth = isCurrent ? 2.5 : 1.5;
-    const opacity = isCurrent ? 1.0 : 0.45;
-
-    // Path with breakage at gaps (rounds the driver missed)
+  // Build path strings — break at gaps where the driver missed a race
+  const pathFor = (yd) => {
+    if (!yd || !yd.standings.length) return "";
     let d = "";
     let lastRound = null;
-    for (const p of seriesPoints) {
-      const val = metric === "points" ? p.cum : p.pos;
+    for (const p of yd.standings) {
       const cmd = (lastRound != null && p.round === lastRound + 1) ? "L" : "M";
-      d += `${cmd}${xScale(p.round).toFixed(1)},${yScale(val).toFixed(1)} `;
+      d += `${cmd}${xScale(p.round).toFixed(1)},${yScale(p.pos).toFixed(1)} `;
       lastRound = p.round;
     }
+    return d;
+  };
 
-    // Endpoint label — year + final value, anchored at last point
-    const last = seriesPoints[seriesPoints.length - 1];
-    const lastVal = metric === "points" ? last.cum : last.pos;
+  // Prior year — faded behind. Drawn first so the current year sits on top.
+  let priorPath = "";
+  let priorLabel = "";
+  if (priorYearData) {
+    const d = pathFor(priorYearData);
+    priorPath = `<path d="${d}" fill="none" stroke="var(--muted)" stroke-width="1.5" opacity="0.45" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last = priorYearData.standings[priorYearData.standings.length - 1];
     const lx = xScale(last.round);
-    const ly = yScale(lastVal);
+    const ly = yScale(last.pos);
+    priorLabel = `<text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="10" font-weight="600" fill="var(--muted)" opacity="0.7">${priorYearData.year}: P${last.pos}</text>`;
+  }
 
-    return {
-      yd, color, isCurrent, strokeWidth, opacity, d, lx, ly,
-      labelText: `${yd.year}`,
-      valText: metric === "points" ? `${last.cum} pts` : `P${last.pos}`,
-    };
-  });
-
-  // Render: grid first, then path (older years), then current year on top
-  const linesHTML = lines.map(l => {
-    if (!l.d) return "";
-    return `
-      <g class="profile-yoy-line ${l.isCurrent ? "yoy-current" : "yoy-prior"}" data-year="${l.yd.year}">
-        <path d="${l.d}" fill="none" stroke="${l.color}"
-              stroke-width="${l.strokeWidth}" opacity="${l.opacity}"
-              stroke-linejoin="round" stroke-linecap="round"/>
-      </g>
-    `;
-  }).join("");
+  // Current year — bold, in car color
+  let currentPath = "";
+  let currentLabel = "";
+  if (currentYearData) {
+    const d = pathFor(currentYearData);
+    currentPath = `<path d="${d}" fill="none" stroke="${currentHex}" stroke-width="2.5" opacity="1" stroke-linejoin="round" stroke-linecap="round" filter="drop-shadow(0 1px 1px rgba(0,0,0,0.12))"/>`;
+    const last = currentYearData.standings[currentYearData.standings.length - 1];
+    const lx = xScale(last.round);
+    const ly = yScale(last.pos);
+    currentLabel = `<text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="12" font-weight="700" fill="${currentHex}">${currentYearData.year}: P${last.pos}</text>`;
+  }
 
   svg.innerHTML = `
     ${gridLines.join("")}
     ${xLabels.join("")}
-    ${linesHTML}
+    ${priorPath}
+    ${currentPath}
+    ${priorLabel}
+    ${currentLabel}
   `;
-
-  // Legend below the chart — sorted by year descending (newest first)
-  if (legendHost) {
-    const legendItems = lines.slice().reverse().map(l => {
-      if (!l.d) return "";
-      return `
-        <span class="profile-yoy-legend-item ${l.isCurrent ? "is-current" : ""}">
-          <span class="profile-yoy-legend-swatch" style="background:${l.color};${l.isCurrent ? "" : "opacity:0.6;"}"></span>
-          <span class="profile-yoy-legend-year">${l.yd.year}${l.isCurrent ? " (current)" : ""}</span>
-          <span class="profile-yoy-legend-val">${l.valText}</span>
-        </span>
-      `;
-    }).join("");
-    legendHost.innerHTML = legendItems;
-  }
 }
 
 function paintProfileHeatStrip(rows) {
