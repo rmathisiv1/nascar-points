@@ -7467,8 +7467,8 @@ function renderProfile() {
     <div class="profile-panels">
       <div class="profile-panel">
         <div class="profile-panel-head">
-          <span class="profile-panel-title">${STATE.season} Season Cumulative</span>
-          <span class="profile-panel-sub">Points by race · last year faded behind</span>
+          <span class="profile-panel-title">Season Points</span>
+          <span class="profile-panel-sub">${STATE.season} cumulative points by race · last year faded behind</span>
         </div>
         <div class="profile-panel-body">
           <svg id="profile-chart" style="width:100%;height:260px;display:block;"></svg>
@@ -7987,12 +7987,15 @@ function paintProfileChart(entity, rows) {
         `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
       ).join(" ");
       priorPath = `<path d="${d}" fill="none" stroke="var(--muted)" stroke-width="1.5" opacity="0.45"/>`;
-      // Year + final-cum endpoint label
+      // Year + final-cum endpoint label. Uses --text color rather than
+      // --muted so it stays legible against the bright gradient-fill area
+      // of the current-year curve, while opacity keeps it visually
+      // secondary to the bold current-year line.
       const last = priorYear.points[priorYear.points.length - 1];
       const lx = xScale(last.round);
       const ly = yScale(last.cum);
       priorLabel = `
-        <text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="10" font-weight="600" fill="var(--muted)" opacity="0.7">${priorYear.year}: ${last.cum}</text>
+        <text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="11" font-weight="600" fill="var(--text)" opacity="0.85">${priorYear.year}: ${last.cum}</text>
       `;
     }
 
@@ -8010,9 +8013,9 @@ function paintProfileChart(entity, rows) {
       </g>`;
     }).join("");
 
-    const last = pts[pts.length - 1];
-    const lastX = xScale(last.round), lastY = yScale(last.cum);
-    const labelTotal = `<text x="${lastX + 6}" y="${lastY - 6}" font-family="var(--mono)" font-size="12" font-weight="700" fill="${carHex}">${STATE.season}: ${last.cum}</text>`;
+    // Current-year endpoint label removed by user request — the bold
+    // colored line + dots are clearly the current year, and the running
+    // total is already shown in the header rank panel.
 
     svg.innerHTML = `
       <defs>
@@ -8028,7 +8031,6 @@ function paintProfileChart(entity, rows) {
       <polyline points="${lineD}" fill="none" stroke="${carHex}" stroke-width="2"/>
       ${dots}
       ${priorLabel}
-      ${labelTotal}
     `;
   }
   requestAnimationFrame(draw);
@@ -8329,19 +8331,19 @@ function paintProfileYearOverYear(driverName) {
     const last = priorClipped.standings[priorClipped.standings.length - 1];
     const lx = xScale(last.round);
     const ly = yScale(last.pos);
-    priorLabel = `<text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="10" font-weight="600" fill="var(--muted)" opacity="0.7">${priorClipped.year}: P${last.pos}</text>`;
+    // Label uses --text color at 0.85 opacity for legibility — pure
+    // --muted gets lost against the muted-toned grid + line.
+    priorLabel = `<text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="11" font-weight="600" fill="var(--text)" opacity="0.85">${priorClipped.year}: P${last.pos}</text>`;
   }
 
-  // Current year — bold, in car color
+  // Current year — bold, in car color. Endpoint label removed by user
+  // request: the bold colored line is unambiguous as "current year",
+  // and the standings position is already shown in the header rank
+  // panel near the top of the profile.
   let currentPath = "";
-  let currentLabel = "";
   if (currentYearData) {
     const d = pathFor(currentYearData);
     currentPath = `<path d="${d}" fill="none" stroke="${currentHex}" stroke-width="2.5" opacity="1" stroke-linejoin="round" stroke-linecap="round" filter="drop-shadow(0 1px 1px rgba(0,0,0,0.12))"/>`;
-    const last = currentYearData.standings[currentYearData.standings.length - 1];
-    const lx = xScale(last.round);
-    const ly = yScale(last.pos);
-    currentLabel = `<text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="12" font-weight="700" fill="${currentHex}">${currentYearData.year}: P${last.pos}</text>`;
   }
 
   svg.innerHTML = `
@@ -8350,7 +8352,6 @@ function paintProfileYearOverYear(driverName) {
     ${priorPath}
     ${currentPath}
     ${priorLabel}
-    ${currentLabel}
   `;
 }
 
