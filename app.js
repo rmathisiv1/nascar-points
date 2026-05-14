@@ -12521,30 +12521,70 @@ function renderCompareCareerChart(drivers) {
 
 // Build the six metrics for one driver. Returns an object with values
 // in 0..1 space, plus a `raw` object with the source numbers for tooltips.
+// Six axes shared between the compare spider and the per-driver profile
+// spider. Order alternates SEASON and CAREER metrics around the hexagon
+// so a single visual side isn't biased toward "current form" or
+// "all-time resume". Each axis carries an `explain` string that becomes
+// a <title> tooltip on its label, so hovering reveals the methodology
+// in-place without needing to open the methodology details panel.
+const COMPARE_SPIDER_AXES = [
+  {
+    key: "finish", label: "Finish", sub: "season",
+    explain: "Average finish position this season. Normalized so P1 = 100%, P40 = 0%. Inverts the raw number so 'higher = better' reads naturally on the radar.",
+  },
+  {
+    key: "winRate", label: "Win rate", sub: "career",
+    explain: "Career wins / starts. Uses a sqrt curve since pure win rate is rare (5% wins ≈ 45% radar, 25%+ caps at 100%). Captures peak performance — racking up T5s without winning gets a low value here.",
+  },
+  {
+    key: "qual", label: "Qualifying", sub: "season",
+    explain: "Average starting position this season. Same P1 = 100%, P40 = 0% normalization as Finish. Differs from Finish: shows raw qualifying pace, before strategy / pit calls / race-day variance.",
+  },
+  {
+    key: "top5Rate", label: "T5 rate", sub: "career",
+    explain: "Career top-5 finishes / starts. Linear: 50%+ T5 rate = 100% radar (elite-level consistency). Captures 'sustained competitive level' — different from win rate because finishing P2-P5 doesn't show up there at all.",
+  },
+  {
+    key: "top15Pct", label: "% Laps Top 15", sub: "career",
+    explain: "Career average fraction of green-flag laps run inside the top 15 (NASCAR loop data). Captures 'consistently competitive' separately from finishing position — a driver who ran T10 all day but DNF'd late scores high here. Elite tier sits 65-80%, back markers 10-25%.",
+  },
+  {
+    key: "stageConsistency", label: "Stage Consistency", sub: "season",
+    explain: "Standard deviation of this-season stage-point totals per race, INVERTED (lower σ = higher radar). Captures reliability — a driver who scores 6-9 pts every week scores higher than one who alternates 18-pt monsters with shutouts. σ=0 → 100%, σ=10 → 0%.",
+  },
+];
+
 function _compareSpiderMetricsFor(driver, series) {
   const result = { values: {}, raw: {} };
 
-  // Pace: avg finish this season — normalized so 1=P1, 0=P40. We invert
+  // Finish: avg finish this season — normalized so 1=P1, 0=P40. We invert
   // so smaller (better) numbers map to higher (better) radar values.
   const form = getDriverRecentForm(driver.name, series, 100);  // huge N = whole season
   if (form && form.avg_finish != null) {
-    result.values.pace = Math.max(0, Math.min(1, (40 - form.avg_finish) / 39));
-    result.raw.pace = form.avg_finish.toFixed(1);
+    result.values.finish = Math.max(0, Math.min(1, (40 - form.avg_finish) / 39));
+    result.raw.finish = form.avg_finish.toFixed(1);
   } else {
-    result.values.pace = 0;
-    result.raw.pace = "—";
+    result.values.finish = 0;
+    result.raw.finish = "—";
   }
 
   // Qualifying: avg start this season. Same inverted normalization.
-  // Walk season race history for start positions directly since
-  // getDriverRecentForm doesn't expose avg_start.
-  const ent = allEntities().find(e =>
-    (e.primaryDriver || e.driver || "").toLowerCase() === driver.name.toLowerCase()
-  );
-  if (ent && ent.races) {
-    const starts = ent.races
-      .map(rr => rr.result && rr.result.start_pos)
-      .filter(n => n != null);
+  // Walks SEASON_CACHE for the current season directly (not
+  // allEntities, which is scoped to the topbar series — spider chart
+  // may render a different series for compare-page contexts).
+  {
+    const cacheQ = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+    const slugQ = slugify(driver.name);
+    const block = cacheQ[STATE.season] && cacheQ[STATE.season][series];
+    const starts = [];
+    if (block) {
+      for (const race of (block.races || [])) {
+        for (const d of (race.results || [])) {
+          if (slugify(d.driver) !== slugQ) continue;
+          if (d.start_pos != null) starts.push(d.start_pos);
+        }
+      }
+    }
     if (starts.length > 0) {
       const avgStart = starts.reduce((a, b) => a + b, 0) / starts.length;
       result.values.qual = Math.max(0, Math.min(1, (40 - avgStart) / 39));
@@ -12553,9 +12593,6 @@ function _compareSpiderMetricsFor(driver, series) {
       result.values.qual = 0;
       result.raw.qual = "—";
     }
-  } else {
-    result.values.qual = 0;
-    result.raw.qual = "—";
   }
 
   // Career wins, top5s — bio first, cache fallback. For wins/top5 rate
@@ -12607,50 +12644,77 @@ function _compareSpiderMetricsFor(driver, series) {
     result.raw.top5Rate = "—";
   }
 
-  // Stage scoring: this-season avg stage pts per race. 15 pts/race
-  // (= consistent top-3 in both stages every week) = 1.0.
-  if (form && form.avg_stage_pts != null) {
-    result.values.stage = Math.max(0, Math.min(1, form.avg_stage_pts / 15));
-    result.raw.stage = form.avg_stage_pts.toFixed(1);
-  } else {
-    result.values.stage = 0;
-    result.raw.stage = "—";
-  }
-
-  // Pass differential: average per-race net positions gained/lost from
-  // NASCAR loop data (loop_pass_diff field). Positive = made more passes
-  // than were made on them; negative = lost positions. Aggregated across
-  // all loaded SEASON_CACHE races for this driver in this series.
-  //
-  // Scaling: a season-long pace of +3.0 passes/race is elite-aggressive
-  // (think a Hamlin moving forward from mid-pack quals); -3.0 is
-  // "always falling back". We center 0 at 0.5 on the radar so neutral
-  // drivers sit at the midpoint.
-  let passDiffSum = 0;
-  let passDiffCount = 0;
-  const slugP = slugify(driver.name);
-  const cacheP = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
-  for (const year of Object.keys(cacheP)) {
-    const block = cacheP[year] && cacheP[year][series];
+  // % Laps in Top 15: career loop-data metric. Fraction of all racing
+  // laps (across all loaded seasons for this series) the driver spent
+  // running in the top 15. Captures "consistently competitive" in a
+  // way pure finish position can't — a driver who ran T10 all day but
+  // blew an engine on lap 280 scores high here. The loop_pct_top15_laps
+  // field is per-race, 0-1 native. We weight-average by laps when
+  // available, but simple-mean across races is close enough for the
+  // small per-race differences.
+  let topPctSum = 0;
+  let topPctCount = 0;
+  const slugT = slugify(driver.name);
+  const cacheT = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+  for (const year of Object.keys(cacheT)) {
+    const block = cacheT[year] && cacheT[year][series];
     if (!block) continue;
     for (const race of (block.races || [])) {
       for (const d of (race.results || [])) {
-        if (slugify(d.driver) !== slugP) continue;
-        if (d.loop_pass_diff != null) {
-          passDiffSum += d.loop_pass_diff;
-          passDiffCount++;
+        if (slugify(d.driver) !== slugT) continue;
+        if (d.loop_pct_top15_laps != null) {
+          topPctSum += d.loop_pct_top15_laps;
+          topPctCount++;
         }
       }
     }
   }
-  if (passDiffCount > 0) {
-    const avgPD = passDiffSum / passDiffCount;
-    // Map [-3, +3] → [0, 1] linearly, then clamp outside that range.
-    result.values.passDiff = Math.max(0, Math.min(1, (avgPD + 3) / 6));
-    result.raw.passDiff = (avgPD >= 0 ? "+" : "") + avgPD.toFixed(2);
+  if (topPctCount > 0) {
+    const avgPct = topPctSum / topPctCount;
+    // Source field is already 0-1 in the data. Map directly. Elite
+    // drivers sit around 0.65-0.80 (Hamlin/Larson/Bell tier); strong
+    // mid-pack ~0.40-0.55; back markers ~0.10-0.25. The chart fills
+    // the whole 0-1 range so even slight differences are visible.
+    result.values.top15Pct = Math.max(0, Math.min(1, avgPct));
+    result.raw.top15Pct = `${(avgPct * 100).toFixed(1)}%`;
   } else {
-    result.values.passDiff = 0.5;  // unknown = neutral, not zero
-    result.raw.passDiff = "—";
+    result.values.top15Pct = 0;
+    result.raw.top15Pct = "—";
+  }
+
+  // Stage Points Consistency: how RELIABLE the driver is at scoring
+  // stage points race-to-race. Computed as the std deviation of their
+  // per-race stage point totals THIS SEASON. Lower std dev = more
+  // consistent = higher radar value.
+  //
+  // We use this-season only (not career) so a veteran's old form
+  // doesn't drown out their current trend. Requires ≥3 races to have
+  // a meaningful std dev; below that we render "—" (neutral 0.5).
+  //
+  // Scale: σ=0 (perfect consistency, same pts every week) → 1.0;
+  // σ=10 (high variance — bouncing between 18-pt monster races and
+  // shutouts) → 0. Linear map clamped at edges.
+  const seasonStagePts = [];
+  const blockS = cacheT[STATE.season] && cacheT[STATE.season][series];
+  if (blockS) {
+    for (const race of (blockS.races || [])) {
+      for (const d of (race.results || [])) {
+        if (slugify(d.driver) !== slugT) continue;
+        const sp = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
+        seasonStagePts.push(sp);
+      }
+    }
+  }
+  if (seasonStagePts.length >= 3) {
+    const mean = seasonStagePts.reduce((a, b) => a + b, 0) / seasonStagePts.length;
+    const variance = seasonStagePts.reduce((acc, v) => acc + (v - mean) ** 2, 0) / seasonStagePts.length;
+    const stddev = Math.sqrt(variance);
+    // Invert: σ=0 → 1.0; σ=10 → 0
+    result.values.stageConsistency = Math.max(0, Math.min(1, (10 - stddev) / 10));
+    result.raw.stageConsistency = `σ ${stddev.toFixed(2)} (avg ${mean.toFixed(1)})`;
+  } else {
+    result.values.stageConsistency = 0.5;
+    result.raw.stageConsistency = "—";
   }
 
   return result;
@@ -12673,17 +12737,11 @@ function renderCompareSpiderChart(drivers) {
     acc + Object.values(dm.metrics.values).reduce((a, b) => a + b, 0), 0);
   if (totalSignal === 0) return "";
 
-  // Six-axis layout. Order matters visually — alternating CURRENT and
-  // CAREER stats around the hexagon prevents a single concentration on
-  // one side from biasing the visual shape.
-  const axes = [
-    { key: "pace",        label: "Pace",        sub: "season" },
-    { key: "winRate",     label: "Win rate",    sub: "career" },
-    { key: "qual",        label: "Qualifying",  sub: "season" },
-    { key: "top5Rate",    label: "T5 rate",     sub: "career" },
-    { key: "stage",       label: "Stage pts",   sub: "season" },
-    { key: "passDiff",    label: "Pass diff",   sub: "per race" },
-  ];
+  // Six-axis layout from the shared COMPARE_SPIDER_AXES constant.
+  // Order alternates SEASON and CAREER metrics around the hexagon so a
+  // single visual side isn't biased toward "current form" or "all-time
+  // resume". See the const definition for per-axis methodology details.
+  const axes = COMPARE_SPIDER_AXES;
 
   // SVG layout — square viewBox; hexagon centered. Generous padding
   // for the axis labels which sit just outside the outer ring.
@@ -12723,7 +12781,10 @@ function renderCompareSpiderChart(drivers) {
   }).join("");
 
   // Axis labels — positioned just outside the outer ring at each axis tip.
-  // Two lines: main label + smaller sub label (season/career)
+  // Two lines: main label + smaller sub label (season/career). Wrapped
+  // in a <g> with <title> so hovering reveals each axis's methodology
+  // tooltip (browser-native, no JS needed). The cmp-spider-label-group
+  // class adds a help cursor.
   const labels = axes.map((axis, i) => {
     const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
     const labelR = R + 24;
@@ -12737,26 +12798,37 @@ function renderCompareSpiderChart(drivers) {
       anchor = Math.cos(angle) > 0 ? "start" : "end";
     }
     return `
-      <text class="cmp-spider-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>
-      <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.sub)}</text>
+      <g class="cmp-spider-label-group">
+        <title>${escapeHTML(axis.label)} — ${escapeHTML(axis.explain || "")}</title>
+        <text class="cmp-spider-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>
+        <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.sub)}</text>
+      </g>
     `;
   }).join("");
 
-  // Driver polygons — semi-transparent fill, solid stroke. Color
-  // each with the driver's car color (using safeContrastColor for
-  // light-on-light cases).
+  // Fill mode: "filled" (default) renders semi-transparent overlapping
+  // polygons; "outline" renders stroke-only shapes so you can read each
+  // driver's profile without colors compounding. With 3+ drivers the
+  // overlap can muddy the chart; the toggle lets users switch modes.
+  const fillMode = (STATE.compare && STATE.compare.chart && STATE.compare.chart.spiderFill) || "filled";
+
+  // Driver polygons — colored with each driver's car color (using
+  // safeContrastColor for light-on-light cases). Opacity values come
+  // from fillMode: outline mode sets fill-opacity to 0 so only the
+  // strokes remain.
   const driverPolys = driverMetrics.map((dm) => {
     const carHex = colorFor(dm.driver.series, dm.driver.entity.car_number);
     const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
     const vals = axes.map(a => dm.metrics.values[a.key] || 0);
     const points = polyPoints(vals);
     const tooltipParts = axes.map(a => `${a.label}: ${dm.metrics.raw[a.key]}`).join(" · ");
+    const fillOpacity = (fillMode === "outline") ? 0 : 0.18;
     return `
       <polygon class="cmp-spider-driver"
                points="${points}"
                fill="${safeHex}"
                stroke="${safeHex}"
-               opacity="0.18"
+               fill-opacity="${fillOpacity}"
                stroke-opacity="0.95"
                stroke-width="2">
         <title>${escapeHTML(dm.driver.name)} · ${escapeHTML(tooltipParts)}</title>
@@ -12776,12 +12848,24 @@ function renderCompareSpiderChart(drivers) {
     `;
   }).join("");
 
+  // Toggle button group for fill mode (filled vs outline-only)
+  const fillToggleHTML = [
+    { key: "filled",  label: "Filled" },
+    { key: "outline", label: "Outline" },
+  ].map(m =>
+    `<button class="${m.key === fillMode ? "on" : ""}" data-cmp-spider-fill="${m.key}" data-val="${m.key}">${m.label}</button>`
+  ).join("");
+
   return `
     <div class="cmp-section">
       <div class="cmp-section-head">
         <span class="series-tag tag-${series}">${series}</span>
         <span class="cmp-section-title">Performance Profile · radar</span>
         <span class="ed-byline">All axes normalized 0–100% · larger shape = stronger overall</span>
+        <span class="cmp-spider-fill-toggle">
+          <span class="cmp-chart-control-label">Fill</span>
+          <div class="toggle-group mini" id="cmp-spider-fill-toggle">${fillToggleHTML}</div>
+        </span>
       </div>
       <div class="cmp-spider-host">
         <svg class="cmp-spider-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
@@ -12798,12 +12882,12 @@ function renderCompareSpiderChart(drivers) {
           <span class="rps-explainer-cta">methodology →</span>
         </summary>
         <div class="rps-explainer-body">
-          <strong>Pace</strong> &amp; <strong>Qualifying</strong> map this-season avg finish/start positions to 0–1 (P1 = 1.0, P40 = 0).<br>
+          <strong>Finish</strong> &amp; <strong>Qualifying</strong> map this-season avg finish/start positions to 0–1 (P1 = 1.0, P40 = 0).<br>
           <strong>Win rate</strong> uses a sqrt curve so 5% wins ≈ 0.45 and 25%+ caps at 1.0 (raw rate is rare even for elites).<br>
           <strong>T5 rate</strong> maps career top-5% linearly to 0–1 with 50%+ = full ring.<br>
-          <strong>Stage points</strong> maps avg stage pts/race to 0–1 with 15+ pts/race = full ring.<br>
-          <strong>Pass diff</strong> averages NASCAR's loop-data net positions gained/lost per race across all loaded seasons; +3/race ≈ aggressive passer (1.0), -3/race ≈ falling back (0), neutral sits at 0.5.<br><br>
-          Season metrics reflect the loaded current season; career metrics use canonical bio data when available, or aggregate loaded SEASON_CACHE seasons otherwise.
+          <strong>% Laps Top 15</strong> averages NASCAR's loop-data per-race fraction of laps run in the top 15 across all loaded seasons. Elite drivers sit at 65-80%, back markers 10-25%.<br>
+          <strong>Stage Consistency</strong> inverts the std deviation of this-season per-race stage points. σ=0 → 1.0 (same pts every week), σ=10 → 0 (high variance — bouncing between monsters and shutouts). Requires ≥3 races to compute.<br><br>
+          Hover any axis label for an inline explanation. Season metrics reflect the loaded current season; career metrics use canonical bio data when available, or aggregate loaded SEASON_CACHE seasons otherwise.
         </div>
       </details>
     </div>
@@ -12839,15 +12923,10 @@ function renderProfileSpiderChart(driverName, series, entity) {
   };
   const m = _compareSpiderMetricsFor(driverObj, series);
 
-  // Render a smaller, more compact spider for the profile context
-  const axes = [
-    { key: "pace",        label: "Pace",        sub: "season" },
-    { key: "winRate",     label: "Win rate",    sub: "career" },
-    { key: "qual",        label: "Qualifying",  sub: "season" },
-    { key: "top5Rate",    label: "T5 rate",     sub: "career" },
-    { key: "stage",       label: "Stage pts",   sub: "season" },
-    { key: "passDiff",    label: "Pass diff",   sub: "per race" },
-  ];
+  // Use the shared 6-axis layout (alternates season/career metrics
+  // around the hexagon for visual balance). Same axes appear on the
+  // compare-page spider so the two contexts stay readable consistently.
+  const axes = COMPARE_SPIDER_AXES;
   const W = 420;
   const H = 360;
   const cx = W / 2;
@@ -12879,7 +12958,9 @@ function renderProfileSpiderChart(driverName, series, entity) {
   }).join("");
 
   // Axis labels with the driver's actual raw values inline (since there's
-  // only one driver here, we can afford to show numbers right at each tip)
+  // only one driver here, we can afford to show numbers right at each tip).
+  // Wrapped in a <g> with <title> so hovering reveals each axis's
+  // methodology tooltip — same as the compare spider.
   const labels = axes.map((axis, i) => {
     const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
     const labelR = R + 22;
@@ -12890,8 +12971,11 @@ function renderProfileSpiderChart(driverName, series, entity) {
       anchor = Math.cos(angle) > 0 ? "start" : "end";
     }
     return `
-      <text class="cmp-spider-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>
-      <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(String(m.raw[axis.key]))}</text>
+      <g class="cmp-spider-label-group">
+        <title>${escapeHTML(axis.label)} — ${escapeHTML(axis.explain || "")}</title>
+        <text class="cmp-spider-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>
+        <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(String(m.raw[axis.key]))}</text>
+      </g>
     `;
   }).join("");
 
@@ -13346,6 +13430,22 @@ function wireCompareEventHandlers() {
       const next = btn.dataset.cmpChartDisplay;
       if (!next || next === STATE.compare.chart.display) return;
       STATE.compare.chart.display = next;
+      renderCompare();
+    });
+  }
+
+  // Spider chart fill-mode toggle (filled overlap vs outline only).
+  // STATE.compare.chart.spiderFill persists the choice across renders.
+  const spiderFillToggle = document.getElementById("cmp-spider-fill-toggle");
+  if (spiderFillToggle && !spiderFillToggle._wired) {
+    spiderFillToggle._wired = true;
+    spiderFillToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-cmp-spider-fill]");
+      if (!btn) return;
+      const next = btn.dataset.cmpSpiderFill;
+      const cur = (STATE.compare.chart && STATE.compare.chart.spiderFill) || "filled";
+      if (!next || next === cur) return;
+      STATE.compare.chart.spiderFill = next;
       renderCompare();
     });
   }

@@ -10630,3 +10630,25 @@ body.lightbox-open {
     font-size: 9px;
   }
 }
+
+/* Spider chart label hover — help cursor signals the tooltip is available */
+.cmp-spider-label-group {
+  cursor: help;
+}
+
+/* Spider fill-mode toggle — small inline control on the spider section
+   header. Sits to the right of the section title/byline. */
+.cmp-spider-fill-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;  /* push to the right edge of the flex header */
+}
+@media (max-width: 767.98px) {
+  /* On mobile, let the toggle wrap below the title rather than overflow */
+  .cmp-spider-fill-toggle {
+    margin-left: 0;
+    margin-top: 6px;
+    flex-basis: 100%;
+  }
+}
