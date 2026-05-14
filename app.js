@@ -7889,6 +7889,13 @@ function paintProfileChart(entity, rows) {
   // faint underlay so the user can see whether they're tracking ahead or
   // behind their previous year at the same point on the schedule.
   // Returns { year, points: [{round, cum}], lastCum } or null if none found.
+  // Clip prior-year trace to the current season's progress so the
+  // comparison reads as "where was I after this many races last year?"
+  // rather than showing the entire prior season extending past the
+  // current cursor. currentLastRound is the round of the most recent
+  // completed race this season.
+  const currentLastRound = pts[pts.length - 1].round || pts.length;
+
   const priorYear = (() => {
     const slug = slugify(driverName);
     const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
@@ -7905,15 +7912,17 @@ function paintProfileChart(entity, rows) {
       const trace = [];
       for (const r of races) {
         if (!(r.results && r.results.length)) continue;  // skip uncompleted
+        // Stop building the trace once we pass the current season's
+        // progress — the comparison only spans the same race-number range.
+        if ((r.round || 0) > currentLastRound) break;
         const myResult = r.results.find(d => slugify(d.driver) === slug);
         if (myResult) {
           ran = true;
           pyCum += (myResult.race_pts || 0);
         }
-        // Push a point at every completed round (whether driver ran or
-        // not) — so the line extends across the full schedule even
-        // through missed weeks (flat segments through missed rounds
-        // are the correct visualization for "no points scored").
+        // Push a point at every completed round in the comparison window
+        // (whether driver ran or not) — flat segments through missed
+        // weeks are the correct visualization for "no points scored".
         trace.push({ round: r.round, cum: pyCum });
       }
       if (ran && trace.length > 0) {
@@ -7936,13 +7945,12 @@ function paintProfileChart(entity, rows) {
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.removeAttribute("preserveAspectRatio");
 
-    // X axis spans the full prior-year schedule when present (so the
-    // current year's partial schedule appears in correct proportion);
-    // otherwise just spans the current year's rounds.
-    const maxRound = Math.max(
-      pts[pts.length - 1].round || pts.length,
-      priorYear ? (priorYear.points[priorYear.points.length - 1].round || 0) : 0
-    );
+    // X axis spans only the current season's rounds — the prior-year
+    // trace is clipped to the same range above so both lines end at
+    // the same X position. (Used to span the full prior season; that
+    // wasted half the chart on rounds the current season hasn't
+    // reached yet.)
+    const maxRound = pts[pts.length - 1].round || pts.length;
     const xScale = round => pad.l + ((round - 1) / Math.max(1, maxRound - 1)) * innerW;
     const yScale = v => pad.t + (1 - v / maxPts) * innerH;
 
@@ -8217,17 +8225,34 @@ function paintProfileYearOverYear(driverName) {
     }
   }
 
-  // X axis: spans the longer of the two seasons (so a 12-round current
-  // year next to a 36-round prior year displays in correct proportion).
-  const maxRound = Math.max(
-    currentYearData ? Math.max(...currentYearData.standings.map(p => p.round)) : 0,
-    priorYearData   ? Math.max(...priorYearData.standings.map(p => p.round)) : 0
-  );
+  // Clip prior-year trace to the current season's last round so both
+  // lines end at the same X position. If there's no current-year data
+  // yet (driver hasn't run this season), we show the prior year as-is.
+  const currentLastRound = currentYearData && currentYearData.standings.length
+    ? currentYearData.standings[currentYearData.standings.length - 1].round
+    : null;
+  const priorClipped = (priorYearData && currentLastRound != null)
+    ? {
+        ...priorYearData,
+        standings: priorYearData.standings.filter(p => p.round <= currentLastRound),
+      }
+    : priorYearData;
 
-  // Y axis: max standings position from either year (capped reasonably)
+  // X axis: when both years are present, span only the current season's
+  // rounds (prior trace is clipped to match above). When only prior is
+  // available, span its full schedule.
+  const maxRound = currentLastRound != null
+    ? currentLastRound
+    : (priorYearData ? Math.max(...priorYearData.standings.map(p => p.round)) : 0);
+
+  // Y axis: max standings position from either year IN THE COMPARISON
+  // WINDOW (so a wild late-season prior-year crash doesn't stretch the
+  // axis past the part we're actually showing).
   const maxRank = Math.max(
     currentYearData ? Math.max(...currentYearData.standings.map(p => p.pos)) : 1,
-    priorYearData   ? Math.max(...priorYearData.standings.map(p => p.pos))   : 1
+    priorClipped && priorClipped.standings.length
+      ? Math.max(...priorClipped.standings.map(p => p.pos))
+      : 1
   );
   const yMin = 1;
   const yMax = Math.max(20, Math.ceil(maxRank * 1.1));
@@ -8294,15 +8319,17 @@ function paintProfileYearOverYear(driverName) {
   };
 
   // Prior year — faded behind. Drawn first so the current year sits on top.
+  // Uses priorClipped (trace truncated to currentLastRound) so the line
+  // ends at the same X position as the current year.
   let priorPath = "";
   let priorLabel = "";
-  if (priorYearData) {
-    const d = pathFor(priorYearData);
+  if (priorClipped && priorClipped.standings.length) {
+    const d = pathFor(priorClipped);
     priorPath = `<path d="${d}" fill="none" stroke="var(--muted)" stroke-width="1.5" opacity="0.45" stroke-linejoin="round" stroke-linecap="round"/>`;
-    const last = priorYearData.standings[priorYearData.standings.length - 1];
+    const last = priorClipped.standings[priorClipped.standings.length - 1];
     const lx = xScale(last.round);
     const ly = yScale(last.pos);
-    priorLabel = `<text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="10" font-weight="600" fill="var(--muted)" opacity="0.7">${priorYearData.year}: P${last.pos}</text>`;
+    priorLabel = `<text x="${lx + 6}" y="${ly + 4}" font-family="var(--mono)" font-size="10" font-weight="600" fill="var(--muted)" opacity="0.7">${priorClipped.year}: P${last.pos}</text>`;
   }
 
   // Current year — bold, in car color
