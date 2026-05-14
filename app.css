@@ -10292,12 +10292,43 @@ body.lightbox-open {
   font-weight: 600;
   color: var(--text);
 }
+/* Three-letter abbreviation — hidden by default. Shown only on mobile
+   when 3+ drivers are being compared (each column is too narrow for
+   the full last name without truncation cutoffs mid-word). */
+.cmp-th-name-abbrev {
+  display: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
 
 @media (max-width: 767.98px) {
   .cmp-th-chip { gap: 4px; }
   .cmp-th-car { font-size: 9px; padding: 2px 4px; }
   .cmp-th-name { font-size: 11px; }
   .cmp-thead th { padding: 6px 4px !important; }
+
+  /* 3 or 4 drivers on mobile: swap full last name for the 3-letter
+     abbreviation. With 4 drivers each data column is roughly 65px wide
+     on a 380px viewport — full last names ("Reddick", "Keselowski")
+     don't fit; truncation cuts mid-word. Using mono-font abbreviation
+     makes the truncation deliberate and visually consistent across
+     drivers. */
+  .cmp-thead[data-driver-count="3"] .cmp-th-name,
+  .cmp-thead[data-driver-count="4"] .cmp-th-name {
+    display: none;
+  }
+  .cmp-thead[data-driver-count="3"] .cmp-th-name-abbrev,
+  .cmp-thead[data-driver-count="4"] .cmp-th-name-abbrev {
+    display: inline-block;
+  }
+  /* At 4 drivers, tighten the chip further: car-number badge stays but
+     its right padding shrinks slightly so the abbrev sits closer. */
+  .cmp-thead[data-driver-count="4"] .cmp-th-chip { gap: 3px; }
+  .cmp-thead[data-driver-count="4"] .cmp-th-car { padding: 2px 3px; font-size: 8px; }
+  .cmp-thead[data-driver-count="4"] .cmp-th-name-abbrev { font-size: 11px; }
 }
 
 /* ============================================================================

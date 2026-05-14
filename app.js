@@ -12057,14 +12057,25 @@ function _renderCompareTableHeader(drivers) {
     const carHex = colorFor(d.series, d.entity.car_number);
     const carTxt = contrastTextFor(carHex);
     const lastName = _lastNameOf(d.name);
+    // Three-letter abbreviation, uppercased — used on mobile when 3+
+    // drivers are being compared (the chip would otherwise be cropped
+    // mid-word at the column boundary). Picks first 3 letters of last
+    // name; for hyphenated names like "Ware-Smith" we strip non-alpha
+    // first so we get the first 3 of the leading word.
+    const cleaned = lastName.replace(/[^A-Za-z]/g, "");
+    const abbrev = cleaned.slice(0, 3).toUpperCase();
     return `<th class="cmp-th-driver">
       <span class="cmp-th-chip">
         <span class="cmp-th-car" style="background:${carHex};color:${carTxt}">#${d.entity.car_number}</span>
-        <span class="cmp-th-name">${escapeHTML(lastName)}</span>
+        <span class="cmp-th-name" title="${escapeHTML(d.name)}">${escapeHTML(lastName)}</span>
+        <span class="cmp-th-name-abbrev" title="${escapeHTML(d.name)}">${escapeHTML(abbrev)}</span>
       </span>
     </th>`;
   }).join("");
-  return `<thead class="cmp-thead"><tr><th></th>${cells}</tr></thead>`;
+  // data-driver-count on the thead lets CSS branch on driver count
+  // without JS: we use selectors like [data-driver-count="3"] to hide
+  // the full name and show the abbreviation only at that density.
+  return `<thead class="cmp-thead" data-driver-count="${drivers.length}"><tr><th></th>${cells}</tr></thead>`;
 }
 
 // Track-type splits — for each driver, avg finish on short/inter/super/road
