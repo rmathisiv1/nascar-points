@@ -7083,16 +7083,6 @@ function renderProfile() {
             </div>
           </div>
 
-          <div class="profile-panel" id="profile-notable-panel" style="display:none;">
-            <div class="profile-panel-head">
-              <span class="profile-panel-title">Notable Performances</span>
-              <span class="profile-panel-sub">By Driver Rating</span>
-            </div>
-            <div class="profile-panel-body">
-              <div id="profile-notable" class="profile-notable"></div>
-            </div>
-          </div>
-
           <div class="profile-panel full" id="profile-tt-panel" style="display:none;">
             <div class="profile-panel-head">
               <span class="profile-panel-title">Track-Type Performance</span>
@@ -7401,16 +7391,6 @@ function renderProfile() {
         </div>
         <div class="profile-panel-body">
           <svg id="profile-rating-chart" style="width:100%;height:140px;display:block;"></svg>
-        </div>
-      </div>
-
-      <div class="profile-panel" id="profile-notable-panel" style="display:none;">
-        <div class="profile-panel-head">
-          <span class="profile-panel-title">Notable Performances</span>
-          <span class="profile-panel-sub">By Driver Rating</span>
-        </div>
-        <div class="profile-panel-body">
-          <div id="profile-notable" class="profile-notable"></div>
         </div>
       </div>
 
@@ -12637,16 +12617,41 @@ function _compareSpiderMetricsFor(driver, series) {
     result.raw.stage = "—";
   }
 
-  // Versatility: count of track types where they have ≥3 career starts.
-  // Out of 4 types (short/inter/super/road). Cache-only for now since
-  // bios don't have a track-type breakdown.
-  let typesRaced = 0;
-  for (const t of ["short", "inter", "super", "road"]) {
-    const tt = getDriverTrackTypeStats(driver.name, series, t);
-    if (tt && tt.starts >= 3) typesRaced++;
+  // Pass differential: average per-race net positions gained/lost from
+  // NASCAR loop data (loop_pass_diff field). Positive = made more passes
+  // than were made on them; negative = lost positions. Aggregated across
+  // all loaded SEASON_CACHE races for this driver in this series.
+  //
+  // Scaling: a season-long pace of +3.0 passes/race is elite-aggressive
+  // (think a Hamlin moving forward from mid-pack quals); -3.0 is
+  // "always falling back". We center 0 at 0.5 on the radar so neutral
+  // drivers sit at the midpoint.
+  let passDiffSum = 0;
+  let passDiffCount = 0;
+  const slugP = slugify(driver.name);
+  const cacheP = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+  for (const year of Object.keys(cacheP)) {
+    const block = cacheP[year] && cacheP[year][series];
+    if (!block) continue;
+    for (const race of (block.races || [])) {
+      for (const d of (race.results || [])) {
+        if (slugify(d.driver) !== slugP) continue;
+        if (d.loop_pass_diff != null) {
+          passDiffSum += d.loop_pass_diff;
+          passDiffCount++;
+        }
+      }
+    }
   }
-  result.values.versatility = typesRaced / 4;
-  result.raw.versatility = `${typesRaced}/4`;
+  if (passDiffCount > 0) {
+    const avgPD = passDiffSum / passDiffCount;
+    // Map [-3, +3] → [0, 1] linearly, then clamp outside that range.
+    result.values.passDiff = Math.max(0, Math.min(1, (avgPD + 3) / 6));
+    result.raw.passDiff = (avgPD >= 0 ? "+" : "") + avgPD.toFixed(2);
+  } else {
+    result.values.passDiff = 0.5;  // unknown = neutral, not zero
+    result.raw.passDiff = "—";
+  }
 
   return result;
 }
@@ -12677,7 +12682,7 @@ function renderCompareSpiderChart(drivers) {
     { key: "qual",        label: "Qualifying",  sub: "season" },
     { key: "top5Rate",    label: "T5 rate",     sub: "career" },
     { key: "stage",       label: "Stage pts",   sub: "season" },
-    { key: "versatility", label: "Track types", sub: "career" },
+    { key: "passDiff",    label: "Pass diff",   sub: "per race" },
   ];
 
   // SVG layout — square viewBox; hexagon centered. Generous padding
@@ -12797,7 +12802,7 @@ function renderCompareSpiderChart(drivers) {
           <strong>Win rate</strong> uses a sqrt curve so 5% wins ≈ 0.45 and 25%+ caps at 1.0 (raw rate is rare even for elites).<br>
           <strong>T5 rate</strong> maps career top-5% linearly to 0–1 with 50%+ = full ring.<br>
           <strong>Stage points</strong> maps avg stage pts/race to 0–1 with 15+ pts/race = full ring.<br>
-          <strong>Track types</strong> counts career types (short/inter/super/road) with ≥3 starts, out of 4.<br><br>
+          <strong>Pass diff</strong> averages NASCAR's loop-data net positions gained/lost per race across all loaded seasons; +3/race ≈ aggressive passer (1.0), -3/race ≈ falling back (0), neutral sits at 0.5.<br><br>
           Season metrics reflect the loaded current season; career metrics use canonical bio data when available, or aggregate loaded SEASON_CACHE seasons otherwise.
         </div>
       </details>
@@ -12841,7 +12846,7 @@ function renderProfileSpiderChart(driverName, series, entity) {
     { key: "qual",        label: "Qualifying",  sub: "season" },
     { key: "top5Rate",    label: "T5 rate",     sub: "career" },
     { key: "stage",       label: "Stage pts",   sub: "season" },
-    { key: "versatility", label: "Track types", sub: "career" },
+    { key: "passDiff",    label: "Pass diff",   sub: "per race" },
   ];
   const W = 420;
   const H = 360;
