@@ -69,7 +69,11 @@ const STATE = {
   //             makes era-spanning comparisons direct.
   compare: {
     slugs: [],
-    chart: { series: "NCS", metric: "wins", display: "per-season" },
+    // Default chart view: cumulative wins, in whichever series ends up
+    // most-populated for the current driver set. The series gets
+    // re-resolved on each render if the current pick has no data; see
+    // renderCompareCareerChart.
+    chart: { series: "NCS", metric: "wins", display: "cumulative" },
   },
   // Table-split chart: the car whose arc is shown next to Trending/Standings.
   // Null = first row by default. Set when user clicks any row in the table.
@@ -11995,9 +11999,64 @@ function renderCompareDriverHeader(d) {
 function renderCompareCareerSection(drivers) {
   // Pull career stats from driver bios (drivers.json has the canonical data)
   const seriesOrder = ["NCS", "NOS", "NTS"];
+  // Helper: aggregate career stats from SEASON_CACHE for one driver in
+  // one series. Used as a fallback when the driver has no bio entry
+  // (typically a brand-new debut). Stats reflect only loaded years —
+  // not a full historical career — so we flag them as partial with the
+  // `partial: true` field for display annotation.
+  const cacheStatsFor = (driverName, series) => {
+    const slug = slugify(driverName);
+    let starts = 0, wins = 0, top5 = 0, top10 = 0, poles = 0;
+    let lapsLed = 0;
+    const startsSum = []; const finishesSum = [];
+    const years = new Set();
+    const seasonCache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+    for (const year of Object.keys(seasonCache)) {
+      const block = seasonCache[year] && seasonCache[year][series];
+      if (!block) continue;
+      let yearStarts = 0;
+      for (const race of (block.races || [])) {
+        for (const d of (race.results || [])) {
+          if (slugify(d.driver) !== slug) continue;
+          starts++; yearStarts++;
+          if (d.finish_pos === 1) wins++;
+          if (d.finish_pos != null && d.finish_pos <= 5) top5++;
+          if (d.finish_pos != null && d.finish_pos <= 10) top10++;
+          if (d.start_pos === 1) poles++;
+          lapsLed += (d.laps_led || 0);
+          if (d.start_pos != null) startsSum.push(d.start_pos);
+          if (d.finish_pos != null) finishesSum.push(d.finish_pos);
+        }
+      }
+      if (yearStarts > 0) years.add(Number(year));
+    }
+    if (starts === 0) return null;
+    return {
+      starts, wins, top5, top10, poles, laps_led: lapsLed,
+      avg_start: startsSum.length ? startsSum.reduce((a,b)=>a+b,0) / startsSum.length : null,
+      avg_finish: finishesSum.length ? finishesSum.reduce((a,b)=>a+b,0) / finishesSum.length : null,
+      years: years.size,
+      partial: true,  // flag for UI annotation
+    };
+  };
+
+  // Resolve career stats for each driver+series: bio first, cache fallback.
+  // Pre-compute the resolved stats so the inner loop doesn't re-walk
+  // SEASON_CACHE for every stat row.
+  const driverCareerByPair = new Map(); // `${slug}|${series}` -> stats
+  for (const d of drivers) {
+    for (const s of seriesOrder) {
+      let stats = d.bio.career && d.bio.career[s];
+      if (!stats) {
+        stats = cacheStatsFor(d.name, s);
+      }
+      if (stats) driverCareerByPair.set(`${d.slug}|${s}`, stats);
+    }
+  }
+
   const sections = seriesOrder.map(s => {
-    // Skip series where no driver has career stats
-    const haveAny = drivers.some(d => d.bio.career && d.bio.career[s]);
+    // Skip series where no driver has data (either bio OR cache)
+    const haveAny = drivers.some(d => driverCareerByPair.has(`${d.slug}|${s}`));
     if (!haveAny) return "";
 
     const statRows = [
@@ -12012,17 +12071,25 @@ function renderCompareCareerSection(drivers) {
       { key: "years", label: "Seasons" },
     ];
 
+    // Does ANY driver in this section have only cache-partial data?
+    // Triggers a small footnote at the bottom of the table explaining
+    // the asterisk markers.
+    const anyPartial = drivers.some(d => {
+      const c = driverCareerByPair.get(`${d.slug}|${s}`);
+      return c && c.partial;
+    });
+
     const rowsHTML = statRows.map(stat => {
-      const vals = drivers.map(d => d.bio.career?.[s]?.[stat.key]);
+      const vals = drivers.map(d => {
+        const c = driverCareerByPair.get(`${d.slug}|${s}`);
+        return c ? c[stat.key] : null;
+      });
       const numericVals = vals.filter(v => v != null && !isNaN(v));
       // Highlight best per row: for avg-finish/avg-start lower is better; others higher.
       const lowerBetter = (stat.key === "avg_finish" || stat.key === "avg_start");
       const best = numericVals.length > 0
         ? (lowerBetter ? Math.min(...numericVals) : Math.max(...numericVals))
         : null;
-      // Worst is the OPPOSITE extreme. We only flag a worst when there
-      // are 3+ drivers in the row — with just 2, labeling one of them
-      // "worst" is silly (the non-best is the worst by definition).
       const worst = (numericVals.length >= 3)
         ? (lowerBetter ? Math.max(...numericVals) : Math.min(...numericVals))
         : null;
@@ -12032,12 +12099,18 @@ function renderCompareCareerSection(drivers) {
         if (v == null) return `<td class="cmp-cell-empty">—</td>`;
         const isBest = (best != null && v === best && numericVals.length > 1);
         const isWorst = (worst != null && v === worst && !isBest);
+        const c = driverCareerByPair.get(`${d.slug}|${s}`);
+        const partialMark = (c && c.partial) ? `<span class="cmp-cell-partial-mark" title="From loaded seasons only">*</span>` : "";
         const display = stat.fmt ? stat.fmt(v) : v;
         const cls = isBest ? "cmp-cell-best" : (isWorst ? "cmp-cell-worst" : "");
-        return `<td class="${cls}">${display}</td>`;
+        return `<td class="${cls}">${display}${partialMark}</td>`;
       }).join("");
       return `<tr><th>${stat.label}</th>${cells}</tr>`;
     }).join("");
+
+    const partialFootnote = anyPartial
+      ? `<div class="cmp-section-footer"><span class="ed-byline">* From loaded seasons only — no canonical career data on file for this driver yet.</span></div>`
+      : "";
 
     return `
       <div class="cmp-section">
@@ -12049,6 +12122,7 @@ function renderCompareCareerSection(drivers) {
           ${_renderCompareTableHeader(drivers)}
           <tbody>${rowsHTML}</tbody>
         </table>
+        ${partialFootnote}
       </div>
     `;
   }).join("");
@@ -12146,17 +12220,41 @@ function _compareDriverYearlyStats(driverName, series, minStarts = 10) {
 }
 
 function renderCompareCareerChart(drivers) {
-  const settings = STATE.compare.chart || { series: "NCS", metric: "wins", display: "per-season" };
-  const seriesChoice = settings.series;
+  const settings = STATE.compare.chart || { series: "NCS", metric: "wins", display: "cumulative" };
+  let seriesChoice = settings.series;
   const metricChoice = settings.metric;
-  const displayMode = settings.display || "per-season";  // "per-season" | "cumulative"
+  const displayMode = settings.display || "cumulative";
 
-  // Compute series-availability — only show buttons for series where at
-  // least one driver actually has data.
-  const seriesOptions = ["NCS", "NOS", "NTS"].filter(s => {
-    return drivers.some(d => getDriverRaceHistory(d.name, s).length > 0);
-  });
+  // Compute per-series data availability — count drivers who have ANY
+  // race history in each series. Used both to filter the toggle buttons
+  // (only show series where at least one driver has data) AND for
+  // auto-resolution: when the user hasn't manually picked a series,
+  // we default to the one where the MOST drivers have data. Critical
+  // for cases where the driver set is dominated by Xfinity-only or
+  // Truck-only drivers — defaulting to NCS would leave the chart empty.
+  const seriesDriverCounts = {};
+  for (const s of ["NCS", "NOS", "NTS"]) {
+    seriesDriverCounts[s] = drivers.filter(d =>
+      getDriverRaceHistory(d.name, s).length > 0
+    ).length;
+  }
+  const seriesOptions = ["NCS", "NOS", "NTS"].filter(s => seriesDriverCounts[s] > 0);
   if (seriesOptions.length === 0) return "";
+
+  // Auto-resolve: if the current series has zero drivers with data AND
+  // the user hasn't explicitly set it (seriesManuallySet flag is unset),
+  // switch to the series with the most data. Ties break in NCS > NOS >
+  // NTS order (the original seriesOptions sort).
+  const userPickValid = seriesDriverCounts[seriesChoice] > 0;
+  if (!userPickValid || !STATE.compare.chart.seriesManuallySet) {
+    const best = seriesOptions
+      .map(s => ({ s, count: seriesDriverCounts[s] }))
+      .sort((a, b) => b.count - a.count)[0];
+    if (best && best.s !== seriesChoice) {
+      seriesChoice = best.s;
+      STATE.compare.chart.series = best.s;
+    }
+  }
 
   const seriesToggleHTML = seriesOptions.map(s =>
     `<button class="${s === seriesChoice ? "on" : ""}" data-cmp-chart-series="${s}" data-val="${s}">${s}</button>`
@@ -12472,7 +12570,10 @@ function renderCompareHeadToHeadSection(drivers) {
   // For each pair, build the record. We don't show all N*(N-1)/2 pairs
   // for >2 drivers — that's too dense. Just show each driver vs each
   // other in a triangular matrix.
-  const series = "NCS"; // most data-rich; can extend later
+  // We walk ALL series (NCS, NOS, NTS) and aggregate. Previous version
+  // hardcoded NCS which left Xfinity- or Truck-only driver matchups
+  // showing "No shared races" even when they raced each other 30 times.
+  const seriesList = ["NCS", "NOS", "NTS"];
   const pairs = [];
   for (let i = 0; i < drivers.length; i++) {
     for (let j = i + 1; j < drivers.length; j++) {
@@ -12481,22 +12582,33 @@ function renderCompareHeadToHeadSection(drivers) {
   }
 
   const pairCards = pairs.map(([a, b]) => {
-    // Walk both drivers' race histories, find shared (year, round, series)
-    const aHist = getDriverRaceHistory(a.name, series);
-    const bHist = getDriverRaceHistory(b.name, series);
-    const bMap = new Map();
-    bHist.forEach(r => bMap.set(`${r.year}|${r.round}`, r));
-    let aWins = 0;  // a finished better
-    let bWins = 0;  // b finished better
+    // Per-series tallies first, then aggregate. Per-series breakdown is
+    // shown in the card meta line ("48 shared races · 34 NOS · 14 NTS")
+    // so the user knows where the head-to-head comes from.
+    let aWins = 0;
+    let bWins = 0;
     let ties = 0;
-    for (const ra of aHist) {
-      const rb = bMap.get(`${ra.year}|${ra.round}`);
-      if (!rb) continue;
-      if (ra.finish_pos == null || rb.finish_pos == null) continue;
-      if (ra.finish_pos < rb.finish_pos) aWins++;
-      else if (ra.finish_pos > rb.finish_pos) bWins++;
-      else ties++;
+    const perSeries = [];
+
+    for (const series of seriesList) {
+      const aHist = getDriverRaceHistory(a.name, series);
+      const bHist = getDriverRaceHistory(b.name, series);
+      if (aHist.length === 0 || bHist.length === 0) continue;
+      const bMap = new Map();
+      bHist.forEach(r => bMap.set(`${r.year}|${r.round}`, r));
+      let sCount = 0;
+      for (const ra of aHist) {
+        const rb = bMap.get(`${ra.year}|${ra.round}`);
+        if (!rb) continue;
+        if (ra.finish_pos == null || rb.finish_pos == null) continue;
+        if (ra.finish_pos < rb.finish_pos) aWins++;
+        else if (ra.finish_pos > rb.finish_pos) bWins++;
+        else ties++;
+        sCount++;
+      }
+      if (sCount > 0) perSeries.push({ series, count: sCount });
     }
+
     const total = aWins + bWins + ties;
     if (total === 0) {
       return `
@@ -12512,6 +12624,11 @@ function renderCompareHeadToHeadSection(drivers) {
     }
     const aPct = total > 0 ? (aWins / total * 100) : 0;
     const bPct = total > 0 ? (bWins / total * 100) : 0;
+    // Series breakdown string. Single-series races just show that series.
+    // Multi-series races show counts per series.
+    const seriesBreakdown = perSeries.length === 1
+      ? perSeries[0].series
+      : perSeries.map(p => `${p.count} ${p.series}`).join(" · ");
     return `
       <div class="cmp-h2h-card">
         <div class="cmp-h2h-pair">
@@ -12524,7 +12641,7 @@ function renderCompareHeadToHeadSection(drivers) {
           <div class="cmp-h2h-bar-b" style="width:${bPct}%" title="${bWins} better finishes"></div>
         </div>
         <div class="cmp-h2h-meta">
-          <span class="ed-byline">${total} shared NCS race${total === 1 ? "" : "s"}${ties > 0 ? ` · ${ties} tied` : ""}</span>
+          <span class="ed-byline">${total} shared race${total === 1 ? "" : "s"} · ${seriesBreakdown}${ties > 0 ? ` · ${ties} tied` : ""}</span>
         </div>
       </div>
     `;
@@ -12533,8 +12650,8 @@ function renderCompareHeadToHeadSection(drivers) {
   return `
     <div class="cmp-section">
       <div class="cmp-section-head">
-        <span class="cmp-section-title">Head-to-Head · NCS</span>
-        <span class="ed-byline">Races where both drivers started · who finished higher</span>
+        <span class="cmp-section-title">Head-to-Head</span>
+        <span class="ed-byline">Races where both drivers started · who finished higher · across all loaded series</span>
       </div>
       <div class="cmp-h2h-grid">${pairCards}</div>
     </div>
@@ -12639,6 +12756,10 @@ function wireCompareEventHandlers() {
       e.stopPropagation();
       const slug = btn.dataset.slug;
       STATE.compare.slugs = STATE.compare.slugs.filter(s => s !== slug);
+      // Reset the chart's manual-series flag — composition changed,
+      // user's previously-picked series may no longer make sense.
+      // Re-enables auto-resolve to the new majority-data series.
+      if (STATE.compare.chart) STATE.compare.chart.seriesManuallySet = false;
       // Reflect the new state in the URL (without triggering a hashchange
       // round-trip — replaceState is silent).
       const newSlugs = STATE.compare.slugs;
@@ -12743,6 +12864,8 @@ function wireCompareEventHandlers() {
       if (STATE.compare.slugs.length >= 4) return;
       if (STATE.compare.slugs.includes(slug)) return;
       STATE.compare.slugs.push(slug);
+      // Reset chart's auto-resolve flag — see comment in remove handler
+      if (STATE.compare.chart) STATE.compare.chart.seriesManuallySet = false;
       const newUrl = `#/compare?with=${encodeURIComponent(STATE.compare.slugs.join(","))}`;
       history.replaceState(null, "", newUrl);
       input.value = "";
@@ -12764,6 +12887,7 @@ function wireCompareEventHandlers() {
       const next = btn.dataset.cmpChartSeries;
       if (!next || next === STATE.compare.chart.series) return;
       STATE.compare.chart.series = next;
+      STATE.compare.chart.seriesManuallySet = true;
       renderCompare();
     });
   }

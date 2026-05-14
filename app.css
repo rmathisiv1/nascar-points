@@ -10517,3 +10517,18 @@ body.lightbox-open {
     -webkit-touch-callout: none;
   }
 }
+
+/* Compare table footer + partial-data marker */
+.cmp-section-footer {
+  padding: 8px 14px;
+  border-top: 1px dashed var(--border);
+  font-size: 11px;
+}
+.cmp-cell-partial-mark {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  margin-left: 2px;
+  vertical-align: super;
+  cursor: help;
+}
