@@ -7380,7 +7380,7 @@ function renderProfile() {
           <span class="profile-panel-sub">Six-axis radar · season pace + career resume</span>
         </div>
         <div class="profile-panel-body" id="profile-spider-body">
-          ${renderProfileSpiderChart(primaryDrv, STATE.series, ent)}
+          ${renderProfileSpiderChart(primaryDrv, STATE.series, entity)}
         </div>
       </div>
 
