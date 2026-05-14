@@ -12948,7 +12948,13 @@ function renderCompareTrackTypeSection(drivers) {
       const isBest = (best != null && s.avg_finish === best);
       const isWorst = (worst != null && s.avg_finish === worst && !isBest);
       const cls = isBest ? "cmp-cell-best" : (isWorst ? "cmp-cell-worst" : "");
-      return `<td class="${cls}">${s.avg_finish.toFixed(1)} <small>(${s.starts}st, ${s.wins}w)</small></td>`;
+      // Small-text breakdown: starts always, wins only when >0
+      // (otherwise "0w" clutters every row for drivers who haven't won
+      // at that track type). Use the word "starts"/"wins" spelled out
+      // since "8st, 0w" was getting misread.
+      const startsPart = `${s.starts} start${s.starts === 1 ? "" : "s"}`;
+      const winsPart = s.wins > 0 ? ` · ${s.wins} win${s.wins === 1 ? "" : "s"}` : "";
+      return `<td class="${cls}">${s.avg_finish.toFixed(1)} <small>(${startsPart}${winsPart})</small></td>`;
     }).join("");
 
     return `<tr><th>${t.label}</th>${finCells}</tr>`;
@@ -13096,7 +13102,7 @@ function renderCompareFormSection(drivers) {
     const isBest = (finBest != null && form.avg_finish === finBest);
     const isWorst = (finWorst != null && form.avg_finish === finWorst && !isBest);
     const cls = isBest ? "cmp-cell-best" : (isWorst ? "cmp-cell-worst" : "");
-    return `<td class="${cls}">${form.avg_finish.toFixed(1)} <small>(${form.starts}r)</small></td>`;
+    return `<td class="${cls}">${form.avg_finish.toFixed(1)} <small>(${form.starts} race${form.starts === 1 ? "" : "s"})</small></td>`;
   }).join("");
 
   // Stage points — higher is better
