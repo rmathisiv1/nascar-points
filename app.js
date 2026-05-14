@@ -12512,7 +12512,16 @@ function _lastNameOf(fullName) {
 }
 
 function renderCompareTrackTypeSection(drivers) {
-  const series = "NCS";
+  // Pick series with the most driver-data (same logic as form section).
+  // Was hardcoded to NCS, which meant Xfinity/Truck-only driver sets
+  // saw nothing here. Auto-pick gives them the most-populated series.
+  const seriesCounts = ["NCS", "NOS", "NTS"].map(s => {
+    const count = drivers.filter(d => getDriverRaceHistory(d.name, s).length > 0).length;
+    return { series: s, count };
+  });
+  seriesCounts.sort((a, b) => b.count - a.count);
+  const series = seriesCounts[0].count > 0 ? seriesCounts[0].series : "NCS";
+
   const types = [
     { key: "short", label: "Short", icon: "S" },
     { key: "inter", label: "Inter", icon: "I" },
@@ -12550,7 +12559,7 @@ function renderCompareTrackTypeSection(drivers) {
   return `
     <div class="cmp-section">
       <div class="cmp-section-head">
-        <span class="series-tag tag-NCS">NCS</span>
+        <span class="series-tag tag-${series}">${series}</span>
         <span class="cmp-section-title">By Track Type · Avg Finish (career)</span>
       </div>
       <table class="cmp-table cmp-table-tt">
@@ -12660,15 +12669,21 @@ function renderCompareHeadToHeadSection(drivers) {
 
 // Current-season form — last 5 races for each driver, plus YTD averages.
 function renderCompareFormSection(drivers) {
-  const series = STATE.series;
-  const rows = drivers.map(d => {
-    const form = getDriverRecentForm(d.name, series, 5);
-    return { d, form };
-  }).filter(r => r.form);
-  if (rows.length === 0) return "";
+  // Pick the series where the MOST compared drivers have current-season
+  // form data. Decoupled from STATE.series (the topbar) because the
+  // compare page is its own context — a user comparing 4 Xfinity drivers
+  // shouldn't have to switch the topbar to NOS to see their form.
+  // Falls back to STATE.series if no drivers have any form data anywhere
+  // (still emits the section so users can see something useful).
+  const seriesCounts = ["NCS", "NOS", "NTS"].map(s => {
+    const count = drivers.filter(d => getDriverRecentForm(d.name, s, 5)).length;
+    return { series: s, count };
+  });
+  seriesCounts.sort((a, b) => b.count - a.count);
+  const series = seriesCounts[0].count > 0 ? seriesCounts[0].series : STATE.series;
 
-  // Precompute the form values for each driver so we can determine best/worst.
   const forms = drivers.map(d => getDriverRecentForm(d.name, series, 5));
+  if (forms.every(f => !f)) return "";
 
   // Avg finish — lower is better
   const finVals = forms.map(f => f?.avg_finish).filter(n => n != null);
@@ -12698,11 +12713,19 @@ function renderCompareFormSection(drivers) {
     return `<td class="${cls}">${form.avg_stage_pts.toFixed(1)} <small>pts</small></td>`;
   }).join("");
 
+  // Header sub-note shows which other series had data, so the user
+  // understands the section auto-picked one. E.g. "NOS (4 drivers) · NTS (2 drivers)"
+  const otherSeriesNote = seriesCounts.filter(sc => sc.count > 0 && sc.series !== series);
+  const subNote = otherSeriesNote.length > 0
+    ? `<span class="ed-byline">Also: ${otherSeriesNote.map(sc => `${sc.count} in ${sc.series}`).join(" · ")}</span>`
+    : "";
+
   return `
     <div class="cmp-section">
       <div class="cmp-section-head">
         <span class="series-tag tag-${series}">${series}</span>
         <span class="cmp-section-title">Current Season Form · ${STATE.season}</span>
+        ${subNote}
       </div>
       <table class="cmp-table">
         ${_renderCompareTableHeader(drivers)}
