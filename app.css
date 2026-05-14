@@ -8143,6 +8143,13 @@ body.lightbox-open {
   text-decoration: none;
   border-bottom: 1px solid var(--tint-1);
 }
+/* Team-mode rows: wider tag column to fit 5-7 char team codes
+   (TRICON, HENDRCK, JOEGIBBS) without overflowing into the name cell.
+   Without this, codes >3 chars push the inline-block tag past its grid
+   cell boundary and visually collide with the team name to its right. */
+.sp-row.sp-row-team {
+  grid-template-columns: 28px 60px 1fr 1.6fr 50px;
+}
 .sp-row:hover {
   background: var(--tint-1);
 }
@@ -8311,7 +8318,9 @@ body.lightbox-open {
   }
 }
 
-/* Stage points — team-mode tag (wider than car tag for 3-4 char team codes) */
+/* Stage points — team-mode tag (wider than car tag for 3-7 char team codes).
+   max-width:100% prevents the inline-block from growing past its grid
+   cell when the code is unusually long. */
 .sp-team-tag {
   font-family: var(--mono);
   font-size: 10px;
@@ -8321,7 +8330,12 @@ body.lightbox-open {
   text-align: center;
   letter-spacing: 0.04em;
   min-width: 36px;
+  max-width: 100%;
   display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 @media (max-width: 767.98px) {
   .sp-team-tag { font-size: 9px; min-width: 32px; padding: 2px 4px; }
@@ -9416,6 +9430,17 @@ body.lightbox-open {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
+}
+/* Left cluster: grip handle + car number badge. Sits at the top-left
+   of the card (where the car alone used to sit, before drag was added).
+   The grip is the small ⋮⋮ glyph that signals draggability — putting it
+   inline with the car keeps the original visual emphasis on the car
+   number while still surfacing the drag affordance. */
+.cmp-header-top-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .cmp-header-car {
   display: inline-block;
@@ -10531,4 +10556,77 @@ body.lightbox-open {
   margin-left: 2px;
   vertical-align: super;
   cursor: help;
+}
+
+/* ============================================================================
+   Compare: spider/radar chart for performance profile
+   ============================================================================ */
+.cmp-spider-host {
+  padding: 14px;
+  display: flex;
+  justify-content: center;
+}
+.cmp-spider-svg {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+}
+
+/* Grid rings — concentric hexagons */
+.cmp-spider-grid {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-opacity: 0.5;
+}
+/* The outermost ring (100%) should be slightly bolder so the chart
+   has a clear outer boundary. Specificity wise, this is just a
+   last-child or nth-last-of-type style. */
+.cmp-spider-grid:last-of-type {
+  stroke-width: 1.5;
+  stroke-opacity: 0.85;
+}
+
+/* Spokes from center to each axis tip */
+.cmp-spider-spoke {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+  stroke-dasharray: 2 3;
+}
+
+/* Axis labels and sub-labels */
+.cmp-spider-label {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text);
+  dominant-baseline: middle;
+}
+.cmp-spider-sublabel {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 10px;
+  fill: var(--dim);
+  dominant-baseline: middle;
+}
+
+/* Driver polygons */
+.cmp-spider-driver {
+  transition: opacity 0.1s;
+}
+.cmp-spider-driver:hover {
+  opacity: 0.35 !important;
+}
+
+@media (max-width: 767.98px) {
+  .cmp-spider-host {
+    padding: 8px 4px;
+  }
+  .cmp-spider-label {
+    font-size: 11px;
+  }
+  .cmp-spider-sublabel {
+    font-size: 9px;
+  }
 }

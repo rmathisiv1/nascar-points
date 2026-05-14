@@ -4941,7 +4941,7 @@ function renderBreakdown() {
       const txt = contrastTextFor(teamHex);
       const pct = (r.stagePts / max) * 100;
       const fullName = (lbl && lbl.full) || r.team_code;
-      return `<a class="sp-row profile-link" href="#/team/${encodeURIComponent(r.team_code)}">
+      return `<a class="sp-row sp-row-team profile-link" href="#/team/${encodeURIComponent(r.team_code)}">
         <span class="sp-rank">${i + 1}</span>
         <span class="sp-team-tag" style="background:${teamHex};color:${txt}">${escapeHTML(r.team_code)}</span>
         <span class="sp-name">${escapeHTML(fullName)}</span>
@@ -7371,6 +7371,16 @@ function renderProfile() {
         </div>
         <div class="profile-panel-body">
           <svg id="profile-chart" style="width:100%;height:260px;display:block;"></svg>
+        </div>
+      </div>
+
+      <div class="profile-panel">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">Performance Profile</span>
+          <span class="profile-panel-sub">Six-axis radar · season pace + career resume</span>
+        </div>
+        <div class="profile-panel-body" id="profile-spider-body">
+          ${renderProfileSpiderChart(primaryDrv, STATE.series, ent)}
         </div>
       </div>
 
@@ -11883,7 +11893,10 @@ function renderCompare() {
   // ----- Section: career trajectory line chart -----
   const chartHTML = renderCompareCareerChart(drivers);
 
-  // ----- Section: track-type splits (NCS only — primary series for analysis) -----
+  // ----- Section: performance spider chart (6-axis radar) -----
+  const spiderHTML = renderCompareSpiderChart(drivers);
+
+  // ----- Section: track-type splits -----
   const trackTypeHTML = renderCompareTrackTypeSection(drivers);
 
   // ----- Section: head-to-head (pairwise, all series combined) -----
@@ -11901,6 +11914,7 @@ function renderCompare() {
     <div class="cmp-headers">${headersHTML}</div>
     ${careerHTML}
     ${chartHTML}
+    ${spiderHTML}
     ${trackTypeHTML}
     ${h2hHTML}
     ${formHTML}
@@ -11979,8 +11993,10 @@ function renderCompareDriverHeader(d) {
   return `
     <div class="cmp-header-card" draggable="true" data-slug="${d.slug}">
       <div class="cmp-header-top">
-        <span class="cmp-header-grip" title="Drag to reorder" aria-hidden="true">⋮⋮</span>
-        <span class="cmp-header-car" style="background:${carHex};color:${carTxt}">#${d.entity.car_number}</span>
+        <span class="cmp-header-top-left">
+          <span class="cmp-header-grip" title="Drag to reorder" aria-hidden="true">⋮⋮</span>
+          <span class="cmp-header-car" style="background:${carHex};color:${carTxt}">#${d.entity.car_number}</span>
+        </span>
         <button class="cmp-header-remove" data-slug="${d.slug}" title="Remove from comparison" aria-label="Remove ${escapeHTML(d.name)}">×</button>
       </div>
       <a class="cmp-header-name profile-link" href="#/driver/${d.slug}">${escapeHTML(d.name)}</a>
@@ -12501,6 +12517,294 @@ function renderCompareCareerChart(drivers) {
   `;
 }
 
+// ============================================================
+// COMPARE: Performance spider chart (radar)
+// ============================================================
+// Six-axis radar showing each driver's performance profile. The axes
+// are a deliberate mix of CURRENT-SEASON pace and CAREER scope so a
+// single chart tells you both "how are they running right now" and
+// "how good have they been historically." Normalized 0-1 against a
+// fixed sensible scale (not per-driver-set min/max) so the shapes are
+// meaningful across comparison contexts.
+//
+// Axes:
+//   1. Pace          — current season avg finish (1=P1 perfect, 0=P40)
+//   2. Qualifying    — current season avg start (1=P1, 0=P40)
+//   3. Win rate      — career wins/starts (1=100%, 0=0%; logarithmic-ish — 5% wins ≈ 0.5)
+//   4. Top-5 rate    — career top5/starts (1=50%+, 0=0%)
+//   5. Stage scoring — current season avg stage pts/race (1=15+, 0=0)
+//   6. Versatility   — # of track types with ≥3 starts (4/4=1, 0/4=0)
+//
+// Cache-only drivers (no bio) still work since career stats come from
+// _compareDriverYearlyStats which walks SEASON_CACHE. Brand-new debuts
+// with <10 starts won't have a meaningful shape but it still draws.
+
+// Build the six metrics for one driver. Returns an object with values
+// in 0..1 space, plus a `raw` object with the source numbers for tooltips.
+function _compareSpiderMetricsFor(driver, series) {
+  const result = { values: {}, raw: {} };
+
+  // Pace: avg finish this season — normalized so 1=P1, 0=P40. We invert
+  // so smaller (better) numbers map to higher (better) radar values.
+  const form = getDriverRecentForm(driver.name, series, 100);  // huge N = whole season
+  if (form && form.avg_finish != null) {
+    result.values.pace = Math.max(0, Math.min(1, (40 - form.avg_finish) / 39));
+    result.raw.pace = form.avg_finish.toFixed(1);
+  } else {
+    result.values.pace = 0;
+    result.raw.pace = "—";
+  }
+
+  // Qualifying: avg start this season. Same inverted normalization.
+  // Walk season race history for start positions directly since
+  // getDriverRecentForm doesn't expose avg_start.
+  const ent = allEntities().find(e =>
+    (e.primaryDriver || e.driver || "").toLowerCase() === driver.name.toLowerCase()
+  );
+  if (ent && ent.races) {
+    const starts = ent.races
+      .map(rr => rr.result && rr.result.start_pos)
+      .filter(n => n != null);
+    if (starts.length > 0) {
+      const avgStart = starts.reduce((a, b) => a + b, 0) / starts.length;
+      result.values.qual = Math.max(0, Math.min(1, (40 - avgStart) / 39));
+      result.raw.qual = avgStart.toFixed(1);
+    } else {
+      result.values.qual = 0;
+      result.raw.qual = "—";
+    }
+  } else {
+    result.values.qual = 0;
+    result.raw.qual = "—";
+  }
+
+  // Career wins, top5s — bio first, cache fallback. For wins/top5 rate
+  // we need both numerator and denominator across the same series.
+  const careerData = (() => {
+    const bio = driver.bio && driver.bio.career && driver.bio.career[series];
+    if (bio && bio.starts) {
+      return { starts: bio.starts, wins: bio.wins, top5: bio.top5 };
+    }
+    // Cache fallback: sum across all loaded years for this series
+    let starts = 0, wins = 0, top5 = 0;
+    const slug = slugify(driver.name);
+    const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+    for (const year of Object.keys(cache)) {
+      const block = cache[year] && cache[year][series];
+      if (!block) continue;
+      for (const race of (block.races || [])) {
+        for (const d of (race.results || [])) {
+          if (slugify(d.driver) !== slug) continue;
+          starts++;
+          if (d.finish_pos === 1) wins++;
+          if (d.finish_pos != null && d.finish_pos <= 5) top5++;
+        }
+      }
+    }
+    return { starts, wins, top5 };
+  })();
+
+  // Win rate: scaled so 5% = 0.5 (a sliding-scale log-ish curve since
+  // wins are rare even for elite drivers; a flat 0-100% scale would
+  // make everyone look near-zero). Using sqrt makes it readable.
+  if (careerData.starts > 0) {
+    const rate = careerData.wins / careerData.starts;
+    result.values.winRate = Math.min(1, Math.sqrt(rate / 0.25));  // 25% wins = perfect
+    result.raw.winRate = `${(rate * 100).toFixed(1)}%`;
+  } else {
+    result.values.winRate = 0;
+    result.raw.winRate = "—";
+  }
+
+  // Top-5 rate: 50%+ = 1.0 (any T5 rate above half a driver's starts
+  // is elite-territory; Hamlin/Larson sit around 30-35%).
+  if (careerData.starts > 0) {
+    const rate = careerData.top5 / careerData.starts;
+    result.values.top5Rate = Math.min(1, rate / 0.5);
+    result.raw.top5Rate = `${(rate * 100).toFixed(1)}%`;
+  } else {
+    result.values.top5Rate = 0;
+    result.raw.top5Rate = "—";
+  }
+
+  // Stage scoring: this-season avg stage pts per race. 15 pts/race
+  // (= consistent top-3 in both stages every week) = 1.0.
+  if (form && form.avg_stage_pts != null) {
+    result.values.stage = Math.max(0, Math.min(1, form.avg_stage_pts / 15));
+    result.raw.stage = form.avg_stage_pts.toFixed(1);
+  } else {
+    result.values.stage = 0;
+    result.raw.stage = "—";
+  }
+
+  // Versatility: count of track types where they have ≥3 career starts.
+  // Out of 4 types (short/inter/super/road). Cache-only for now since
+  // bios don't have a track-type breakdown.
+  let typesRaced = 0;
+  for (const t of ["short", "inter", "super", "road"]) {
+    const tt = getDriverTrackTypeStats(driver.name, series, t);
+    if (tt && tt.starts >= 3) typesRaced++;
+  }
+  result.values.versatility = typesRaced / 4;
+  result.raw.versatility = `${typesRaced}/4`;
+
+  return result;
+}
+
+function renderCompareSpiderChart(drivers) {
+  // Use the same auto-resolved series as the line chart for consistency.
+  // The chart's series setting (already resolved by renderCompareCareerChart
+  // on this same render pass) is the right pick — the line chart's
+  // auto-resolve already chose the series with the most driver data.
+  const series = (STATE.compare && STATE.compare.chart && STATE.compare.chart.series) || "NCS";
+
+  const driverMetrics = drivers.map(d => ({
+    driver: d,
+    metrics: _compareSpiderMetricsFor(d, series),
+  }));
+
+  // Skip if every driver has zero data across all axes
+  const totalSignal = driverMetrics.reduce((acc, dm) =>
+    acc + Object.values(dm.metrics.values).reduce((a, b) => a + b, 0), 0);
+  if (totalSignal === 0) return "";
+
+  // Six-axis layout. Order matters visually — alternating CURRENT and
+  // CAREER stats around the hexagon prevents a single concentration on
+  // one side from biasing the visual shape.
+  const axes = [
+    { key: "pace",        label: "Pace",        sub: "season" },
+    { key: "winRate",     label: "Win rate",    sub: "career" },
+    { key: "qual",        label: "Qualifying",  sub: "season" },
+    { key: "top5Rate",    label: "T5 rate",     sub: "career" },
+    { key: "stage",       label: "Stage pts",   sub: "season" },
+    { key: "versatility", label: "Track types", sub: "career" },
+  ];
+
+  // SVG layout — square viewBox; hexagon centered. Generous padding
+  // for the axis labels which sit just outside the outer ring.
+  const W = 520;
+  const H = 440;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 150;  // outer ring radius
+  const numAxes = axes.length;
+
+  // Compute point coordinates for a given value-array (0..1 per axis)
+  // and ring radius. Returns the SVG polygon points string.
+  const polyPoints = (vals, ringR = R) =>
+    vals.map((v, i) => {
+      const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;  // start at top
+      const r = ringR * v;
+      return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
+    }).join(" ");
+
+  // Concentric grid rings at 25%/50%/75%/100% — provides reference for
+  // reading values off the chart.
+  const gridRings = [0.25, 0.5, 0.75, 1.0].map(ratio => {
+    const points = Array.from({ length: numAxes }, (_, i) => {
+      const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
+      const r = R * ratio;
+      return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
+    }).join(" ");
+    return `<polygon class="cmp-spider-grid" points="${points}"/>`;
+  }).join("");
+
+  // Spokes from center to each axis tip
+  const spokes = axes.map((_, i) => {
+    const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
+    const x = cx + R * Math.cos(angle);
+    const y = cy + R * Math.sin(angle);
+    return `<line class="cmp-spider-spoke" x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+  }).join("");
+
+  // Axis labels — positioned just outside the outer ring at each axis tip.
+  // Two lines: main label + smaller sub label (season/career)
+  const labels = axes.map((axis, i) => {
+    const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
+    const labelR = R + 24;
+    const x = cx + labelR * Math.cos(angle);
+    const y = cy + labelR * Math.sin(angle);
+    // Anchor based on angle: left-half labels right-anchor, right-half
+    // left-anchor, top/bottom center-anchor. Avoids label overlap with
+    // the chart on the side where the spoke points.
+    let anchor = "middle";
+    if (Math.abs(Math.cos(angle)) > 0.4) {
+      anchor = Math.cos(angle) > 0 ? "start" : "end";
+    }
+    return `
+      <text class="cmp-spider-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>
+      <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.sub)}</text>
+    `;
+  }).join("");
+
+  // Driver polygons — semi-transparent fill, solid stroke. Color
+  // each with the driver's car color (using safeContrastColor for
+  // light-on-light cases).
+  const driverPolys = driverMetrics.map((dm) => {
+    const carHex = colorFor(dm.driver.series, dm.driver.entity.car_number);
+    const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
+    const vals = axes.map(a => dm.metrics.values[a.key] || 0);
+    const points = polyPoints(vals);
+    const tooltipParts = axes.map(a => `${a.label}: ${dm.metrics.raw[a.key]}`).join(" · ");
+    return `
+      <polygon class="cmp-spider-driver"
+               points="${points}"
+               fill="${safeHex}"
+               stroke="${safeHex}"
+               opacity="0.18"
+               stroke-opacity="0.95"
+               stroke-width="2">
+        <title>${escapeHTML(dm.driver.name)} · ${escapeHTML(tooltipParts)}</title>
+      </polygon>
+    `;
+  }).join("");
+
+  // Legend below the chart — same style as the line chart legend
+  const legendHTML = driverMetrics.map(dm => {
+    const carHex = colorFor(dm.driver.series, dm.driver.entity.car_number);
+    const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
+    return `
+      <div class="cmp-chart-legend-row">
+        <span class="cmp-chart-legend-swatch" style="background:${safeHex}"></span>
+        <span class="cmp-chart-legend-name">${escapeHTML(dm.driver.name)}</span>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="cmp-section">
+      <div class="cmp-section-head">
+        <span class="series-tag tag-${series}">${series}</span>
+        <span class="cmp-section-title">Performance Profile · radar</span>
+        <span class="ed-byline">All axes normalized 0–100% · larger shape = stronger overall</span>
+      </div>
+      <div class="cmp-spider-host">
+        <svg class="cmp-spider-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+          ${gridRings}
+          ${spokes}
+          ${driverPolys}
+          ${labels}
+        </svg>
+      </div>
+      <div class="cmp-chart-legend">${legendHTML}</div>
+      <details class="rps-explainer-details">
+        <summary class="rps-explainer-summary">
+          <span class="ed-kicker">How the axes are scaled</span>
+          <span class="rps-explainer-cta">methodology →</span>
+        </summary>
+        <div class="rps-explainer-body">
+          <strong>Pace</strong> &amp; <strong>Qualifying</strong> map this-season avg finish/start positions to 0–1 (P1 = 1.0, P40 = 0).<br>
+          <strong>Win rate</strong> uses a sqrt curve so 5% wins ≈ 0.45 and 25%+ caps at 1.0 (raw rate is rare even for elites).<br>
+          <strong>T5 rate</strong> maps career top-5% linearly to 0–1 with 50%+ = full ring.<br>
+          <strong>Stage points</strong> maps avg stage pts/race to 0–1 with 15+ pts/race = full ring.<br>
+          <strong>Track types</strong> counts career types (short/inter/super/road) with ≥3 starts, out of 4.<br><br>
+          Season metrics reflect the loaded current season; career metrics use canonical bio data when available, or aggregate loaded SEASON_CACHE seasons otherwise.
+        </div>
+      </details>
+    </div>
+  `;
+}
+
 // Helper: extract last name for chart labels
 function _lastNameOf(fullName) {
   if (!fullName) return "";
@@ -12509,6 +12813,102 @@ function _lastNameOf(fullName) {
   // Skip common suffixes (Jr, Sr, III) when picking the surname
   const lastIsSuffix = /^(jr\.?|sr\.?|i{2,3}|iv)$/i.test(parts[parts.length - 1]);
   return lastIsSuffix && parts.length >= 2 ? parts[parts.length - 2] : parts[parts.length - 1];
+}
+
+// Single-driver radar — used on the driver profile page.
+// Takes a driver name + series, builds the same 6-axis profile used in
+// compare. We construct a minimal "driver" object compatible with
+// _compareSpiderMetricsFor by wrapping the name + entity.
+function renderProfileSpiderChart(driverName, series, entity) {
+  if (!driverName) return "";
+  const bio = (STATE.driverBios && STATE.driverBios[slugify(driverName)]) || {};
+  const carHex = colorFor(series, entity?.car_number);
+  const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
+
+  // Build the driver-shaped object _compareSpiderMetricsFor expects
+  const driverObj = {
+    name: driverName,
+    series,
+    bio,
+    entity: entity || { car_number: "?" },
+  };
+  const m = _compareSpiderMetricsFor(driverObj, series);
+
+  // Render a smaller, more compact spider for the profile context
+  const axes = [
+    { key: "pace",        label: "Pace",        sub: "season" },
+    { key: "winRate",     label: "Win rate",    sub: "career" },
+    { key: "qual",        label: "Qualifying",  sub: "season" },
+    { key: "top5Rate",    label: "T5 rate",     sub: "career" },
+    { key: "stage",       label: "Stage pts",   sub: "season" },
+    { key: "versatility", label: "Track types", sub: "career" },
+  ];
+  const W = 420;
+  const H = 360;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 120;
+  const numAxes = axes.length;
+
+  const polyPoints = (vals, ringR = R) =>
+    vals.map((v, i) => {
+      const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
+      const r = ringR * v;
+      return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
+    }).join(" ");
+
+  const gridRings = [0.25, 0.5, 0.75, 1.0].map(ratio => {
+    const points = Array.from({ length: numAxes }, (_, i) => {
+      const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
+      const r = R * ratio;
+      return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
+    }).join(" ");
+    return `<polygon class="cmp-spider-grid" points="${points}"/>`;
+  }).join("");
+
+  const spokes = axes.map((_, i) => {
+    const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
+    const x = cx + R * Math.cos(angle);
+    const y = cy + R * Math.sin(angle);
+    return `<line class="cmp-spider-spoke" x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+  }).join("");
+
+  // Axis labels with the driver's actual raw values inline (since there's
+  // only one driver here, we can afford to show numbers right at each tip)
+  const labels = axes.map((axis, i) => {
+    const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
+    const labelR = R + 22;
+    const x = cx + labelR * Math.cos(angle);
+    const y = cy + labelR * Math.sin(angle);
+    let anchor = "middle";
+    if (Math.abs(Math.cos(angle)) > 0.4) {
+      anchor = Math.cos(angle) > 0 ? "start" : "end";
+    }
+    return `
+      <text class="cmp-spider-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>
+      <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(String(m.raw[axis.key]))}</text>
+    `;
+  }).join("");
+
+  const vals = axes.map(a => m.values[a.key] || 0);
+  const driverPoly = `
+    <polygon class="cmp-spider-driver"
+             points="${polyPoints(vals)}"
+             fill="${safeHex}"
+             stroke="${safeHex}"
+             opacity="0.22"
+             stroke-opacity="0.95"
+             stroke-width="2"/>
+  `;
+
+  return `
+    <svg class="cmp-spider-svg profile-spider" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+      ${gridRings}
+      ${spokes}
+      ${driverPoly}
+      ${labels}
+    </svg>
+  `;
 }
 
 function renderCompareTrackTypeSection(drivers) {
