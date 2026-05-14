@@ -1855,6 +1855,10 @@ function parseHash() {
       splitsRange: STATE.profile.splitsRange || "season",
       splitsSeries: STATE.profile.splitsSeries || "all",
       heatmapSeries: STATE.profile.heatmapSeries || "all",
+      // Preserve the year-over-year panel's toggle state across
+      // navigation so the user's preference for points vs standings
+      // doesn't reset every time they open a new profile.
+      yearOverYear: (STATE.profile && STATE.profile.yearOverYear) || { metric: "points" },
       // Reset track picker to defaults on each driver navigation so a
       // selection made on Driver A doesn't bleed into Driver B (where the
       // picked track might not exist in their cache).
@@ -1902,6 +1906,8 @@ function parseHash() {
       splitsRange: STATE.profile.splitsRange || "season",
       splitsSeries: STATE.profile.splitsSeries || "all",
       heatmapSeries: STATE.profile.heatmapSeries || "all",
+      // Preserve year-over-year toggle state — see comment in driver branch above.
+      yearOverYear: (STATE.profile && STATE.profile.yearOverYear) || { metric: "points" },
       trackPicker: { code: null, series: "all", gens: new Set() },
       locked: true,
     };
@@ -7486,8 +7492,8 @@ function renderProfile() {
           <span class="profile-yoy-controls">
             <span class="cmp-chart-control-label">Show</span>
             <div class="toggle-group mini" id="profile-yoy-toggle">
-              <button data-yoy-metric="points" data-val="points" class="${STATE.profile.yearOverYear.metric === "points" ? "on" : ""}">Points</button>
-              <button data-yoy-metric="standings" data-val="standings" class="${STATE.profile.yearOverYear.metric === "standings" ? "on" : ""}">Standings</button>
+              <button data-yoy-metric="points" data-val="points" class="${(STATE.profile?.yearOverYear?.metric || "points") === "points" ? "on" : ""}">Points</button>
+              <button data-yoy-metric="standings" data-val="standings" class="${(STATE.profile?.yearOverYear?.metric || "points") === "standings" ? "on" : ""}">Standings</button>
             </div>
           </span>
         </div>
@@ -8134,7 +8140,7 @@ function paintProfileYearOverYear(driverName) {
   const sub = document.getElementById("profile-yoy-sub");
   if (!svg) return;
   const series = STATE.series;
-  const metric = (STATE.profile.yearOverYear && STATE.profile.yearOverYear.metric) || "points";
+  const metric = (STATE.profile && STATE.profile.yearOverYear && STATE.profile.yearOverYear.metric) || "points";
 
   const data = _profileYearOverYearData(driverName, series);
 
@@ -8146,6 +8152,10 @@ function paintProfileYearOverYear(driverName) {
       const btn = e.target.closest("button[data-yoy-metric]");
       if (!btn) return;
       const next = btn.dataset.yoyMetric;
+      // Defensive: ensure the sub-state object exists. If a future
+      // state reset clears it (or if older session storage drops it),
+      // we re-create it here rather than crashing.
+      if (!STATE.profile.yearOverYear) STATE.profile.yearOverYear = { metric: "points" };
       if (!next || next === STATE.profile.yearOverYear.metric) return;
       STATE.profile.yearOverYear.metric = next;
       // Update button state visually without re-rendering everything
