@@ -12545,11 +12545,11 @@ const COMPARE_SPIDER_AXES = [
     explain: "Career top-5 finishes / starts. Linear: 50%+ T5 rate = 100% radar (elite-level consistency). Captures 'sustained competitive level' — different from win rate because finishing P2-P5 doesn't show up there at all.",
   },
   {
-    key: "top15Pct", label: "% Laps Top 15", sub: "career",
+    key: "top15Pct", label: "Top 15 %", sub: "career",
     explain: "Career average fraction of green-flag laps run inside the top 15 (NASCAR loop data). Captures 'consistently competitive' separately from finishing position — a driver who ran T10 all day but DNF'd late scores high here. Elite tier sits 65-80%, back markers 10-25%.",
   },
   {
-    key: "stageConsistency", label: "Stage Consistency", sub: "season",
+    key: "stageConsistency", label: "Consistency", sub: "stage pts",
     explain: "Standard deviation of this-season stage-point totals per race, INVERTED (lower σ = higher radar). Captures reliability — a driver who scores 6-9 pts every week scores higher than one who alternates 18-pt monsters with shutouts. σ=0 → 100%, σ=10 → 0%.",
   },
 ];
@@ -12670,11 +12670,9 @@ function _compareSpiderMetricsFor(driver, series) {
     }
   }
   if (topPctCount > 0) {
-    const avgPct = topPctSum / topPctCount;
-    // Source field is already 0-1 in the data. Map directly. Elite
-    // drivers sit around 0.65-0.80 (Hamlin/Larson/Bell tier); strong
-    // mid-pack ~0.40-0.55; back markers ~0.10-0.25. The chart fills
-    // the whole 0-1 range so even slight differences are visible.
+    // Source field is in PERCENT (0-100), not fraction. Divide by 100
+    // to get the fraction, then the 0-1 radar mapping is direct.
+    const avgPct = (topPctSum / topPctCount) / 100;
     result.values.top15Pct = Math.max(0, Math.min(1, avgPct));
     result.raw.top15Pct = `${(avgPct * 100).toFixed(1)}%`;
   } else {
@@ -12743,13 +12741,16 @@ function renderCompareSpiderChart(drivers) {
   // resume". See the const definition for per-axis methodology details.
   const axes = COMPARE_SPIDER_AXES;
 
-  // SVG layout — square viewBox; hexagon centered. Generous padding
-  // for the axis labels which sit just outside the outer ring.
-  const W = 520;
+  // SVG layout — square-ish viewBox with extra horizontal padding so
+  // labels at the 9 and 11 o'clock positions (which right-anchor and
+  // extend leftward) have room before hitting the SVG edge. The
+  // hexagon itself is centered in the viewBox; the extra width is
+  // pure label padding.
+  const W = 640;
   const H = 440;
   const cx = W / 2;
   const cy = H / 2;
-  const R = 150;  // outer ring radius
+  const R = 150;  // outer ring radius — unchanged
   const numAxes = axes.length;
 
   // Compute point coordinates for a given value-array (0..1 per axis)
@@ -12926,8 +12927,10 @@ function renderProfileSpiderChart(driverName, series, entity) {
   // Use the shared 6-axis layout (alternates season/career metrics
   // around the hexagon for visual balance). Same axes appear on the
   // compare-page spider so the two contexts stay readable consistently.
+  // viewBox is intentionally wider than tall (520x360) to give the
+  // long left-side labels room before hitting the SVG edge.
   const axes = COMPARE_SPIDER_AXES;
-  const W = 420;
+  const W = 520;
   const H = 360;
   const cx = W / 2;
   const cy = H / 2;
