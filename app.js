@@ -11964,9 +11964,18 @@ function renderCompareDriverHeader(d) {
   }
   if (d.bio.hometown) bioStrip.push(escapeHTML(d.bio.hometown));
 
+  // The card is draggable so users can reorder drivers by dragging the
+  // header cards left/right (or up/down on mobile when 4 drivers wrap
+  // to 2x2). The data-slug attribute tells the drop handler which
+  // slug to move. The little grip icon (⋮⋮) at the top-left signals
+  // draggability — without it, users wouldn't know the cards can be
+  // grabbed. The X (remove) button is excluded from drag-initiation
+  // by the JS handler so users can still click to remove without
+  // triggering a phantom drag.
   return `
-    <div class="cmp-header-card">
+    <div class="cmp-header-card" draggable="true" data-slug="${d.slug}">
       <div class="cmp-header-top">
+        <span class="cmp-header-grip" title="Drag to reorder" aria-hidden="true">⋮⋮</span>
         <span class="cmp-header-car" style="background:${carHex};color:${carTxt}">#${d.entity.car_number}</span>
         <button class="cmp-header-remove" data-slug="${d.slug}" title="Remove from comparison" aria-label="Remove ${escapeHTML(d.name)}">×</button>
       </div>
@@ -12780,6 +12789,233 @@ function wireCompareEventHandlers() {
       if (!next || next === STATE.compare.chart.display) return;
       STATE.compare.chart.display = next;
       renderCompare();
+    });
+  }
+
+  // ============================================================
+  // Driver header cards: drag-and-drop to reorder
+  // ============================================================
+  // Desktop: HTML5 native drag/drop API. The browser handles the ghost
+  // image and the drag visuals for free; we just need to listen for
+  // dragstart (to capture source slug), dragover (to suppress the
+  // browser's default "no drop" cursor on the target), and drop (to
+  // perform the reorder).
+  //
+  // Mobile: HTML5 drag is unreliable on touch and conflicts with
+  // page scroll. We implement long-press → enter drag mode → finger
+  // drag → drop on lift, using touch events. The card the finger is
+  // currently over gets a visual drop indicator.
+  //
+  // The mutation logic is shared via _compareReorder(fromSlug, toSlug):
+  // both event paths call into it.
+  const headersHost = document.querySelector(".cmp-headers");
+  if (headersHost) {
+    // No _wired guard needed — the .cmp-headers element is destroyed
+    // and re-created on every renderCompare() (innerHTML replacement of
+    // #compare-host), so attaching listeners afresh each call is fine
+    // and won't accumulate duplicates.
+
+    // Track the slug currently being dragged (desktop AND mobile)
+    let dragSlug = null;
+    // Mobile-only: ghost element that follows the finger, since HTML5
+    // drag's native ghost doesn't exist for touch events
+    let touchGhost = null;
+    let longPressTimer = null;
+    let longPressStartX = 0;
+    let longPressStartY = 0;
+    // Track of which card is currently the "drop indicator" target —
+    // both event paths set this so we can clear it cleanly on end.
+    let currentDropTarget = null;
+
+    const clearDropIndicators = () => {
+      headersHost.querySelectorAll(".cmp-header-card.cmp-drop-target").forEach(el => {
+        el.classList.remove("cmp-drop-target");
+      });
+      currentDropTarget = null;
+    };
+
+    // The core reorder operation. Moves fromSlug to the position of
+    // toSlug in STATE.compare.slugs (shifting toSlug and anything past
+    // it down by one). Then updates the URL (so a refresh keeps the new
+    // order) and re-renders.
+    const performReorder = (fromSlug, toSlug) => {
+      if (!fromSlug || !toSlug || fromSlug === toSlug) return;
+      const slugs = STATE.compare.slugs;
+      const fromIdx = slugs.indexOf(fromSlug);
+      const toIdx = slugs.indexOf(toSlug);
+      if (fromIdx < 0 || toIdx < 0) return;
+      // Pull the dragged slug out, splice it in at the target position
+      const [moved] = slugs.splice(fromIdx, 1);
+      slugs.splice(toIdx, 0, moved);
+      // Reflect in URL so bookmarks/refreshes retain the new order
+      const newUrl = `#/compare?with=${encodeURIComponent(slugs.join(","))}`;
+      history.replaceState(null, "", newUrl);
+      renderCompare();
+    };
+
+    // ----- DESKTOP DRAG EVENTS -----
+    headersHost.addEventListener("dragstart", (e) => {
+      const card = e.target.closest(".cmp-header-card");
+      if (!card) return;
+      // Don't initiate drag if the user is interacting with the X remove
+      // button or the name link — let those clicks happen normally.
+      if (e.target.closest(".cmp-header-remove, .cmp-header-name")) {
+        e.preventDefault();
+        return;
+      }
+      dragSlug = card.dataset.slug;
+      card.classList.add("cmp-dragging");
+      e.dataTransfer.effectAllowed = "move";
+      // Setting some data is required for Firefox to actually allow the
+      // drag — even though we read it back from the closure, not from
+      // the dataTransfer object.
+      try { e.dataTransfer.setData("text/plain", dragSlug); } catch (_) {}
+    });
+
+    headersHost.addEventListener("dragover", (e) => {
+      const card = e.target.closest(".cmp-header-card");
+      if (!card || !dragSlug) return;
+      // preventDefault is required to allow a drop event to fire
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (currentDropTarget !== card && card.dataset.slug !== dragSlug) {
+        clearDropIndicators();
+        card.classList.add("cmp-drop-target");
+        currentDropTarget = card;
+      }
+    });
+
+    headersHost.addEventListener("dragleave", (e) => {
+      // Only clear if we've truly left ALL cards. dragleave fires when
+      // crossing internal boundaries too, so check relatedTarget.
+      const card = e.target.closest(".cmp-header-card");
+      if (!card) return;
+      if (!card.contains(e.relatedTarget)) {
+        card.classList.remove("cmp-drop-target");
+        if (currentDropTarget === card) currentDropTarget = null;
+      }
+    });
+
+    headersHost.addEventListener("drop", (e) => {
+      const card = e.target.closest(".cmp-header-card");
+      if (!card || !dragSlug) return;
+      e.preventDefault();
+      const toSlug = card.dataset.slug;
+      clearDropIndicators();
+      performReorder(dragSlug, toSlug);
+      dragSlug = null;
+    });
+
+    headersHost.addEventListener("dragend", () => {
+      headersHost.querySelectorAll(".cmp-header-card.cmp-dragging").forEach(el => {
+        el.classList.remove("cmp-dragging");
+      });
+      clearDropIndicators();
+      dragSlug = null;
+    });
+
+    // ----- MOBILE TOUCH EVENTS -----
+    // Long-press threshold: 400ms feels deliberate without being slow.
+    // Movement threshold during the press: 8px — if the finger moves
+    // more than that before the timer fires, we treat it as a scroll
+    // gesture and abandon the drag.
+    headersHost.addEventListener("touchstart", (e) => {
+      const card = e.target.closest(".cmp-header-card");
+      if (!card) return;
+      // Don't initiate on the remove button or name link
+      if (e.target.closest(".cmp-header-remove, .cmp-header-name")) return;
+      const t = e.touches[0];
+      longPressStartX = t.clientX;
+      longPressStartY = t.clientY;
+      longPressTimer = setTimeout(() => {
+        // Long-press fired — enter drag mode
+        dragSlug = card.dataset.slug;
+        card.classList.add("cmp-dragging");
+        // Create the ghost element that follows the finger
+        touchGhost = card.cloneNode(true);
+        touchGhost.classList.add("cmp-touch-ghost");
+        touchGhost.style.position = "fixed";
+        touchGhost.style.pointerEvents = "none";
+        touchGhost.style.zIndex = "10000";
+        touchGhost.style.opacity = "0.85";
+        touchGhost.style.width = card.offsetWidth + "px";
+        touchGhost.style.left = (t.clientX - card.offsetWidth / 2) + "px";
+        touchGhost.style.top = (t.clientY - card.offsetHeight / 2) + "px";
+        document.body.appendChild(touchGhost);
+        // Haptic feedback if the device supports it — small confirmation
+        // that the long-press registered.
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, 400);
+    }, { passive: true });
+
+    headersHost.addEventListener("touchmove", (e) => {
+      if (longPressTimer && !dragSlug) {
+        // Pre-drag: check if the user has moved their finger too far
+        // (treat as scroll, cancel the long-press)
+        const t = e.touches[0];
+        const dx = Math.abs(t.clientX - longPressStartX);
+        const dy = Math.abs(t.clientY - longPressStartY);
+        if (dx > 8 || dy > 8) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        return;
+      }
+      if (!dragSlug || !touchGhost) return;
+      // We're in active drag — prevent the default scroll and move the
+      // ghost. preventDefault requires { passive: false } so this
+      // listener is set up that way separately below.
+      const t = e.touches[0];
+      touchGhost.style.left = (t.clientX - touchGhost.offsetWidth / 2) + "px";
+      touchGhost.style.top = (t.clientY - touchGhost.offsetHeight / 2) + "px";
+      // Figure out which card the finger is currently over
+      const elBelow = document.elementFromPoint(t.clientX, t.clientY);
+      const cardBelow = elBelow && elBelow.closest(".cmp-header-card:not(.cmp-dragging)");
+      if (cardBelow && cardBelow !== currentDropTarget) {
+        clearDropIndicators();
+        cardBelow.classList.add("cmp-drop-target");
+        currentDropTarget = cardBelow;
+      } else if (!cardBelow && currentDropTarget) {
+        clearDropIndicators();
+      }
+    }, { passive: false });
+
+    headersHost.addEventListener("touchend", (e) => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (!dragSlug) return;
+      // Drop on whichever card the finger was last over
+      const toSlug = currentDropTarget ? currentDropTarget.dataset.slug : null;
+      // Clean up the ghost + indicators BEFORE the reorder so the
+      // re-render starts from a clean DOM state.
+      if (touchGhost && touchGhost.parentNode) touchGhost.parentNode.removeChild(touchGhost);
+      touchGhost = null;
+      headersHost.querySelectorAll(".cmp-header-card.cmp-dragging").forEach(el => {
+        el.classList.remove("cmp-dragging");
+      });
+      clearDropIndicators();
+      const movedSlug = dragSlug;
+      dragSlug = null;
+      if (toSlug) performReorder(movedSlug, toSlug);
+    });
+
+    // If a touch is cancelled (system gesture, phone call, etc.), tear
+    // down state cleanly so we don't leave a phantom ghost stuck on
+    // screen.
+    headersHost.addEventListener("touchcancel", () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (touchGhost && touchGhost.parentNode) touchGhost.parentNode.removeChild(touchGhost);
+      touchGhost = null;
+      headersHost.querySelectorAll(".cmp-header-card.cmp-dragging").forEach(el => {
+        el.classList.remove("cmp-dragging");
+      });
+      clearDropIndicators();
+      dragSlug = null;
     });
   }
 

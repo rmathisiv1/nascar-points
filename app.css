@@ -10443,3 +10443,77 @@ body.lightbox-open {
   border-radius: 8px;
   vertical-align: middle;
 }
+
+/* ============================================================================
+   Driver header card drag-and-drop styling
+   ============================================================================ */
+.cmp-header-card {
+  cursor: grab;
+  /* Subtle highlight on hover signals interactivity for the whole card,
+     beyond the small grip icon. Browser-default would just show a
+     pointer cursor on the X button. */
+  transition: border-color 0.1s, box-shadow 0.1s, transform 0.1s;
+}
+.cmp-header-card:hover {
+  border-color: var(--muted);
+}
+.cmp-header-card:active {
+  cursor: grabbing;
+}
+.cmp-header-card.cmp-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+.cmp-header-card.cmp-drop-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+  transform: translateY(-2px);
+}
+
+/* The small grip handle (⋮⋮ glyph) at the top-left of each card.
+   Pure visual affordance — the whole card is draggable, but without
+   this users wouldn't know that. Sits to the left of the car badge
+   without disrupting the existing top-row layout. */
+.cmp-header-grip {
+  display: inline-block;
+  margin-right: 6px;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--dim);
+  letter-spacing: -2px;   /* ⋮⋮ glyph is wide by default; tighten it */
+  user-select: none;
+  cursor: grab;
+  line-height: 1;
+  /* The grip is purely decorative — don't capture clicks so the parent
+     card's drag/click behavior works through it. */
+  pointer-events: none;
+}
+.cmp-header-card:hover .cmp-header-grip {
+  color: var(--muted);
+}
+
+/* Mobile touch ghost — the card-clone that follows the finger during a
+   long-press drag. The cmp-touch-ghost class is added in JS at drag
+   start; the inline styles take care of position. We slightly desaturate
+   to differentiate from the real (still-visible-but-faded) source card. */
+.cmp-touch-ghost {
+  pointer-events: none;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  border-color: var(--accent) !important;
+  transform: scale(1.02);
+  transition: none;
+}
+
+@media (max-width: 767.98px) {
+  /* On mobile, hover state isn't really a thing — but the grip should
+     still be visible at full muted strength (not dim) since touch users
+     can't preview interactivity by hovering. */
+  .cmp-header-grip { color: var(--muted); }
+  /* Prevent text selection during the long-press window so the user
+     doesn't get a phone-style "select text" popup mid-drag. */
+  .cmp-header-card {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
