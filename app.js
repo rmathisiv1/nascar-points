@@ -7940,7 +7940,7 @@ function paintProfileChart(entity, rows) {
     const rect = svg.getBoundingClientRect();
     const W = Math.max(320, Math.floor(rect.width));
     const H = 260;
-    const pad = { t: 16, r: 56, b: 32, l: 52 };
+    const pad = { t: 16, r: 80, b: 32, l: 52 };
     const innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.removeAttribute("preserveAspectRatio");
@@ -8223,7 +8223,7 @@ function paintProfileYearOverYear(driverName) {
     } else if (!currentYearData) {
       sub.textContent = `${priorYearData.year} championship rank by race · driver hasn't run ${STATE.season} yet`;
     } else {
-      sub.textContent = `${STATE.season} championship rank by race · ${priorYearData.year} faded behind`;
+      sub.textContent = `${STATE.season} championship rank by race · last year faded behind`;
     }
   }
 
@@ -8263,7 +8263,7 @@ function paintProfileYearOverYear(driverName) {
   const rect = svg.getBoundingClientRect();
   const W = Math.max(320, Math.floor(rect.width));
   const H = 280;
-  const pad = { t: 16, r: 64, b: 32, l: 56 };
+  const pad = { t: 16, r: 80, b: 32, l: 56 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
