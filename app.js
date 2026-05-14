@@ -715,6 +715,114 @@ function wireSearch() {
 }
 
 
+// ============================================================
+// Spider chart label tooltips
+// ============================================================
+// Custom hover/tap tooltip for the radar chart axis labels — replaces the
+// native SVG <title> which has a slow ~1.5s show delay and disappears
+// the moment the mouse moves. This handler attaches at the document
+// level (once), uses event delegation, and works for both the compare
+// spider AND the profile spider since they share the same selectors.
+function _wireSpiderTooltips() {
+  if (document.body._spiderTooltipWired) return;
+  document.body._spiderTooltipWired = true;
+
+  // Find (or build) the floating tooltip element inside a given host.
+  // The renderers emit an empty <div class="cmp-spider-tooltip" hidden>
+  // alongside the SVG; we populate + position it on hover.
+  const tooltipForHost = (host) => host.querySelector(".cmp-spider-tooltip");
+
+  const showTooltipForGroup = (group) => {
+    const host = group.closest(".cmp-spider-host");
+    if (!host) return;
+    const tip = tooltipForHost(host);
+    if (!tip) return;
+    const label = group.dataset.axisLabel || "";
+    const sub = group.dataset.axisSub || "";
+    const explain = group.dataset.axisExplain || "";
+    tip.innerHTML = `
+      <div class="cmp-spider-tip-title">${label}<span class="cmp-spider-tip-scope">${sub}</span></div>
+      <div class="cmp-spider-tip-body">${explain}</div>
+    `;
+    // Position over the host using the group's bounding rect. Bounds
+    // are in document coordinates; subtract the host's offset to get
+    // local coords.
+    const hostRect = host.getBoundingClientRect();
+    const groupRect = group.getBoundingClientRect();
+    // Default: center the tooltip horizontally on the group, place it
+    // 8px below. If that overflows the host's right edge, shift left;
+    // if it'd overflow below the host, place above instead.
+    tip.hidden = false;
+    const tipRect = tip.getBoundingClientRect();
+    let left = (groupRect.left - hostRect.left) + (groupRect.width / 2) - (tipRect.width / 2);
+    let top = (groupRect.top - hostRect.top) + groupRect.height + 8;
+    // Clamp horizontally inside the host
+    left = Math.max(6, Math.min(hostRect.width - tipRect.width - 6, left));
+    // If tooltip would extend below the host, flip above the label
+    if (top + tipRect.height > hostRect.height - 4) {
+      top = (groupRect.top - hostRect.top) - tipRect.height - 8;
+    }
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  };
+
+  const hideAllTooltips = () => {
+    document.querySelectorAll(".cmp-spider-tooltip").forEach(tip => {
+      tip.hidden = true;
+    });
+  };
+
+  // Desktop hover. We use mouseover/mouseout (which bubble) rather than
+  // mouseenter/mouseleave (which don't bubble — wouldn't work with
+  // event delegation). The relatedTarget check on mouseout prevents
+  // hiding the tooltip when the cursor moves between the label and
+  // sublabel text inside the same group.
+  document.body.addEventListener("mouseover", (e) => {
+    if (!e.target || !e.target.closest) return;
+    const group = e.target.closest(".cmp-spider-label-group");
+    if (!group) return;
+    showTooltipForGroup(group);
+  });
+
+  document.body.addEventListener("mouseout", (e) => {
+    if (!e.target || !e.target.closest) return;
+    const group = e.target.closest(".cmp-spider-label-group");
+    if (!group) return;
+    // Only hide if cursor genuinely left the group (not moved between
+    // internal children — text label / sublabel — which both fire
+    // mouseout/mouseover events as the cursor crosses their boundaries).
+    const related = e.relatedTarget;
+    if (related && group.contains(related)) return;
+    hideAllTooltips();
+  });
+
+  // Mobile tap-to-toggle: tap a label to show; tap anywhere else to hide.
+  // This is in capture phase so we beat any link-navigation on the page.
+  document.body.addEventListener("click", (e) => {
+    const group = e.target.closest && e.target.closest(".cmp-spider-label-group");
+    if (group) {
+      // Tap on a label — toggle its tooltip
+      const host = group.closest(".cmp-spider-host");
+      const tip = host && tooltipForHost(host);
+      if (tip && !tip.hidden) {
+        hideAllTooltips();
+      } else {
+        showTooltipForGroup(group);
+      }
+      e.stopPropagation();
+      return;
+    }
+    // Tap anywhere else — close any open spider tooltip
+    if (e.target.closest && !e.target.closest(".cmp-spider-tooltip")) {
+      hideAllTooltips();
+    }
+  });
+}
+// Wire on script-load (module-level) — body should exist by the time
+// this script runs since we're at end-of-body inclusion.
+_wireSpiderTooltips();
+
+
 
 // ============================================================
 // BOOT
@@ -12799,8 +12907,7 @@ function renderCompareSpiderChart(drivers) {
       anchor = Math.cos(angle) > 0 ? "start" : "end";
     }
     return `
-      <g class="cmp-spider-label-group">
-        <title>${escapeHTML(axis.label)} — ${escapeHTML(axis.explain || "")}</title>
+      <g class="cmp-spider-label-group" data-axis-label="${escapeHTML(axis.label)}" data-axis-sub="${escapeHTML(axis.sub)}" data-axis-explain="${escapeHTML(axis.explain || "")}">
         <text class="cmp-spider-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>
         <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.sub)}</text>
       </g>
@@ -12875,6 +12982,7 @@ function renderCompareSpiderChart(drivers) {
           ${driverPolys}
           ${labels}
         </svg>
+        <div class="cmp-spider-tooltip" hidden></div>
       </div>
       <div class="cmp-chart-legend">${legendHTML}</div>
       <details class="rps-explainer-details">
@@ -12974,10 +13082,9 @@ function renderProfileSpiderChart(driverName, series, entity) {
       anchor = Math.cos(angle) > 0 ? "start" : "end";
     }
     return `
-      <g class="cmp-spider-label-group">
-        <title>${escapeHTML(axis.label)} — ${escapeHTML(axis.explain || "")}</title>
+      <g class="cmp-spider-label-group" data-axis-label="${escapeHTML(axis.label)}" data-axis-sub="${escapeHTML(axis.sub)}" data-axis-explain="${escapeHTML(axis.explain || "")}">
         <text class="cmp-spider-label" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>
-        <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(String(m.raw[axis.key]))}</text>
+        <text class="cmp-spider-sublabel" x="${x.toFixed(1)}" y="${(y + 12).toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.sub)} · ${escapeHTML(String(m.raw[axis.key]))}</text>
       </g>
     `;
   }).join("");
@@ -12994,12 +13101,15 @@ function renderProfileSpiderChart(driverName, series, entity) {
   `;
 
   return `
-    <svg class="cmp-spider-svg profile-spider" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
-      ${gridRings}
-      ${spokes}
-      ${driverPoly}
-      ${labels}
-    </svg>
+    <div class="cmp-spider-host profile-spider-host">
+      <svg class="cmp-spider-svg profile-spider" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+        ${gridRings}
+        ${spokes}
+        ${driverPoly}
+        ${labels}
+      </svg>
+      <div class="cmp-spider-tooltip" hidden></div>
+    </div>
   `;
 }
 

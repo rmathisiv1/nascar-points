@@ -10009,6 +10009,20 @@ body.lightbox-open {
   padding-top: 10px;
   border-top: 1px dashed var(--border);
 }
+/* When the methodology block sits inside a compare-section card, add
+   horizontal padding so the text doesn't run flush to the card border.
+   Compare-section cards have no internal padding by default — each
+   child block manages its own. */
+.cmp-section .rps-explainer-details {
+  padding: 12px 14px 14px;
+  margin-top: 0;
+}
+.cmp-section .rps-explainer-summary {
+  padding: 0;
+}
+.cmp-section .rps-explainer-body {
+  padding-top: 8px;
+}
 .rps-explainer-summary {
   display: flex;
   justify-content: space-between;
@@ -10650,5 +10664,72 @@ body.lightbox-open {
     margin-left: 0;
     margin-top: 6px;
     flex-basis: 100%;
+  }
+}
+
+/* ============================================================================
+   Spider chart hover tooltip (custom, replaces SVG <title>)
+   ============================================================================ */
+/* Both the compare and profile spider hosts are position-relative so
+   the absolutely-positioned tooltip can place itself locally to the
+   chart. */
+.cmp-spider-host,
+.profile-spider-host {
+  position: relative;
+}
+.cmp-spider-tooltip {
+  position: absolute;
+  z-index: 50;
+  max-width: 260px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  /* On open, fade in subtly */
+  animation: spiderTipFade 0.1s ease-out;
+}
+@keyframes spiderTipFade {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cmp-spider-tip-title {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cmp-spider-tip-scope {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.cmp-spider-tip-body {
+  font-family: var(--serif);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* On mobile, tooltip is the same — pointer-events:none doesn't matter
+   since we toggle on tap (not hover). But make sure it can't overflow
+   the viewport horizontally. */
+@media (max-width: 767.98px) {
+  .cmp-spider-tooltip {
+    max-width: 240px;
+    font-size: 11px;
+  }
+  .cmp-spider-tip-body {
+    font-size: 11px;
   }
 }
