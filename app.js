@@ -13242,13 +13242,50 @@ function renderStandings() {
   applyMobileTableCollapse(table, [0, 1, totalColIdx]);
 }
 
+// NASCAR base finish-points schedule (2017+, modern era). P1=40, P2=35,
+// then linear: P3=34, P4=33, ..., P36=1. Returns 0 outside that range.
+// Used to compute OWNER points for cars whose driver is ineligible
+// (crossover drivers earn no driver points, but their team still gets
+// owner points from the car's finishing position).
+function _finishPointsForPos(pos) {
+  if (pos == null) return 0;
+  if (pos === 1) return 40;
+  if (pos === 2) return 35;
+  if (pos <= 36) return Math.max(1, 36 - pos + 1);
+  return 0;
+}
+
+// Owner points for one race-result row. For ELIGIBLE drivers, owner pts
+// equal driver's race_pts. For INELIGIBLE drivers (crossover Cup drivers
+// running Xfinity, etc.), the car still earned points based on its
+// finish + stage finishes + (if won) +15 win bonus. The fastest_lap_pt
+// field exists in 2025+ data and applies to whichever car got the FL —
+// we include it for consistency.
+function _ownerPointsForResult(d) {
+  if (!d.ineligible) return d.race_pts || 0;
+  if (d.finish_pos == null) return 0;
+  const finishBase = _finishPointsForPos(d.finish_pos);
+  const winBonus = (d.finish_pos === 1) ? 15 : 0;
+  const stage = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
+  const fl = d.fastest_lap_pt || 0;
+  return finishBase + winBonus + stage + fl;
+}
+
 function pointsMapThroughRound(maxRound) {
   const seriesKey = SERIES_TO_KEY[STATE.series];
   const map = new Map();
   (STATE.data?.races || []).forEach(r => {
     if (r.round > maxRound) return;
     (r.results || []).forEach(d => {
-      if (d.ineligible) return;
+      // Crucial difference vs driverPointsMapThroughRound: we do NOT
+      // skip ineligible drivers. The CAR (owner entity) earns points
+      // even when the driver behind the wheel is ineligible for
+      // series championship points. Pre-fix this function shared the
+      // `if (d.ineligible) return` guard with driver standings, which
+      // meant any race with a crossover driver subtracted points from
+      // the owner standings — the NASCAR.com owner standings include
+      // those points.
+      const ownerPts = _ownerPointsForResult(d);
       // Car-centric identity: key is always car number.
       const key = `#${d.car_number}`;
       // Same team-code resolution used in allEntities: scraper field → owner parse
@@ -13272,10 +13309,17 @@ function pointsMapThroughRound(maxRound) {
       e.team = d.team;
       if (teamCode) e.team_code = teamCode;
       e.car_number = d.car_number;
-      e.total += d.race_pts || 0;
+      e.total += ownerPts;
+      // Stage / finish / FL component breakdowns. For owner points of
+      // ineligible drivers, sumFin is reconstructed from the finish
+      // position curve (since d.finish_pts in the data is 0).
       e.sumS1 += d.stage_1_pts || 0;
       e.sumS2 += d.stage_2_pts || 0;
-      e.sumFin += d.finish_pts || 0;
+      if (d.ineligible && d.finish_pos != null) {
+        e.sumFin += _finishPointsForPos(d.finish_pos) + (d.finish_pos === 1 ? 15 : 0);
+      } else {
+        e.sumFin += d.finish_pts || 0;
+      }
       e.sumFL += d.fastest_lap_pt || 0;
       e.starts += 1;
       if (d.finish_pos != null) {
