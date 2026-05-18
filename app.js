@@ -15260,8 +15260,10 @@ function computeEliminationBracket(rule) {
   // Determine the playoff field (same logic as renderEliminationView).
   const pp = computePlayoffPoints(rule);
   const standingsAtCutoff = rankingRowsFrom(pointsMapThroughRound(rule.regSeasonEndRound));
-  const ftThreshold = rule.regSeasonEndRound < 5 ? 1 : Math.ceil(rule.regSeasonEndRound * 0.9);
-  const eligibleAtCutoff = standingsAtCutoff.filter(r => r.starts >= ftThreshold);
+  // No starts threshold — chase eligibility is purely championship-points
+  // eligibility, which the aggregator already enforces by excluding
+  // ineligible-flagged drivers.
+  const eligibleAtCutoff = standingsAtCutoff;
 
   const enriched = eligibleAtCutoff.map(r => {
     const p = pp.get(r.key) || { raceWins: 0, stageWins: 0, regBonus: 0, total: 0 };
@@ -15658,9 +15660,11 @@ function renderPlayoffsMini() {
     const standingsRound = STATE.throughRound != null
       ? Math.min(STATE.throughRound, rule.regSeasonEndRound)
       : Math.min(racesSorted().length, rule.regSeasonEndRound);
-    const ftThreshold = standingsRound < 5 ? 1 : Math.ceil(standingsRound * 0.9);
     const standings = rankingRowsFrom(pointsMapThroughRound(standingsRound));
-    const eligible = standings.filter(r => r.starts >= ftThreshold);
+    // No starts threshold — same fix as the main chase-reseeded view.
+    // Mid-season rookies and debutants are chase-eligible if they
+    // qualify on points. Aggregator excludes truly ineligible drivers.
+    const eligible = standings;
     const field = eligible.slice(0, rule.field);
     const fieldKeys = new Set(field.map(r => r.key));
     const firstOut = eligible.filter(r => !fieldKeys.has(r.key)).slice(0, 3);
@@ -15709,8 +15713,8 @@ function renderPlayoffsMini() {
       const p = pp.get(r.key) || { raceWins: 0, stageWins: 0, regBonus: 0, total: 0 };
       return { ...r, playoffPts: p.total, raceWins: p.raceWins };
     });
-    const ftThreshold = standingsCutoff < 5 ? 1 : Math.ceil(standingsCutoff * 0.9);
-    const eligible = enriched.filter(r => r.starts >= ftThreshold);
+    // No starts threshold — see chase-reseeded above for rationale.
+    const eligible = enriched;
     const winners = eligible.filter(r => r.raceWins > 0).sort((a, b) => b.raceWins - a.raceWins || b.total - a.total);
     const nonWinners = eligible.filter(r => r.raceWins === 0).sort((a, b) => b.total - a.total);
     const winnersIn = winners.slice(0, rule.field);
@@ -19363,9 +19367,15 @@ function renderChaseReseededView(rule, phase) {
   // Standings through "now" (or through cutoff if playoffs have started)
   const standingsRound = phase === "regular" ? racesRun : rule.regSeasonEndRound;
   const standings = rankFn(pointsMap(standingsRound));
-  // Threshold scales with the standings cutoff (starts can't exceed it)
-  const ftThreshold = standingsRound < 5 ? 1 : Math.ceil(standingsRound * 0.9);
-  const eligible = standings.filter(r => r.starts >= ftThreshold);
+  // Chase eligibility: any driver eligible for series championship
+  // points. The driver-keyed aggregator already excludes drivers
+  // declared "ineligible" (crossovers running a non-home series).
+  // No starts threshold — rookies and mid-season debuts ARE eligible
+  // for the chase as long as they're scoring championship points.
+  // A prior version filtered by `starts >= 90% of races` which
+  // incorrectly excluded rookies like Brent Crews (10 starts mid-
+  // season, fully eligible).
+  const eligible = standings;
 
   // Projected or actual field: top N eligible by regular-season points
   const field = eligible.slice(0, rule.field);
@@ -19538,15 +19548,12 @@ function renderEliminationView(rule, phase) {
     return { ...r, playoffPts: p.total, raceWins: p.raceWins, stageWins: p.stageWins, regBonus: p.regBonus };
   });
 
-  // Determine playoff field. Rule: drivers with wins enter first (by points tiebreak),
-  // then fill remaining spots by points. Drivers must be eligible (running for
-  // championship in this series); we approximate with a "has run most races
-  // through the cutoff" filter. Key detail: `standings` was built through the
-  // regular-season cutoff round (R26 for Cup), so `r.starts` on each row is
-  // counting starts through R26 — so the threshold must also be ≤ R26.
-  const standingsCutoff = phase === "regular" ? racesSorted().slice(-1)[0].round : rule.regSeasonEndRound;
-  const ftThreshold = standingsCutoff < 5 ? 1 : Math.ceil(standingsCutoff * 0.9);
-  const eligible = enriched.filter(r => r.starts >= ftThreshold);
+  // Determine playoff field. Rule: drivers with wins enter first (by points
+  // tiebreak), then fill remaining spots by points. Eligibility comes
+  // entirely from the underlying aggregator (which excludes ineligible
+  // crossovers). No starts threshold — rookies and mid-season debuts
+  // are chase-eligible if they qualify on points.
+  const eligible = enriched;
 
   const winners = eligible.filter(r => r.raceWins > 0).sort((a, b) => b.raceWins - a.raceWins || b.total - a.total);
   const nonWinners = eligible.filter(r => r.raceWins === 0).sort((a, b) => b.total - a.total);
