@@ -19475,16 +19475,12 @@ function renderChaseReseededView(rule, phase) {
             const carHex = colorFor(STATE.series, r.car_number);
             const txt = contrastTextFor(carHex);
             const teamPill = renderTeamPill(r.team_code);
-            // Rank within the playoff-eligible pool (continuing from
-            // the chase field's last seed). Using raw standings rank
-            // here would create visual gaps when an ineligible driver
-            // (e.g. an NCS regular running NOS for fun) sits between
-            // the last chase seed and the first bubble driver — the
-            // chase field shows seeds 1-12 but raw rank for the first
-            // bubble driver would be 14, looking like the page skipped
-            // a row. NASCAR's official playoff picture also uses
-            // eligible-only ranking for the same reason.
-            const rank = eligible.findIndex(x => x.key === r.key) + 1;
+            // Use raw standings rank — same as the standings page and
+            // the left-rail standings strip — so users can cross-
+            // reference between tables. Ineligible drivers (not enough
+            // full-time starts) create gaps; the footer note below
+            // surfaces who they are so users see why a rank is missing.
+            const rank = standings.findIndex(x => x.key === r.key) + 1;
             const back = cutoffPts - r.total;
             const linkHref = poView === "driver"
               ? `#/driver/${encodeURIComponent(r.key)}`
@@ -19504,6 +19500,35 @@ function renderChaseReseededView(rule, phase) {
           }).join("")}
         </tbody>
       </table>
+      ${(() => {
+        // Find ineligible drivers within the visible rank window so we
+        // can explain rank-gaps in the table above. Window = from rank 1
+        // through the last bubble row. ftThreshold uses the same logic
+        // as the eligibility filter above (starts >= 90% of races run,
+        // or 1 if very early in the season).
+        const maxBubbleRank = Math.max(...firstOut.map(r =>
+          standings.findIndex(x => x.key === r.key) + 1
+        ));
+        const ineligibleInRange = standings
+          .slice(0, maxBubbleRank)
+          .filter(r => r.starts < ftThreshold)
+          .map(r => {
+            const rk = standings.findIndex(x => x.key === r.key) + 1;
+            const label = r.primaryDriver || r.driver || r.displayLabel || "";
+            return { rank: rk, label, starts: r.starts };
+          });
+        if (ineligibleInRange.length === 0) return "";
+        const items = ineligibleInRange.map(r =>
+          `<li><span class="po-ineligible-rank">#${r.rank}</span> ${escapeHTML(lastNameOf(r.label))} <span class="po-ineligible-detail">(${r.starts} starts · needs ${ftThreshold}+)</span></li>`
+        ).join("");
+        return `
+          <div class="po-ineligible-note">
+            <div class="po-ineligible-head">Ranked but not chase-eligible</div>
+            <ul class="po-ineligible-list">${items}</ul>
+            <div class="po-ineligible-foot">Driver must have ${ftThreshold}+ starts (≥90% of season) to qualify for the Chase. Part-time and crossover drivers are skipped.</div>
+          </div>
+        `;
+      })()}
     </div>
   ` : "";
 

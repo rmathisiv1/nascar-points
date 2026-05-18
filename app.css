@@ -10824,3 +10824,52 @@ body.lightbox-open {
     font-size: 11px;
   }
 }
+
+/* Playoff bubble: ineligibles footnote — explains gaps in the rank
+   column when a part-timer or crossover driver is between the chase
+   field and the bubble drivers but isn't chase-eligible themselves. */
+.po-ineligible-note {
+  padding: 10px 14px 12px;
+  border-top: 1px dashed var(--border);
+  background: rgba(0, 0, 0, 0.02);
+}
+.po-ineligible-head {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.po-ineligible-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--sans);
+  font-size: 11px;
+}
+.po-ineligible-list li {
+  color: var(--text);
+}
+.po-ineligible-rank {
+  font-family: var(--mono);
+  color: var(--muted);
+  margin-right: 4px;
+}
+.po-ineligible-detail {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 10px;
+  color: var(--dim);
+  margin-left: 2px;
+}
+.po-ineligible-foot {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
