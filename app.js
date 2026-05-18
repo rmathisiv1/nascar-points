@@ -19475,7 +19475,16 @@ function renderChaseReseededView(rule, phase) {
             const carHex = colorFor(STATE.series, r.car_number);
             const txt = contrastTextFor(carHex);
             const teamPill = renderTeamPill(r.team_code);
-            const rank = standings.findIndex(x => x.key === r.key) + 1;
+            // Rank within the playoff-eligible pool (continuing from
+            // the chase field's last seed). Using raw standings rank
+            // here would create visual gaps when an ineligible driver
+            // (e.g. an NCS regular running NOS for fun) sits between
+            // the last chase seed and the first bubble driver — the
+            // chase field shows seeds 1-12 but raw rank for the first
+            // bubble driver would be 14, looking like the page skipped
+            // a row. NASCAR's official playoff picture also uses
+            // eligible-only ranking for the same reason.
+            const rank = eligible.findIndex(x => x.key === r.key) + 1;
             const back = cutoffPts - r.total;
             const linkHref = poView === "driver"
               ? `#/driver/${encodeURIComponent(r.key)}`
