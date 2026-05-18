@@ -10802,3 +10802,25 @@ body.lightbox-open {
     width: 12px;
   }
 }
+
+/* Playoff Picture: driver/owner view toggle — sits above the field tables.
+   Reuses .standings-views / .toggle-group styling for consistency with
+   the standings page, with a small note explaining the view selection. */
+.po-views-host {
+  margin-bottom: 12px;
+}
+.po-views-note {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 12px;
+}
+@media (max-width: 767.98px) {
+  .po-views-note {
+    display: block;
+    margin-left: 0;
+    margin-top: 6px;
+    font-size: 11px;
+  }
+}

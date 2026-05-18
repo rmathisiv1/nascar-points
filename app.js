@@ -59,6 +59,13 @@ const STATE = {
   // standings (per-car, subs accrue to the car); Manufacturer uses
   // NASCAR's modern (2011+) mfr point scale applied to all years.
   standings: { sortKey: "total", sortDir: "desc", view: "driver" },
+  // Playoff Picture: driver-vs-owner toggle. Defaults to "driver" since
+  // the playoff field is fundamentally a driver-eligibility question
+  // (drivers, not cars, qualify for the Chase). Owner view is offered
+  // for parity with the standings page and to surface car-points-based
+  // playoff projections (relevant for teams running ineligible drivers
+  // mid-season — those starts count for the OWNER but not the DRIVER).
+  playoffs: { view: "driver" },
   // Driver Compare page — slugs currently in the comparison set. Cap of
   // 4 to keep the side-by-side layout readable on mobile. Persisted in
   // STATE only; not in localStorage (each visit should be a fresh slate
@@ -15147,7 +15154,7 @@ function isStageEra(series, year) {
 // Compute playoff points for every driver from per-race data.
 // Returns Map<key, {raceWins, stageWins, regBonus, total, ...}>
 // Only works for "elimination" format years (2014+). Returns empty Map otherwise.
-function computePlayoffPoints(rule) {
+function computePlayoffPoints(rule, view = "owner") {
   const result = new Map();
   if (!rule || rule.format !== "elimination") return result;
 
@@ -15161,10 +15168,18 @@ function computePlayoffPoints(rule) {
   // Tally race + stage wins across every race in the season (PP accrue in regular
   // season only for the "entering the playoffs" total — but the same value is
   // what gets applied as the reset bonus after the R26 cutoff).
+  //
+  // Key shape depends on view: owner mode keys by car number ("#45");
+  // driver mode keys by normalized driver name (matching the format
+  // driverRankingRowsFrom uses). Ineligible drivers don't get playoff
+  // points in EITHER mode — they're not in the championship hunt.
   regSeasonRaces.forEach(r => {
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      const key = `#${d.car_number}`;
+      const key = view === "owner"
+        ? `#${d.car_number}`
+        : normalizeDriverName(d.driver || "");
+      if (!key) return;
       if (!result.has(key)) result.set(key, { key, raceWins: 0, stageWins: 0, regBonus: 0, total: 0 });
       const rec = result.get(key);
       if (d.finish_pos === 1) rec.raceWins += 1;
@@ -15186,7 +15201,10 @@ function computePlayoffPoints(rule) {
   // Only applies AFTER the cutoff race is complete — mid-season it's TBD.
   const racesDoneForBonus = racesSorted().length;
   if (rule.regBonus && racesDoneForBonus >= rule.regSeasonEndRound) {
-    const regSeasonStandings = rankingRowsFrom(pointsMapThroughRound(rule.regSeasonEndRound));
+    // Use the same view's aggregator so the bonus matches the table view.
+    const regSeasonStandings = view === "owner"
+      ? rankingRowsFrom(pointsMapThroughRound(rule.regSeasonEndRound))
+      : driverRankingRowsFrom(driverPointsMapThroughRound(rule.regSeasonEndRound));
     const BONUS = [15, 10, 8, 7, 6, 5, 4, 3, 2, 1];
     regSeasonStandings.slice(0, 10).forEach((r, i) => {
       const rec = result.get(r.key);
@@ -19244,11 +19262,41 @@ function renderPlayoffs() {
     return;
   }
 
+  // For aggregator-driven formats (chase-reseeded, elimination), inject a
+  // Driver / Owner toggle above the content. Same toggle pattern as the
+  // standings page, so muscle memory transfers between pages.
+  const poView = (STATE.playoffs && STATE.playoffs.view) || "driver";
+  const poToggleHTML = `
+    <div class="standings-views toolbar-slim po-views-host">
+      <div class="toggle-group" data-group="playoffs-view">
+        <button class="${poView === "driver" ? "on" : ""}" data-val="driver">Driver</button>
+        <button class="${poView === "owner"  ? "on" : ""}" data-val="owner">Owner</button>
+      </div>
+      <span class="po-views-note">
+        ${poView === "driver"
+          ? "Driver standings — drivers must be eligible for series championship points to qualify."
+          : "Owner standings — car-points basis; cars with ineligible drivers still accrue points."}
+      </span>
+    </div>
+  `;
+
+  const wirePlayoffsToggle = () => {
+    host.querySelectorAll('[data-group="playoffs-view"] button').forEach(btn => {
+      btn.addEventListener("click", () => {
+        const v = btn.dataset.val;
+        if (!v || v === STATE.playoffs.view) return;
+        STATE.playoffs.view = v;
+        renderPlayoffs();
+      });
+    });
+  };
+
   if (rule.format === "chase-reseeded") {
     const phase = currentPlayoffPhase(rule);
     const phaseLabel = { "regular": "regular season in progress", "playoffs": "Chase in progress", "complete": "season complete" }[phase] || phase;
     sub.textContent = `${STATE.season} ${STATE.series} · ${rule.field}-driver Chase · ${rule.playoffRaces} Chase races · ${phaseLabel}`;
-    host.innerHTML = renderChaseReseededView(rule, phase);
+    host.innerHTML = poToggleHTML + renderChaseReseededView(rule, phase);
+    wirePlayoffsToggle();
     wireCoDriverBadges(host);
     // Mobile collapse: keep Seed (0), Driver (1), Reseed Pts (5).
     // Hide Team, Reg. Wins, Reg. Pts, Gap.
@@ -19262,7 +19310,8 @@ function renderPlayoffs() {
     const phase = currentPlayoffPhase(rule);
     const phaseLabel = { "regular": "regular season in progress", "playoffs": "playoffs in progress", "complete": "season complete" }[phase] || phase;
     sub.textContent = `${STATE.season} ${STATE.series} · ${rule.field}-driver elimination · ${phaseLabel}`;
-    host.innerHTML = renderEliminationView(rule, phase);
+    host.innerHTML = poToggleHTML + renderEliminationView(rule, phase);
+    wirePlayoffsToggle();
     wireCoDriverBadges(host);
     host.querySelectorAll("table.po-table").forEach(t => {
       applyMobileTableCollapse(t, [0, 1, 2]);  // Seed, Driver, third col
@@ -19302,10 +19351,18 @@ function renderChaseView(rule) {
 // Championship: most points after all Chase races wins it. Everyone stays in the field.
 function renderChaseReseededView(rule, phase) {
   const racesRun = racesSorted().length;
+  // Driver vs owner view — toggleable. Driver mode is the canonical
+  // "who's in the Chase" projection (championship contention is a
+  // driver question). Owner mode reflects the car-points version,
+  // which can differ when ineligible drivers run a car: those starts
+  // count toward owner points but not driver points.
+  const poView = (STATE.playoffs && STATE.playoffs.view) || "driver";
+  const pointsMap = poView === "owner" ? pointsMapThroughRound : driverPointsMapThroughRound;
+  const rankFn   = poView === "owner" ? rankingRowsFrom        : driverRankingRowsFrom;
 
   // Standings through "now" (or through cutoff if playoffs have started)
   const standingsRound = phase === "regular" ? racesRun : rule.regSeasonEndRound;
-  const standings = rankingRowsFrom(pointsMapThroughRound(standingsRound));
+  const standings = rankFn(pointsMap(standingsRound));
   // Threshold scales with the standings cutoff (starts can't exceed it)
   const ftThreshold = standingsRound < 5 ? 1 : Math.ceil(standingsRound * 0.9);
   const eligible = standings.filter(r => r.starts >= ftThreshold);
@@ -19372,9 +19429,16 @@ function renderChaseReseededView(rule, phase) {
             const seedCell = r.seed === 1
               ? `<td class="num"><span class="po-seed-top">1</span></td>`
               : `<td class="num">${r.seed}</td>`;
+            // Driver mode links to /driver/<slug>; owner mode links to
+            // /car/<n>. The row's `key` is the slug in driver mode
+            // (matching driverRankingRowsFrom's key) and `#5` in owner
+            // mode — we use poView directly so the URL is unambiguous.
+            const linkHref = poView === "driver"
+              ? `#/driver/${encodeURIComponent(r.key)}`
+              : `#/car/${r.car_number}`;
             return `<tr>
               ${seedCell}
-              <td><a class="driver-cell profile-link" href="#/car/${r.car_number}">
+              <td><a class="driver-cell profile-link" href="${linkHref}">
                 <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
                 <span>${escapeHTML(r.displayLabel)}</span>
                 ${renderCoDriverBadge(r)}
@@ -19413,9 +19477,12 @@ function renderChaseReseededView(rule, phase) {
             const teamPill = renderTeamPill(r.team_code);
             const rank = standings.findIndex(x => x.key === r.key) + 1;
             const back = cutoffPts - r.total;
+            const linkHref = poView === "driver"
+              ? `#/driver/${encodeURIComponent(r.key)}`
+              : `#/car/${r.car_number}`;
             return `<tr>
               <td class="num">${rank}</td>
-              <td><a class="driver-cell profile-link" href="#/car/${r.car_number}">
+              <td><a class="driver-cell profile-link" href="${linkHref}">
                 <span class="car-tag" style="background:${carHex};color:${txt}">${r.car_number}</span>
                 <span>${escapeHTML(r.displayLabel)}</span>
                 ${renderCoDriverBadge(r)}
@@ -19452,8 +19519,11 @@ function renderChaseReseededView(rule, phase) {
 }
 
 function renderEliminationView(rule, phase) {
-  const pp = computePlayoffPoints(rule);
-  const standings = rankingRowsFrom(pointsMapThroughRound(
+  const poView = (STATE.playoffs && STATE.playoffs.view) || "driver";
+  const pp = computePlayoffPoints(rule, poView);
+  const pointsMap = poView === "owner" ? pointsMapThroughRound : driverPointsMapThroughRound;
+  const rankFn   = poView === "owner" ? rankingRowsFrom        : driverRankingRowsFrom;
+  const standings = rankFn(pointsMap(
     phase === "regular" ? racesSorted().slice(-1)[0].round : rule.regSeasonEndRound
   ));
 
