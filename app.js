@@ -2860,7 +2860,7 @@ const TAB_VIEWS = ["home", "arc", "form", "breakdown", "trajectory", "teammates"
 const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
 // alongside left (standings) and right (form) panels.
-const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs", "drivers", "teams", "crewchiefs"];
+const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -19345,60 +19345,54 @@ function renderPlayoffs() {
 // that format. Uses actual race results from SEASON_CACHE — only the
 // format rule changes.
 
-// Build the catalog of all known format options across every series and
-// era. Deduplicated by format-signature so we don't show "elimination 16
-// 2014-2016" and "elimination 16 2017-2025" twice when they differ
-// only in stage points / playoff PP rules. Each catalog entry carries
-// the full underlying rule so we can dispatch to the right recompute
-// logic when selected.
-function _pointsCalcFormatCatalog() {
+// Build the catalog of all known format options for a given series.
+// Filters PLAYOFF_RULES to entries that historically applied to the
+// chosen series, then dedupes by format-signature within that series.
+// This is what makes the format dropdown change content when the user
+// switches series — NCS sees 16-driver chase/elim variants, NOS sees
+// 12-driver, NTS sees 8/10-driver, etc.
+function _pointsCalcFormatCatalog(series) {
   const catalog = [];
   const seen = new Set();
-  for (const series of Object.keys(PLAYOFF_RULES)) {
-    for (const rule of PLAYOFF_RULES[series]) {
-      // Unique key includes everything that affects the recompute so
-      // every distinct rule variant gets its own catalog entry.
-      const key = [
-        rule.format,
-        rule.field || 0,
-        rule.playoffRaces || 0,
-        rule.regSeasonEndRound || 0,
-        rule.raceWinPP || 0,
-        rule.stageWinPP || 0,
-        rule.stages ? 1 : 0,
-        rule.regBonus ? 1 : 0,
-        rule.winBonus || 0,
-        rule.wildcards || 0,
-      ].join("|");
-      if (seen.has(key)) continue;
-      seen.add(key);
-      // Build a human label
-      const era = `${rule.start}${rule.end ? `–${rule.end}` : "+"}`;
-      let label = "";
-      switch (rule.format) {
-        case "championship":
-          label = `Championship · season-long points (${era})`;
-          break;
-        case "chase":
-          label = `Chase · ${rule.field}-driver reseed · ${rule.playoffRaces} races (${era})`;
-          break;
-        case "chase-wildcard":
-          label = `Chase + Wildcards · ${rule.field}-driver · ${rule.wildcards} wildcards (${era})`;
-          break;
-        case "chase-reseeded":
-          label = `Chase Reseeded · ${rule.field}-driver · ${rule.playoffRaces} races · no eliminations (${era})`;
-          break;
-        case "elimination":
-          label = `Elimination · ${rule.field}-driver · ${rule.rounds?.length || 4} rounds${rule.stages ? " · stage pts" : ""} (${era})`;
-          break;
-        default:
-          label = `${rule.format} (${era})`;
-      }
-      catalog.push({ key, rule: { ...rule }, label, originSeries: series });
+  const rules = PLAYOFF_RULES[series] || [];
+  for (const rule of rules) {
+    const key = [
+      rule.format,
+      rule.field || 0,
+      rule.playoffRaces || 0,
+      rule.regSeasonEndRound || 0,
+      rule.raceWinPP || 0,
+      rule.stageWinPP || 0,
+      rule.stages ? 1 : 0,
+      rule.regBonus ? 1 : 0,
+      rule.winBonus || 0,
+      rule.wildcards || 0,
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const era = `${rule.start}${rule.end ? `–${rule.end}` : "+"}`;
+    let label = "";
+    switch (rule.format) {
+      case "championship":
+        label = `Championship · season-long points (${era})`;
+        break;
+      case "chase":
+        label = `Chase · ${rule.field}-driver reseed · ${rule.playoffRaces} races (${era})`;
+        break;
+      case "chase-wildcard":
+        label = `Chase + Wildcards · ${rule.field}-driver · ${rule.wildcards} wildcards (${era})`;
+        break;
+      case "chase-reseeded":
+        label = `Chase Reseeded · ${rule.field}-driver · ${rule.playoffRaces} races · no eliminations (${era})`;
+        break;
+      case "elimination":
+        label = `Elimination · ${rule.field}-driver · ${rule.rounds?.length || 4} rounds${rule.stages ? " · stage pts" : ""} (${era})`;
+        break;
+      default:
+        label = `${rule.format} (${era})`;
     }
+    catalog.push({ key, rule: { ...rule }, label, originSeries: series });
   }
-  // Sort by format-family then era ascending so the dropdown reads
-  // chronologically: championship → chase → wildcard → reseeded → elim.
   const familyOrder = { "championship": 0, "chase": 1, "chase-wildcard": 2, "chase-reseeded": 3, "elimination": 4 };
   catalog.sort((a, b) => {
     const fa = familyOrder[a.rule.format] ?? 99;
@@ -19854,7 +19848,6 @@ function renderPointsCalc() {
     if (sub) sub.textContent = "Recompute any season's standings under any playoff format";
     return;
   }
-  const catalog = _pointsCalcFormatCatalog();
   // Resolve selectors with sensible defaults
   if (STATE.pointscalc.season == null || !loadedYears.includes(STATE.pointscalc.season)) {
     STATE.pointscalc.season = loadedYears[0];
@@ -19865,30 +19858,37 @@ function renderPointsCalc() {
     const candidateSeries = ["NCS", "NOS", "NTS"].find(s => seasonBlocks[s]) || STATE.series;
     STATE.pointscalc.series = candidateSeries;
   }
-  if (!STATE.pointscalc.formatKey) {
-    // Default: the format that applied to this season+series naturally
+  // Build the catalog NOW that series is resolved. Format dropdown
+  // shows only formats that historically applied to this series.
+  const seriesCatalog = _pointsCalcFormatCatalog(STATE.pointscalc.series);
+  // Validate the saved formatKey against the new catalog. If the user
+  // switched from NCS (16-driver chase) to NTS (8/10-driver only),
+  // the old key won't exist in the new catalog and we fall back to
+  // the natural format for the series+year combo.
+  const keyExists = seriesCatalog.some(c => c.key === STATE.pointscalc.formatKey);
+  if (!STATE.pointscalc.formatKey || !keyExists) {
     const natural = resolvePlayoffRules(STATE.pointscalc.series, STATE.pointscalc.season);
     if (natural) {
-      const match = catalog.find(c =>
+      const match = seriesCatalog.find(c =>
         c.rule.format === natural.format &&
         (c.rule.field || 0) === (natural.field || 0) &&
         (c.rule.playoffRaces || 0) === (natural.playoffRaces || 0)
       );
-      STATE.pointscalc.formatKey = match ? match.key : catalog[0].key;
+      STATE.pointscalc.formatKey = match ? match.key : seriesCatalog[0].key;
     } else {
-      STATE.pointscalc.formatKey = catalog[0].key;
+      STATE.pointscalc.formatKey = seriesCatalog[0].key;
     }
   }
 
   // Resolve the chosen format from the catalog
-  const formatEntry = catalog.find(c => c.key === STATE.pointscalc.formatKey) || catalog[0];
+  const formatEntry = seriesCatalog.find(c => c.key === STATE.pointscalc.formatKey) || seriesCatalog[0];
   const rule = formatEntry.rule;
 
   // Load the season block for the chosen (year, series)
   const seasonBlock = cache[STATE.pointscalc.season] && cache[STATE.pointscalc.season][STATE.pointscalc.series];
   if (!seasonBlock) {
     host.innerHTML = `
-      ${_pointsCalcControls(loadedYears, catalog)}
+      ${_pointsCalcControls(loadedYears, seriesCatalog)}
       <div class="empty" style="padding:32px;text-align:center;margin-top:16px;">
         No ${STATE.pointscalc.series} data loaded for ${STATE.pointscalc.season}.
       </div>
@@ -19902,7 +19902,7 @@ function renderPointsCalc() {
   const aggregate = _pointsCalcSeasonAggregate(seasonBlock, rule);
   if (aggregate.drivers.size === 0) {
     host.innerHTML = `
-      ${_pointsCalcControls(loadedYears, catalog)}
+      ${_pointsCalcControls(loadedYears, seriesCatalog)}
       <div class="empty" style="padding:32px;text-align:center;margin-top:16px;">
         No completed races in this season block.
       </div>
@@ -19929,7 +19929,7 @@ function renderPointsCalc() {
 
   // Compose page
   host.innerHTML = `
-    ${_pointsCalcControls(loadedYears, catalog)}
+    ${_pointsCalcControls(loadedYears, seriesCatalog)}
 
     <div class="pc-section">
       <div class="pc-section-head">
@@ -19963,7 +19963,7 @@ function renderPointsCalc() {
   _pointsCalcWireControls();
 }
 
-function _pointsCalcControls(loadedYears, catalog) {
+function _pointsCalcControls(loadedYears, seriesCatalog) {
   const yearOpts = loadedYears.map(y =>
     `<option value="${y}" ${y === STATE.pointscalc.season ? "selected" : ""}>${y}</option>`
   ).join("");
@@ -20001,6 +20001,9 @@ function _pointsCalcWireControls() {
   });
   if (seriesSel) seriesSel.addEventListener("change", () => {
     STATE.pointscalc.series = seriesSel.value;
+    // Reset format — new series has different formats available.
+    // Re-resolution to natural format happens in renderPointsCalc.
+    STATE.pointscalc.formatKey = null;
     renderPointsCalc();
   });
   if (formatSel) formatSel.addEventListener("change", () => {

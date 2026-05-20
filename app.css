@@ -759,7 +759,8 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .profile-takeover #view-playoffs,
 .profile-takeover #view-drivers,
 .profile-takeover #view-teams,
-.profile-takeover #view-crewchiefs {
+.profile-takeover #view-crewchiefs,
+.profile-takeover #view-pointscalc {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -777,7 +778,8 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .profile-takeover #view-playoffs::-webkit-scrollbar,
 .profile-takeover #view-drivers::-webkit-scrollbar,
 .profile-takeover #view-teams::-webkit-scrollbar,
-.profile-takeover #view-crewchiefs::-webkit-scrollbar { display: none; }
+.profile-takeover #view-crewchiefs::-webkit-scrollbar,
+.profile-takeover #view-pointscalc::-webkit-scrollbar { display: none; }
 
 /* Slim toolbar variant for tabbed panels — no margin-bottom, tighter */
 .toolbar-slim {
@@ -10938,6 +10940,17 @@ body.lightbox-open {
 }
 .pc-chart-host {
   padding: 14px 14px 4px;
+  /* Constrain height so the SVG (viewBox 800x320) renders at a clean
+     aspect ratio. Without max-height, a tall flex parent stretches
+     the chart vertically and the lines bunch into the right side
+     because the visible portion is far below where they're drawn. */
+  max-height: 360px;
+}
+.pc-chart-host svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 340px;
 }
 .pc-table-host {
   padding: 4px 0 8px;
