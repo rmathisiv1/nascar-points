@@ -20155,10 +20155,16 @@ function _pointsCalcChampionStatsCard(stats, rule) {
     return `
       <div class="pc-hist-col" title="${escapeHTML(title)}">
         <div class="pc-hist-bar ${isInField ? "in-field" : "out-field"}" style="height: ${h}%;"></div>
-        <div class="pc-hist-label">${b.seed}</div>
       </div>
     `;
   }).join("");
+
+  // Labels in a parallel row below the bars so the bars' percentage
+  // heights resolve cleanly against a fixed-height container without
+  // having to share vertical space with text.
+  const labelsHTML = buckets.map(b =>
+    `<div class="pc-hist-label">${b.seed}</div>`
+  ).join("");
 
   const yearsRange = samples.length === 1
     ? `${samples[0].year}`
@@ -20178,6 +20184,7 @@ function _pointsCalcChampionStatsCard(stats, rule) {
         </div>
         <div class="pc-hist">
           <div class="pc-hist-bars">${barsHTML}</div>
+          <div class="pc-hist-labels">${labelsHTML}</div>
           <div class="pc-hist-axis">seed at regular-season cutoff</div>
         </div>
       </div>
@@ -20212,9 +20219,15 @@ function _pointsCalcWireControls() {
 // tooltip inside the same .pc-chart-wrap with driver / round / cum
 // pts and position it near the cursor (clamped inside the wrap so it
 // doesn't escape the chart on edge points).
+//
+// Guarded by host._pcTooltipWired so re-renders don't stack duplicate
+// listeners — the host element persists across re-renders (only its
+// innerHTML changes), so without the guard we'd attach a new handler
+// each time and they'd all fire on a single mouseover.
 function _pointsCalcWireTooltips() {
   const host = document.getElementById("pointscalc-host");
-  if (!host) return;
+  if (!host || host._pcTooltipWired) return;
+  host._pcTooltipWired = true;
   host.addEventListener("mouseover", (e) => {
     const hit = e.target.closest(".pc-hit");
     if (!hit) return;

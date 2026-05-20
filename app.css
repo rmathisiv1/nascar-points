@@ -11134,9 +11134,9 @@ body.lightbox-open {
 }
 .pc-hist-bars {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 2px;
-  height: 90px;
+  height: 110px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 2px;
 }
@@ -11145,9 +11145,11 @@ body.lightbox-open {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   align-items: center;
-  gap: 2px;
   cursor: default;
+  /* Height matches parent so the bar's percentage height resolves. */
+  height: 100%;
 }
 .pc-hist-bar {
   width: 100%;
@@ -11155,6 +11157,9 @@ body.lightbox-open {
   min-height: 2px;
   border-radius: 2px 2px 0 0;
   transition: opacity 120ms ease;
+  /* Bar sits at the bottom of its column via justify-content above.
+     The label is rendered BELOW the bars container (in pc-hist-axis)
+     so the bar height is independent of label space. */
 }
 .pc-hist-bar.in-field {
   background: var(--accent);
@@ -11167,10 +11172,18 @@ body.lightbox-open {
 .pc-hist-col:hover .pc-hist-bar {
   opacity: 1;
 }
+.pc-hist-labels {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
 .pc-hist-label {
+  flex: 1;
+  text-align: center;
   font-family: var(--mono);
   font-size: 9px;
   color: var(--muted);
+  min-width: 0;
 }
 .pc-hist-axis {
   font-family: var(--serif);
