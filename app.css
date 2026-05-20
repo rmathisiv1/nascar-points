@@ -11157,19 +11157,12 @@ body.lightbox-open {
   min-height: 2px;
   border-radius: 2px 2px 0 0;
   transition: opacity 120ms ease;
-  /* Bar sits at the bottom of its column via justify-content above.
-     The label is rendered BELOW the bars container (in pc-hist-axis)
-     so the bar height is independent of label space. */
 }
-.pc-hist-bar.in-field {
+.pc-hist-bar.has-count {
   background: var(--accent);
   opacity: 0.85;
 }
-.pc-hist-bar.out-field {
-  background: var(--muted);
-  opacity: 0.4;
-}
-.pc-hist-col:hover .pc-hist-bar {
+.pc-hist-col:hover .pc-hist-bar.has-count {
   opacity: 1;
 }
 .pc-hist-labels {

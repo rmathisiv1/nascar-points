@@ -19903,23 +19903,51 @@ function renderPointsCalc() {
   // Build the catalog NOW that series is resolved. Format dropdown
   // shows only formats that historically applied to this series.
   const seriesCatalog = _pointsCalcFormatCatalog(STATE.pointscalc.series);
-  // Validate the saved formatKey against the new catalog. If the user
-  // switched from NCS (16-driver chase) to NTS (8/10-driver only),
-  // the old key won't exist in the new catalog and we fall back to
-  // the natural format for the series+year combo.
+  // Validate the saved formatKey against the new catalog. Two-step
+  // resolution when the saved key doesn't exist in the new series:
+  //   1. Try to match by format family + era (e.g., a user on
+  //      "Chase Reseeded 16-driver" switching NCS→NOS should land
+  //      on NOS's "Chase Reseeded 12-driver" — same family, same era,
+  //      just different field size).
+  //   2. Fall back to the natural format for the (series, season)
+  //      combo if no family match exists.
+  // This preserves intent across series switches better than always
+  // resetting to natural.
   const keyExists = seriesCatalog.some(c => c.key === STATE.pointscalc.formatKey);
   if (!STATE.pointscalc.formatKey || !keyExists) {
-    const natural = resolvePlayoffRules(STATE.pointscalc.series, STATE.pointscalc.season);
-    if (natural) {
-      const match = seriesCatalog.find(c =>
-        c.rule.format === natural.format &&
-        (c.rule.field || 0) === (natural.field || 0) &&
-        (c.rule.playoffRaces || 0) === (natural.playoffRaces || 0)
-      );
-      STATE.pointscalc.formatKey = match ? match.key : seriesCatalog[0].key;
-    } else {
-      STATE.pointscalc.formatKey = seriesCatalog[0].key;
+    // Decode the previous key to learn its format family + era, then
+    // search the new catalog for a match. Key format is built in
+    // _pointsCalcFormatCatalog: format|field|playoffRaces|...
+    const prevKey = STATE.pointscalc.formatKey || "";
+    const prevFamily = prevKey.split("|")[0];
+
+    // Step 1: family match — find the latest format in the new
+    // series's catalog with the same format family
+    let chosen = null;
+    if (prevFamily) {
+      const familyMatches = seriesCatalog.filter(c => c.rule.format === prevFamily);
+      // Prefer the one matching the chosen season's era; otherwise the
+      // most recent. resolvePlayoffRules naturally picks the era-
+      // appropriate one for the season.
+      chosen = familyMatches.find(c => {
+        const start = c.rule.start;
+        const end = c.rule.end ?? Infinity;
+        return STATE.pointscalc.season >= start && STATE.pointscalc.season <= end;
+      }) || familyMatches[familyMatches.length - 1] || null;
     }
+
+    // Step 2: fall back to natural format for series + season
+    if (!chosen) {
+      const natural = resolvePlayoffRules(STATE.pointscalc.series, STATE.pointscalc.season);
+      if (natural) {
+        chosen = seriesCatalog.find(c =>
+          c.rule.format === natural.format &&
+          (c.rule.field || 0) === (natural.field || 0) &&
+          (c.rule.playoffRaces || 0) === (natural.playoffRaces || 0)
+        );
+      }
+    }
+    STATE.pointscalc.formatKey = (chosen || seriesCatalog[0]).key;
   }
 
   // Resolve the chosen format from the catalog
@@ -20134,10 +20162,17 @@ function _pointsCalcChampionSeedStats(rule, series) {
 function _pointsCalcChampionStatsCard(stats, rule) {
   if (!stats) return "";
   const { samples, stats: agg } = stats;
-  const fieldSize = rule.field || 16;
-  // Histogram buckets — by seed position. Max bucket extends to
-  // (field size + 4) so out-of-field champions still appear if any.
-  const maxBucket = Math.max(fieldSize + 4, agg.max);
+  // For chase formats, cap at the field size — anything beyond is
+  // mathematically not a chase contender (would've missed the field
+  // outright). For championship format (no field), cap at the worst
+  // seed any champion has actually held. Either way, no padding past
+  // the cap, no empty trailing slots.
+  let maxBucket;
+  if (rule.format === "championship") {
+    maxBucket = Math.max(agg.max, 12);   // at least 12 wide for visual rhythm
+  } else {
+    maxBucket = rule.field || 16;
+  }
   const buckets = Array.from({ length: maxBucket }, (_, i) => ({ seed: i + 1, count: 0, years: [] }));
   for (const s of samples) {
     if (s.seed <= maxBucket) {
@@ -20147,14 +20182,17 @@ function _pointsCalcChampionStatsCard(stats, rule) {
   }
   const maxCount = Math.max(1, ...buckets.map(b => b.count));
   const barsHTML = buckets.map(b => {
+    // Zero-count bars render with no color at all — just an empty
+    // column with the baseline tick from the bottom border of the
+    // bars container. Colored bars only when there's a real count.
+    const hasCount = b.count > 0;
     const h = (b.count / maxCount) * 100;
-    const isInField = b.seed <= fieldSize;
-    const title = b.count > 0
+    const title = hasCount
       ? `Seed ${b.seed}: ${b.count} champion${b.count === 1 ? "" : "s"} (${b.years.join(", ")})`
       : `Seed ${b.seed}: no champions`;
     return `
       <div class="pc-hist-col" title="${escapeHTML(title)}">
-        <div class="pc-hist-bar ${isInField ? "in-field" : "out-field"}" style="height: ${h}%;"></div>
+        ${hasCount ? `<div class="pc-hist-bar has-count" style="height: ${h}%;"></div>` : ""}
       </div>
     `;
   }).join("");
