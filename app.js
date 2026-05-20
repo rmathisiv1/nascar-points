@@ -19418,13 +19418,142 @@ function _pointsCalcFormatCatalog(series) {
   return catalog;
 }
 
+// Per-race points calculator per format. Takes the raw race-result
+// row (finish position, stage points scored, etc.) and the rule, and
+// returns how many points the driver should earn under that rule. This
+// is the core of the "what-if" calculation — we IGNORE the historical
+// race_pts the scraper recorded (which used whatever rule was in
+// effect at the time) and recompute fresh under the user's chosen
+// format.
+//
+// Stage points come from the data (10 if stage winner, 9 for 2nd, ...
+// 1 for 10th). For pre-2017 eras the scraper records 0 for these,
+// which is correct since stages didn't exist then. If a user runs
+// "2026 format" on "1985 data", the stages contribute nothing to the
+// total — there's no way to synthesize who would have led the
+// imaginary stages.
+function _pointsCalcPerRacePoints(d, rule) {
+  const fin = d.finish_pos;
+  if (!fin || fin < 1) return 0;
+
+  // Base scale per format family
+  let basePts = 0;
+  switch (rule.format) {
+    case "championship":
+      // Latford system (1975-2003 in NCS). P1-P6 in 5pt steps to 150,
+      // P6-P11 in 5pt steps to 130, P11-P43 in 3pt drop.
+      // Includes the +5 leader-of-a-lap bonus + +5 most-laps-led
+      // bonus for the winner (approximated: just add 10 to P1).
+      basePts = _latfordScale(fin);
+      if (fin === 1) basePts += 10;  // typical winner accrued both lap bonuses
+      break;
+
+    case "chase":
+    case "chase-wildcard":
+      // 2004-2013 used the Latford scale for per-race points. The
+      // "winBonus" on the rule is for the chase RESET, not per-race.
+      basePts = _latfordScale(fin);
+      if (fin === 1) basePts += 10;  // lap bonuses
+      break;
+
+    case "elimination":
+      // 2014-2016: P1=43, P2=42... P43=1 with no stage points and
+      // a +3 win bonus.
+      // 2017-2025: P1=40, P2=35, P3=34... P36=1 with stage points
+      // and a +5 win bonus implicit at P1.
+      // We use the rule.stages flag to distinguish.
+      if (rule.stages) {
+        // 2017-2025 era
+        basePts = _modernElimScale(fin);
+      } else {
+        // 2014-2016 era — old "1 point per position" scale + 3 win bonus
+        basePts = _oldElimScale(fin);
+      }
+      break;
+
+    case "chase-reseeded":
+      // 2026+ format. P1 = 55 (up from 40 in 2017-2025). P2 onwards
+      // unchanged (35, 34, ... 1). Stages remain 10/9/.../1.
+      // The +15 increase for P1 effectively replaces the old +5 win
+      // bonus — winners now get 55 directly, no separate bonus.
+      basePts = _modern2026Scale(fin, rule);
+      break;
+
+    default:
+      // Unknown format — fall back to the recorded race_pts.
+      return d.race_pts || 0;
+  }
+
+  // Stage points (only if rule has stages and the data has them).
+  // For 2014-2016 elim and pre-2014 chase, stages didn't exist — data
+  // has 0 for these, so the conditional add is naturally a no-op even
+  // without explicit gating. We still gate on rule.stages so a 2026
+  // format on a 1995 race doesn't accidentally pick up stage points
+  // from some weird future data source.
+  let stagePts = 0;
+  if (rule.stages || rule.format === "chase-reseeded") {
+    stagePts = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
+    // Some 2022+ races have a stage 3 (e.g., Coke 600). The data
+    // typically rolls that into stage_2_pts or a separate field; if
+    // we see stage_3_pts, add it.
+    if (d.stage_3_pts) stagePts += d.stage_3_pts;
+    // Fastest-lap point (2023-2024 had this in some series; the data
+    // tracks it via fastest_lap_pt).
+    if (d.fastest_lap_pt) stagePts += d.fastest_lap_pt;
+  }
+
+  return basePts + stagePts;
+}
+
+// Latford system (1975-2003): a curved scale that rewards top finishes
+// heavily and tails off slowly. Approximated from NASCAR's published
+// table. P1-P6: -5/step from 175. P7-P11: -5/step. P12+: -3/step
+// down to P43 = 34 (after the curve change at P12).
+function _latfordScale(fin) {
+  if (fin === 1) return 175;
+  if (fin === 2) return 170;
+  if (fin === 3) return 165;
+  if (fin === 4) return 160;
+  if (fin === 5) return 155;
+  if (fin === 6) return 150;
+  // P7-P11: -4/step (146, 142, 138, 134, 130)
+  if (fin >= 7 && fin <= 11) return 146 - (fin - 7) * 4;
+  // P12-P43: -3/step (127, 124, ... 34)
+  if (fin >= 12 && fin <= 43) return 127 - (fin - 12) * 3;
+  return Math.max(0, 34 - (fin - 43));  // anything below P43 keeps dropping
+}
+
+// 2017-2025 modern elimination scale. P1=40 (with implicit +5 bonus,
+// so 35+5), P2=35, P3=34, P4=33, ..., P36=1, P37+=0.
+function _modernElimScale(fin) {
+  if (fin === 1) return 40;
+  if (fin === 2) return 35;
+  if (fin >= 3 && fin <= 36) return 35 - (fin - 2);   // P3=34, P4=33, ... P36=1
+  return 0;
+}
+
+// 2014-2016 elimination scale (pre-stage-points). P1=43+3=46, P2=42,
+// P3=41, ... P43=1. No stages.
+function _oldElimScale(fin) {
+  if (fin === 1) return 46;   // 43 + 3 win bonus
+  if (fin >= 2 && fin <= 43) return 44 - fin;  // P2=42, P3=41, ... P43=1
+  return 0;
+}
+
+// 2026+ scale. P1=55 (no separate win bonus), P2-P36 unchanged from
+// 2017-2025 (35, 34, ... 1). The +15 over the prior P1=40 is the
+// headline change of the new format — winners get a much bigger
+// per-race jump on the field.
+function _modern2026Scale(fin, rule) {
+  if (fin === 1) return rule.raceWinPts || 55;
+  if (fin === 2) return 35;
+  if (fin >= 3 && fin <= 36) return 35 - (fin - 2);
+  return 0;
+}
+
 // Compute per-driver cumulative points race-by-race for a given season
 // block (year+series), using the given rule for what counts as a point.
 // Returns: { drivers: Map<slug, { name, car_number, total, perRace: [{round, cum, race_pts}] }>, races: [round1, round2, ...] }
-//
-// For most formats this is just sum of d.race_pts (driver-eligible only).
-// The rule's stage / win-bonus values are baked into race_pts already by
-// the scraper, so we don't need to recompute those — just sum.
 function _pointsCalcSeasonAggregate(seasonBlock, rule) {
   const drivers = new Map();
   const races = (seasonBlock.races || []).slice().sort((a, b) => (a.round || 0) - (b.round || 0));
@@ -19451,12 +19580,17 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule) {
         });
       }
       const ent = drivers.get(slug);
-      ent.total += (d.race_pts || 0);
+      // CORE OF THE WHAT-IF: recompute race_pts under the chosen rule
+      // instead of using the historical race_pts the scraper recorded.
+      // This is what makes "2025 race results under 2026 format" yield
+      // different totals than the 2025 actuals.
+      const ptsUnderRule = _pointsCalcPerRacePoints(d, rule);
+      ent.total += ptsUnderRule;
       ent.starts += 1;
       if (d.finish_pos === 1) ent.wins += 1;
       if ((d.stage_1_pts || 0) === 10) ent.stageWins += 1;
       if ((d.stage_2_pts || 0) === 10) ent.stageWins += 1;
-      ent.perRace.push({ round: race.round, cum: ent.total, race_pts: d.race_pts || 0, finish: d.finish_pos });
+      ent.perRace.push({ round: race.round, cum: ent.total, race_pts: ptsUnderRule, finish: d.finish_pos });
     }
   }
   return { drivers, rounds };
@@ -20048,8 +20182,8 @@ function renderPointsCalc() {
     `;
 
   const regSeasonByline = isChampionship
-    ? `Through R${regEndRound} · all drivers shown`
-    : `Through R${regEndRound} · projected field shown bold; non-field drivers faded`;
+    ? `Through R${regEndRound} · points recomputed under chosen format`
+    : `Through R${regEndRound} · points recomputed under chosen format · projected field shown bold`;
   const regSeasonSection = `
     <div class="pc-section">
       <div class="pc-section-head">
