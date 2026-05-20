@@ -19710,53 +19710,85 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
     let alive = field.slice();
     let cursor = regEnd;
     const rounded = [];  // result tracking per round
+    let finalRaceFinishMap = null;  // slug -> finish_pos in the final race
     for (let ri = 0; ri < rounds.length; ri++) {
       const round = rounds[ri];
       const roundStart = cursor;
       const roundEnd = cursor + round.races;
-      // Carry forward PP into round totals, then add playoff race points + race wins + stage wins during this round
+      const isFinalRound = (ri === rounds.length - 1);
+
+      // Carry forward PP into round totals, then add race points scored in this round
       for (const d of alive) {
         const racesInRound = d.perRace.filter(p => p.round > roundStart && p.round <= roundEnd);
         let added = racesInRound.reduce((sum, p) => sum + p.race_pts, 0);
-        // Note: race_pts already includes stage pts + win bonus in the data,
-        // but elimination PP is on top of season-points — we keep this
-        // simple by using race_pts as the round-points contribution.
-        // (The PP from earlier wins/stage wins is in ppMap.)
         d._roundPts = (d._roundPts || ppMap.get(d.slug) || 0) + added;
       }
-      // Sort by round points and cut to round.cutTo
-      const sorted = alive.slice().sort((a, b) => b._roundPts - a._roundPts);
-      const advanced = sorted.slice(0, round.cutTo);
-      const eliminated = sorted.slice(round.cutTo);
+
+      let advanced, eliminated;
+      if (isFinalRound) {
+        // Championship 4 (or whatever the final round is) — the champion
+        // is decided by HIGHEST FINISH in the finale among the alive
+        // drivers, NOT by cumulative points. This matches NASCAR's
+        // actual rules: the 4 finalists reset to equal points, race the
+        // final race, and best finish wins it.
+        finalRaceFinishMap = new Map();
+        for (const d of alive) {
+          // Find the driver's finish in the final race of this round.
+          // round.races is typically 1 for Champ 4. Last race in window
+          // is the championship-deciding race.
+          const finaleRound = roundEnd;
+          const finaleEntry = d.perRace.find(p => p.round === finaleRound);
+          // Use Infinity for missing entries so they sort last (they
+          // didn't actually finish the race).
+          finalRaceFinishMap.set(d.slug, finaleEntry?.finish ?? Infinity);
+        }
+        // Sort by finish position ascending (P1 = champion)
+        const sortedByFinish = alive.slice().sort((a, b) =>
+          (finalRaceFinishMap.get(a.slug) ?? Infinity) -
+          (finalRaceFinishMap.get(b.slug) ?? Infinity)
+        );
+        // Everyone who reached the final round counts as "advanced" to
+        // C4 — we mark them all as final-round attendees, then sort by
+        // finale finish for the standings table. cutTo isn't applied
+        // here because there's no further round.
+        advanced = sortedByFinish;
+        eliminated = [];
+      } else {
+        // Regular elimination round: sort by cumulative PP and cut to
+        // round.cutTo (the lower seeds get eliminated).
+        const sorted = alive.slice().sort((a, b) => b._roundPts - a._roundPts);
+        advanced = sorted.slice(0, round.cutTo);
+        eliminated = sorted.slice(round.cutTo);
+      }
+
       rounded.push({
         name: round.name,
         startRound: roundStart,
         endRound: roundEnd,
         advanced: advanced.map(d => d.slug),
         eliminated: eliminated.map(d => d.slug),
+        isFinalRound,
       });
-      // For the Championship 4 round, PP carryover doesn't matter — all four reset
-      const isFinalRound = (ri === rounds.length - 1);
+
       if (isFinalRound) {
-        // Reset all four to equal at start of last race(s)
-        advanced.forEach(d => d._roundPts = 0);
-      } else {
-        // PP carries forward; reset roundPts to ppMap baseline + accumulated through this round
-        // (already done implicitly since _roundPts persists)
+        // Don't reset _roundPts — we use finalRaceFinishMap for ordering
       }
+      // PP carries forward for non-final rounds (already implicit since
+      // _roundPts persists across iterations).
       alive = advanced;
       cursor = roundEnd;
     }
 
-    // Now build the output array: each driver gets their final-eliminated round + final points
+    // Now build the output array: each driver gets their final-
+    // eliminated round + final points. For final-round drivers we
+    // attach their finale finish so the standings sort can use it.
     return field.map(d => {
-      // Determine which round they were eliminated in (or made it to Championship 4)
       let lastRoundReached = -1;
       let lastRoundName = "Did not advance";
       for (let ri = rounds.length - 1; ri >= 0; ri--) {
         if (rounded[ri].advanced.includes(d.slug)) {
           lastRoundReached = ri;
-          lastRoundName = ri === rounds.length - 1 ? "Championship 4" : `Through ${rounds[ri].name}`;
+          lastRoundName = ri === rounds.length - 1 ? rounds[ri].name : `Through ${rounds[ri].name}`;
           break;
         }
       }
@@ -19768,18 +19800,37 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
         runningCum += p.race_pts;
         playoffTrace.push({ round: p.round, cum: runningCum });
       }
+      // For final-round drivers, attach their finale finish so the
+      // standings sort can place the race winner first.
+      const finaleFinish = (lastRoundReached === rounds.length - 1 && finalRaceFinishMap)
+        ? finalRaceFinishMap.get(d.slug)
+        : null;
       return {
         ...d,
         seed: field.indexOf(d) + 1,
         lastRoundReached,
         lastRoundName,
+        finaleFinish,
         playoffPts,
         finalPts: playoffPts,
         playoffTrace,
       };
     }).sort((a, b) => {
-      // Champ 4 first, then by playoff pts
-      if (a.lastRoundReached !== b.lastRoundReached) return b.lastRoundReached - a.lastRoundReached;
+      // Sort by last-round-reached first (Champ 4 above earlier-round
+      // eliminees). WITHIN the final round, sort by finale finish
+      // (P1 = champion, P2-P4 = runners-up). For earlier rounds,
+      // sort by cumulative playoff points within that round.
+      if (a.lastRoundReached !== b.lastRoundReached) {
+        return b.lastRoundReached - a.lastRoundReached;
+      }
+      // Same elimination round
+      if (a.lastRoundReached === rounds.length - 1) {
+        // Both in Championship 4 — finale finish decides
+        const aFin = a.finaleFinish ?? Infinity;
+        const bFin = b.finaleFinish ?? Infinity;
+        return aFin - bFin;
+      }
+      // Eliminated earlier — by playoff points
       return b.finalPts - a.finalPts;
     });
   }

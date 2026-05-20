@@ -10882,38 +10882,60 @@ body.lightbox-open {
 .pc-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  padding: 14px 16px;
+  gap: 14px;
+  padding: 10px 14px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 4px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
+  align-items: center;
 }
 .pc-control {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 120px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 .pc-control-format {
   flex: 1;
-  min-width: 280px;
+  min-width: 220px;
 }
 .pc-control-label {
   font-family: var(--serif);
   font-style: italic;
   font-size: 11px;
   color: var(--muted);
+  white-space: nowrap;
 }
 .pc-select {
   font-family: var(--mono);
   font-size: 12px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 3px;
   cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Compress the PFC page's view-head so the controls + first card
+   appear in the initial viewport. Title shrinks, sub-text inlines
+   next to it, and the head gets tight margins. */
+#view-pointscalc .view-head {
+  margin-bottom: 6px;
+  padding: 0;
+  gap: 10px;
+  align-items: baseline;
+}
+#view-pointscalc .view-head h1 {
+  font-size: 22px;
+  line-height: 1.1;
+}
+#view-pointscalc .view-sub {
+  font-size: 12px;
 }
 
 .pc-section {
