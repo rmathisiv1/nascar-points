@@ -1333,6 +1333,184 @@ def discover_races(series_code: str, season: int) -> list[dict]:
     return races
 
 
+def parse_owner_final_standings(series_code: str, season: int) -> list[dict]:
+    """
+    Scrape NASCAR's year-end OWNER (car) standings from Racing-Reference.
+
+    NASCAR runs two parallel championships: drivers and owners (cars).
+    Owner-championship totals are what determine the "owner of the year"
+    award and are tracked separately from the driver championship.
+    Critically, the owner standings include points earned by ALL drivers
+    of a given car — including cross-series interlopers whose points
+    DON'T count in driver standings.
+
+    For elimination-era seasons (2014+), owner standings ALSO undergo
+    the playoff reset bracket independently. The car that wins the
+    finale (with whatever driver is behind the wheel) wins the owners
+    championship, regardless of who the driver champion is.
+
+    Example (2025 NOS): driver champion = Jesse Love (#2 RCR); owner
+    champion = the #19 JGR (primarily Aric Almirola).
+
+    We try several plausible URL patterns since Racing-Reference's
+    exact owner-standings path isn't documented externally. The first
+    one that returns a parseable table wins. If all fail, returns []
+    (frontend falls back gracefully — owner standings will just show
+    summed race_pts ranking).
+
+    Output rows:
+        {rank: 1, car_number: "19", owner: "Joe Gibbs",
+         primary_driver: "Aric Almirola", points: 4040, wins: 3, gap: 0}
+
+    The shape mirrors driver final_standings but with car_number /
+    owner / primary_driver fields added. Driver field stays as the
+    primary driver (compatibility with applyCanonicalStandings
+    name-matching).
+    """
+    cfg = SERIES[series_code]
+    code = cfg["rr_code"]
+
+    # Try multiple URL patterns. Racing-Reference's owner standings
+    # page isn't part of their public URL conventions; these are
+    # educated guesses based on the parallel structure to
+    # /standings/{year}/{code}. The first one that yields a parseable
+    # table with car-number rows wins.
+    candidates = [
+        f"{BASE}/own-standings/{season}/{code}",
+        f"{BASE}/owner-standings/{season}/{code}",
+        f"{BASE}/standings-own/{season}/{code}",
+        f"{BASE}/ostandings/{season}/{code}",
+        f"{BASE}/own-stand/{season}/{code}",
+    ]
+
+    html = None
+    used_url = None
+    for url in candidates:
+        print(f"[{series_code}] trying owner standings URL: {url}",
+              file=sys.stderr)
+        try:
+            candidate_html = fetch(url)
+        except Exception as e:
+            print(f"[{series_code}]   {url} -> error: {e}", file=sys.stderr)
+            continue
+        # Check that the fetched page looks like a standings table
+        # (not a 404 page rendered as 200 — RR sometimes does this).
+        if candidate_html and "standingsTbl" in candidate_html:
+            html = candidate_html
+            used_url = url
+            break
+        if candidate_html and ("Owner" in candidate_html
+                               and "Points" in candidate_html
+                               and "<table" in candidate_html.lower()):
+            html = candidate_html
+            used_url = url
+            break
+        print(f"[{series_code}]   {url} -> no recognizable standings table",
+              file=sys.stderr)
+
+    if html is None:
+        print(f"[{series_code}] owner standings: no working URL found — "
+              "tried {} patterns. Update parse_owner_final_standings() "
+              "candidates list with the correct RR URL.".format(len(candidates)),
+              file=sys.stderr)
+        return []
+
+    print(f"[{series_code}] owner standings: using {used_url}", file=sys.stderr)
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Re-use the same table-finding logic as parse_final_standings.
+    table = soup.find("table", class_="standingsTbl")
+    if table is None:
+        for tbl in soup.find_all("table"):
+            headers = [c.get_text(strip=True).lower()
+                       for c in tbl.find_all(["th", "td"])[:25]]
+            # Owner-standings table has "Owner" or car-number markers
+            if ("owner" in headers or "car" in headers or "#" in headers) \
+                    and ("points" in headers or "pts" in headers):
+                table = tbl
+                break
+
+    if table is None:
+        print(f"[{series_code}] owner standings: no table found at {used_url}",
+              file=sys.stderr)
+        return []
+
+    header_row = table.find("tr")
+    if header_row is None:
+        return []
+    headers = [c.get_text(strip=True).lower()
+               for c in header_row.find_all(["th", "td"])]
+    col = {name: i for i, name in enumerate(headers)}
+
+    def cell_text(cells: list, *names: str) -> str:
+        for name in names:
+            idx = col.get(name.lower())
+            if idx is not None and idx < len(cells):
+                return cells[idx].get_text(" ", strip=True)
+        return ""
+
+    def to_int(s: str) -> Optional[int]:
+        s = (s or "").replace(",", "").strip()
+        m = re.match(r"^-?\d+$", s)
+        return int(m.group()) if m else None
+
+    rows: list[dict] = []
+    leader_pts: Optional[int] = None
+    for tr in table.find_all("tr")[1:]:
+        tds = tr.find_all(["td", "th"])
+        if len(tds) < 4:
+            continue
+        rank_text = tds[0].get_text(" ", strip=True)
+        rank = to_int(rank_text)
+        if rank is None:
+            continue
+
+        # Car number column — try multiple header names. RR has used
+        # "Car", "#", "Car #" historically. The cell content might be
+        # plain (e.g., "19") or have a "#19" prefix.
+        car_raw = (cell_text(tds, "Car", "#", "Car #", "No.", "No")
+                   or "").strip()
+        car_number = car_raw.replace("#", "").strip() or None
+
+        # Owner name column (the entity that "owns" the championship).
+        # Falls back to the team / sponsor cell if Owner isn't present.
+        owner_name = (cell_text(tds, "Owner", "Owner Name", "Sponsor / Owner")
+                      or "").strip()
+        # Primary driver — usually labeled "Driver". Sometimes absent
+        # entirely from owner-standings tables.
+        primary_driver = (cell_text(tds, "Driver", "Primary Driver")
+                          or "").strip()
+
+        points = to_int(cell_text(tds, "Points", "Pts"))
+        wins = to_int(cell_text(tds, "Win", "Wins"))
+        if points is None or not car_number:
+            continue
+
+        if leader_pts is None:
+            leader_pts = points
+        gap = points - leader_pts
+
+        rows.append({
+            "rank": rank,
+            "car_number": car_number,
+            "owner": owner_name or None,
+            "primary_driver": primary_driver or None,
+            # Compatibility alias for applyCanonicalStandings, which
+            # name-matches on `driver`. When primary_driver is unknown
+            # we leave the key absent so the lookup falls through.
+            "driver": primary_driver or None,
+            "points": points,
+            "wins": wins or 0,
+            "gap": gap,
+        })
+
+    print(f"[{series_code}] owner standings: {len(rows)} cars, "
+          f"leader #{rows[0]['car_number'] if rows else '—'}",
+          file=sys.stderr)
+    return rows
+
+
 def parse_final_standings(series_code: str, season: int) -> list[dict]:
     """
     Scrape the canonical NASCAR year-end standings from
@@ -1509,6 +1687,7 @@ def build_series(series_code: str, season: int) -> dict:
     # mistake those for the final championship outcome. The frontend handles
     # missing final_standings by falling back to summed race_pts as before.
     final_standings: list[dict] = []
+    owner_final_standings: list[dict] = []
     has_unrun = any(not r.get("has_run") for r in race_list)
     if not has_unrun and race_list:
         time.sleep(0.8)  # be polite between page fetches
@@ -1518,6 +1697,16 @@ def build_series(series_code: str, season: int) -> dict:
             print(f"[{series_code}] final standings parse failed: {e}",
                   file=sys.stderr)
             final_standings = []
+
+        time.sleep(0.8)
+        try:
+            owner_final_standings = parse_owner_final_standings(
+                series_code, season
+            )
+        except Exception as e:
+            print(f"[{series_code}] owner standings parse failed: {e}",
+                  file=sys.stderr)
+            owner_final_standings = []
     elif has_unrun:
         print(f"[{series_code}] season in progress — skipping final standings",
               file=sys.stderr)
@@ -1528,6 +1717,7 @@ def build_series(series_code: str, season: int) -> dict:
         "season": season,
         "races": out_races,
         "final_standings": final_standings,
+        "owner_final_standings": owner_final_standings,
     }
 
 

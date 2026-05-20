@@ -3332,7 +3332,8 @@ function computeSeasonTotals() {
   // This matches what the standings page does — applies to every view that
   // surfaces season totals (Leader tile, Form panel, metric bar, etc.) so
   // the entire UI agrees on who's #1 in champion-determined years.
-  applyCanonicalStandings(rows);
+  // Mode: "owner" — entities are car-keyed here (see allEntities/entitiesFromRaces).
+  applyCanonicalStandings(rows, "owner");
 
   RENDER_CACHE.totals = rows.sort((a, b) => b.total - a.total);
   return RENDER_CACHE.totals;
@@ -14822,7 +14823,8 @@ function rankingRowsFrom(map) {
   // summed-race_pts total with the canonical points so the standings page
   // shows the actual champion at row 1, not the regular-season points
   // leader.
-  applyCanonicalStandings(rows);
+  // Mode: "owner" — rankingRowsFrom processes car-keyed entries.
+  applyCanonicalStandings(rows, "owner");
 
   rows.sort((a, b) => b.total - a.total);
   return rows;
@@ -14931,7 +14933,7 @@ function driverRankingRowsFrom(map) {
       driver: displayLabel,
     };
   });
-  applyCanonicalStandings(rows);
+  applyCanonicalStandings(rows, "driver");
   rows.sort((a, b) => b.total - a.total);
   return rows;
 }
@@ -15048,6 +15050,9 @@ function manufacturerStandingsThroughRound(maxRound) {
 
 // Build a normalized-name → final-standing map from STATE.data.final_standings.
 // Returns null if no canonical standings are present (in-progress season).
+// Build a Map of normalized-driver-name → canonical-standings row.
+// Used by applyCanonicalStandings to overlay NASCAR's published
+// championship totals onto our sum-of-race_pts rows.
 function canonicalStandingsMap() {
   const arr = STATE.data && STATE.data.final_standings;
   if (!Array.isArray(arr) || arr.length === 0) return null;
@@ -15066,11 +15071,69 @@ function canonicalStandingsMap() {
   return m;
 }
 
+// Owner-side canonical standings map. Keyed by "#NN" (car number) so
+// owner-mode rows (which carry car_number) can match cleanly. Returns
+// null when the scraper hasn't fetched owner_final_standings yet —
+// caller falls back gracefully (no override, raw sums preserved).
+function canonicalOwnerStandingsMap() {
+  const arr = STATE.data && STATE.data.owner_final_standings;
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const m = new Map();
+  arr.forEach(row => {
+    const raw = row.car_number != null ? String(row.car_number) : "";
+    const cleaned = raw.replace(/^#/, "").trim();
+    if (!cleaned) return;
+    m.set(`#${cleaned}`, {
+      rank: row.rank,
+      points: row.points,
+      wins: row.wins,
+      gap: row.gap,
+      car_number: cleaned,
+      owner: row.owner,
+      primary_driver: row.primary_driver,
+    });
+  });
+  return m;
+}
+
 // Mutate each row in-place: replace `total` with the canonical points and
 // attach `canonicalRank` + `canonicalGap` if we found a match. Rows whose
 // driver isn't in the canonical table keep their summed total (catches
 // part-timers and ineligible drivers correctly).
-function applyCanonicalStandings(rows) {
+//
+// `mode` param: "driver" (default, matches by normalized driver name) or
+// "owner" (matches by car number). Owner mode REQUIRES the scraper to
+// have fetched owner_final_standings — without it, we leave rows alone
+// rather than apply driver totals to owner rows (which produces wildly
+// wrong results when the primary driver isn't championship-declared,
+// e.g., 2025 NOS #19 / Almirola).
+function applyCanonicalStandings(rows, mode) {
+  const actualMode = mode || "driver";
+
+  if (actualMode === "owner") {
+    const ownerCanon = canonicalOwnerStandingsMap();
+    if (!ownerCanon) {
+      // No owner_final_standings available — DO NOT fall back to
+      // driver canonical (which would assign Almirola's 652 to #19
+      // and produce nonsense). Leave raw sums in place.
+      return;
+    }
+    rows.forEach(r => {
+      const raw = r.car_number != null ? String(r.car_number) : "";
+      const cleaned = raw.replace(/^#/, "").trim();
+      if (!cleaned) return;
+      const hit = ownerCanon.get(`#${cleaned}`);
+      if (hit) {
+        r.total = hit.points;
+        r.canonicalRank = hit.rank;
+        r.canonicalGap = hit.gap;
+        r.canonicalWins = hit.wins;
+      }
+    });
+    return;
+  }
+
+  // Driver mode.
   const canon = canonicalStandingsMap();
   if (!canon) return;
   rows.forEach(r => {
@@ -15080,46 +15143,10 @@ function applyCanonicalStandings(rows) {
       const norm = normalizeDriverName(name || "");
       const hit = norm && canon.get(norm);
       if (hit) {
-        // SAFETY GUARD for owner/car-keyed rows: the canonical_standings
-        // table is DRIVER-keyed (NASCAR publishes driver standings; we
-        // don't currently scrape NASCAR's separate owner standings).
-        //
-        // For driver standings this overlay is exactly right — it sets
-        // each driver's row to NASCAR's published championship total.
-        //
-        // For owner standings, the primary driver of a car may not be
-        // the playoff-declared championship driver. Example: 2025 NOS
-        // #19 was driven primarily by Aric Almirola, who ran as a
-        // part-time non-declared driver (rank 17, 652 pts in driver
-        // standings). The #19 CAR earned far more owner points than
-        // 652 across the season because Almirola won races and other
-        // drivers contributed. Blindly overriding the #19 row's total
-        // with Almirola's driver total (652) makes the owner standings
-        // page wildly wrong.
-        //
-        // Heuristic: if the canonical total is LOWER than the raw
-        // sum we already have, the canonical refers to a driver whose
-        // individual championship arc was a strict subset of the car's
-        // owner-points season. Keep the raw sum. If the canonical is
-        // EQUAL or HIGHER, accept it (it includes playoff reset bonuses
-        // that boost the championship total above the regular-season
-        // sum — that's exactly what we want for driver standings, and
-        // happens for owners only when the primary driver IS the
-        // declared championship driver).
-        const rawTotal = r.total || 0;
-        if (hit.points >= rawTotal) {
-          r.total = hit.points;
-          r.canonicalRank = hit.rank;
-          r.canonicalGap = hit.gap;
-          r.canonicalWins = hit.wins;
-        } else {
-          // Still surface the canonical rank/gap on the row (for
-          // tooltips / "this is who the primary driver was in the
-          // driver championship") but DO NOT overwrite total.
-          r.canonicalRank = hit.rank;
-          r.canonicalGap = hit.gap;
-          r.canonicalWins = hit.wins;
-        }
+        r.total = hit.points;
+        r.canonicalRank = hit.rank;
+        r.canonicalGap = hit.gap;
+        r.canonicalWins = hit.wins;
         return;
       }
     }
@@ -19744,14 +19771,35 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
     }
   }
 
-  // Attach the canonical NASCAR final standings (when present in the
-  // season block) to the aggregate. _pointsCalcDeriveField uses this
-  // to filter the elimination field to championship-declared drivers
-  // only. Without this filter, part-time drivers (e.g., Cup runners
-  // doing select Xfinity races) can claim a playoff spot via the
-  // "win and you're in" rule even though they aren't declared for
-  // the championship — which doesn't match NASCAR's actual rules.
-  return { drivers, rounds, finalStandings: seasonBlock.final_standings || null, view };
+  // Attach metadata the field-builder and round-by-round derivation
+  // need downstream:
+  //  - finalStandings: NASCAR's published DRIVER championship table
+  //    (driver mode authoritative source for field + round tiers)
+  //  - ownerFinalStandings: NASCAR's published OWNER (car) championship
+  //    table (owner mode authoritative source). May be absent if the
+  //    scraper hasn't fetched it yet for this season; downstream code
+  //    falls back gracefully.
+  //  - view: 'driver' or 'owner' — controls which final_standings the
+  //    derivation logic uses.
+  //  - useScraperPts: true when the chosen rule is the season's native
+  //    rule, signaling that race_pts in perRace entries equal the
+  //    canonical scraper values (not recomputed). When this is true
+  //    AND a final_standings is present, _pointsCalcPlayoffStandings
+  //    derives round-by-round results directly from the rank tiers in
+  //    final_standings rather than running a simulation — which is
+  //    authoritative because NASCAR's official standings table encodes
+  //    the elimination outcome in its rank order (top N = C4, next M
+  //    = previous-round eliminations, etc.). The simulation can't
+  //    reproduce NASCAR rulings like Austin Hill's 2025 NOS playoff-
+  //    eligibility revocation; the canonical standings do.
+  return {
+    drivers,
+    rounds,
+    finalStandings: seasonBlock.final_standings || null,
+    ownerFinalStandings: seasonBlock.owner_final_standings || null,
+    view,
+    useScraperPts,
+  };
 }
 
 // Compute the field for a given rule + aggregate. Returns the field
@@ -19796,41 +19844,52 @@ function _pointsCalcDeriveField(aggregate, rule, regEndRound) {
     return { field: [...fixed, ...wildcards], type: "chase-wildcard", leftOut: standings.filter(d => !fixedSlugs.has(d.slug) && !wildcards.includes(d)).slice(0, 10) };
   }
   if (rule.format === "elimination") {
-    // CHAMPIONSHIP-DECLARATION FILTER (driver view only):
-    // NASCAR's playoff rules require drivers to be DECLARED for the
-    // series championship at the start of the season. Part-time
-    // drivers (e.g., Cup drivers running select Xfinity races) earn
-    // per-race points but are NOT championship-eligible — they can
-    // win races without claiming a playoff slot via the "win-and-in"
-    // rule.
+    // CHAMPIONSHIP-DECLARATION FILTER:
+    // NASCAR's playoff rules require entities to be DECLARED for the
+    // series championship. The scraper's per-race `ineligible` flag
+    // catches obvious cross-series interlopers but misses subtler
+    // cases (e.g., Almirola in 2025 NOS had 3 wins but wasn't
+    // declared, finished rank 17 in NASCAR's official driver
+    // standings). The bare "anyone with a win is in" rule wrongly
+    // puts him in the playoff field.
     //
-    // The scraper's per-race `ineligible` flag catches obvious cross-
-    // series interlopers (Cup full-timers in Xfinity), but misses
-    // subtler cases. Example: Almirola in 2025 NOS had 3 wins but
-    // wasn't declared, and finished rank 17 in NASCAR's official
-    // final standings. The bare "anyone with a win is in" rule
-    // wrongly puts him in the playoff field.
-    //
-    // Practical signal: NASCAR's `final_standings` only includes
+    // Practical signal: NASCAR's final_standings only includes
     // declared championship drivers in the playoff-tier point range
-    // (the top N drivers, where N = rule.field, have reset-bonus
-    // values 2000+; non-playoff drivers are well below that). So we
-    // treat the top-N final-standings drivers as the eligibility
-    // pool for the playoff field.
+    // (the top N entries, where N = rule.field, are the playoff
+    // field). So we filter the eligibility pool to those names
+    // before applying winners-first / points-fill logic.
     //
-    // Owner view: skipped because canonical final-standings is
-    // driver-keyed; owner-points playoff eligibility is governed
-    // by a different (NASCAR-tracked) standings set.
+    // Driver mode  → use driver finalStandings
+    // Owner mode   → use ownerFinalStandings if present, else fall
+    //                back to no filter (preserves current behavior
+    //                until owner_final_standings is scraped). When
+    //                owner FS is present, keys are car numbers like
+    //                "#19" or just "19"; we normalize to "#NN".
     let eligiblePool = standings;
-    const fs = aggregate.finalStandings;
-    if (aggregate.view === "driver" && Array.isArray(fs) && fs.length >= rule.field) {
-      const declaredSlugs = new Set();
+    const fs = aggregate.view === "owner"
+      ? aggregate.ownerFinalStandings
+      : aggregate.finalStandings;
+
+    if (Array.isArray(fs) && fs.length >= rule.field) {
+      const declaredKeys = new Set();
       for (let i = 0; i < Math.min(fs.length, rule.field); i++) {
-        const norm = slugify(fs[i].driver || "");
-        if (norm) declaredSlugs.add(norm);
+        const row = fs[i];
+        let key = null;
+        if (aggregate.view === "owner") {
+          // Owner FS rows expected to have car_number; tolerate
+          // either bare number or "#NN" form.
+          const raw = row.car_number != null
+            ? String(row.car_number)
+            : (row.car || row.driver || "");
+          const cleaned = String(raw).replace(/^#/, "").trim();
+          if (cleaned) key = `#${cleaned}`;
+        } else {
+          key = slugify(row.driver || "");
+        }
+        if (key) declaredKeys.add(key);
       }
-      if (declaredSlugs.size > 0) {
-        eligiblePool = standings.filter(d => declaredSlugs.has(d.slug));
+      if (declaredKeys.size > 0) {
+        eligiblePool = standings.filter(d => declaredKeys.has(d.slug));
       }
     }
 
@@ -19893,7 +19952,232 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
     }).sort((a, b) => b.finalPts - a.finalPts);
   }
   if (rule.format === "elimination") {
-    // Run the eliminations sim. NASCAR's playoff structure works like:
+    const rounds = rule.rounds || [];
+
+    // ============================================================
+    // CANONICAL DERIVATION PATH
+    // ============================================================
+    // When NASCAR's published final_standings table is available AND
+    // the chosen rule is the season's native rule (useScraperPts is
+    // true, set by the aggregator), derive each round's advancers
+    // directly from the rank order in final_standings instead of
+    // running a simulation.
+    //
+    // Why: NASCAR's published standings encode the actual elimination
+    // outcome in their rank structure. The drivers reset to a higher
+    // base each round they survive, so ranks 1..cutTo of the final
+    // round have the highest finishing totals, then the next tier
+    // had a lower reset (eliminated one round earlier), and so on.
+    //
+    // For NOS 2025 (12-driver, cutTo [8,4,1]):
+    //   ranks 1-4    -> made C4 (champion = rank 1, by finale finish)
+    //   ranks 5-8    -> eliminated at Round of 8 (3000-base reset)
+    //   ranks 9-12   -> eliminated at Round of 12 (2000-base reset)
+    //
+    // This is authoritative because it reflects NASCAR's own ruling-
+    // adjusted bracket — including penalties, eligibility revocations,
+    // and any other adjustments that aren't visible in the race-by-
+    // race data. A pure simulation can't capture those (e.g., 2025
+    // NOS Austin Hill won R31 but didn't auto-advance to C4 due to a
+    // NASCAR ruling; sim says he advanced, canonical says he didn't).
+    //
+    // Owner mode uses ownerFinalStandings (when present, same shape)
+    // since owner-championship has its own elimination outcome.
+    //
+    // When canonical isn't available (in-progress seasons, cross-era
+    // what-ifs), we fall through to the simulation path below.
+    const canonFS = aggregate.view === "owner"
+      ? aggregate.ownerFinalStandings
+      : aggregate.finalStandings;
+    const canonAvailable = aggregate.useScraperPts
+      && Array.isArray(canonFS)
+      && canonFS.length >= rule.field;
+
+    if (canonAvailable) {
+      // Build a key->rank map from canonical FS. In driver mode the
+      // key is the slugified name; in owner mode it's "#NN".
+      const rankByKey = new Map();
+      canonFS.forEach((row, i) => {
+        let key = null;
+        if (aggregate.view === "owner") {
+          const raw = row.car_number != null
+            ? String(row.car_number)
+            : (row.car || row.driver || "");
+          const cleaned = String(raw).replace(/^#/, "").trim();
+          if (cleaned) key = `#${cleaned}`;
+        } else {
+          key = slugify(row.driver || "");
+        }
+        if (key && !rankByKey.has(key)) {
+          rankByKey.set(key, { rank: i + 1, row });
+        }
+      });
+
+      // Derive each driver's lastRoundReached from their canonical
+      // rank. The rule's rounds[ri].cutTo defines how many drivers
+      // SURVIVED that round. So:
+      //   ranks 1..cutTo[last]     -> survived final round  -> made finale
+      //   ranks 1..cutTo[last-1]   -> survived last-1 round -> in finale
+      //   ranks cutTo[last]+1 ..
+      //         cutTo[last-1]      -> eliminated at last-1
+      //   etc.
+      //
+      // lastRoundReached is the index of the highest round the
+      // driver participated in (= reached). For C4 drivers that's
+      // rounds.length - 1 (the final round). For Round-of-8
+      // eliminated drivers that's rounds.length - 2. Etc.
+      //
+      // We build a sorted boundary list (highest rank in each tier)
+      // by walking rounds from last to first.
+      const tierBoundaries = []; // [{lastRoundIdx, maxRank}]
+      // The final round itself: drivers who made it to the final
+      // round have rank <= rule.rounds[last-1].cutTo (i.e., they
+      // survived the cut BEFORE the final). For typical eliminate
+      // brackets ending in C4, that's cutTo of the round before
+      // C4 = 4. Drivers at ranks 1..4 are "in C4". The champion
+      // (rank 1) and other C4 members are all in lastRoundReached =
+      // rounds.length - 1.
+      //
+      // For a 1-driver-cut final round (cutTo: 1), the rank-1
+      // driver alone "won" but all 4 finalists reached the final
+      // round. Their lastRoundReached is the same (rounds.length - 1).
+      const lastRoundCutTo = rounds[rounds.length - 1]?.cutTo ?? 1;
+      // The number of drivers who reached the final round =
+      // cutTo of the round BEFORE the final (which is the survivors
+      // OF that round who became finalists). When there's only one
+      // round (a championship-style finale), all field members
+      // reached the final round.
+      const finalRoundSurvivors = rounds.length >= 2
+        ? rounds[rounds.length - 2].cutTo
+        : rule.field;
+
+      // tierBoundaries[i] = max canonical rank that corresponds to
+      // a driver who LAST APPEARED at round i. Built from highest
+      // round (final) down to lowest (first elimination round).
+      // For the final round, max rank = finalRoundSurvivors.
+      tierBoundaries.push({ lastRoundIdx: rounds.length - 1, maxRank: finalRoundSurvivors });
+      for (let ri = rounds.length - 2; ri >= 0; ri--) {
+        // Eliminated at round ri = drivers who survived ri-1's cut
+        // (or made the field if ri = 0) but didn't survive ri's cut.
+        // Max rank in this tier = cutTo of the round BEFORE ri,
+        // i.e., the number of drivers who entered round ri.
+        // For ri = 0, that's the field size.
+        const entered = ri === 0 ? rule.field : rounds[ri - 1].cutTo;
+        tierBoundaries.push({ lastRoundIdx: ri, maxRank: entered });
+      }
+      // Sort by maxRank ascending so we can walk rank → tier.
+      tierBoundaries.sort((a, b) => a.maxRank - b.maxRank);
+
+      const getLastRoundReached = (canonRank) => {
+        if (!canonRank) return -1;
+        for (const tier of tierBoundaries) {
+          if (canonRank <= tier.maxRank) return tier.lastRoundIdx;
+        }
+        return -1; // beyond playoff field = not in the bracket
+      };
+
+      // For the chart trace: cumulative race_pts during playoffs.
+      // Same shape as the sim path.
+      const regSeasonPP = new Map();
+      // Compute the same regSeasonPP that the sim would, since we
+      // still expose "po pts" in the table. This is the advancement-
+      // score notion, NOT NASCAR's published total (which is post-
+      // reset and depends on reset bases we don't model precisely).
+      for (const d of field) {
+        const regRaces = d.perRace.filter(p => p.round <= regEnd);
+        const regWins = regRaces.filter(p => p.isWin).length;
+        const regStageWins = regRaces.reduce((s, p) => s + (p.stageWins || 0), 0);
+        regSeasonPP.set(d.slug, regWins * (rule.raceWinPP || 0) + regStageWins * (rule.stageWinPP || 0));
+      }
+      if (rule.regBonus) {
+        const BONUS = [15, 10, 8, 7, 6, 5, 4, 3, 2, 1];
+        const ranked = [...aggregate.drivers.values()]
+          .filter(d => d.perRace.some(p => p.round <= regEnd))
+          .map(d => ({
+            slug: d.slug,
+            regSeasonPts: d.perRace.filter(p => p.round <= regEnd)
+              .reduce((m, p) => Math.max(m, p.cum), 0),
+          }))
+          .sort((a, b) => b.regSeasonPts - a.regSeasonPts);
+        ranked.slice(0, 10).forEach((s, i) => {
+          if (regSeasonPP.has(s.slug)) {
+            regSeasonPP.set(s.slug, regSeasonPP.get(s.slug) + BONUS[i]);
+          }
+        });
+      }
+
+      const lastRoundEnd = regEnd + rounds.reduce((s, r) => s + r.races, 0);
+      const advancementScoreThrough = (d, throughRound) => {
+        const playoffRaces = d.perRace.filter(p => p.round > regEnd && p.round <= throughRound);
+        const playoffWins = playoffRaces.filter(p => p.isWin).length;
+        const playoffStageWins = playoffRaces.reduce((s, p) => s + (p.stageWins || 0), 0);
+        const playoffPP = playoffWins * (rule.raceWinPP || 0) + playoffStageWins * (rule.stageWinPP || 0);
+        const playoffRacePts = playoffRaces.reduce((s, p) => s + p.race_pts, 0);
+        return (regSeasonPP.get(d.slug) || 0) + playoffPP + playoffRacePts;
+      };
+
+      const finaleRound = lastRoundEnd;
+
+      return field.map(d => {
+        const canonHit = rankByKey.get(d.slug);
+        const canonRank = canonHit ? canonHit.rank : null;
+        const lastRoundReached = getLastRoundReached(canonRank);
+        let lastRoundName = "Did not advance";
+        if (lastRoundReached >= 0) {
+          lastRoundName = lastRoundReached === rounds.length - 1
+            ? rounds[lastRoundReached].name
+            : `Through ${rounds[lastRoundReached].name}`;
+        }
+        // Finale finish: from the actual finale race, regardless of
+        // whether they "advanced" there in the canonical bracket.
+        // For drivers eliminated earlier this won't be displayed
+        // anyway (UI keys off lastRoundReached).
+        const finaleEntry = d.perRace.find(p => p.round === finaleRound);
+        const finaleFinish = finaleEntry?.finish ?? null;
+
+        const playoffPts = advancementScoreThrough(d, lastRoundEnd);
+        let runningCum = 0;
+        const playoffTrace = [{ round: regEnd, cum: 0 }];
+        for (const p of d.perRace.filter(p => p.round > regEnd)) {
+          runningCum += p.race_pts;
+          playoffTrace.push({ round: p.round, cum: runningCum });
+        }
+        return {
+          ...d,
+          seed: field.indexOf(d) + 1,
+          lastRoundReached,
+          lastRoundName,
+          finaleFinish,
+          playoffPts,
+          finalPts: playoffPts,
+          playoffTrace,
+          canonicalRank: canonRank,
+          canonicalPoints: canonHit?.row?.points ?? null,
+        };
+      }).sort((a, b) => {
+        // Primary sort: canonical rank (authoritative).
+        // Fall back to lastRoundReached desc / playoffPts desc for
+        // any drivers not present in canonical FS (shouldn't happen
+        // when canonAvailable is true, but defensive).
+        const aR = a.canonicalRank ?? Infinity;
+        const bR = b.canonicalRank ?? Infinity;
+        if (aR !== bR) return aR - bR;
+        if (a.lastRoundReached !== b.lastRoundReached) {
+          return b.lastRoundReached - a.lastRoundReached;
+        }
+        return b.finalPts - a.finalPts;
+      });
+    }
+
+    // ============================================================
+    // SIMULATION PATH (fallback for in-progress seasons & what-ifs)
+    // ============================================================
+    // Used when canonical final_standings isn't available — e.g.,
+    // mid-season views and cross-era what-ifs ("apply 2026 rules to
+    // 2017"). Runs NASCAR's published rules as best we can model
+    // them from race-by-race data alone.
+    //
+    // NASCAR's playoff structure works like:
     //   1. After regular season: drivers reset to a base (2000), get
     //      their PP added on top. PP = (race wins × 5) + (stage wins
     //      × 1) + (top-10 reg-season finish bonus 15/10/8/.../1).
@@ -19908,7 +20192,6 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
     // it doesn't matter — only the deltas between drivers matter. The
     // delta is each driver's TOTAL-PP-TO-DATE + TOTAL-RACE-PTS-TO-DATE-
     // IN-PLAYOFFS. So we track cumulative PP across the season.
-    const rounds = rule.rounds || [];
 
     // Compute each driver's PP earned through the regular season
     // (race wins + stage wins + reg-bonus).
