@@ -19677,12 +19677,22 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
 // (array of driver slugs in seeding order) and any auxiliary info for
 // the playoff phase.
 function _pointsCalcDeriveField(aggregate, rule, regEndRound) {
-  // Only consider drivers who actually raced through reg-season cutoff
+  // Build per-driver regular-season stats from perRace entries. We
+  // can NOT use d.wins / d.stageWins because those are season-wide
+  // and would let a driver get into the playoffs based on wins they
+  // earned AFTER the cutoff — which is not how NASCAR's playoff
+  // eligibility works.
+  //
+  // Eligibility for playoffs is decided at R{regEndRound} based on
+  // races run up to and including that round.
   const standings = [...aggregate.drivers.values()]
     .filter(d => d.perRace.some(p => p.round <= regEndRound))
     .map(d => {
-      const cumAtCutoff = d.perRace.filter(p => p.round <= regEndRound).reduce((a, p) => Math.max(a, p.cum), 0);
-      return { ...d, regSeasonPts: cumAtCutoff };
+      const regRaces = d.perRace.filter(p => p.round <= regEndRound);
+      const cumAtCutoff = regRaces.reduce((a, p) => Math.max(a, p.cum), 0);
+      const regWins = regRaces.filter(p => p.isWin).length;
+      const regStageWins = regRaces.reduce((s, p) => s + (p.stageWins || 0), 0);
+      return { ...d, regSeasonPts: cumAtCutoff, regWins, regStageWins };
     })
     .sort((a, b) => b.regSeasonPts - a.regSeasonPts);
 
@@ -19697,14 +19707,20 @@ function _pointsCalcDeriveField(aggregate, rule, regEndRound) {
     const fixedSlots = rule.field - (rule.wildcards || 0);
     const fixed = standings.slice(0, fixedSlots);
     const fixedSlugs = new Set(fixed.map(d => d.slug));
-    const eligibleForWildcards = standings.filter(d => !fixedSlugs.has(d.slug) && d.wins > 0);
+    // Wildcards: drivers outside the fixed top who have REGULAR-SEASON
+    // wins. Use regWins (not season-wide d.wins) so playoff wins
+    // can't earn anyone a regular-season wildcard slot.
+    const eligibleForWildcards = standings.filter(d => !fixedSlugs.has(d.slug) && d.regWins > 0);
     const wildcards = eligibleForWildcards.slice(0, rule.wildcards);
     return { field: [...fixed, ...wildcards], type: "chase-wildcard", leftOut: standings.filter(d => !fixedSlugs.has(d.slug) && !wildcards.includes(d)).slice(0, 10) };
   }
   if (rule.format === "elimination") {
-    // Race winners first, then by points
-    const winners = standings.filter(d => d.wins > 0).sort((a, b) => b.wins - a.wins || b.regSeasonPts - a.regSeasonPts);
-    const nonWinners = standings.filter(d => d.wins === 0);
+    // Race winners first, then by points. CRITICAL: use regWins
+    // (regular-season wins through R{regEndRound}) — NOT d.wins (which
+    // is season-wide and includes playoff wins). A driver doesn't
+    // qualify for the playoffs because they won later in the playoffs.
+    const winners = standings.filter(d => d.regWins > 0).sort((a, b) => b.regWins - a.regWins || b.regSeasonPts - a.regSeasonPts);
+    const nonWinners = standings.filter(d => d.regWins === 0);
     const field = [...winners.slice(0, rule.field)];
     if (field.length < rule.field) field.push(...nonWinners.slice(0, rule.field - field.length));
     const fieldSlugs = new Set(field.map(d => d.slug));
@@ -19848,12 +19864,31 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
         advanced = sortedByFinish;
         eliminated = [];
       } else {
-        // Regular elimination round: sort by advancement score through
-        // this round's end and cut to round.cutTo.
-        const scored = alive.map(d => ({ d, score: advancementScoreThrough(d, roundEnd) }));
+        // Regular elimination round. CRITICAL NASCAR RULE: any driver
+        // who WINS a race during this round advances automatically
+        // to the next round, regardless of points. Remaining slots
+        // are filled by highest-points among non-winners.
+        //
+        // Without auto-advance, drivers like Hamlin (who often wins
+        // a single playoff race that locks him in) get incorrectly
+        // eliminated based on points alone.
+        const autoAdvancers = alive.filter(d =>
+          d.perRace.some(p => p.round > roundStart && p.round <= roundEnd && p.isWin)
+        );
+        const autoSet = new Set(autoAdvancers.map(d => d.slug));
+        const nonWinners = alive.filter(d => !autoSet.has(d.slug));
+        // Sort non-winners by advancement score (PP + race pts to date)
+        const scored = nonWinners.map(d => ({ d, score: advancementScoreThrough(d, roundEnd) }));
         scored.sort((a, b) => b.score - a.score);
-        advanced = scored.slice(0, round.cutTo).map(x => x.d);
-        eliminated = scored.slice(round.cutTo).map(x => x.d);
+        // Fill remaining slots after auto-advancers
+        const slotsRemaining = Math.max(0, round.cutTo - autoAdvancers.length);
+        const filledByPoints = scored.slice(0, slotsRemaining).map(x => x.d);
+        advanced = [...autoAdvancers, ...filledByPoints];
+        // If auto-advancers already exceed cutTo (rare — e.g., 5 different
+        // winners in a 3-race round when cutTo=4), all winners still
+        // advance (NASCAR doesn't cut a winner). Slice to cutTo only
+        // when filling by points; never trim auto-advancers.
+        eliminated = alive.filter(d => !advanced.includes(d));
       }
 
       rounded.push({
