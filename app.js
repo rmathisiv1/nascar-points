@@ -19641,9 +19641,16 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
   return [];
 }
 
-// Render the regular-season cumulative chart (one line per driver in
-// the projected field, faded for non-field drivers).
-function _pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo) {
+// Render the regular-season cumulative chart. In championship-format
+// mode (no separate playoff phase), all drivers render bold since the
+// chart IS the full championship picture. Otherwise field drivers are
+// bold and non-field drivers fade to background context.
+//
+// Each data point gets an invisible hit-target circle so the hover
+// handler (wired separately) can show a tooltip with driver / round /
+// cumulative-points on mouseover.
+function _pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo, opts = {}) {
+  const isChampionshipMode = opts.championshipMode === true;
   const fieldSlugs = new Set((fieldInfo?.field || []).map(d => d.slug));
   const W = 800, H = 320;
   const pad = { t: 16, r: 80, b: 36, l: 56 };
@@ -19685,7 +19692,7 @@ function _pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo) {
     .sort((a, b) => b.final - a.final);
 
   const lines = sortedDrivers.map(({ d, final }) => {
-    const inField = fieldSlugs.has(d.slug);
+    const inField = isChampionshipMode || fieldSlugs.has(d.slug);
     const carHex = colorFor(STATE.pointscalc.series, d.car_number);
     const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
     const opacity = inField ? 0.95 : 0.18;
@@ -19698,17 +19705,35 @@ function _pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo) {
     return `<path d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="${width}" opacity="${opacity}" stroke-linejoin="round"/>`;
   }).join("");
 
+  // Hit targets — invisible circles at each driver/race point. Tooltip
+  // handler (wired via _wirePointsCalcTooltips on the chart-host) reads
+  // the data-* attributes to render the popup. Only field drivers get
+  // hit targets to keep mouseover noise low; in championship mode
+  // every driver is a field driver.
+  const hits = sortedDrivers.flatMap(({ d }) => {
+    const inField = isChampionshipMode || fieldSlugs.has(d.slug);
+    if (!inField) return [];
+    return d.perRace.filter(p => p.round <= maxRound).map(p =>
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="9" fill="transparent" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
+    );
+  }).join("");
+
   return `
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
-      ${gridLines.join("")}
-      ${xLabels.join("")}
-      ${lines}
-    </svg>
+    <div class="pc-chart-wrap">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+        ${gridLines.join("")}
+        ${xLabels.join("")}
+        ${lines}
+        ${hits}
+      </svg>
+      <div class="pc-tooltip" hidden></div>
+    </div>
   `;
 }
 
 // Render the regular-season standings table
-function _pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo) {
+function _pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo, opts = {}) {
+  const isChampionshipMode = opts.championshipMode === true;
   const fieldSlugs = new Set((fieldInfo?.field || []).map(d => d.slug));
   const standings = [...aggregate.drivers.values()]
     .map(d => {
@@ -19718,11 +19743,11 @@ function _pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo) {
     .sort((a, b) => b.cum - a.cum)
     .slice(0, 30);
   const rows = standings.map((d, i) => {
-    const inField = fieldSlugs.has(d.slug);
+    const inField = !isChampionshipMode && fieldSlugs.has(d.slug);
     const carHex = colorFor(STATE.pointscalc.series, d.car_number);
     const txt = contrastTextFor(carHex);
-    return `<tr class="${inField ? "pc-row-field" : ""}">
-      <td class="num">${i + 1}</td>
+    return `<tr class="${inField ? "pc-row-field" : ""} ${isChampionshipMode && i === 0 ? "pc-row-champion" : ""}">
+      <td class="num">${i + 1}${isChampionshipMode && i === 0 ? " 🏆" : ""}</td>
       <td><a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
         <span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span>
         <span>${escapeHTML(d.name)}</span>
@@ -19730,7 +19755,7 @@ function _pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo) {
       <td class="num">${d.starts}</td>
       <td class="num">${d.wins}</td>
       <td class="num"><strong>${d.cum}</strong></td>
-      <td class="num">${inField ? '<span class="pc-tag-in">in</span>' : ""}</td>
+      ${isChampionshipMode ? "" : `<td class="num">${inField ? '<span class="pc-tag-in">in</span>' : ""}</td>`}
     </tr>`;
   }).join("");
   return `
@@ -19738,7 +19763,8 @@ function _pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo) {
       <thead><tr>
         <th class="num">Rank</th><th>Driver</th>
         <th class="num">Starts</th><th class="num">Wins</th>
-        <th class="num">Pts</th><th></th>
+        <th class="num">Pts</th>
+        ${isChampionshipMode ? "" : "<th></th>"}
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -19790,12 +19816,24 @@ function _pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound) {
     return `<path d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>`;
   }).join("");
 
+  // Hit targets — invisible circles at every trace point for hover tooltips
+  const hits = playoffStandings.flatMap(d => {
+    const trace = d.playoffTrace || [];
+    return trace.map(p =>
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="9" fill="transparent" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
+    );
+  }).join("");
+
   return `
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
-      ${gridLines.join("")}
-      ${xLabels.join("")}
-      ${lines}
-    </svg>
+    <div class="pc-chart-wrap">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+        ${gridLines.join("")}
+        ${xLabels.join("")}
+        ${lines}
+        ${hits}
+      </svg>
+      <div class="pc-tooltip" hidden></div>
+    </div>
   `;
 }
 
@@ -19931,28 +19969,28 @@ function renderPointsCalc() {
     sub.textContent = `${STATE.pointscalc.season} ${STATE.pointscalc.series} · ${formatEntry.label.replace(/\([0-9–+]+\)\s*$/, "")}`;
   }
 
-  // Compose page
-  host.innerHTML = `
-    ${_pointsCalcControls(loadedYears, seriesCatalog)}
+  // Champion-seed stats across loaded seasons under this format.
+  // Returns null when only the current season is loaded (or the
+  // cutoff hasn't been reached yet in any), in which case we hide
+  // the card. Otherwise it answers "what reg-season seed have
+  // champions historically held under this format?"
+  const championStats = _pointsCalcChampionSeedStats(rule, STATE.pointscalc.series);
 
-    <div class="pc-section">
-      <div class="pc-section-head">
-        <span class="pc-section-title">Regular Season</span>
-        <span class="ed-byline">Through R${regEndRound} · projected field shown bold; non-field drivers faded</span>
-      </div>
-      <div class="pc-chart-host">${_pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo)}</div>
-      <div class="pc-table-host">${_pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo)}</div>
-    </div>
+  const isChampionship = rule.format === "championship";
 
-    ${rule.format === "championship" ? `
+  // Section blocks — built separately so we can order them. User
+  // wanted Playoffs on TOP, Regular Season on BOTTOM.
+  const playoffsSection = isChampionship
+    ? `
       <div class="pc-section">
         <div class="pc-section-head">
           <span class="pc-section-title">Final Championship</span>
           <span class="ed-byline">Season-long points · no separate playoff phase</span>
         </div>
-        <div class="pc-table-host">${_pointsCalcRegSeasonTable(aggregate, lastRound, { field: [] })}</div>
+        <div class="pc-table-host">${_pointsCalcRegSeasonTable(aggregate, lastRound, { field: [] }, { championshipMode: true })}</div>
       </div>
-    ` : `
+    `
+    : `
       <div class="pc-section">
         <div class="pc-section-head">
           <span class="pc-section-title">Playoffs</span>
@@ -19961,10 +19999,32 @@ function renderPointsCalc() {
         <div class="pc-chart-host">${_pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound)}</div>
         <div class="pc-table-host">${_pointsCalcPlayoffTable(playoffStandings, rule)}</div>
       </div>
-    `}
+    `;
+
+  const regSeasonByline = isChampionship
+    ? `Through R${regEndRound} · all drivers shown`
+    : `Through R${regEndRound} · projected field shown bold; non-field drivers faded`;
+  const regSeasonSection = `
+    <div class="pc-section">
+      <div class="pc-section-head">
+        <span class="pc-section-title">Regular Season</span>
+        <span class="ed-byline">${regSeasonByline}</span>
+      </div>
+      <div class="pc-chart-host">${_pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo, { championshipMode: isChampionship })}</div>
+      <div class="pc-table-host">${_pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo, { championshipMode: isChampionship })}</div>
+    </div>
+  `;
+
+  // Compose page: controls → stats card → playoffs (top) → regular season (bottom)
+  host.innerHTML = `
+    ${_pointsCalcControls(loadedYears, seriesCatalog)}
+    ${_pointsCalcChampionStatsCard(championStats, rule)}
+    ${playoffsSection}
+    ${regSeasonSection}
   `;
 
   _pointsCalcWireControls();
+  _pointsCalcWireTooltips();
 }
 
 function _pointsCalcControls(loadedYears, seriesCatalog) {
@@ -19995,6 +20055,136 @@ function _pointsCalcControls(loadedYears, seriesCatalog) {
   `;
 }
 
+// Compute "what seed have champions historically held by the cutoff?"
+// For every loaded season in the current series, this:
+//   1. Builds the aggregate for that season under the chosen format
+//   2. Picks the eventual champion (playoff winner, or season-points
+//      leader for championship format)
+//   3. Records the champion's regular-season seed at the cutoff
+// Returns { samples: [{year, championName, seed}], stats: {min, max, avg, count} } or null if no data.
+function _pointsCalcChampionSeedStats(rule, series) {
+  const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+  const samples = [];
+  for (const yearStr of Object.keys(cache)) {
+    const year = Number(yearStr);
+    const block = cache[yearStr] && cache[yearStr][series];
+    if (!block || !(block.races || []).length) continue;
+    const agg = _pointsCalcSeasonAggregate(block, rule);
+    if (agg.drivers.size === 0) continue;
+    const regEndRound = rule.regSeasonEndRound || (agg.rounds[agg.rounds.length - 1] || 36);
+    // Need the regular-season cutoff to actually exist in the data —
+    // skip in-progress seasons that haven't reached the cutoff yet.
+    const lastRound = agg.rounds[agg.rounds.length - 1] || 0;
+    if (lastRound < regEndRound) continue;
+
+    // Reg-season standings at the cutoff
+    const regStandings = [...agg.drivers.values()]
+      .map(d => {
+        const cum = d.perRace.filter(p => p.round <= regEndRound).reduce((m, p) => Math.max(m, p.cum), 0);
+        return { slug: d.slug, name: d.name, cum };
+      })
+      .sort((a, b) => b.cum - a.cum);
+
+    // Identify the champion. For championship format, it's the
+    // season-points leader at the LAST round. For chase / chase-
+    // reseeded / chase-wildcard, it's whoever has the most cumulative
+    // points (reset+playoffs). For elimination, it's the field-driver
+    // with the best Championship-4 finish (highest playoff race
+    // points). The shared `_pointsCalcPlayoffStandings` already
+    // produces the right ordering, so we use it.
+    let championSlug = null;
+    if (rule.format === "championship") {
+      // Champion = season-leader at last round
+      const finalStandings = [...agg.drivers.values()]
+        .map(d => ({ slug: d.slug, total: d.total }))
+        .sort((a, b) => b.total - a.total);
+      championSlug = finalStandings[0]?.slug;
+    } else {
+      const fieldInfo = _pointsCalcDeriveField(agg, rule, regEndRound);
+      const playoffStandings = _pointsCalcPlayoffStandings(agg, rule, fieldInfo);
+      championSlug = playoffStandings[0]?.slug;
+    }
+    if (!championSlug) continue;
+
+    // Find the champion's seed at the cutoff. May be -1 if they
+    // weren't in the data at the cutoff (shouldn't happen for a
+    // real season-long champion, but be defensive).
+    const seedIdx = regStandings.findIndex(r => r.slug === championSlug);
+    if (seedIdx < 0) continue;
+    samples.push({
+      year,
+      championName: regStandings[seedIdx].name,
+      seed: seedIdx + 1,
+    });
+  }
+
+  if (samples.length === 0) return null;
+  const seeds = samples.map(s => s.seed);
+  const stats = {
+    count: samples.length,
+    min: Math.min(...seeds),
+    max: Math.max(...seeds),
+    avg: seeds.reduce((a, b) => a + b, 0) / seeds.length,
+  };
+  return { samples: samples.sort((a, b) => a.year - b.year), stats };
+}
+
+// Render the champion-seed stats card. Shows min/max/avg + a small
+// histogram so users can visually see where champions cluster.
+function _pointsCalcChampionStatsCard(stats, rule) {
+  if (!stats) return "";
+  const { samples, stats: agg } = stats;
+  const fieldSize = rule.field || 16;
+  // Histogram buckets — by seed position. Max bucket extends to
+  // (field size + 4) so out-of-field champions still appear if any.
+  const maxBucket = Math.max(fieldSize + 4, agg.max);
+  const buckets = Array.from({ length: maxBucket }, (_, i) => ({ seed: i + 1, count: 0, years: [] }));
+  for (const s of samples) {
+    if (s.seed <= maxBucket) {
+      buckets[s.seed - 1].count += 1;
+      buckets[s.seed - 1].years.push(s.year);
+    }
+  }
+  const maxCount = Math.max(1, ...buckets.map(b => b.count));
+  const barsHTML = buckets.map(b => {
+    const h = (b.count / maxCount) * 100;
+    const isInField = b.seed <= fieldSize;
+    const title = b.count > 0
+      ? `Seed ${b.seed}: ${b.count} champion${b.count === 1 ? "" : "s"} (${b.years.join(", ")})`
+      : `Seed ${b.seed}: no champions`;
+    return `
+      <div class="pc-hist-col" title="${escapeHTML(title)}">
+        <div class="pc-hist-bar ${isInField ? "in-field" : "out-field"}" style="height: ${h}%;"></div>
+        <div class="pc-hist-label">${b.seed}</div>
+      </div>
+    `;
+  }).join("");
+
+  const yearsRange = samples.length === 1
+    ? `${samples[0].year}`
+    : `${samples[0].year}–${samples[samples.length - 1].year}`;
+
+  return `
+    <div class="pc-stats-card">
+      <div class="pc-stats-head">
+        <span class="pc-stats-title">Champion's Regular-Season Seed</span>
+        <span class="pc-stats-sub">Across ${agg.count} loaded season${agg.count === 1 ? "" : "s"} (${yearsRange}) under this format</span>
+      </div>
+      <div class="pc-stats-body">
+        <div class="pc-stats-numbers">
+          <div class="pc-stat-pill"><span class="pc-stat-lbl">Avg seed</span><span class="pc-stat-val">${agg.avg.toFixed(1)}</span></div>
+          <div class="pc-stat-pill"><span class="pc-stat-lbl">Best</span><span class="pc-stat-val">${agg.min}</span></div>
+          <div class="pc-stat-pill"><span class="pc-stat-lbl">Worst</span><span class="pc-stat-val">${agg.max}</span></div>
+        </div>
+        <div class="pc-hist">
+          <div class="pc-hist-bars">${barsHTML}</div>
+          <div class="pc-hist-axis">seed at regular-season cutoff</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function _pointsCalcWireControls() {
   const seasonSel = document.getElementById("pc-season");
   const seriesSel = document.getElementById("pc-series");
@@ -20013,6 +20203,55 @@ function _pointsCalcWireControls() {
   if (formatSel) formatSel.addEventListener("change", () => {
     STATE.pointscalc.formatKey = formatSel.value;
     renderPointsCalc();
+  });
+}
+
+// Wire hover tooltips for both PC charts. Event delegation on the host
+// so we attach once per render and it covers every .pc-chart-wrap in
+// the section. On hover of a .pc-hit hit-target, we populate the
+// tooltip inside the same .pc-chart-wrap with driver / round / cum
+// pts and position it near the cursor (clamped inside the wrap so it
+// doesn't escape the chart on edge points).
+function _pointsCalcWireTooltips() {
+  const host = document.getElementById("pointscalc-host");
+  if (!host) return;
+  host.addEventListener("mouseover", (e) => {
+    const hit = e.target.closest(".pc-hit");
+    if (!hit) return;
+    const wrap = hit.closest(".pc-chart-wrap");
+    if (!wrap) return;
+    const tip = wrap.querySelector(".pc-tooltip");
+    if (!tip) return;
+    const driver = hit.dataset.driver || "";
+    const round = hit.dataset.round || "?";
+    const cum = hit.dataset.cum || "?";
+    tip.innerHTML = `
+      <div class="pc-tip-driver">${driver}</div>
+      <div class="pc-tip-row"><span>Round</span><span>R${round}</span></div>
+      <div class="pc-tip-row"><span>Cum. pts</span><span>${cum}</span></div>
+    `;
+    tip.hidden = false;
+    // Position relative to the wrap. e.offsetX/Y is relative to the
+    // SVG inner area; we use clientRect math for reliability.
+    const wrapRect = wrap.getBoundingClientRect();
+    const x = e.clientX - wrapRect.left + 12;
+    const y = e.clientY - wrapRect.top + 12;
+    // Clamp inside the wrap so the tip doesn't escape on edge points.
+    tip.style.left = "0";
+    tip.style.top = "0";
+    const tipRect = tip.getBoundingClientRect();
+    const clampedX = Math.min(Math.max(0, x), wrapRect.width - tipRect.width - 4);
+    const clampedY = Math.min(Math.max(0, y), wrapRect.height - tipRect.height - 4);
+    tip.style.left = `${clampedX}px`;
+    tip.style.top = `${clampedY}px`;
+  });
+  host.addEventListener("mouseout", (e) => {
+    const hit = e.target.closest(".pc-hit");
+    if (!hit) return;
+    const wrap = hit.closest(".pc-chart-wrap");
+    if (!wrap) return;
+    const tip = wrap.querySelector(".pc-tooltip");
+    if (tip) tip.hidden = true;
   });
 }
 

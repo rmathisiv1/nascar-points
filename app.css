@@ -11018,3 +11018,177 @@ body.lightbox-open {
     font-size: 11px;
   }
 }
+
+/* ============================================================================
+   PC chart-wrap (tooltip positioning anchor) + tooltip popup
+   ============================================================================ */
+.pc-chart-wrap {
+  position: relative;
+}
+.pc-hit {
+  cursor: crosshair;
+  pointer-events: all;
+}
+.pc-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px 10px;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 50;
+  min-width: 140px;
+  max-width: 220px;
+  transition: opacity 80ms ease;
+}
+.pc-tooltip[hidden] { display: none !important; }
+.pc-tip-driver {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.pc-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.pc-tip-row span:last-child {
+  color: var(--text);
+}
+
+/* ============================================================================
+   PC champion-seed statistics card
+   ============================================================================ */
+.pc-stats-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 18px;
+  padding: 14px 18px 16px;
+}
+.pc-stats-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.pc-stats-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+.pc-stats-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+}
+.pc-stats-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  align-items: end;
+}
+.pc-stats-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 110px;
+}
+.pc-stat-pill {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  background: var(--tint-1);
+  border-radius: 3px;
+  line-height: 1.1;
+}
+.pc-stat-lbl {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 10px;
+  color: var(--muted);
+}
+.pc-stat-val {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pc-hist {
+  min-width: 0;
+}
+.pc-hist-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 90px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+}
+.pc-hist-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: default;
+}
+.pc-hist-bar {
+  width: 100%;
+  max-width: 18px;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: opacity 120ms ease;
+}
+.pc-hist-bar.in-field {
+  background: var(--accent);
+  opacity: 0.85;
+}
+.pc-hist-bar.out-field {
+  background: var(--muted);
+  opacity: 0.4;
+}
+.pc-hist-col:hover .pc-hist-bar {
+  opacity: 1;
+}
+.pc-hist-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+}
+.pc-hist-axis {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+  text-align: center;
+}
+
+@media (max-width: 767.98px) {
+  .pc-stats-body {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .pc-stats-numbers {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .pc-stat-pill { min-width: 80px; }
+}
