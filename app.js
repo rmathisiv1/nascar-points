@@ -85,10 +85,9 @@ const STATE = {
     // DRIVER).
     view: "driver",
     // Year range filter for the champion-seed stat card. Limits which
-    // historical seasons feed the histogram + min/max/avg. Defaults to
-    // 2000-current-year on first render (covers the modern era when
-    // every series has had stable scoring rules). null = unset =
-    // re-resolve to default on next render.
+    // historical seasons feed the histogram + min/max/avg. Defaulted
+    // on first render to the chosen format's era; user-editable
+    // thereafter, and persists across format/series swaps.
     statsRange: { startYear: null, endYear: null },
   },
   // Driver Compare page — slugs currently in the comparison set. Cap of
@@ -19961,18 +19960,26 @@ function _pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo, opts = {})
     const pathD = racesInWindow.map((p, i) =>
       `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
     ).join(" ");
-    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="${width}" opacity="${opacity}" stroke-linejoin="round"/>`;
+    // Two paths per driver: a transparent FAT overlay (10px) for
+    // catching hovers anywhere along the line, plus the visible line
+    // underneath. The overlay sits ON TOP (drawn after) so it gets
+    // mouse events. Only in-field drivers get the overlay to keep
+    // background context lines un-grabby.
+    const overlay = inField
+      ? `<path class="pc-line-hover" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-car="${d.car_number}" d="${pathD}" fill="none" stroke="transparent" stroke-width="12" stroke-linejoin="round" pointer-events="stroke"/>`
+      : "";
+    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="${width}" opacity="${opacity}" stroke-linejoin="round"/>${overlay}`;
   }).join("");
 
-  // Hit targets — invisible circles at each driver/race point. Tooltip
-  // handler (wired via _wirePointsCalcTooltips on the chart-host) reads
-  // the data-* attributes to render the popup. data-slug is also used
-  // by the hover-to-isolate behavior to fade non-matching lines.
+  // Hit targets — bigger circles at each driver/race point for snap
+  // tooltips. The line overlays above catch hovers between points;
+  // these give precise per-round tooltips when the cursor lands near
+  // an actual data point.
   const hits = sortedDrivers.flatMap(({ d }) => {
     const inField = isChampionshipMode || fieldSlugs.has(d.slug);
     if (!inField) return [];
     return d.perRace.filter(p => p.round <= maxRound).map(p =>
-      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="9" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="14" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
     );
   }).join("");
 
@@ -20061,7 +20068,10 @@ function _pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound) {
     xLabels.push(`<text class="axis-label" x="${xScale(r)}" y="${H - 10}" text-anchor="middle">R${r}</text>`);
   }
 
-  // Lines — top driver (champion) drawn last so they sit on top
+  // Lines — top driver (champion) drawn last so they sit on top.
+  // Each line gets a transparent fat overlay (12px) so hovering
+  // anywhere along the line triggers a tooltip — not just at the
+  // dot positions.
   const sortedForDraw = playoffStandings.slice().reverse();
   const lines = sortedForDraw.map(d => {
     const carHex = colorFor(STATE.pointscalc.series, d.car_number);
@@ -20071,14 +20081,15 @@ function _pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound) {
     const pathD = trace.map((p, i) =>
       `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
     ).join(" ");
-    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>`;
+    const overlay = `<path class="pc-line-hover" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-car="${d.car_number}" d="${pathD}" fill="none" stroke="transparent" stroke-width="12" stroke-linejoin="round" pointer-events="stroke"/>`;
+    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>${overlay}`;
   }).join("");
 
-  // Hit targets — invisible circles at every trace point for hover tooltips
+  // Hit targets — bigger circles at every trace point for precise per-round tooltips
   const hits = playoffStandings.flatMap(d => {
     const trace = d.playoffTrace || [];
     return trace.map(p =>
-      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="9" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="14" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
     );
   }).join("");
 
@@ -20248,20 +20259,19 @@ function renderPointsCalc() {
     sub.textContent = `${STATE.pointscalc.season} ${STATE.pointscalc.series} · ${formatEntry.label.replace(/\([0-9–+]+\)\s*$/, "")}`;
   }
 
-  // Champion-seed stats: default the year range to match the chosen
-  // FORMAT'S ERA (start–end), not a hardcoded 2000. So picking
-  // "Chase Reseeded" defaults to 2026+; picking "2017-2025 Elim"
-  // defaults to 2017-2025. This avoids the trap of running the chosen
-  // format against years where it didn't actually apply — synthesized
-  // results from those years pick weird "champions" (often Cup-
-  // crossover part-timers who happened to win their 1-2 NOS races).
+  // Champion-seed stats year range. Set defaults ONCE on first
+  // render when unset. After that, only the user can change them
+  // via the range inputs. Format/series swaps don't touch the
+  // range — what you set stays set.
   //
-  // The user can still widen the range manually to do what-if
-  // historical applications. We track whether the user has touched
-  // the range via _userTouched so format changes don't blow away
-  // their manual choice.
-  if (!STATE.pointscalc.statsRange._userTouched) {
+  // Initial defaults: format era when known, else 2000-current.
+  // Format era is a reasonable starting point — picking "2017-2025
+  // Elimination" defaults to 2017-2025 (years that actually used
+  // that format), which gives meaningful stats by default.
+  if (STATE.pointscalc.statsRange.startYear == null) {
     STATE.pointscalc.statsRange.startYear = rule.start || 2000;
+  }
+  if (STATE.pointscalc.statsRange.endYear == null) {
     STATE.pointscalc.statsRange.endYear = rule.end ?? new Date().getFullYear();
   }
   const championStats = _pointsCalcChampionSeedStats(
@@ -20561,16 +20571,10 @@ function _pointsCalcWireControls() {
     // Reset format — new series has different formats available.
     // Re-resolution to natural format happens in renderPointsCalc.
     STATE.pointscalc.formatKey = null;
-    // Reset stats range to format era. Without this, a range set
-    // on one format/series leaks into the next, which can produce
-    // weird "no champions in this range" empty states.
-    STATE.pointscalc.statsRange._userTouched = false;
     renderPointsCalc();
   });
   if (formatSel) formatSel.addEventListener("change", () => {
     STATE.pointscalc.formatKey = formatSel.value;
-    // Same: reset stats range to the new format's era.
-    STATE.pointscalc.statsRange._userTouched = false;
     renderPointsCalc();
   });
   // Driver/owner toggle. Delegated click handler on the toggle-group.
@@ -20602,10 +20606,6 @@ function _pointsCalcWireControls() {
     if (s > e) [s, e] = [e, s];
     STATE.pointscalc.statsRange.startYear = s;
     STATE.pointscalc.statsRange.endYear = e;
-    // Mark range as user-touched so format/series swaps don't blow it
-    // away. Without this, the renderer's "default to format era" logic
-    // would override the user's pick on the next render.
-    STATE.pointscalc.statsRange._userTouched = true;
     renderPointsCalc();
   };
   if (statsStart) statsStart.addEventListener("change", onRangeChange);
@@ -20627,29 +20627,13 @@ function _pointsCalcWireTooltips() {
   const host = document.getElementById("pointscalc-host");
   if (!host || host._pcTooltipWired) return;
   host._pcTooltipWired = true;
-  host.addEventListener("mouseover", (e) => {
-    const hit = e.target.closest(".pc-hit");
-    if (!hit) return;
-    const wrap = hit.closest(".pc-chart-wrap");
-    if (!wrap) return;
-    const tip = wrap.querySelector(".pc-tooltip");
-    if (!tip) return;
-    const driver = hit.dataset.driver || "";
-    const round = hit.dataset.round || "?";
-    const cum = hit.dataset.cum || "?";
-    const slug = hit.dataset.slug || "";
-    tip.innerHTML = `
-      <div class="pc-tip-driver">${driver}</div>
-      <div class="pc-tip-row"><span>Round</span><span>R${round}</span></div>
-      <div class="pc-tip-row"><span>Cum. pts</span><span>${cum}</span></div>
-    `;
-    tip.hidden = false;
-    // Position relative to the wrap. e.offsetX/Y is relative to the
-    // SVG inner area; we use clientRect math for reliability.
+
+  // Helper: position the tooltip near the cursor, clamped inside the
+  // wrap so it doesn't escape on edge points.
+  const positionTip = (tip, wrap, e) => {
     const wrapRect = wrap.getBoundingClientRect();
     const x = e.clientX - wrapRect.left + 12;
     const y = e.clientY - wrapRect.top + 12;
-    // Clamp inside the wrap so the tip doesn't escape on edge points.
     tip.style.left = "0";
     tip.style.top = "0";
     const tipRect = tip.getBoundingClientRect();
@@ -20657,29 +20641,75 @@ function _pointsCalcWireTooltips() {
     const clampedY = Math.min(Math.max(0, y), wrapRect.height - tipRect.height - 4);
     tip.style.left = `${clampedX}px`;
     tip.style.top = `${clampedY}px`;
+  };
 
-    // Hover-to-isolate: mark the chart-wrap so its lines dim, then
-    // find the matching line and mark it as the hovered one (full
-    // opacity, thicker stroke). Lets the user trace a single
-    // driver's line through a crowded chart.
+  // Helper: mark a line as the hovered one (full opacity, thick) and
+  // dim others via the wrap's data-hover-slug attribute.
+  const isolateLine = (wrap, slug) => {
     wrap.dataset.hoverSlug = slug;
     if (slug) {
       const matchLine = wrap.querySelector(`.pc-line[data-slug="${CSS.escape(slug)}"]`);
       if (matchLine) matchLine.classList.add("is-hovered");
     }
-  });
-  host.addEventListener("mouseout", (e) => {
-    const hit = e.target.closest(".pc-hit");
-    if (!hit) return;
-    const wrap = hit.closest(".pc-chart-wrap");
-    if (!wrap) return;
+  };
+
+  const clearHover = (wrap) => {
     const tip = wrap.querySelector(".pc-tooltip");
     if (tip) tip.hidden = true;
     delete wrap.dataset.hoverSlug;
-    // Clear is-hovered from any line that has it
     wrap.querySelectorAll(".pc-line.is-hovered").forEach(el =>
       el.classList.remove("is-hovered")
     );
+  };
+
+  host.addEventListener("mousemove", (e) => {
+    // Prefer dot hits (precise per-round) but fall back to line
+    // overlays so users can hover anywhere along a line.
+    const hit = e.target.closest(".pc-hit");
+    const lineHover = e.target.closest(".pc-line-hover");
+    const target = hit || lineHover;
+    if (!target) return;
+    const wrap = target.closest(".pc-chart-wrap");
+    if (!wrap) return;
+    const tip = wrap.querySelector(".pc-tooltip");
+    if (!tip) return;
+
+    const driver = target.dataset.driver || "";
+    const slug = target.dataset.slug || "";
+
+    if (hit) {
+      // Precise data-point hover: show exact round + cum pts
+      const round = hit.dataset.round || "?";
+      const cum = hit.dataset.cum || "?";
+      tip.innerHTML = `
+        <div class="pc-tip-driver">${driver}</div>
+        <div class="pc-tip-row"><span>Round</span><span>R${round}</span></div>
+        <div class="pc-tip-row"><span>Cum. pts</span><span>${cum}</span></div>
+      `;
+    } else {
+      // Line-overlay hover: no exact data point. Just show driver
+      // name — invites the user to hover a dot for precise pts.
+      tip.innerHTML = `
+        <div class="pc-tip-driver">${driver}</div>
+        <div class="pc-tip-row"><span></span><span>hover dot for pts</span></div>
+      `;
+    }
+    tip.hidden = false;
+    positionTip(tip, wrap, e);
+    isolateLine(wrap, slug);
+  });
+
+  host.addEventListener("mouseout", (e) => {
+    const target = e.target.closest(".pc-hit, .pc-line-hover");
+    if (!target) return;
+    const wrap = target.closest(".pc-chart-wrap");
+    if (!wrap) return;
+    // Only clear if we're actually leaving — relatedTarget being a
+    // sibling .pc-hit or .pc-line-hover means we're moving between
+    // hits and should keep the tooltip alive.
+    const next = e.relatedTarget;
+    if (next && next.closest && next.closest(".pc-hit, .pc-line-hover")) return;
+    clearHover(wrap);
   });
 }
 

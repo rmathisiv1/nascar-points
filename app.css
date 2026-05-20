@@ -11056,6 +11056,15 @@ body.lightbox-open {
   cursor: crosshair;
   pointer-events: all;
 }
+/* Line-overlay hover targets — invisible 12px-wide stroke version of
+   each line drawn on top of the visible line. pointer-events:stroke
+   means only the stroke area catches events (not the inside of any
+   closed curves). Lets users hover anywhere along the line, not just
+   at data points. */
+.pc-line-hover {
+  cursor: crosshair;
+  pointer-events: stroke;
+}
 /* Hover-to-isolate: when the wrap has [data-hover-slug] set (by the
    tooltip handler on mouseover of a hit-target), all lines fade. The
    handler also adds .is-hovered to the matching line, which bumps it
