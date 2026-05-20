@@ -19393,12 +19393,16 @@ function _pointsCalcFormatCatalog(series) {
     }
     catalog.push({ key, rule: { ...rule }, label, originSeries: series });
   }
-  const familyOrder = { "championship": 0, "chase": 1, "chase-wildcard": 2, "chase-reseeded": 3, "elimination": 4 };
+  // Sort chronologically by era start year so the dropdown reads as a
+  // timeline of NASCAR's playoff-format history. Tiebreaker on end year
+  // keeps longer-running rules ahead of brief one-year experiments with
+  // the same start (e.g., 2016 NOS one-year format).
   catalog.sort((a, b) => {
-    const fa = familyOrder[a.rule.format] ?? 99;
-    const fb = familyOrder[b.rule.format] ?? 99;
-    if (fa !== fb) return fa - fb;
-    return a.rule.start - b.rule.start;
+    if (a.rule.start !== b.rule.start) return a.rule.start - b.rule.start;
+    // null end means current/ongoing — sort it last among same-start
+    const aEnd = a.rule.end ?? Infinity;
+    const bEnd = b.rule.end ?? Infinity;
+    return aEnd - bEnd;
   });
   return catalog;
 }
