@@ -19670,7 +19670,14 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
     }
   }
 
-  return { drivers, rounds };
+  // Attach the canonical NASCAR final standings (when present in the
+  // season block) to the aggregate. _pointsCalcDeriveField uses this
+  // to filter the elimination field to championship-declared drivers
+  // only. Without this filter, part-time drivers (e.g., Cup runners
+  // doing select Xfinity races) can claim a playoff spot via the
+  // "win and you're in" rule even though they aren't declared for
+  // the championship — which doesn't match NASCAR's actual rules.
+  return { drivers, rounds, finalStandings: seasonBlock.final_standings || null, view };
 }
 
 // Compute the field for a given rule + aggregate. Returns the field
@@ -19715,12 +19722,50 @@ function _pointsCalcDeriveField(aggregate, rule, regEndRound) {
     return { field: [...fixed, ...wildcards], type: "chase-wildcard", leftOut: standings.filter(d => !fixedSlugs.has(d.slug) && !wildcards.includes(d)).slice(0, 10) };
   }
   if (rule.format === "elimination") {
+    // CHAMPIONSHIP-DECLARATION FILTER (driver view only):
+    // NASCAR's playoff rules require drivers to be DECLARED for the
+    // series championship at the start of the season. Part-time
+    // drivers (e.g., Cup drivers running select Xfinity races) earn
+    // per-race points but are NOT championship-eligible — they can
+    // win races without claiming a playoff slot via the "win-and-in"
+    // rule.
+    //
+    // The scraper's per-race `ineligible` flag catches obvious cross-
+    // series interlopers (Cup full-timers in Xfinity), but misses
+    // subtler cases. Example: Almirola in 2025 NOS had 3 wins but
+    // wasn't declared, and finished rank 17 in NASCAR's official
+    // final standings. The bare "anyone with a win is in" rule
+    // wrongly puts him in the playoff field.
+    //
+    // Practical signal: NASCAR's `final_standings` only includes
+    // declared championship drivers in the playoff-tier point range
+    // (the top N drivers, where N = rule.field, have reset-bonus
+    // values 2000+; non-playoff drivers are well below that). So we
+    // treat the top-N final-standings drivers as the eligibility
+    // pool for the playoff field.
+    //
+    // Owner view: skipped because canonical final-standings is
+    // driver-keyed; owner-points playoff eligibility is governed
+    // by a different (NASCAR-tracked) standings set.
+    let eligiblePool = standings;
+    const fs = aggregate.finalStandings;
+    if (aggregate.view === "driver" && Array.isArray(fs) && fs.length >= rule.field) {
+      const declaredSlugs = new Set();
+      for (let i = 0; i < Math.min(fs.length, rule.field); i++) {
+        const norm = slugify(fs[i].driver || "");
+        if (norm) declaredSlugs.add(norm);
+      }
+      if (declaredSlugs.size > 0) {
+        eligiblePool = standings.filter(d => declaredSlugs.has(d.slug));
+      }
+    }
+
     // Race winners first, then by points. CRITICAL: use regWins
     // (regular-season wins through R{regEndRound}) — NOT d.wins (which
     // is season-wide and includes playoff wins). A driver doesn't
     // qualify for the playoffs because they won later in the playoffs.
-    const winners = standings.filter(d => d.regWins > 0).sort((a, b) => b.regWins - a.regWins || b.regSeasonPts - a.regSeasonPts);
-    const nonWinners = standings.filter(d => d.regWins === 0);
+    const winners = eligiblePool.filter(d => d.regWins > 0).sort((a, b) => b.regWins - a.regWins || b.regSeasonPts - a.regSeasonPts);
+    const nonWinners = eligiblePool.filter(d => d.regWins === 0);
     const field = [...winners.slice(0, rule.field)];
     if (field.length < rule.field) field.push(...nonWinners.slice(0, rule.field - field.length));
     const fieldSlugs = new Set(field.map(d => d.slug));
