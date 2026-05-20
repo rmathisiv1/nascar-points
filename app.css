@@ -11029,6 +11029,21 @@ body.lightbox-open {
   cursor: crosshair;
   pointer-events: all;
 }
+/* Hover-to-isolate: when the wrap has [data-hover-slug] set (by the
+   tooltip handler on mouseover of a hit-target), all lines fade. The
+   handler also adds .is-hovered to the matching line, which bumps it
+   back to full opacity + thicker stroke. Lets the user trace one
+   driver's line through a crowded chart. */
+.pc-line {
+  transition: opacity 120ms ease, stroke-width 120ms ease;
+}
+.pc-chart-wrap[data-hover-slug] .pc-line {
+  opacity: 0.08;
+}
+.pc-chart-wrap .pc-line.is-hovered {
+  opacity: 1 !important;
+  stroke-width: 3 !important;
+}
 .pc-tooltip {
   position: absolute;
   pointer-events: none;

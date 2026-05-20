@@ -19702,19 +19702,18 @@ function _pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo, opts = {})
     const pathD = racesInWindow.map((p, i) =>
       `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
     ).join(" ");
-    return `<path d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="${width}" opacity="${opacity}" stroke-linejoin="round"/>`;
+    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="${width}" opacity="${opacity}" stroke-linejoin="round"/>`;
   }).join("");
 
   // Hit targets — invisible circles at each driver/race point. Tooltip
   // handler (wired via _wirePointsCalcTooltips on the chart-host) reads
-  // the data-* attributes to render the popup. Only field drivers get
-  // hit targets to keep mouseover noise low; in championship mode
-  // every driver is a field driver.
+  // the data-* attributes to render the popup. data-slug is also used
+  // by the hover-to-isolate behavior to fade non-matching lines.
   const hits = sortedDrivers.flatMap(({ d }) => {
     const inField = isChampionshipMode || fieldSlugs.has(d.slug);
     if (!inField) return [];
     return d.perRace.filter(p => p.round <= maxRound).map(p =>
-      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="9" fill="transparent" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="9" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
     );
   }).join("");
 
@@ -19813,14 +19812,14 @@ function _pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound) {
     const pathD = trace.map((p, i) =>
       `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
     ).join(" ");
-    return `<path d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>`;
+    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>`;
   }).join("");
 
   // Hit targets — invisible circles at every trace point for hover tooltips
   const hits = playoffStandings.flatMap(d => {
     const trace = d.playoffTrace || [];
     return trace.map(p =>
-      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="9" fill="transparent" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="9" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${p.cum}" data-car="${d.car_number}"/>`
     );
   }).join("");
 
@@ -20276,6 +20275,7 @@ function _pointsCalcWireTooltips() {
     const driver = hit.dataset.driver || "";
     const round = hit.dataset.round || "?";
     const cum = hit.dataset.cum || "?";
+    const slug = hit.dataset.slug || "";
     tip.innerHTML = `
       <div class="pc-tip-driver">${driver}</div>
       <div class="pc-tip-row"><span>Round</span><span>R${round}</span></div>
@@ -20295,6 +20295,16 @@ function _pointsCalcWireTooltips() {
     const clampedY = Math.min(Math.max(0, y), wrapRect.height - tipRect.height - 4);
     tip.style.left = `${clampedX}px`;
     tip.style.top = `${clampedY}px`;
+
+    // Hover-to-isolate: mark the chart-wrap so its lines dim, then
+    // find the matching line and mark it as the hovered one (full
+    // opacity, thicker stroke). Lets the user trace a single
+    // driver's line through a crowded chart.
+    wrap.dataset.hoverSlug = slug;
+    if (slug) {
+      const matchLine = wrap.querySelector(`.pc-line[data-slug="${CSS.escape(slug)}"]`);
+      if (matchLine) matchLine.classList.add("is-hovered");
+    }
   });
   host.addEventListener("mouseout", (e) => {
     const hit = e.target.closest(".pc-hit");
@@ -20303,6 +20313,11 @@ function _pointsCalcWireTooltips() {
     if (!wrap) return;
     const tip = wrap.querySelector(".pc-tooltip");
     if (tip) tip.hidden = true;
+    delete wrap.dataset.hoverSlug;
+    // Clear is-hovered from any line that has it
+    wrap.querySelectorAll(".pc-line.is-hovered").forEach(el =>
+      el.classList.remove("is-hovered")
+    );
   });
 }
 
