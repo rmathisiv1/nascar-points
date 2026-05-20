@@ -15080,10 +15080,46 @@ function applyCanonicalStandings(rows) {
       const norm = normalizeDriverName(name || "");
       const hit = norm && canon.get(norm);
       if (hit) {
-        r.total = hit.points;
-        r.canonicalRank = hit.rank;
-        r.canonicalGap = hit.gap;
-        r.canonicalWins = hit.wins;
+        // SAFETY GUARD for owner/car-keyed rows: the canonical_standings
+        // table is DRIVER-keyed (NASCAR publishes driver standings; we
+        // don't currently scrape NASCAR's separate owner standings).
+        //
+        // For driver standings this overlay is exactly right — it sets
+        // each driver's row to NASCAR's published championship total.
+        //
+        // For owner standings, the primary driver of a car may not be
+        // the playoff-declared championship driver. Example: 2025 NOS
+        // #19 was driven primarily by Aric Almirola, who ran as a
+        // part-time non-declared driver (rank 17, 652 pts in driver
+        // standings). The #19 CAR earned far more owner points than
+        // 652 across the season because Almirola won races and other
+        // drivers contributed. Blindly overriding the #19 row's total
+        // with Almirola's driver total (652) makes the owner standings
+        // page wildly wrong.
+        //
+        // Heuristic: if the canonical total is LOWER than the raw
+        // sum we already have, the canonical refers to a driver whose
+        // individual championship arc was a strict subset of the car's
+        // owner-points season. Keep the raw sum. If the canonical is
+        // EQUAL or HIGHER, accept it (it includes playoff reset bonuses
+        // that boost the championship total above the regular-season
+        // sum — that's exactly what we want for driver standings, and
+        // happens for owners only when the primary driver IS the
+        // declared championship driver).
+        const rawTotal = r.total || 0;
+        if (hit.points >= rawTotal) {
+          r.total = hit.points;
+          r.canonicalRank = hit.rank;
+          r.canonicalGap = hit.gap;
+          r.canonicalWins = hit.wins;
+        } else {
+          // Still surface the canonical rank/gap on the row (for
+          // tooltips / "this is who the primary driver was in the
+          // driver championship") but DO NOT overwrite total.
+          r.canonicalRank = hit.rank;
+          r.canonicalGap = hit.gap;
+          r.canonicalWins = hit.wins;
+        }
         return;
       }
     }
@@ -19578,6 +19614,35 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
   // pick the primary driver for the display name. Map<car, Map<driver, count>>.
   const carDriverStarts = new Map();
 
+  // Is the chosen rule the season's NATIVE rule? If yes, the scraper's
+  // race_pts already reflects exactly this rule (it's what NASCAR
+  // actually awarded), and we should trust it — the recomputation
+  // pipeline (_pointsCalcPerRacePoints) is an approximation built for
+  // cross-era what-ifs and CAN'T faithfully reproduce edge cases in
+  // the scraped data:
+  //
+  //   1) Some Racing-Reference race pages combine stage points INTO
+  //      finish_pts when the per-stage breakdown isn't published
+  //      (e.g., the road-course "Drive for the Cure 250" R29 2025 NOS
+  //      page has S1=0, S2=0 across the board but inflated finish_pts).
+  //      The scraper preserves the conflated total in race_pts; the
+  //      recomputation only adds basePts + raw stage cells, so it
+  //      loses ~10-20 pts per driver in that race.
+  //   2) The +5 win bonus was historically baked into finish_pts on
+  //      some pages and broken out on others. Scraper handles both;
+  //      recomputation assumes the modern split.
+  //
+  // Cross-era what-ifs (apply 2026 rule to 2017) still recompute, as
+  // intended — that's the whole point of the PFC. But for "show me
+  // 2025 NOS under 2025 NOS rules" we should not re-derive what
+  // NASCAR already published.
+  const seasonYear = Number(seasonBlock.season);
+  const ruleStart = rule.start || -Infinity;
+  const ruleEnd = (rule.end == null) ? Infinity : rule.end;
+  const useScraperPts = Number.isFinite(seasonYear)
+    && seasonYear >= ruleStart
+    && seasonYear <= ruleEnd;
+
   for (const race of races) {
     if (!(race.results && race.results.length)) continue;
     rounds.push(race.round);
@@ -19619,10 +19684,19 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
         });
       }
       const ent = drivers.get(key);
-      // Recompute points under the chosen rule. For owner mode, this
-      // gives the CAR's race points regardless of driver eligibility
-      // (since _pointsCalcPerRacePoints just reads finish + stages).
-      const ptsUnderRule = _pointsCalcPerRacePoints(d, rule);
+      // Use scraper's race_pts when the rule matches the season's
+      // native rule (preserves data fidelity); otherwise recompute
+      // under the user's chosen what-if rule.
+      //
+      // Owner mode caveat: when an ineligible (cross-series) driver
+      // races, the scraper records race_pts=0 for them but the owner
+      // (car) does earn points. The recompute path handles this by
+      // reconstructing from finish_pos. So for owner mode we still
+      // need to recompute for those specific rows even on native-rule
+      // seasons.
+      const ptsUnderRule = (useScraperPts && !(view === "owner" && d.ineligible))
+        ? (d.race_pts || 0)
+        : _pointsCalcPerRacePoints(d, rule);
       const isWin = d.finish_pos === 1;
       const stageWinsThisRace =
         ((d.stage_1_pts || 0) === 10 ? 1 : 0) +
