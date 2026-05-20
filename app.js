@@ -19970,7 +19970,7 @@ function _pointsCalcControls(loadedYears, seriesCatalog) {
   const seriesOpts = ["NCS", "NOS", "NTS"].map(s =>
     `<option value="${s}" ${s === STATE.pointscalc.series ? "selected" : ""}>${s}</option>`
   ).join("");
-  const formatOpts = catalog.map(c =>
+  const formatOpts = seriesCatalog.map(c =>
     `<option value="${c.key}" ${c.key === STATE.pointscalc.formatKey ? "selected" : ""}>${escapeHTML(c.label)}</option>`
   ).join("");
   return `
