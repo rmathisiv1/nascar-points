@@ -11111,6 +11111,52 @@ body.lightbox-open {
   font-size: 11px;
   color: var(--muted);
 }
+/* Year-range inputs in the stats card head — push to the right when
+   space allows; wrap below on narrow screens. */
+.pc-stats-range {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto;
+}
+.pc-stats-range-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pc-stats-range-label {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+}
+.pc-stats-range-input {
+  font-family: var(--mono);
+  font-size: 12px;
+  width: 60px;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 3px;
+  text-align: center;
+}
+.pc-stats-range-input::-webkit-inner-spin-button,
+.pc-stats-range-input::-webkit-outer-spin-button {
+  /* Hide native spinners — they look out of place against the
+     editorial mono styling. Up/down arrow keys + typing still work. */
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pc-stats-range-input { -moz-appearance: textfield; }
+
+@media (max-width: 767.98px) {
+  .pc-stats-range {
+    margin-left: 0;
+    width: 100%;
+    margin-top: 4px;
+  }
+}
 .pc-stats-body {
   display: grid;
   grid-template-columns: auto 1fr;

@@ -71,7 +71,18 @@ const STATE = {
   // formatKey) plus per-format option overrides. formatKey identifies
   // a rule by its lineage start year so we can map back to the
   // PLAYOFF_RULES table without storing the full rule object.
-  pointscalc: { season: null, series: null, formatKey: null, formatOverrides: {} },
+  pointscalc: {
+    season: null,
+    series: null,
+    formatKey: null,
+    formatOverrides: {},
+    // Year range filter for the champion-seed stat card. Limits which
+    // historical seasons feed the histogram + min/max/avg. Defaults to
+    // 2000-current-year on first render (covers the modern era when
+    // every series has had stable scoring rules). null = unset =
+    // re-resolve to default on next render.
+    statsRange: { startYear: null, endYear: null },
+  },
   // Driver Compare page — slugs currently in the comparison set. Cap of
   // 4 to keep the side-by-side layout readable on mobile. Persisted in
   // STATE only; not in localStorage (each visit should be a fresh slate
@@ -19996,12 +20007,20 @@ function renderPointsCalc() {
     sub.textContent = `${STATE.pointscalc.season} ${STATE.pointscalc.series} · ${formatEntry.label.replace(/\([0-9–+]+\)\s*$/, "")}`;
   }
 
-  // Champion-seed stats across loaded seasons under this format.
-  // Returns null when only the current season is loaded (or the
-  // cutoff hasn't been reached yet in any), in which case we hide
-  // the card. Otherwise it answers "what reg-season seed have
-  // champions historically held under this format?"
-  const championStats = _pointsCalcChampionSeedStats(rule, STATE.pointscalc.series);
+  // Champion-seed stats: defaults to 2000 → current year on first
+  // render. User can adjust via the range inputs in the stats card.
+  // Stored in STATE so the choice persists across format/series swaps.
+  if (STATE.pointscalc.statsRange.startYear == null) {
+    STATE.pointscalc.statsRange.startYear = 2000;
+  }
+  if (STATE.pointscalc.statsRange.endYear == null) {
+    STATE.pointscalc.statsRange.endYear = new Date().getFullYear();
+  }
+  const championStats = _pointsCalcChampionSeedStats(
+    rule,
+    STATE.pointscalc.series,
+    STATE.pointscalc.statsRange,
+  );
 
   const isChampionship = rule.format === "championship";
 
@@ -20089,11 +20108,18 @@ function _pointsCalcControls(loadedYears, seriesCatalog) {
 //      leader for championship format)
 //   3. Records the champion's regular-season seed at the cutoff
 // Returns { samples: [{year, championName, seed}], stats: {min, max, avg, count} } or null if no data.
-function _pointsCalcChampionSeedStats(rule, series) {
+function _pointsCalcChampionSeedStats(rule, series, range) {
   const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
   const samples = [];
+  // Range filter: null/undefined start or end means "no bound on that
+  // side". Allows the caller to pass {startYear: 2000, endYear: 2025}
+  // to cover the modern era. Filtered BEFORE recompute to avoid
+  // unnecessary aggregation work on out-of-range seasons.
+  const startY = range?.startYear ?? -Infinity;
+  const endY   = range?.endYear   ??  Infinity;
   for (const yearStr of Object.keys(cache)) {
     const year = Number(yearStr);
+    if (year < startY || year > endY) continue;
     const block = cache[yearStr] && cache[yearStr][series];
     if (!block || !(block.races || []).length) continue;
     const agg = _pointsCalcSeasonAggregate(block, rule);
@@ -20159,7 +20185,40 @@ function _pointsCalcChampionSeedStats(rule, series) {
 // Render the champion-seed stats card. Shows min/max/avg + a small
 // histogram so users can visually see where champions cluster.
 function _pointsCalcChampionStatsCard(stats, rule) {
-  if (!stats) return "";
+  const range = STATE.pointscalc.statsRange;
+  const startVal = range.startYear ?? "";
+  const endVal = range.endYear ?? "";
+
+  // Range controls render unconditionally so the user can adjust the
+  // window even when the current range yields no data. The body
+  // switches to an empty state when stats is null.
+  const rangeControls = `
+    <div class="pc-stats-range">
+      <label class="pc-stats-range-control">
+        <span class="pc-stats-range-label">From</span>
+        <input type="number" id="pc-stats-start" class="pc-stats-range-input" value="${startVal}" min="1949" max="${new Date().getFullYear()}" step="1"/>
+      </label>
+      <label class="pc-stats-range-control">
+        <span class="pc-stats-range-label">To</span>
+        <input type="number" id="pc-stats-end" class="pc-stats-range-input" value="${endVal}" min="1949" max="${new Date().getFullYear()}" step="1"/>
+      </label>
+    </div>
+  `;
+
+  if (!stats) {
+    // Empty state — preserve the range controls so the user can widen
+    // the window to find data again.
+    return `
+      <div class="pc-stats-card">
+        <div class="pc-stats-head">
+          <span class="pc-stats-title">Champion's Regular-Season Seed</span>
+          <span class="pc-stats-sub">No champions in ${startVal || "?"}–${endVal || "?"} under this format. Try widening the range.</span>
+          ${rangeControls}
+        </div>
+      </div>
+    `;
+  }
+
   const { samples, stats: agg } = stats;
   // For chase formats, cap at the field size — anything beyond is
   // mathematically not a chase contender (would've missed the field
@@ -20211,7 +20270,8 @@ function _pointsCalcChampionStatsCard(stats, rule) {
     <div class="pc-stats-card">
       <div class="pc-stats-head">
         <span class="pc-stats-title">Champion's Regular-Season Seed</span>
-        <span class="pc-stats-sub">Across ${agg.count} loaded season${agg.count === 1 ? "" : "s"} (${yearsRange}) under this format</span>
+        <span class="pc-stats-sub">Across ${agg.count} season${agg.count === 1 ? "" : "s"} (${yearsRange}) under this format</span>
+        ${rangeControls}
       </div>
       <div class="pc-stats-body">
         <div class="pc-stats-numbers">
@@ -20233,6 +20293,8 @@ function _pointsCalcWireControls() {
   const seasonSel = document.getElementById("pc-season");
   const seriesSel = document.getElementById("pc-series");
   const formatSel = document.getElementById("pc-format");
+  const statsStart = document.getElementById("pc-stats-start");
+  const statsEnd = document.getElementById("pc-stats-end");
   if (seasonSel) seasonSel.addEventListener("change", () => {
     STATE.pointscalc.season = Number(seasonSel.value);
     renderPointsCalc();
@@ -20248,6 +20310,25 @@ function _pointsCalcWireControls() {
     STATE.pointscalc.formatKey = formatSel.value;
     renderPointsCalc();
   });
+  // Stats year-range inputs. Uses 'change' (fires on blur / Enter)
+  // rather than 'input' so we don't recompute on every keystroke
+  // during typing — the full-season-history walk is expensive.
+  // Defensive validation: clamp to plausible NASCAR-era bounds,
+  // swap if start > end (probably user just typed them out of order).
+  const onRangeChange = () => {
+    const minY = 1949;
+    const maxY = new Date().getFullYear();
+    let s = Number(statsStart?.value) || minY;
+    let e = Number(statsEnd?.value)   || maxY;
+    s = Math.max(minY, Math.min(maxY, s));
+    e = Math.max(minY, Math.min(maxY, e));
+    if (s > e) [s, e] = [e, s];
+    STATE.pointscalc.statsRange.startYear = s;
+    STATE.pointscalc.statsRange.endYear = e;
+    renderPointsCalc();
+  };
+  if (statsStart) statsStart.addEventListener("change", onRangeChange);
+  if (statsEnd) statsEnd.addEventListener("change", onRangeChange);
 }
 
 // Wire hover tooltips for both PC charts. Event delegation on the host
