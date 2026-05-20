@@ -10901,6 +10901,11 @@ body.lightbox-open {
   flex: 1;
   min-width: 220px;
 }
+/* View toggle (driver/owner) sits with other controls but doesn't
+   stretch — fixed width to fit the two-button toggle-group. */
+.pc-control-view {
+  flex: 0 0 auto;
+}
 .pc-control-label {
   font-family: var(--serif);
   font-style: italic;

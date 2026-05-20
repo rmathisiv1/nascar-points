@@ -76,6 +76,14 @@ const STATE = {
     series: null,
     formatKey: null,
     formatOverrides: {},
+    // Driver vs owner view — same toggle pattern as Standings and
+    // Playoffs. Defaults to driver since championship contention is
+    // fundamentally a driver question (drivers, not cars, qualify
+    // for the playoff field). Owner view recomputes by car number,
+    // surfacing the car-points version which differs when ineligible
+    // drivers run a car (those starts accrue to the OWNER but not the
+    // DRIVER).
+    view: "driver",
     // Year range filter for the champion-seed stat card. Limits which
     // historical seasons feed the histogram + min/max/avg. Defaults to
     // 2000-current-year on first render (covers the modern era when
@@ -19551,25 +19559,57 @@ function _modern2026Scale(fin, rule) {
   return 0;
 }
 
-// Compute per-driver cumulative points race-by-race for a given season
-// block (year+series), using the given rule for what counts as a point.
-// Returns: { drivers: Map<slug, { name, car_number, total, perRace: [{round, cum, race_pts}] }>, races: [round1, round2, ...] }
-function _pointsCalcSeasonAggregate(seasonBlock, rule) {
+// Compute per-driver (or per-car, depending on view) cumulative points
+// race-by-race for a given season block, using the chosen rule.
+// Returns: { drivers: Map<key, entity>, rounds: [round1, round2, ...] }
+//
+// View handling:
+//   - "driver" (default): key by slugified driver name. Ineligible
+//     drivers are skipped entirely — they don't accrue championship
+//     points in their non-home series.
+//   - "owner": key by car number. ALL drivers contribute, including
+//     ineligible ones — the CAR earns points regardless of who's
+//     driving. Display name is the primary driver (most starts in
+//     that car) for clarity.
+function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
   const drivers = new Map();
   const races = (seasonBlock.races || []).slice().sort((a, b) => (a.round || 0) - (b.round || 0));
   const rounds = [];
+  // For owner mode we need to track per-car driver starts so we can
+  // pick the primary driver for the display name. Map<car, Map<driver, count>>.
+  const carDriverStarts = new Map();
+
   for (const race of races) {
     if (!(race.results && race.results.length)) continue;
     rounds.push(race.round);
     for (const d of race.results) {
-      if (d.ineligible) continue;
-      const slug = slugify(d.driver);
-      if (!slug) continue;
-      if (!drivers.has(slug)) {
-        drivers.set(slug, {
-          name: d.driver,
-          slug,
-          car_number: d.car_number,
+      // Driver mode: skip ineligible — they don't earn driver points.
+      // Owner mode: include everyone — the car earns points either way.
+      if (view === "driver" && d.ineligible) continue;
+
+      let key, displayName, carNumber;
+      if (view === "owner") {
+        carNumber = d.car_number;
+        if (carNumber == null) continue;
+        key = `#${carNumber}`;
+        displayName = d.driver;  // tentative; finalized below using primary
+        // Track starts per driver per car
+        if (!carDriverStarts.has(key)) carDriverStarts.set(key, new Map());
+        const map = carDriverStarts.get(key);
+        map.set(d.driver, (map.get(d.driver) || 0) + 1);
+      } else {
+        const slug = slugify(d.driver);
+        if (!slug) continue;
+        key = slug;
+        displayName = d.driver;
+        carNumber = d.car_number;
+      }
+
+      if (!drivers.has(key)) {
+        drivers.set(key, {
+          name: displayName,
+          slug: key,
+          car_number: carNumber,
           team: d.team,
           team_code: d.team_code || null,
           total: 0,
@@ -19579,11 +19619,10 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule) {
           perRace: [],
         });
       }
-      const ent = drivers.get(slug);
-      // CORE OF THE WHAT-IF: recompute race_pts under the chosen rule
-      // instead of using the historical race_pts the scraper recorded.
-      // This is what makes "2025 race results under 2026 format" yield
-      // different totals than the 2025 actuals.
+      const ent = drivers.get(key);
+      // Recompute points under the chosen rule. For owner mode, this
+      // gives the CAR's race points regardless of driver eligibility
+      // (since _pointsCalcPerRacePoints just reads finish + stages).
       const ptsUnderRule = _pointsCalcPerRacePoints(d, rule);
       ent.total += ptsUnderRule;
       ent.starts += 1;
@@ -19593,6 +19632,30 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule) {
       ent.perRace.push({ round: race.round, cum: ent.total, race_pts: ptsUnderRule, finish: d.finish_pos });
     }
   }
+
+  // Owner mode: pick the primary driver name for each car (whoever
+  // has the most starts in that car this season). This makes the
+  // standings table read sensibly — "#19 — Brent Crews" instead of
+  // "#19 — Hailie Deegan" because she ran one race.
+  if (view === "owner") {
+    for (const [carKey, starts] of carDriverStarts) {
+      const ent = drivers.get(carKey);
+      if (!ent) continue;
+      let bestDriver = ent.name;
+      let bestCount = 0;
+      for (const [driver, count] of starts) {
+        if (count > bestCount) {
+          bestCount = count;
+          bestDriver = driver;
+        }
+      }
+      ent.name = bestDriver;
+      // Slug for profile-link routing — in owner mode we still want
+      // clicks to go to the driver's profile, using primary driver.
+      ent.slug = slugify(bestDriver) || carKey;
+    }
+  }
+
   return { drivers, rounds };
 }
 
@@ -20154,8 +20217,10 @@ function renderPointsCalc() {
     return;
   }
 
-  // Aggregate + derive
-  const aggregate = _pointsCalcSeasonAggregate(seasonBlock, rule);
+  // Aggregate + derive — uses the chosen view (driver vs owner) to
+  // determine how points and entities are keyed.
+  const pcView = STATE.pointscalc.view || "driver";
+  const aggregate = _pointsCalcSeasonAggregate(seasonBlock, rule, pcView);
   if (aggregate.drivers.size === 0) {
     host.innerHTML = `
       ${_pointsCalcControls(loadedYears, seriesCatalog)}
@@ -20203,6 +20268,7 @@ function renderPointsCalc() {
     rule,
     STATE.pointscalc.series,
     STATE.pointscalc.statsRange,
+    pcView,
   );
 
   const isChampionship = rule.format === "championship";
@@ -20266,6 +20332,7 @@ function _pointsCalcControls(loadedYears, seriesCatalog) {
   const formatOpts = seriesCatalog.map(c =>
     `<option value="${c.key}" ${c.key === STATE.pointscalc.formatKey ? "selected" : ""}>${escapeHTML(c.label)}</option>`
   ).join("");
+  const pcView = STATE.pointscalc.view || "driver";
   return `
     <div class="pc-controls">
       <label class="pc-control">
@@ -20280,6 +20347,13 @@ function _pointsCalcControls(loadedYears, seriesCatalog) {
         <span class="pc-control-label">Format</span>
         <select id="pc-format" class="pc-select">${formatOpts}</select>
       </label>
+      <div class="pc-control pc-control-view">
+        <span class="pc-control-label">View</span>
+        <div class="toggle-group mini" data-group="pc-view">
+          <button class="${pcView === "driver" ? "on" : ""}" data-val="driver">Driver</button>
+          <button class="${pcView === "owner"  ? "on" : ""}" data-val="owner">Owner</button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -20291,7 +20365,7 @@ function _pointsCalcControls(loadedYears, seriesCatalog) {
 //      leader for championship format)
 //   3. Records the champion's regular-season seed at the cutoff
 // Returns { samples: [{year, championName, seed}], stats: {min, max, avg, count} } or null if no data.
-function _pointsCalcChampionSeedStats(rule, series, range) {
+function _pointsCalcChampionSeedStats(rule, series, range, view = "driver") {
   const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
   const samples = [];
   // Range filter: null/undefined start or end means "no bound on that
@@ -20305,7 +20379,7 @@ function _pointsCalcChampionSeedStats(rule, series, range) {
     if (year < startY || year > endY) continue;
     const block = cache[yearStr] && cache[yearStr][series];
     if (!block || !(block.races || []).length) continue;
-    const agg = _pointsCalcSeasonAggregate(block, rule);
+    const agg = _pointsCalcSeasonAggregate(block, rule, view);
     if (agg.drivers.size === 0) continue;
     const regEndRound = rule.regSeasonEndRound || (agg.rounds[agg.rounds.length - 1] || 36);
     // Need the regular-season cutoff to actually exist in the data —
@@ -20499,6 +20573,20 @@ function _pointsCalcWireControls() {
     STATE.pointscalc.statsRange._userTouched = false;
     renderPointsCalc();
   });
+  // Driver/owner toggle. Delegated click handler on the toggle-group.
+  // Buttons are inside a generic .toggle-group so we listen on the
+  // parent and pick up data-val from whichever button got clicked.
+  const viewGroup = document.querySelector('[data-group="pc-view"]');
+  if (viewGroup) {
+    viewGroup.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const v = btn.dataset.val;
+        if (!v || v === STATE.pointscalc.view) return;
+        STATE.pointscalc.view = v;
+        renderPointsCalc();
+      });
+    });
+  }
   // Stats year-range inputs. Uses 'change' (fires on blur / Enter)
   // rather than 'input' so we don't recompute on every keystroke
   // during typing — the full-season-history walk is expensive.
