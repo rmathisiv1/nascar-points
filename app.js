@@ -20100,35 +20100,26 @@ function renderPointsCalc() {
   const seriesCatalog = _pointsCalcFormatCatalog(STATE.pointscalc.series);
   // Validate the saved formatKey against the new catalog. Two-step
   // resolution when the saved key doesn't exist in the new series:
-  //   1. Try to match by format family + era (e.g., a user on
-  //      "Chase Reseeded 16-driver" switching NCS→NOS should land
-  //      on NOS's "Chase Reseeded 12-driver" — same family, same era,
-  //      just different field size).
+  //   1. Try to match by format family — pick the NEWEST variant of
+  //      the family in the new series. So if user had "Chase Reseeded
+  //      NCS 16-driver" picked and switched to NOS, they land on the
+  //      newest Chase Reseeded variant for NOS (12-driver 2026+).
   //   2. Fall back to the natural format for the (series, season)
-  //      combo if no family match exists.
-  // This preserves intent across series switches better than always
-  // resetting to natural.
+  //      combo only if no family match exists.
+  // The "newest" rule is what most users want — exploring a recent
+  // format family across series, not jumping back to an older era's
+  // variant just because that era covered the current season.
   const keyExists = seriesCatalog.some(c => c.key === STATE.pointscalc.formatKey);
   if (!STATE.pointscalc.formatKey || !keyExists) {
-    // Decode the previous key to learn its format family + era, then
-    // search the new catalog for a match. Key format is built in
-    // _pointsCalcFormatCatalog: format|field|playoffRaces|...
     const prevKey = STATE.pointscalc.formatKey || "";
     const prevFamily = prevKey.split("|")[0];
 
-    // Step 1: family match — find the latest format in the new
-    // series's catalog with the same format family
     let chosen = null;
     if (prevFamily) {
+      // Family matches sorted chronologically already (catalog sort).
+      // Pick the last = newest variant.
       const familyMatches = seriesCatalog.filter(c => c.rule.format === prevFamily);
-      // Prefer the one matching the chosen season's era; otherwise the
-      // most recent. resolvePlayoffRules naturally picks the era-
-      // appropriate one for the season.
-      chosen = familyMatches.find(c => {
-        const start = c.rule.start;
-        const end = c.rule.end ?? Infinity;
-        return STATE.pointscalc.season >= start && STATE.pointscalc.season <= end;
-      }) || familyMatches[familyMatches.length - 1] || null;
+      chosen = familyMatches[familyMatches.length - 1] || null;
     }
 
     // Step 2: fall back to natural format for series + season
@@ -20192,14 +20183,21 @@ function renderPointsCalc() {
     sub.textContent = `${STATE.pointscalc.season} ${STATE.pointscalc.series} · ${formatEntry.label.replace(/\([0-9–+]+\)\s*$/, "")}`;
   }
 
-  // Champion-seed stats: defaults to 2000 → current year on first
-  // render. User can adjust via the range inputs in the stats card.
-  // Stored in STATE so the choice persists across format/series swaps.
-  if (STATE.pointscalc.statsRange.startYear == null) {
-    STATE.pointscalc.statsRange.startYear = 2000;
-  }
-  if (STATE.pointscalc.statsRange.endYear == null) {
-    STATE.pointscalc.statsRange.endYear = new Date().getFullYear();
+  // Champion-seed stats: default the year range to match the chosen
+  // FORMAT'S ERA (start–end), not a hardcoded 2000. So picking
+  // "Chase Reseeded" defaults to 2026+; picking "2017-2025 Elim"
+  // defaults to 2017-2025. This avoids the trap of running the chosen
+  // format against years where it didn't actually apply — synthesized
+  // results from those years pick weird "champions" (often Cup-
+  // crossover part-timers who happened to win their 1-2 NOS races).
+  //
+  // The user can still widen the range manually to do what-if
+  // historical applications. We track whether the user has touched
+  // the range via _userTouched so format changes don't blow away
+  // their manual choice.
+  if (!STATE.pointscalc.statsRange._userTouched) {
+    STATE.pointscalc.statsRange.startYear = rule.start || 2000;
+    STATE.pointscalc.statsRange.endYear = rule.end ?? new Date().getFullYear();
   }
   const championStats = _pointsCalcChampionSeedStats(
     rule,
@@ -20489,10 +20487,16 @@ function _pointsCalcWireControls() {
     // Reset format — new series has different formats available.
     // Re-resolution to natural format happens in renderPointsCalc.
     STATE.pointscalc.formatKey = null;
+    // Reset stats range to format era. Without this, a range set
+    // on one format/series leaks into the next, which can produce
+    // weird "no champions in this range" empty states.
+    STATE.pointscalc.statsRange._userTouched = false;
     renderPointsCalc();
   });
   if (formatSel) formatSel.addEventListener("change", () => {
     STATE.pointscalc.formatKey = formatSel.value;
+    // Same: reset stats range to the new format's era.
+    STATE.pointscalc.statsRange._userTouched = false;
     renderPointsCalc();
   });
   // Stats year-range inputs. Uses 'change' (fires on blur / Enter)
@@ -20510,6 +20514,10 @@ function _pointsCalcWireControls() {
     if (s > e) [s, e] = [e, s];
     STATE.pointscalc.statsRange.startYear = s;
     STATE.pointscalc.statsRange.endYear = e;
+    // Mark range as user-touched so format/series swaps don't blow it
+    // away. Without this, the renderer's "default to format era" logic
+    // would override the user's pick on the next render.
+    STATE.pointscalc.statsRange._userTouched = true;
     renderPointsCalc();
   };
   if (statsStart) statsStart.addEventListener("change", onRangeChange);
