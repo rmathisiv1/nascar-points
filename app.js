@@ -66,6 +66,12 @@ const STATE = {
   // playoff projections (relevant for teams running ineligible drivers
   // mid-season — those starts count for the OWNER but not the DRIVER).
   playoffs: { view: "driver" },
+  // Points Format Calc page — "what-if" recompute of any season under any
+  // playoff/points format. Three primary selectors (season, series,
+  // formatKey) plus per-format option overrides. formatKey identifies
+  // a rule by its lineage start year so we can map back to the
+  // PLAYOFF_RULES table without storing the full rule object.
+  pointscalc: { season: null, series: null, formatKey: null, formatOverrides: {} },
   // Driver Compare page — slugs currently in the comparison set. Cap of
   // 4 to keep the side-by-side layout readable on mobile. Persisted in
   // STATE only; not in localStorage (each visit should be a fresh slate
@@ -114,7 +120,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs"];
+const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs", "pointscalc"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -1977,9 +1983,9 @@ function parseHash() {
   // what was stashed, since the user opted into "always live" — even the
   // original entry point may have been historical.
   const wasProfile = STATE.view === "profile" && STATE.profile && STATE.profile.locked;
-  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs"].includes(STATE.view);
+  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc"].includes(STATE.view);
   const leavingTakeover = wasProfile || wasOtherTakeover;
-  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs"].includes(view);
+  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc"].includes(view);
   if (leavingTakeover && enteringNonTakeover) {
     if (STATE.mode === "present") {
       const latest = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
@@ -2898,6 +2904,7 @@ function render() {
       drivers: "Drivers",
       teams: "Teams",
       crewchiefs: "Crew Chiefs",
+      pointscalc: "Points Format Calc",
     };
     pageTitleEl.textContent = titleMap[STATE.view] || "";
   }
@@ -2937,6 +2944,7 @@ function render() {
   const driversTakeover = document.getElementById("drivers-takeover");
   const teamsTakeover   = document.getElementById("teams-takeover");
   const ccsTakeover     = document.getElementById("crewchiefs-takeover");
+  const pointscalcTakeover = document.getElementById("pointscalc-takeover");
   const tabBody         = document.getElementById("tab-body");
   if (profileTakeover) profileTakeover.hidden = (STATE.view !== "profile");
   if (raceTakeover)    raceTakeover.hidden    = (STATE.view !== "race");
@@ -2948,6 +2956,7 @@ function render() {
   if (driversTakeover) driversTakeover.hidden = (STATE.view !== "drivers");
   if (teamsTakeover)   teamsTakeover.hidden   = (STATE.view !== "teams");
   if (ccsTakeover)     ccsTakeover.hidden     = (STATE.view !== "crewchiefs");
+  if (pointscalcTakeover) pointscalcTakeover.hidden = (STATE.view !== "pointscalc");
   // The view-playoffs section inside its takeover wrapper has its own
   // hidden attribute — keep it in sync so renderPlayoffs paints into it.
   const pElem = document.getElementById("view-playoffs");
@@ -3017,6 +3026,8 @@ function render() {
       renderAllTimeTeams();
     } else if (STATE.view === "crewchiefs") {
       renderAllTimeCrewChiefs();
+    } else if (STATE.view === "pointscalc") {
+      renderPointsCalc();
     } else {
       // Render the active tab's content
       switch (activeTab) {
@@ -19324,6 +19335,678 @@ function renderPlayoffs() {
   }
 
   host.innerHTML = `<div class="empty">Unknown format: ${rule.format}</div>`;
+}
+
+// ============================================================
+// POINTS FORMAT CALC ("What-If") PAGE
+// ============================================================
+// Pick any loaded season + series, choose any playoff format from
+// NASCAR history, and see how the season would have played out under
+// that format. Uses actual race results from SEASON_CACHE — only the
+// format rule changes.
+
+// Build the catalog of all known format options across every series and
+// era. Deduplicated by format-signature so we don't show "elimination 16
+// 2014-2016" and "elimination 16 2017-2025" twice when they differ
+// only in stage points / playoff PP rules. Each catalog entry carries
+// the full underlying rule so we can dispatch to the right recompute
+// logic when selected.
+function _pointsCalcFormatCatalog() {
+  const catalog = [];
+  const seen = new Set();
+  for (const series of Object.keys(PLAYOFF_RULES)) {
+    for (const rule of PLAYOFF_RULES[series]) {
+      // Unique key includes everything that affects the recompute so
+      // every distinct rule variant gets its own catalog entry.
+      const key = [
+        rule.format,
+        rule.field || 0,
+        rule.playoffRaces || 0,
+        rule.regSeasonEndRound || 0,
+        rule.raceWinPP || 0,
+        rule.stageWinPP || 0,
+        rule.stages ? 1 : 0,
+        rule.regBonus ? 1 : 0,
+        rule.winBonus || 0,
+        rule.wildcards || 0,
+      ].join("|");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      // Build a human label
+      const era = `${rule.start}${rule.end ? `–${rule.end}` : "+"}`;
+      let label = "";
+      switch (rule.format) {
+        case "championship":
+          label = `Championship · season-long points (${era})`;
+          break;
+        case "chase":
+          label = `Chase · ${rule.field}-driver reseed · ${rule.playoffRaces} races (${era})`;
+          break;
+        case "chase-wildcard":
+          label = `Chase + Wildcards · ${rule.field}-driver · ${rule.wildcards} wildcards (${era})`;
+          break;
+        case "chase-reseeded":
+          label = `Chase Reseeded · ${rule.field}-driver · ${rule.playoffRaces} races · no eliminations (${era})`;
+          break;
+        case "elimination":
+          label = `Elimination · ${rule.field}-driver · ${rule.rounds?.length || 4} rounds${rule.stages ? " · stage pts" : ""} (${era})`;
+          break;
+        default:
+          label = `${rule.format} (${era})`;
+      }
+      catalog.push({ key, rule: { ...rule }, label, originSeries: series });
+    }
+  }
+  // Sort by format-family then era ascending so the dropdown reads
+  // chronologically: championship → chase → wildcard → reseeded → elim.
+  const familyOrder = { "championship": 0, "chase": 1, "chase-wildcard": 2, "chase-reseeded": 3, "elimination": 4 };
+  catalog.sort((a, b) => {
+    const fa = familyOrder[a.rule.format] ?? 99;
+    const fb = familyOrder[b.rule.format] ?? 99;
+    if (fa !== fb) return fa - fb;
+    return a.rule.start - b.rule.start;
+  });
+  return catalog;
+}
+
+// Compute per-driver cumulative points race-by-race for a given season
+// block (year+series), using the given rule for what counts as a point.
+// Returns: { drivers: Map<slug, { name, car_number, total, perRace: [{round, cum, race_pts}] }>, races: [round1, round2, ...] }
+//
+// For most formats this is just sum of d.race_pts (driver-eligible only).
+// The rule's stage / win-bonus values are baked into race_pts already by
+// the scraper, so we don't need to recompute those — just sum.
+function _pointsCalcSeasonAggregate(seasonBlock, rule) {
+  const drivers = new Map();
+  const races = (seasonBlock.races || []).slice().sort((a, b) => (a.round || 0) - (b.round || 0));
+  const rounds = [];
+  for (const race of races) {
+    if (!(race.results && race.results.length)) continue;
+    rounds.push(race.round);
+    for (const d of race.results) {
+      if (d.ineligible) continue;
+      const slug = slugify(d.driver);
+      if (!slug) continue;
+      if (!drivers.has(slug)) {
+        drivers.set(slug, {
+          name: d.driver,
+          slug,
+          car_number: d.car_number,
+          team: d.team,
+          team_code: d.team_code || null,
+          total: 0,
+          wins: 0,
+          stageWins: 0,
+          starts: 0,
+          perRace: [],
+        });
+      }
+      const ent = drivers.get(slug);
+      ent.total += (d.race_pts || 0);
+      ent.starts += 1;
+      if (d.finish_pos === 1) ent.wins += 1;
+      if ((d.stage_1_pts || 0) === 10) ent.stageWins += 1;
+      if ((d.stage_2_pts || 0) === 10) ent.stageWins += 1;
+      ent.perRace.push({ round: race.round, cum: ent.total, race_pts: d.race_pts || 0, finish: d.finish_pos });
+    }
+  }
+  return { drivers, rounds };
+}
+
+// Compute the field for a given rule + aggregate. Returns the field
+// (array of driver slugs in seeding order) and any auxiliary info for
+// the playoff phase.
+function _pointsCalcDeriveField(aggregate, rule, regEndRound) {
+  // Only consider drivers who actually raced through reg-season cutoff
+  const standings = [...aggregate.drivers.values()]
+    .filter(d => d.perRace.some(p => p.round <= regEndRound))
+    .map(d => {
+      const cumAtCutoff = d.perRace.filter(p => p.round <= regEndRound).reduce((a, p) => Math.max(a, p.cum), 0);
+      return { ...d, regSeasonPts: cumAtCutoff };
+    })
+    .sort((a, b) => b.regSeasonPts - a.regSeasonPts);
+
+  if (rule.format === "championship") {
+    return { field: standings, type: "championship" };
+  }
+  if (rule.format === "chase" || rule.format === "chase-reseeded") {
+    return { field: standings.slice(0, rule.field), type: rule.format, leftOut: standings.slice(rule.field, rule.field + 10) };
+  }
+  if (rule.format === "chase-wildcard") {
+    // Top (field - wildcards) by points; remaining slots go to top win-getters not yet in
+    const fixedSlots = rule.field - (rule.wildcards || 0);
+    const fixed = standings.slice(0, fixedSlots);
+    const fixedSlugs = new Set(fixed.map(d => d.slug));
+    const eligibleForWildcards = standings.filter(d => !fixedSlugs.has(d.slug) && d.wins > 0);
+    const wildcards = eligibleForWildcards.slice(0, rule.wildcards);
+    return { field: [...fixed, ...wildcards], type: "chase-wildcard", leftOut: standings.filter(d => !fixedSlugs.has(d.slug) && !wildcards.includes(d)).slice(0, 10) };
+  }
+  if (rule.format === "elimination") {
+    // Race winners first, then by points
+    const winners = standings.filter(d => d.wins > 0).sort((a, b) => b.wins - a.wins || b.regSeasonPts - a.regSeasonPts);
+    const nonWinners = standings.filter(d => d.wins === 0);
+    const field = [...winners.slice(0, rule.field)];
+    if (field.length < rule.field) field.push(...nonWinners.slice(0, rule.field - field.length));
+    const fieldSlugs = new Set(field.map(d => d.slug));
+    return { field, type: "elimination", leftOut: standings.filter(d => !fieldSlugs.has(d.slug)).slice(0, 10) };
+  }
+  return { field: standings, type: "unknown" };
+}
+
+// Compute the playoff phase standings under the chosen rule.
+// Returns an array of rows ordered as the format dictates (after
+// reseed/eliminations applied), each row carrying playoffPts + final
+// position info + per-playoff-race cumulative points for the chart.
+function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
+  const regEnd = rule.regSeasonEndRound;
+  const field = fieldInfo.field;
+  if (rule.format === "championship") {
+    // No separate playoff phase — just return the full standings sorted by total
+    return [...aggregate.drivers.values()]
+      .map(d => ({ ...d, finalPts: d.total }))
+      .sort((a, b) => b.finalPts - a.finalPts);
+  }
+  if (rule.format === "chase" || rule.format === "chase-wildcard") {
+    // Reseed: every driver in field gets resetBase + winBonus*wins, then accumulates playoff race points
+    return field.map(d => {
+      const startPts = (rule.resetBase || 5000) + (rule.winBonus || 10) * d.wins;
+      const playoffPts = d.perRace.filter(p => p.round > regEnd).reduce((sum, p) => sum + p.race_pts, 0);
+      const finalPts = startPts + playoffPts;
+      // Cumulative trace through playoffs only (for chart)
+      let runningCum = startPts;
+      const playoffTrace = [{ round: regEnd, cum: startPts }];
+      for (const p of d.perRace.filter(p => p.round > regEnd)) {
+        runningCum += p.race_pts;
+        playoffTrace.push({ round: p.round, cum: runningCum });
+      }
+      return { ...d, startPts, playoffPts, finalPts, playoffTrace };
+    }).sort((a, b) => b.finalPts - a.finalPts);
+  }
+  if (rule.format === "chase-reseeded") {
+    // Reseed by seed-table position
+    return field.map((d, seedIdx) => {
+      const startPts = rule.reseedTable[seedIdx] || rule.reseedTable[rule.reseedTable.length - 1];
+      const playoffPts = d.perRace.filter(p => p.round > regEnd).reduce((sum, p) => sum + p.race_pts, 0);
+      const finalPts = startPts + playoffPts;
+      let runningCum = startPts;
+      const playoffTrace = [{ round: regEnd, cum: startPts }];
+      for (const p of d.perRace.filter(p => p.round > regEnd)) {
+        runningCum += p.race_pts;
+        playoffTrace.push({ round: p.round, cum: runningCum });
+      }
+      return { ...d, seed: seedIdx + 1, startPts, playoffPts, finalPts, playoffTrace };
+    }).sort((a, b) => b.finalPts - a.finalPts);
+  }
+  if (rule.format === "elimination") {
+    // Run the eliminations sim: at each round end, cut the bottom drivers based on round-end PP totals
+    const rounds = rule.rounds || [];
+    // PP reset to playoff-points calc: race wins * raceWinPP + stage wins * stageWinPP across the season
+    // (regBonus applies once at start if rule.regBonus is true: 15/10/8/.../1 to top 10)
+    const ppMap = new Map();
+    for (const d of field) {
+      let pp = (d.wins || 0) * (rule.raceWinPP || 0) + (d.stageWins || 0) * (rule.stageWinPP || 0);
+      ppMap.set(d.slug, pp);
+    }
+    // Regular-season finish bonus (15/10/8/7/6/5/4/3/2/1)
+    if (rule.regBonus) {
+      const BONUS = [15, 10, 8, 7, 6, 5, 4, 3, 2, 1];
+      // Bonus goes to top 10 by reg-season points among ALL eligible drivers
+      const standings = [...aggregate.drivers.values()]
+        .filter(d => d.perRace.some(p => p.round <= regEnd))
+        .map(d => ({
+          slug: d.slug,
+          regSeasonPts: d.perRace.filter(p => p.round <= regEnd).reduce((m, p) => Math.max(m, p.cum), 0),
+        }))
+        .sort((a, b) => b.regSeasonPts - a.regSeasonPts);
+      standings.slice(0, 10).forEach((s, i) => {
+        if (ppMap.has(s.slug)) ppMap.set(s.slug, ppMap.get(s.slug) + BONUS[i]);
+      });
+    }
+
+    // Run rounds, eliminating after each
+    let alive = field.slice();
+    let cursor = regEnd;
+    const rounded = [];  // result tracking per round
+    for (let ri = 0; ri < rounds.length; ri++) {
+      const round = rounds[ri];
+      const roundStart = cursor;
+      const roundEnd = cursor + round.races;
+      // Carry forward PP into round totals, then add playoff race points + race wins + stage wins during this round
+      for (const d of alive) {
+        const racesInRound = d.perRace.filter(p => p.round > roundStart && p.round <= roundEnd);
+        let added = racesInRound.reduce((sum, p) => sum + p.race_pts, 0);
+        // Note: race_pts already includes stage pts + win bonus in the data,
+        // but elimination PP is on top of season-points — we keep this
+        // simple by using race_pts as the round-points contribution.
+        // (The PP from earlier wins/stage wins is in ppMap.)
+        d._roundPts = (d._roundPts || ppMap.get(d.slug) || 0) + added;
+      }
+      // Sort by round points and cut to round.cutTo
+      const sorted = alive.slice().sort((a, b) => b._roundPts - a._roundPts);
+      const advanced = sorted.slice(0, round.cutTo);
+      const eliminated = sorted.slice(round.cutTo);
+      rounded.push({
+        name: round.name,
+        startRound: roundStart,
+        endRound: roundEnd,
+        advanced: advanced.map(d => d.slug),
+        eliminated: eliminated.map(d => d.slug),
+      });
+      // For the Championship 4 round, PP carryover doesn't matter — all four reset
+      const isFinalRound = (ri === rounds.length - 1);
+      if (isFinalRound) {
+        // Reset all four to equal at start of last race(s)
+        advanced.forEach(d => d._roundPts = 0);
+      } else {
+        // PP carries forward; reset roundPts to ppMap baseline + accumulated through this round
+        // (already done implicitly since _roundPts persists)
+      }
+      alive = advanced;
+      cursor = roundEnd;
+    }
+
+    // Now build the output array: each driver gets their final-eliminated round + final points
+    return field.map(d => {
+      // Determine which round they were eliminated in (or made it to Championship 4)
+      let lastRoundReached = -1;
+      let lastRoundName = "Did not advance";
+      for (let ri = rounds.length - 1; ri >= 0; ri--) {
+        if (rounded[ri].advanced.includes(d.slug)) {
+          lastRoundReached = ri;
+          lastRoundName = ri === rounds.length - 1 ? "Championship 4" : `Through ${rounds[ri].name}`;
+          break;
+        }
+      }
+      const playoffPts = d.perRace.filter(p => p.round > regEnd).reduce((s, p) => s + p.race_pts, 0);
+      // Cumulative trace
+      let runningCum = 0;
+      const playoffTrace = [{ round: regEnd, cum: 0 }];
+      for (const p of d.perRace.filter(p => p.round > regEnd)) {
+        runningCum += p.race_pts;
+        playoffTrace.push({ round: p.round, cum: runningCum });
+      }
+      return {
+        ...d,
+        seed: field.indexOf(d) + 1,
+        lastRoundReached,
+        lastRoundName,
+        playoffPts,
+        finalPts: playoffPts,
+        playoffTrace,
+      };
+    }).sort((a, b) => {
+      // Champ 4 first, then by playoff pts
+      if (a.lastRoundReached !== b.lastRoundReached) return b.lastRoundReached - a.lastRoundReached;
+      return b.finalPts - a.finalPts;
+    });
+  }
+  return [];
+}
+
+// Render the regular-season cumulative chart (one line per driver in
+// the projected field, faded for non-field drivers).
+function _pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo) {
+  const fieldSlugs = new Set((fieldInfo?.field || []).map(d => d.slug));
+  const W = 800, H = 320;
+  const pad = { t: 16, r: 80, b: 36, l: 56 };
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  const drivers = [...aggregate.drivers.values()];
+  const maxRound = regEndRound;
+  if (drivers.length === 0) return `<div class="empty">No data.</div>`;
+  const maxPts = Math.max(50, Math.ceil(Math.max(...drivers.map(d => {
+    const lastP = d.perRace.filter(p => p.round <= maxRound).slice(-1)[0];
+    return lastP ? lastP.cum : 0;
+  })) * 1.08 / 50) * 50);
+  const xScale = r => pad.l + ((r - 1) / Math.max(1, maxRound - 1)) * innerW;
+  const yScale = v => pad.t + (1 - v / maxPts) * innerH;
+
+  // Y grid
+  const gridLines = [];
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.t + (i / 5) * innerH;
+    const v = Math.round(maxPts * (1 - i / 5));
+    gridLines.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
+    gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
+  }
+  // X labels
+  const xLabels = [];
+  const step = Math.max(1, Math.ceil(maxRound / 12));
+  for (let r = 1; r <= maxRound; r++) {
+    if (r === 1 || r === maxRound || (r - 1) % step === 0) {
+      xLabels.push(`<text class="axis-label" x="${xScale(r)}" y="${H - 10}" text-anchor="middle">R${r}</text>`);
+    }
+  }
+
+  // Lines — sorted by final-reg-season-pts so legend reads sensibly
+  const sortedDrivers = drivers
+    .map(d => {
+      const lastP = d.perRace.filter(p => p.round <= maxRound).slice(-1)[0];
+      return { d, final: lastP ? lastP.cum : 0 };
+    })
+    .sort((a, b) => b.final - a.final);
+
+  const lines = sortedDrivers.map(({ d, final }) => {
+    const inField = fieldSlugs.has(d.slug);
+    const carHex = colorFor(STATE.pointscalc.series, d.car_number);
+    const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
+    const opacity = inField ? 0.95 : 0.18;
+    const width = inField ? 2 : 1;
+    const racesInWindow = d.perRace.filter(p => p.round <= maxRound);
+    if (racesInWindow.length === 0) return "";
+    const pathD = racesInWindow.map((p, i) =>
+      `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
+    ).join(" ");
+    return `<path d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="${width}" opacity="${opacity}" stroke-linejoin="round"/>`;
+  }).join("");
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+      ${gridLines.join("")}
+      ${xLabels.join("")}
+      ${lines}
+    </svg>
+  `;
+}
+
+// Render the regular-season standings table
+function _pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo) {
+  const fieldSlugs = new Set((fieldInfo?.field || []).map(d => d.slug));
+  const standings = [...aggregate.drivers.values()]
+    .map(d => {
+      const cum = d.perRace.filter(p => p.round <= regEndRound).reduce((m, p) => Math.max(m, p.cum), 0);
+      return { ...d, cum };
+    })
+    .sort((a, b) => b.cum - a.cum)
+    .slice(0, 30);
+  const rows = standings.map((d, i) => {
+    const inField = fieldSlugs.has(d.slug);
+    const carHex = colorFor(STATE.pointscalc.series, d.car_number);
+    const txt = contrastTextFor(carHex);
+    return `<tr class="${inField ? "pc-row-field" : ""}">
+      <td class="num">${i + 1}</td>
+      <td><a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
+        <span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span>
+        <span>${escapeHTML(d.name)}</span>
+      </a></td>
+      <td class="num">${d.starts}</td>
+      <td class="num">${d.wins}</td>
+      <td class="num"><strong>${d.cum}</strong></td>
+      <td class="num">${inField ? '<span class="pc-tag-in">in</span>' : ""}</td>
+    </tr>`;
+  }).join("");
+  return `
+    <table class="data-table pc-table">
+      <thead><tr>
+        <th class="num">Rank</th><th>Driver</th>
+        <th class="num">Starts</th><th class="num">Wins</th>
+        <th class="num">Pts</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+// Render the playoff cumulative chart — lines for field drivers only
+function _pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound) {
+  if (playoffStandings.length === 0) return `<div class="empty">No playoff phase for this format.</div>`;
+  const W = 800, H = 320;
+  const pad = { t: 16, r: 80, b: 36, l: 56 };
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  // Y range: full playoff cum trace
+  const allCums = playoffStandings.flatMap(d => d.playoffTrace.map(p => p.cum));
+  if (allCums.length === 0) return `<div class="empty">No playoff data.</div>`;
+  const minPts = Math.min(...allCums);
+  const maxPts = Math.max(...allCums);
+  const padPts = (maxPts - minPts) * 0.08 || 50;
+  const yMin = Math.floor((minPts - padPts) / 50) * 50;
+  const yMax = Math.ceil((maxPts + padPts) / 50) * 50;
+  const xScale = r => pad.l + ((r - regEndRound) / Math.max(1, lastRound - regEndRound)) * innerW;
+  const yScale = v => pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+
+  // Grid
+  const gridLines = [];
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.t + (i / 5) * innerH;
+    const v = Math.round(yMax - (i / 5) * (yMax - yMin));
+    gridLines.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
+    gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
+  }
+  // X labels (playoff rounds)
+  const xLabels = [];
+  for (let r = regEndRound; r <= lastRound; r++) {
+    xLabels.push(`<text class="axis-label" x="${xScale(r)}" y="${H - 10}" text-anchor="middle">R${r}</text>`);
+  }
+
+  // Lines — top driver (champion) drawn last so they sit on top
+  const sortedForDraw = playoffStandings.slice().reverse();
+  const lines = sortedForDraw.map(d => {
+    const carHex = colorFor(STATE.pointscalc.series, d.car_number);
+    const safeHex = (typeof safeContrastColor === "function") ? safeContrastColor(carHex) : carHex;
+    const trace = d.playoffTrace || [];
+    if (trace.length === 0) return "";
+    const pathD = trace.map((p, i) =>
+      `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
+    ).join(" ");
+    return `<path d="${pathD}" fill="none" stroke="${safeHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>`;
+  }).join("");
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+      ${gridLines.join("")}
+      ${xLabels.join("")}
+      ${lines}
+    </svg>
+  `;
+}
+
+// Render the playoff standings table
+function _pointsCalcPlayoffTable(playoffStandings, rule) {
+  if (playoffStandings.length === 0) return `<div class="empty">No playoff phase for this format.</div>`;
+  const rows = playoffStandings.map((d, i) => {
+    const carHex = colorFor(STATE.pointscalc.series, d.car_number);
+    const txt = contrastTextFor(carHex);
+    const seedDisplay = d.seed ? `<td class="num">${d.seed}</td>` : `<td class="num">—</td>`;
+    const endNote = d.lastRoundName ? `<td>${escapeHTML(d.lastRoundName)}</td>` : "";
+    return `<tr ${i === 0 ? 'class="pc-row-champion"' : ""}>
+      <td class="num">${i + 1}${i === 0 ? " 🏆" : ""}</td>
+      ${seedDisplay}
+      <td><a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
+        <span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span>
+        <span>${escapeHTML(d.name)}</span>
+      </a></td>
+      <td class="num">${d.wins}</td>
+      <td class="num">${d.playoffPts || 0}</td>
+      <td class="num"><strong>${d.finalPts}</strong></td>
+      ${endNote}
+    </tr>`;
+  }).join("");
+  const showLastRound = playoffStandings[0]?.lastRoundName != null;
+  return `
+    <table class="data-table pc-table">
+      <thead><tr>
+        <th class="num">Pos</th>
+        <th class="num">Seed</th>
+        <th>Driver</th>
+        <th class="num">Wins</th>
+        <th class="num">PO Pts</th>
+        <th class="num">Final</th>
+        ${showLastRound ? "<th>Outcome</th>" : ""}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function renderPointsCalc() {
+  const host = document.getElementById("pointscalc-host");
+  const sub = document.getElementById("pointscalc-sub");
+  if (!host) return;
+
+  // Initialize defaults on first visit. Pick the latest loaded year /
+  // current series / the format that historically applied to that
+  // year+series combo (so the page opens to "actual settings").
+  const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+  const loadedYears = Object.keys(cache).map(Number).filter(y => !isNaN(y)).sort((a, b) => b - a);
+  if (loadedYears.length === 0) {
+    host.innerHTML = `<div class="empty" style="padding:32px;text-align:center;">No seasons loaded yet. Visit Standings or Schedule to load a season first.</div>`;
+    if (sub) sub.textContent = "Recompute any season's standings under any playoff format";
+    return;
+  }
+  const catalog = _pointsCalcFormatCatalog();
+  // Resolve selectors with sensible defaults
+  if (STATE.pointscalc.season == null || !loadedYears.includes(STATE.pointscalc.season)) {
+    STATE.pointscalc.season = loadedYears[0];
+  }
+  if (!STATE.pointscalc.series) {
+    // Use whichever series has data for the chosen year, defaulting to NCS
+    const seasonBlocks = cache[STATE.pointscalc.season] || {};
+    const candidateSeries = ["NCS", "NOS", "NTS"].find(s => seasonBlocks[s]) || STATE.series;
+    STATE.pointscalc.series = candidateSeries;
+  }
+  if (!STATE.pointscalc.formatKey) {
+    // Default: the format that applied to this season+series naturally
+    const natural = resolvePlayoffRules(STATE.pointscalc.series, STATE.pointscalc.season);
+    if (natural) {
+      const match = catalog.find(c =>
+        c.rule.format === natural.format &&
+        (c.rule.field || 0) === (natural.field || 0) &&
+        (c.rule.playoffRaces || 0) === (natural.playoffRaces || 0)
+      );
+      STATE.pointscalc.formatKey = match ? match.key : catalog[0].key;
+    } else {
+      STATE.pointscalc.formatKey = catalog[0].key;
+    }
+  }
+
+  // Resolve the chosen format from the catalog
+  const formatEntry = catalog.find(c => c.key === STATE.pointscalc.formatKey) || catalog[0];
+  const rule = formatEntry.rule;
+
+  // Load the season block for the chosen (year, series)
+  const seasonBlock = cache[STATE.pointscalc.season] && cache[STATE.pointscalc.season][STATE.pointscalc.series];
+  if (!seasonBlock) {
+    host.innerHTML = `
+      ${_pointsCalcControls(loadedYears, catalog)}
+      <div class="empty" style="padding:32px;text-align:center;margin-top:16px;">
+        No ${STATE.pointscalc.series} data loaded for ${STATE.pointscalc.season}.
+      </div>
+    `;
+    _pointsCalcWireControls();
+    if (sub) sub.textContent = "Recompute any season's standings under any playoff format";
+    return;
+  }
+
+  // Aggregate + derive
+  const aggregate = _pointsCalcSeasonAggregate(seasonBlock, rule);
+  if (aggregate.drivers.size === 0) {
+    host.innerHTML = `
+      ${_pointsCalcControls(loadedYears, catalog)}
+      <div class="empty" style="padding:32px;text-align:center;margin-top:16px;">
+        No completed races in this season block.
+      </div>
+    `;
+    _pointsCalcWireControls();
+    return;
+  }
+
+  const regEndRound = rule.regSeasonEndRound || aggregate.rounds[aggregate.rounds.length - 1] || 36;
+  const lastRound = aggregate.rounds[aggregate.rounds.length - 1] || regEndRound;
+
+  // Field + playoff phase
+  const fieldInfo = (rule.format === "championship")
+    ? { field: [], type: "championship" }
+    : _pointsCalcDeriveField(aggregate, rule, regEndRound);
+  const playoffStandings = (rule.format === "championship")
+    ? []
+    : _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo);
+
+  // Update sub-text
+  if (sub) {
+    sub.textContent = `${STATE.pointscalc.season} ${STATE.pointscalc.series} · ${formatEntry.label.replace(/\([0-9–+]+\)\s*$/, "")}`;
+  }
+
+  // Compose page
+  host.innerHTML = `
+    ${_pointsCalcControls(loadedYears, catalog)}
+
+    <div class="pc-section">
+      <div class="pc-section-head">
+        <span class="pc-section-title">Regular Season</span>
+        <span class="ed-byline">Through R${regEndRound} · projected field shown bold; non-field drivers faded</span>
+      </div>
+      <div class="pc-chart-host">${_pointsCalcRegSeasonChart(aggregate, regEndRound, fieldInfo)}</div>
+      <div class="pc-table-host">${_pointsCalcRegSeasonTable(aggregate, regEndRound, fieldInfo)}</div>
+    </div>
+
+    ${rule.format === "championship" ? `
+      <div class="pc-section">
+        <div class="pc-section-head">
+          <span class="pc-section-title">Final Championship</span>
+          <span class="ed-byline">Season-long points · no separate playoff phase</span>
+        </div>
+        <div class="pc-table-host">${_pointsCalcRegSeasonTable(aggregate, lastRound, { field: [] })}</div>
+      </div>
+    ` : `
+      <div class="pc-section">
+        <div class="pc-section-head">
+          <span class="pc-section-title">Playoffs</span>
+          <span class="ed-byline">R${regEndRound + 1}–R${lastRound} · ${rule.format === "elimination" ? "elimination rounds applied" : "reseeded then cumulative"}</span>
+        </div>
+        <div class="pc-chart-host">${_pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound)}</div>
+        <div class="pc-table-host">${_pointsCalcPlayoffTable(playoffStandings, rule)}</div>
+      </div>
+    `}
+  `;
+
+  _pointsCalcWireControls();
+}
+
+function _pointsCalcControls(loadedYears, catalog) {
+  const yearOpts = loadedYears.map(y =>
+    `<option value="${y}" ${y === STATE.pointscalc.season ? "selected" : ""}>${y}</option>`
+  ).join("");
+  const seriesOpts = ["NCS", "NOS", "NTS"].map(s =>
+    `<option value="${s}" ${s === STATE.pointscalc.series ? "selected" : ""}>${s}</option>`
+  ).join("");
+  const formatOpts = catalog.map(c =>
+    `<option value="${c.key}" ${c.key === STATE.pointscalc.formatKey ? "selected" : ""}>${escapeHTML(c.label)}</option>`
+  ).join("");
+  return `
+    <div class="pc-controls">
+      <label class="pc-control">
+        <span class="pc-control-label">Season</span>
+        <select id="pc-season" class="pc-select">${yearOpts}</select>
+      </label>
+      <label class="pc-control">
+        <span class="pc-control-label">Series</span>
+        <select id="pc-series" class="pc-select">${seriesOpts}</select>
+      </label>
+      <label class="pc-control pc-control-format">
+        <span class="pc-control-label">Format</span>
+        <select id="pc-format" class="pc-select">${formatOpts}</select>
+      </label>
+    </div>
+  `;
+}
+
+function _pointsCalcWireControls() {
+  const seasonSel = document.getElementById("pc-season");
+  const seriesSel = document.getElementById("pc-series");
+  const formatSel = document.getElementById("pc-format");
+  if (seasonSel) seasonSel.addEventListener("change", () => {
+    STATE.pointscalc.season = Number(seasonSel.value);
+    renderPointsCalc();
+  });
+  if (seriesSel) seriesSel.addEventListener("change", () => {
+    STATE.pointscalc.series = seriesSel.value;
+    renderPointsCalc();
+  });
+  if (formatSel) formatSel.addEventListener("change", () => {
+    STATE.pointscalc.formatKey = formatSel.value;
+    renderPointsCalc();
+  });
 }
 
 function renderChampionshipView(rule) {
