@@ -19623,12 +19623,27 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
       // gives the CAR's race points regardless of driver eligibility
       // (since _pointsCalcPerRacePoints just reads finish + stages).
       const ptsUnderRule = _pointsCalcPerRacePoints(d, rule);
+      const isWin = d.finish_pos === 1;
+      const stageWinsThisRace =
+        ((d.stage_1_pts || 0) === 10 ? 1 : 0) +
+        ((d.stage_2_pts || 0) === 10 ? 1 : 0) +
+        ((d.stage_3_pts || 0) === 10 ? 1 : 0);
       ent.total += ptsUnderRule;
       ent.starts += 1;
-      if (d.finish_pos === 1) ent.wins += 1;
-      if ((d.stage_1_pts || 0) === 10) ent.stageWins += 1;
-      if ((d.stage_2_pts || 0) === 10) ent.stageWins += 1;
-      ent.perRace.push({ round: race.round, cum: ent.total, race_pts: ptsUnderRule, finish: d.finish_pos });
+      if (isWin) ent.wins += 1;
+      ent.stageWins += stageWinsThisRace;
+      // perRace entries carry per-race PP markers so the elimination
+      // sim can sum PP earned during any window (regular season vs
+      // each playoff round). This is essential for modeling NASCAR's
+      // actual reset-and-carry-forward playoff structure correctly.
+      ent.perRace.push({
+        round: race.round,
+        cum: ent.total,
+        race_pts: ptsUnderRule,
+        finish: d.finish_pos,
+        isWin,
+        stageWins: stageWinsThisRace,
+      });
     }
   }
 
@@ -19743,84 +19758,102 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
     }).sort((a, b) => b.finalPts - a.finalPts);
   }
   if (rule.format === "elimination") {
-    // Run the eliminations sim: at each round end, cut the bottom drivers based on round-end PP totals
+    // Run the eliminations sim. NASCAR's playoff structure works like:
+    //   1. After regular season: drivers reset to a base (2000), get
+    //      their PP added on top. PP = (race wins × 5) + (stage wins
+    //      × 1) + (top-10 reg-season finish bonus 15/10/8/.../1).
+    //   2. Each round: drivers race, earn race_pts + earn ADDITIONAL
+    //      PP from playoff wins/stages. Bottom drivers eliminated.
+    //   3. Survivors reset to next base (3000, 4000) with their CARRIED
+    //      PP added on top. PP keeps growing.
+    //   4. Championship 4: all 4 reset equal, pure race finish at
+    //      finale decides.
+    //
+    // For sort/cut purposes the reset base is constant per round so
+    // it doesn't matter — only the deltas between drivers matter. The
+    // delta is each driver's TOTAL-PP-TO-DATE + TOTAL-RACE-PTS-TO-DATE-
+    // IN-PLAYOFFS. So we track cumulative PP across the season.
     const rounds = rule.rounds || [];
-    // PP reset to playoff-points calc: race wins * raceWinPP + stage wins * stageWinPP across the season
-    // (regBonus applies once at start if rule.regBonus is true: 15/10/8/.../1 to top 10)
-    const ppMap = new Map();
+
+    // Compute each driver's PP earned through the regular season
+    // (race wins + stage wins + reg-bonus).
+    const regSeasonPP = new Map();
     for (const d of field) {
-      let pp = (d.wins || 0) * (rule.raceWinPP || 0) + (d.stageWins || 0) * (rule.stageWinPP || 0);
-      ppMap.set(d.slug, pp);
+      const regRaces = d.perRace.filter(p => p.round <= regEnd);
+      const regWins = regRaces.filter(p => p.isWin).length;
+      const regStageWins = regRaces.reduce((s, p) => s + (p.stageWins || 0), 0);
+      const pp = regWins * (rule.raceWinPP || 0) + regStageWins * (rule.stageWinPP || 0);
+      regSeasonPP.set(d.slug, pp);
     }
-    // Regular-season finish bonus (15/10/8/7/6/5/4/3/2/1)
+    // Regular-season finish bonus (15/10/8/7/6/5/4/3/2/1) for top 10
+    // by reg-season points among eligible drivers.
     if (rule.regBonus) {
       const BONUS = [15, 10, 8, 7, 6, 5, 4, 3, 2, 1];
-      // Bonus goes to top 10 by reg-season points among ALL eligible drivers
       const standings = [...aggregate.drivers.values()]
         .filter(d => d.perRace.some(p => p.round <= regEnd))
         .map(d => ({
           slug: d.slug,
-          regSeasonPts: d.perRace.filter(p => p.round <= regEnd).reduce((m, p) => Math.max(m, p.cum), 0),
+          regSeasonPts: d.perRace.filter(p => p.round <= regEnd)
+            .reduce((m, p) => Math.max(m, p.cum), 0),
         }))
         .sort((a, b) => b.regSeasonPts - a.regSeasonPts);
       standings.slice(0, 10).forEach((s, i) => {
-        if (ppMap.has(s.slug)) ppMap.set(s.slug, ppMap.get(s.slug) + BONUS[i]);
+        if (regSeasonPP.has(s.slug)) {
+          regSeasonPP.set(s.slug, regSeasonPP.get(s.slug) + BONUS[i]);
+        }
       });
     }
 
-    // Run rounds, eliminating after each
+    // For each driver, compute "advancement score" through any round end:
+    //   advancementScore(round R) = regSeasonPP + (PP earned in playoff
+    //   races up to and including R) + (race_pts earned in playoff
+    //   races up to and including R)
+    // This is the metric NASCAR effectively uses for elimination cuts
+    // (after subtracting the per-round reset base, which is constant).
+    const advancementScoreThrough = (d, throughRound) => {
+      const playoffRaces = d.perRace.filter(p => p.round > regEnd && p.round <= throughRound);
+      const playoffWins = playoffRaces.filter(p => p.isWin).length;
+      const playoffStageWins = playoffRaces.reduce((s, p) => s + (p.stageWins || 0), 0);
+      const playoffPP = playoffWins * (rule.raceWinPP || 0) + playoffStageWins * (rule.stageWinPP || 0);
+      const playoffRacePts = playoffRaces.reduce((s, p) => s + p.race_pts, 0);
+      return (regSeasonPP.get(d.slug) || 0) + playoffPP + playoffRacePts;
+    };
+
+    // Run rounds, eliminating after each.
     let alive = field.slice();
     let cursor = regEnd;
-    const rounded = [];  // result tracking per round
-    let finalRaceFinishMap = null;  // slug -> finish_pos in the final race
+    const rounded = [];
+    let finalRaceFinishMap = null;
     for (let ri = 0; ri < rounds.length; ri++) {
       const round = rounds[ri];
       const roundStart = cursor;
       const roundEnd = cursor + round.races;
       const isFinalRound = (ri === rounds.length - 1);
 
-      // Carry forward PP into round totals, then add race points scored in this round
-      for (const d of alive) {
-        const racesInRound = d.perRace.filter(p => p.round > roundStart && p.round <= roundEnd);
-        let added = racesInRound.reduce((sum, p) => sum + p.race_pts, 0);
-        d._roundPts = (d._roundPts || ppMap.get(d.slug) || 0) + added;
-      }
-
       let advanced, eliminated;
       if (isFinalRound) {
-        // Championship 4 (or whatever the final round is) — the champion
-        // is decided by HIGHEST FINISH in the finale among the alive
-        // drivers, NOT by cumulative points. This matches NASCAR's
-        // actual rules: the 4 finalists reset to equal points, race the
-        // final race, and best finish wins it.
+        // Championship 4: all 4 alive drivers reset to equal points
+        // (no carryover). The champion is whoever finishes BEST in
+        // the finale race among the 4. Score by finish_pos ascending.
         finalRaceFinishMap = new Map();
         for (const d of alive) {
-          // Find the driver's finish in the final race of this round.
-          // round.races is typically 1 for Champ 4. Last race in window
-          // is the championship-deciding race.
           const finaleRound = roundEnd;
           const finaleEntry = d.perRace.find(p => p.round === finaleRound);
-          // Use Infinity for missing entries so they sort last (they
-          // didn't actually finish the race).
           finalRaceFinishMap.set(d.slug, finaleEntry?.finish ?? Infinity);
         }
-        // Sort by finish position ascending (P1 = champion)
         const sortedByFinish = alive.slice().sort((a, b) =>
           (finalRaceFinishMap.get(a.slug) ?? Infinity) -
           (finalRaceFinishMap.get(b.slug) ?? Infinity)
         );
-        // Everyone who reached the final round counts as "advanced" to
-        // C4 — we mark them all as final-round attendees, then sort by
-        // finale finish for the standings table. cutTo isn't applied
-        // here because there's no further round.
         advanced = sortedByFinish;
         eliminated = [];
       } else {
-        // Regular elimination round: sort by cumulative PP and cut to
-        // round.cutTo (the lower seeds get eliminated).
-        const sorted = alive.slice().sort((a, b) => b._roundPts - a._roundPts);
-        advanced = sorted.slice(0, round.cutTo);
-        eliminated = sorted.slice(round.cutTo);
+        // Regular elimination round: sort by advancement score through
+        // this round's end and cut to round.cutTo.
+        const scored = alive.map(d => ({ d, score: advancementScoreThrough(d, roundEnd) }));
+        scored.sort((a, b) => b.score - a.score);
+        advanced = scored.slice(0, round.cutTo).map(x => x.d);
+        eliminated = scored.slice(round.cutTo).map(x => x.d);
       }
 
       rounded.push({
@@ -19832,18 +19865,12 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
         isFinalRound,
       });
 
-      if (isFinalRound) {
-        // Don't reset _roundPts — we use finalRaceFinishMap for ordering
-      }
-      // PP carries forward for non-final rounds (already implicit since
-      // _roundPts persists across iterations).
       alive = advanced;
       cursor = roundEnd;
     }
 
-    // Now build the output array: each driver gets their final-
-    // eliminated round + final points. For final-round drivers we
-    // attach their finale finish so the standings sort can use it.
+    // Build output: each driver gets their final-eliminated round +
+    // accumulated playoff race-pts (for the "PO pts" column).
     return field.map(d => {
       let lastRoundReached = -1;
       let lastRoundName = "Did not advance";
@@ -19854,16 +19881,18 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
           break;
         }
       }
-      const playoffPts = d.perRace.filter(p => p.round > regEnd).reduce((s, p) => s + p.race_pts, 0);
-      // Cumulative trace
+      // PO pts shown in the table = the advancement score (PP + race
+      // pts accumulated through playoffs). This is what users want to
+      // see: "how much did this driver score in the playoffs, with PP".
+      const playoffPts = advancementScoreThrough(d, cursor);
+      // Cumulative trace for the chart — just the race_pts cum, which
+      // gives a clean monotonic chart that's easier to read.
       let runningCum = 0;
       const playoffTrace = [{ round: regEnd, cum: 0 }];
       for (const p of d.perRace.filter(p => p.round > regEnd)) {
         runningCum += p.race_pts;
         playoffTrace.push({ round: p.round, cum: runningCum });
       }
-      // For final-round drivers, attach their finale finish so the
-      // standings sort can place the race winner first.
       const finaleFinish = (lastRoundReached === rounds.length - 1 && finalRaceFinishMap)
         ? finalRaceFinishMap.get(d.slug)
         : null;
@@ -19878,21 +19907,14 @@ function _pointsCalcPlayoffStandings(aggregate, rule, fieldInfo) {
         playoffTrace,
       };
     }).sort((a, b) => {
-      // Sort by last-round-reached first (Champ 4 above earlier-round
-      // eliminees). WITHIN the final round, sort by finale finish
-      // (P1 = champion, P2-P4 = runners-up). For earlier rounds,
-      // sort by cumulative playoff points within that round.
       if (a.lastRoundReached !== b.lastRoundReached) {
         return b.lastRoundReached - a.lastRoundReached;
       }
-      // Same elimination round
       if (a.lastRoundReached === rounds.length - 1) {
-        // Both in Championship 4 — finale finish decides
         const aFin = a.finaleFinish ?? Infinity;
         const bFin = b.finaleFinish ?? Infinity;
         return aFin - bFin;
       }
-      // Eliminated earlier — by playoff points
       return b.finalPts - a.finalPts;
     });
   }
@@ -20264,15 +20286,14 @@ function renderPointsCalc() {
   // via the range inputs. Format/series swaps don't touch the
   // range — what you set stays set.
   //
-  // Initial defaults: format era when known, else 2000-current.
-  // Format era is a reasonable starting point — picking "2017-2025
-  // Elimination" defaults to 2017-2025 (years that actually used
-  // that format), which gives meaningful stats by default.
+  // Default: 2000 → current year. Covers the modern era when every
+  // series has stable, well-documented scoring. User can widen
+  // historically or narrow as needed.
   if (STATE.pointscalc.statsRange.startYear == null) {
-    STATE.pointscalc.statsRange.startYear = rule.start || 2000;
+    STATE.pointscalc.statsRange.startYear = 2000;
   }
   if (STATE.pointscalc.statsRange.endYear == null) {
-    STATE.pointscalc.statsRange.endYear = rule.end ?? new Date().getFullYear();
+    STATE.pointscalc.statsRange.endYear = new Date().getFullYear();
   }
   const championStats = _pointsCalcChampionSeedStats(
     rule,
