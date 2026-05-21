@@ -22098,14 +22098,22 @@ function renderProjection() {
   host.innerHTML = `<div class="proj-loading">Simulating ${nSims} season rollouts…</div>`;
 
   setTimeout(() => {
-    const proj = simulateSeasonRollout(series, year, { nSims });
-    if (!proj) {
-      host.innerHTML = `<div class="empty" style="padding:32px;text-align:center;">
-        No playoff rule defined for ${series} ${year}.
+    try {
+      const proj = simulateSeasonRollout(series, year, { nSims });
+      if (!proj) {
+        host.innerHTML = `<div class="empty" style="padding:32px;text-align:center;">
+          No playoff rule defined for ${series} ${year}.
+        </div>`;
+        return;
+      }
+      host.innerHTML = _buildProjectionHTML(proj);
+    } catch (err) {
+      console.error("[projection] simulation error:", err);
+      host.innerHTML = `<div class="empty" style="padding:32px;text-align:center;color:var(--accent);">
+        Simulation error: ${escapeHTML(String(err.message || err))}<br>
+        <span class="muted" style="font-size:11px;">Check browser console for details.</span>
       </div>`;
-      return;
     }
-    host.innerHTML = _buildProjectionHTML(proj);
   }, 50);
 }
 
