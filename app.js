@@ -3677,7 +3677,7 @@ function getDriverTrackTypeStats(driverName, series, trackTypeKey) {
     return DRIVER_ANALYTICS_CACHE.typeStats.get(cacheKey);
   }
   const history = getDriverRaceHistory(driverName, series);
-  const atType = history.filter(r => trackType(r.track_code) === trackTypeKey);
+  const atType = history.filter(r => trackType(r.track_code, r.year) === trackTypeKey);
   if (atType.length === 0) {
     DRIVER_ANALYTICS_CACHE.typeStats.set(cacheKey, null);
     return null;
@@ -5826,12 +5826,8 @@ const TRACK_TYPES = {
   MEX: "road",
 
   // Chicagoland — 1.5mi intermediate oval, returned to schedule 2026.
-  // Note: track code CHI was used by RR for both Chicago Street (2023-2025,
-  // a road course) and Chicagoland (2001-2019 + 2026, an intermediate).
-  // We map it to "inter" for 2026 correctness. Historical Chicago Street
-  // data (if loaded) will incorrectly show as intermediate — a year-aware
-  // override would fix this but isn't implemented yet.
-  CHI: "inter",
+  // CHI is year-aware: see trackType() function below.
+  // CHI: handled in trackType()
 };
 
 const TRACK_TYPE_LABELS = {
@@ -5841,7 +5837,14 @@ const TRACK_TYPE_LABELS = {
   road: "Road Course",
 };
 
-function trackType(trackCode) {
+function trackType(trackCode, year) {
+  // Year-aware overrides — tracks whose type changed across eras.
+  // CHI: Chicago Street (road course, 2023-2025) vs Chicagoland
+  // (intermediate oval, ≤2020 and 2026+).
+  if (trackCode === "CHI") {
+    const y = year || STATE.season || new Date().getFullYear();
+    return (y >= 2023 && y <= 2025) ? "road" : "inter";
+  }
   return TRACK_TYPES[trackCode] || null;
 }
 
@@ -10452,7 +10455,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 5;
+  const PROJ_VERSION = 6;
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -10491,9 +10494,16 @@ function simulateSeasonRollout(series, year, opts = {}) {
     return _buildFinalSeasonProjection(series, year, rule, completedRaces);
   }
 
-  // Build the driver list: full-time only (matches every other
-  // prediction view) keyed by slug.
-  const fullTimeEntities = allEntities().filter(isFullTime);
+  // Build the driver list: reasonably full-time drivers. We relax the
+  // strict isFullTime (90%) threshold for projections because early in
+  // the season a driver who missed 1-2 races (injury, suspension, late
+  // entry like Brent Crews in NOS) should still appear in projections
+  // if they're running now. Allow up to 3 missed races.
+  const totalRacesSoFar = completedRaces.length;
+  const projMinRaces = Math.max(1, totalRacesSoFar - 3);
+  const fullTimeEntities = allEntities().filter(e =>
+    e.races && e.races.length >= projMinRaces
+  );
   const drivers = fullTimeEntities.map(e => {
     const name = e.primaryDriver || e.driver;
     if (!name) return null;
@@ -22399,9 +22409,13 @@ function _buildProjectionHTML(proj) {
 
     ${_renderProjectionRegSeasonTable(proj)}
 
-    ${chaseDrivers.length > 0 ? _renderProjectionChaseChart(chaseDrivers, proj) : ""}
-
-    ${chaseDrivers.length > 0 ? _renderProjectionChaseTable(chaseDrivers, proj) : ""}
+    ${chaseDrivers.length > 0 ? (() => {
+      // Compute deterministic chase traces ONCE — shared by both the
+      // line chart and the table so their numbers match exactly.
+      const chaseTraces = _computeChaseTraces(chaseDrivers, proj);
+      return _renderProjectionChaseChart(chaseDrivers, proj, chaseTraces)
+           + _renderProjectionChaseTable(chaseDrivers, proj, chaseTraces);
+    })() : ""}
   `;
 }
 
@@ -22547,8 +22561,8 @@ function _renderProjectionRegSeasonTable(proj) {
               const playoffPct = d.playoff_pct * 100;
               const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
               const projPts = Math.round(d.projected_reg_total || d.current_pts || 0);
-              const projWins = d.full_season_wins != null ? Math.round(d.full_season_wins) : "—";
-              const projTop5 = d.full_season_top5 != null ? Math.round(d.full_season_top5) : "—";
+              const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
+              const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
               const fromLeader = i === 0 ? "—" : `−${(leaderPts - projPts).toLocaleString()}`;
               const fromCutline = i < fieldSize
                 ? (projPts === cutlinePts ? "CUTLINE" : `+${(projPts - cutlinePts).toLocaleString()}`)
@@ -22586,33 +22600,27 @@ function _renderProjectionRegSeasonTable(proj) {
 // Matches the PFC playoffs chart visual style.
 // Chase line graph — projected cumulative points per round for all 16
 // chase drivers, matching the PFC playoffs chart style with hover tooltips.
-// Uses deterministic predictions (predictDriverForRace) for each chase
-// track to build per-round cumulative totals.
-function _renderProjectionChaseChart(chaseDrivers, proj) {
+// Compute deterministic chase traces — used by both the line chart and
+// the chase table so their numbers match exactly.
+function _computeChaseTraces(chaseDrivers, proj) {
   const fieldSize = proj.rule.field || 16;
   const top = chaseDrivers.slice(0, fieldSize);
-  if (top.length === 0) return "";
+  if (top.length === 0) return [];
 
-  // Get chase race schedule (races after reg-season cutoff)
   const allRaces = allRacesSorted();
   const regEnd = proj.reg_end_round || 26;
   const chaseRaces = allRaces
     .filter(r => (r.round || 0) > regEnd)
     .sort((a, b) => (a.round || 0) - (b.round || 0));
-  if (chaseRaces.length === 0) return "";
 
-  // Compute reseed starting points. Sort top by projected_reg_total to
-  // get seed order, then apply reseedTable + win bonus.
   const byRegTotal = top.slice().sort((a, b) =>
     (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
   );
   const reseedTable = proj.rule.reseedTable || [2100];
-  // Build traces: for each driver, compute predicted points per chase race.
-  // Reseed is flat — just the table value, no win bonus.
-  const traces = byRegTotal.map((d, seedIdx) => {
+
+  return byRegTotal.map((d, seedIdx) => {
     const startPts = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;
     const seed = seedIdx + 1;
-
     const points = [{ round: regEnd, cum: startPts, seed, isReseed: true, track: "Reseed" }];
     let cum = startPts;
     chaseRaces.forEach(race => {
@@ -22623,12 +22631,24 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
       cum += racePts;
       points.push({ round: race.round, cum, predFinish: Math.round(predFinish), track: race.track || race.track_code || "" });
     });
-
     return {
       slug: d.slug, name: d.name, car_number: d.car_number,
-      champPct: d.championship_pct, seed, points
+      champPct: d.championship_pct, seed, points, finalPts: cum,
+      projected_wins: d.projected_wins, projected_top5: d.projected_top5,
     };
   });
+}
+
+// Uses pre-computed traces from _computeChaseTraces.
+function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
+  if (!traces || traces.length === 0) return "";
+
+  const regEnd = proj.reg_end_round || 26;
+  const allRaces = allRacesSorted();
+  const chaseRaces = allRaces
+    .filter(r => (r.round || 0) > regEnd)
+    .sort((a, b) => (a.round || 0) - (b.round || 0));
+  if (chaseRaces.length === 0) return "";
 
   // Chart dimensions (match PFC)
   const W = 800, H = 340;
@@ -22710,13 +22730,12 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
   `;
 }
 
-function _renderProjectionChaseTable(chaseDrivers, proj) {
+function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
+  if (!traces || traces.length === 0) return "";
+  // Sort by deterministic final chase points (same as chart), descending
+  const sorted = traces.slice().sort((a, b) => b.finalPts - a.finalPts);
+  const leaderPts = sorted[0].finalPts;
   const fieldSize = proj.rule.field || 16;
-  const top = chaseDrivers.slice(0, fieldSize);
-  // Leader = highest projected chase total (not necessarily highest champ %)
-  const leaderChasePts = Math.max(...top.map(d =>
-    d.projected_chase_total != null ? Math.round(d.projected_chase_total) : 0
-  ));
   return `
     <section class="proj-section">
       <div class="proj-section-head">
@@ -22728,6 +22747,7 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
         <table class="data-table proj-table">
           <thead><tr>
             <th class="num">#</th>
+            <th class="num">Seed</th>
             <th>Driver</th>
             <th class="num">Proj Wins</th>
             <th class="num">Proj Top 5</th>
@@ -22736,17 +22756,17 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
             <th class="num">Champ %</th>
           </tr></thead>
           <tbody>
-            ${top.map((d, i) => {
+            ${sorted.map((d, i) => {
               const carHex = colorFor(proj.series, d.car_number);
               const txt = contrastTextFor(carHex);
-              const champPct = d.championship_pct * 100;
+              const champPct = (d.champPct || 0) * 100;
               const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
-              const projWins = d.full_season_wins != null ? Math.round(d.full_season_wins) : "—";
-              const projTop5 = d.full_season_top5 != null ? Math.round(d.full_season_top5) : "—";
-              const chasePts = d.projected_chase_total != null ? Math.round(d.projected_chase_total) : 0;
-              const fromLeader = i === 0 ? "—" : `−${Math.abs(leaderChasePts - chasePts).toLocaleString()}`;
+              const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
+              const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
+              const fromLeader = i === 0 ? "—" : `−${Math.abs(leaderPts - d.finalPts).toLocaleString()}`;
               return `<tr>
                 <td class="num">${i + 1}</td>
+                <td class="num">${d.seed}</td>
                 <td>
                   <a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
                     <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
@@ -22755,7 +22775,7 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
                 </td>
                 <td class="num">${projWins}</td>
                 <td class="num">${projTop5}</td>
-                <td class="num">${chasePts.toLocaleString()}</td>
+                <td class="num">${Math.round(d.finalPts).toLocaleString()}</td>
                 <td class="num">${fromLeader}</td>
                 <td class="num ${champCls}"><strong>${champPct.toFixed(1)}%</strong></td>
               </tr>`;
