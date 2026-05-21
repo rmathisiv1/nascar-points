@@ -10591,18 +10591,11 @@ function simulateSeasonRollout(series, year, opts = {}) {
         const base = (rule.reseedTable && rule.reseedTable[idx]) ||
                      (rule.reseedTable && rule.reseedTable[rule.reseedTable.length - 1]) ||
                      2000;
-      // Reseed win bonus: each regular-season win earns a small bonus
-      // added to the reseed base. `rule.reseedWinBonus` if explicitly set;
-      // otherwise 10 per win (matching the 2007-2013 chase precedent).
-      // NOT `rule.raceWinPts` (55) — that's the total race-win point value
-      // (40 finish + 15 bonus), a completely different concept. Using 55
-      // per win made the points leader nearly unbeatable (97%+ champ
-      // probability) because 6 wins × 55 = 330 bonus points on a 2100
-      // base. With 10 per win, 6 wins = 60 bonus — meaningful but not
-      // insurmountable across 10 chase races.
-      const perWinBonus = rule.reseedWinBonus || rule.winBonus || 10;
-        const winsBonus = perWinBonus * simWins.get(d.slug);
-        reseed.set(d.slug, base + winsBonus);
+        // Chase-reseeded format (2026+): flat reset to the table value.
+        // No per-win bonus — the reseedTable IS the full reset. This
+        // makes the chase competitive: seed 1 gets 2100, seed 16 gets
+        // 2000, and the 10 chase races determine the champion.
+        reseed.set(d.slug, base);
       });
       // Race the chase races — ALL drivers race (full 36-car field), but
       // only playoff drivers' points matter for the championship. Previous
@@ -22304,7 +22297,7 @@ function _buildProjectionHTML(proj) {
 
     ${_renderProjectionRegSeasonTable(proj)}
 
-    ${chaseDrivers.length > 0 ? _renderProjectionChaseLineChart(chaseDrivers, proj) : ""}
+    ${chaseDrivers.length > 0 ? _renderProjectionChaseChart(chaseDrivers, proj) : ""}
 
     ${chaseDrivers.length > 0 ? _renderProjectionChaseTable(chaseDrivers, proj) : ""}
   `;
@@ -22514,13 +22507,10 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
     (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
   );
   const reseedTable = proj.rule.reseedTable || [2100];
-  const perWinBonus = proj.rule.reseedWinBonus || proj.rule.winBonus || 10;
-
-  // Build traces: for each driver, compute predicted points per chase race
+  // Build traces: for each driver, compute predicted points per chase race.
+  // Reseed is flat — just the table value, no win bonus.
   const traces = byRegTotal.map((d, seedIdx) => {
-    const base = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;
-    const wins = d.full_season_wins || d.current_wins || 0;
-    const startPts = base + perWinBonus * wins;
+    const startPts = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;
 
     const points = [{ round: regEnd, cum: startPts }];
     let cum = startPts;
