@@ -11401,10 +11401,10 @@ body.lightbox-open {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 14px 14px 12px;
+  padding: 10px 12px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 .proj-contender-leader {
@@ -11446,12 +11446,12 @@ body.lightbox-open {
 .proj-contender-name:hover { color: var(--accent); }
 .proj-contender-bigpct {
   font-family: var(--serif);
-  font-size: 36px;
+  font-size: 26px;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text);
   line-height: 1;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .proj-pct-symbol {
   font-size: 18px;

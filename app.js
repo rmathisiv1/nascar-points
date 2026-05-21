@@ -10456,6 +10456,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
       manufacturer: e.manufacturer,
       currentPts,
       currentWins,
+      currentTop5,
       seasonAvgFinish,
     };
   }).filter(Boolean);
@@ -22108,6 +22109,7 @@ function renderProjection() {
         return;
       }
       host.innerHTML = _buildProjectionHTML(proj);
+      _wireProjectionTooltips();
     } catch (err) {
       console.error("[projection] simulation error:", err);
       host.innerHTML = `<div class="empty" style="padding:32px;text-align:center;color:var(--accent);">
@@ -22116,6 +22118,81 @@ function renderProjection() {
       </div>`;
     }
   }, 50);
+}
+
+function _wireProjectionTooltips() {
+  const host = document.getElementById("projection-host");
+  if (!host || host._projTooltipWired) return;
+  host._projTooltipWired = true;
+
+  const positionTip = (tip, wrap, e) => {
+    const wrapRect = wrap.getBoundingClientRect();
+    const x = e.clientX - wrapRect.left + 12;
+    const y = e.clientY - wrapRect.top + 12;
+    tip.style.left = "0";
+    tip.style.top = "0";
+    const tipRect = tip.getBoundingClientRect();
+    const clampedX = Math.min(Math.max(0, x), wrapRect.width - tipRect.width - 4);
+    const clampedY = Math.min(Math.max(0, y), wrapRect.height - tipRect.height - 4);
+    tip.style.left = `${clampedX}px`;
+    tip.style.top = `${clampedY}px`;
+  };
+
+  host.addEventListener("mousemove", (e) => {
+    const hit = e.target.closest(".pc-hit");
+    const lineHover = e.target.closest(".pc-line-hover");
+    const target = hit || lineHover;
+    if (!target) return;
+    const wrap = target.closest(".pc-chart-wrap");
+    if (!wrap) return;
+    const tip = wrap.querySelector(".pc-tooltip");
+    if (!tip) return;
+
+    const driver = target.dataset.driver || "";
+    const slug = target.dataset.slug || "";
+
+    // Highlight hovered line
+    wrap.dataset.hoverSlug = slug;
+    const matchLine = wrap.querySelector(`.pc-line[data-slug="${CSS.escape(slug)}"]`);
+    if (matchLine) matchLine.classList.add("is-hovered");
+
+    if (hit) {
+      const round = hit.dataset.round || "?";
+      const cum = hit.dataset.cum || "?";
+      const race = hit.dataset.race || "";
+      const finish = hit.dataset.finish || "—";
+      tip.innerHTML = `
+        <div class="pc-tip-driver">${driver}</div>
+        ${race ? `<div class="pc-tip-row"><span>Race</span><span>${race}</span></div>` : ""}
+        <div class="pc-tip-row"><span>Round</span><span>R${round}</span></div>
+        ${finish !== "—" ? `<div class="pc-tip-row"><span>Proj finish</span><span>P${finish}</span></div>` : ""}
+        <div class="pc-tip-row"><span>Cum. pts</span><span>${Number(cum).toLocaleString()}</span></div>
+      `;
+    } else {
+      tip.innerHTML = `<div class="pc-tip-driver">${driver}</div>`;
+    }
+    tip.hidden = false;
+    positionTip(tip, wrap, e);
+  });
+
+  host.addEventListener("mouseleave", () => {
+    host.querySelectorAll(".pc-chart-wrap").forEach(wrap => {
+      const tip = wrap.querySelector(".pc-tooltip");
+      if (tip) tip.hidden = true;
+      delete wrap.dataset.hoverSlug;
+      wrap.querySelectorAll(".pc-line.is-hovered").forEach(el => el.classList.remove("is-hovered"));
+    });
+  }, true);
+
+  host.addEventListener("mouseout", (e) => {
+    if (e.target.closest(".pc-hit, .pc-line-hover")) return;
+    host.querySelectorAll(".pc-chart-wrap").forEach(wrap => {
+      const tip = wrap.querySelector(".pc-tooltip");
+      if (tip) tip.hidden = true;
+      delete wrap.dataset.hoverSlug;
+      wrap.querySelectorAll(".pc-line.is-hovered").forEach(el => el.classList.remove("is-hovered"));
+    });
+  });
 }
 
 function _buildProjectionHTML(proj) {
@@ -22156,7 +22233,7 @@ function _buildProjectionHTML(proj) {
 
     ${_renderProjectionRegSeasonTable(proj)}
 
-    ${chaseDrivers.length > 0 ? _renderProjectionChaseChart(chaseDrivers, proj) : ""}
+    ${chaseDrivers.length > 0 ? _renderProjectionChaseLineChart(chaseDrivers, proj) : ""}
 
     ${chaseDrivers.length > 0 ? _renderProjectionChaseTable(chaseDrivers, proj) : ""}
   `;
@@ -22374,9 +22451,128 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
   `;
 }
 
+// Chase line graph — shows projected cumulative points per round for
+// all 16 chase drivers, with hover tooltips showing race/round/finish/pts.
+// Uses deterministic predictions (predictDriverForRace) for the per-race
+// projections, and median projected wins for the reseed win bonus.
+function _renderProjectionChaseLineChart(chaseDrivers, proj) {
+  const series = proj.series;
+  const regEnd = proj.reg_end_round;
+  const rule = proj.rule;
+  const fieldSize = rule.field || 16;
+  const top = chaseDrivers.slice(0, fieldSize);
+
+  // Get chase race schedule (tracks + rounds)
+  const allRaces = allRacesSorted();
+  const chaseRaces = allRaces
+    .filter(r => (r.round || 0) > regEnd)
+    .sort((a, b) => (a.round || 0) - (b.round || 0));
+  if (chaseRaces.length === 0) return "";
+
+  // Compute reseed base + traces for each driver
+  const traces = top.map((d, seedIdx) => {
+    const base = (rule.reseedTable && rule.reseedTable[seedIdx]) || 2000;
+    const perWinBonus = rule.reseedWinBonus || rule.winBonus || 10;
+    const projWins = d.projected_wins || d.current_wins || 0;
+    const reseedStart = base + perWinBonus * Math.round(projWins);
+
+    const points = [{ round: regEnd, cum: reseedStart, race: "Reseed", projFinish: null }];
+    let cum = reseedStart;
+    chaseRaces.forEach(race => {
+      const pred = predictDriverForRace(d.name, series, race.track_code);
+      const projFinish = pred ? Math.round(pred.predicted_finish) : 20;
+      const racePts = _finishPtsScale(projFinish);
+      cum += racePts;
+      points.push({
+        round: race.round,
+        cum,
+        race: race.track || race.name || `R${race.round}`,
+        projFinish,
+      });
+    });
+    return { ...d, trace: points };
+  });
+
+  // SVG dimensions (matching PFC chart)
+  const W = 800, H = 340;
+  const pad = { t: 16, r: 80, b: 36, l: 56 };
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+
+  const allCums = traces.flatMap(t => t.trace.map(p => p.cum));
+  const minPts = Math.min(...allCums);
+  const maxPts = Math.max(...allCums);
+  const padPts = (maxPts - minPts) * 0.08 || 50;
+  const yMin = Math.floor((minPts - padPts) / 50) * 50;
+  const yMax = Math.ceil((maxPts + padPts) / 50) * 50;
+
+  const firstRound = regEnd;
+  const lastRound = chaseRaces[chaseRaces.length - 1].round;
+  const xScale = r => pad.l + ((r - firstRound) / Math.max(1, lastRound - firstRound)) * innerW;
+  const yScale = v => pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+
+  // Grid lines
+  const gridLines = [];
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.t + (i / 5) * innerH;
+    const v = Math.round(yMax - (i / 5) * (yMax - yMin));
+    gridLines.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
+    gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
+  }
+
+  // X labels
+  const xLabels = [];
+  traces[0].trace.forEach(p => {
+    xLabels.push(`<text class="axis-label" x="${xScale(p.round)}" y="${H - 10}" text-anchor="middle">R${p.round}</text>`);
+  });
+
+  // Lines — draw bottom-ranked drivers first, top last
+  const sortedForDraw = traces.slice().reverse();
+  const lines = sortedForDraw.map(d => {
+    const carHex = colorFor(series, d.car_number);
+    const trace = d.trace;
+    const pathD = trace.map((p, i) =>
+      `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
+    ).join(" ");
+    const overlay = `<path class="pc-line-hover" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-car="${d.car_number}" d="${pathD}" fill="none" stroke="transparent" stroke-width="12" stroke-linejoin="round" pointer-events="stroke"/>`;
+    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${carHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>${overlay}`;
+  }).join("");
+
+  // Hit targets at every point
+  const hits = traces.flatMap(d =>
+    d.trace.map(p =>
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="14" fill="transparent"
+        data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}"
+        data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}"
+        data-race="${escapeHTML(p.race)}" data-finish="${p.projFinish || '—'}"/>`
+    )
+  ).join("");
+
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">championship chase</div>
+        <h2 class="ed-hero ed-hero-sm">Projected points per round</h2>
+        <div class="ed-byline">Hover a line or dot to see projected race finish and cumulative chase points</div>
+      </div>
+      <div class="pc-chart-wrap proj-line-chart-wrap">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+          ${gridLines.join("")}
+          ${xLabels.join("")}
+          ${lines}
+          ${hits}
+        </svg>
+        <div class="pc-tooltip" hidden></div>
+      </div>
+    </section>
+  `;
+}
+
 function _renderProjectionChaseTable(chaseDrivers, proj) {
   const fieldSize = proj.rule.field || 16;
   const top = chaseDrivers.slice(0, fieldSize);
+  const leaderChasePts = top.length > 0 && top[0].projected_chase_total != null
+    ? Math.round(top[0].projected_chase_total) : 0;
   return `
     <section class="proj-section">
       <div class="proj-section-head">
@@ -22392,6 +22588,7 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
             <th class="num">Proj Wins</th>
             <th class="num">Proj Top 5</th>
             <th class="num">Chase Pts</th>
+            <th class="num">From Leader</th>
             <th class="num">Champ %</th>
           </tr></thead>
           <tbody>
@@ -22402,7 +22599,8 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
               const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
               const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
               const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
-              const chasePts = d.projected_chase_total != null ? Math.round(d.projected_chase_total).toLocaleString() : "—";
+              const chasePts = d.projected_chase_total != null ? Math.round(d.projected_chase_total) : 0;
+              const fromLeader = i === 0 ? "—" : `−${Math.abs(leaderChasePts - chasePts).toLocaleString()}`;
               return `<tr>
                 <td class="num">${i + 1}</td>
                 <td>
@@ -22413,7 +22611,8 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
                 </td>
                 <td class="num">${projWins}</td>
                 <td class="num">${projTop5}</td>
-                <td class="num">${chasePts}</td>
+                <td class="num">${chasePts.toLocaleString()}</td>
+                <td class="num">${fromLeader}</td>
                 <td class="num ${champCls}"><strong>${champPct.toFixed(1)}%</strong></td>
               </tr>`;
             }).join("")}
