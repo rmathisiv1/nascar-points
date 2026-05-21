@@ -2790,12 +2790,30 @@ function wireUIControls() {
     if (heatBtn) {
       e.preventDefault();
       const newSeries = heatBtn.dataset.srs;
+      // [debug] temporary instrumentation for mobile heatmap-filter bug.
+      // Mobile shows the button selection sticking but the heatmap content
+      // doesn't change. This log lets us inspect what STATE and DOM look
+      // like at click time. Remove once root-caused.
+      if (window.dcDebug) {
+        console.log("[heat-toggle]", {
+          newSeries,
+          prevState: STATE.profile && STATE.profile.heatmapSeries,
+          hostExists: !!document.getElementById("profile-career-heatmap"),
+          hostHTML: (document.getElementById("profile-career-heatmap") || {}).innerHTML?.slice(0, 80),
+        });
+      }
       if (!newSeries || newSeries === STATE.profile.heatmapSeries) return;
       STATE.profile.heatmapSeries = newSeries;
       heatBtn.parentElement.querySelectorAll("button").forEach(b =>
         b.classList.toggle("on", b === heatBtn)
       );
       paintProfileCareerHeatmap();
+      if (window.dcDebug) {
+        console.log("[heat-toggle after paint]", {
+          stateAfter: STATE.profile.heatmapSeries,
+          hostHTMLAfter: (document.getElementById("profile-career-heatmap") || {}).innerHTML?.slice(0, 80),
+        });
+      }
     }
     // CC career-heatmap series filter — same UX as the driver heatmap but
     // lives on the crew chief profile and updates STATE.cc.heatmapSeries.
