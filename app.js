@@ -8755,18 +8755,28 @@ function paintProfileRatingChart(driverName) {
   if (!panel || !svg) return;
 
   const agg = computeDriverLoopAggregates(driverName);
-  // Combine ratings across series. In PRESENT mode, restrict to the
-  // active series toggle so a Cup driver's profile doesn't show
-  // one-off NTS or NOS appearances. In HISTORICAL mode we show all
-  // series since the chart is interpreted as a career arc.
+  // Series scope: in PRESENT mode restrict to the active series toggle
+  // so a Cup driver's profile doesn't show one-off NTS or NOS appearances.
+  // In HISTORICAL mode show all series since the chart is interpreted
+  // as a single-season historical snapshot for that year.
   const seriesScope = STATE.mode === "present"
     ? [STATE.series]
     : ["NCS", "NOS", "NTS"];
+  // Year scope: ALWAYS the active season. The Driver Rating chart is
+  // a season trace, not a career arc — it shows how this driver has
+  // been rated race-by-race THIS YEAR. Career heatmap (separate panel)
+  // is the multi-year view. Without this filter the chart silently
+  // grew to include backfilled prior seasons once SEASON_CACHE warmed,
+  // producing the "46 races on a 14-race season" anomaly.
+  const yearScope = STATE.season;
   const allPts = [];
   seriesScope.forEach(s => {
     const a = agg[s];
     if (!a) return;
-    a.ratings.forEach(r => allPts.push({ ...r, series: s }));
+    a.ratings.forEach(r => {
+      if (r.year !== yearScope) return;
+      allPts.push({ ...r, series: s });
+    });
   });
   if (allPts.length < 3) {
     panel.style.display = "none";
@@ -8775,12 +8785,12 @@ function paintProfileRatingChart(driverName) {
   allPts.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   panel.style.display = "";
 
-  // Subtitle: career avg + "n races" so the user has a single-number
+  // Subtitle: season avg + "n races" so the user has a single-number
   // anchor before parsing the line shape.
   const sum = allPts.reduce((s, p) => s + p.rating, 0);
   const avg = sum / allPts.length;
   if (sub) {
-    sub.textContent = `Career avg ${avg.toFixed(1)} · ${allPts.length} races`;
+    sub.textContent = `${yearScope} avg ${avg.toFixed(1)} · ${allPts.length} race${allPts.length === 1 ? "" : "s"}`;
   }
 
   // Per-race top-rated-driver lookup. For each (year, series, round)

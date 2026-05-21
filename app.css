@@ -6471,11 +6471,20 @@ body.lightbox-open {
 [data-theme="light"] .profile-hero-champ .champ-count { color: #2e1f00; }
 [data-theme="light"] .profile-hero-champ .champ-trophy { filter: none; color: #8a5a00; }
 
-/* Team-hero championship pill — slightly larger, sits in top-right of hero */
+/* Team-hero championship row — a flex strip that sits at the top of
+   the team page and right-aligns the championship pill. The pill used
+   to be position: absolute relative to a `.tm-hero` wrapper, but that
+   wrapper no longer exists in the template (page structure was
+   refactored). Without it, absolute positioning made the pill float to
+   the page top-right where it landed behind the fixed topbar.
+   The row + flex layout keeps the pill in normal flow and avoids
+   stacking-context surprises. */
+.tm-hero-champ-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
 .tm-hero-champ {
-  position: absolute;
-  top: 14px;
-  right: 18px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -6505,9 +6514,6 @@ body.lightbox-open {
 }
 [data-theme="light"] .tm-hero-champ .champ-count { color: #2e1f00; }
 [data-theme="light"] .tm-hero-champ .champ-trophy { filter: none; color: #8a5a00; }
-.tm-hero {
-  position: relative;   /* anchor for the absolute champ pill */
-}
 
 /* Team stats row context label — makes it obvious the stats below are
    scoped to the user's pre-takeover series + season ("2026 NCS team
@@ -6621,8 +6627,6 @@ body.lightbox-open {
 
 @media (max-width: 767.98px) {
   .tm-hero-champ {
-    top: 10px;
-    right: 12px;
     padding: 4px 8px;
     font-size: 10px;
   }
