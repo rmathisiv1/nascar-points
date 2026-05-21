@@ -10716,7 +10716,6 @@ function simulateSeasonRollout(series, year, opts = {}) {
     // reg-season total for everyone else — playoff bracket doesn't reset
     // points in elimination, so using simPts is a reasonable proxy).
     drivers.forEach(d => {
-      finalTotalSamples.get(d.slug).push(projTotals.get(d.slug));
       winSamples.get(d.slug).push(simWins.get(d.slug) || 0);
       top5Samples.get(d.slug).push(simTop5.get(d.slug) || 0);
     });
@@ -10736,7 +10735,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
     const playoffPct = playoffMakes.get(d.slug) / nSims;
     const champPct = championshipWins.get(d.slug) / nSims;
     const medianSeed = median(seedSamples.get(d.slug));
-    const medianTotal = median(finalTotalSamples.get(d.slug));
+    const medianTotal = median(regSeasonTotalSamples.get(d.slug));
     const medianRank = median(finalRankSamples.get(d.slug));
     const projectedWins = median(winSamples.get(d.slug));
     const projectedTop5 = median(top5Samples.get(d.slug));
