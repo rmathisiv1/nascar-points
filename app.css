@@ -11341,3 +11341,251 @@ body.lightbox-open {
   }
   .pc-stat-pill { min-width: 80px; }
 }
+
+/* ============================================================
+   SEASON PROJECTION PAGE
+   Monte Carlo rollout — championship contenders, full-field table,
+   cutline drama panel. Layout mirrors PFC / playoff pages — kicker
+   on top, content panels stacked vertically, table for full field.
+   ============================================================ */
+.proj-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.proj-meta {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+}
+.proj-loading {
+  padding: 60px;
+  text-align: center;
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--muted);
+}
+.proj-section {
+  margin-bottom: 28px;
+}
+.proj-section-head {
+  margin-bottom: 12px;
+}
+.proj-section-head .ed-byline {
+  margin-top: 4px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Top 5 championship contenders row. Each contender is a tall card
+   with rank, name, big % number, and a horizontal bar visualizing
+   the championship probability. Leader card gets accent treatment. */
+.proj-contender-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+@media (max-width: 1100px) {
+  .proj-contender-row { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 700px) {
+  .proj-contender-row { grid-template-columns: repeat(2, 1fr); }
+}
+.proj-contender {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.proj-contender-leader {
+  border-color: rgba(255,200,50,0.55);
+  background: linear-gradient(180deg, rgba(255,200,50,0.05) 0%, var(--card) 60%);
+}
+.proj-contender-rank {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.proj-contender-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.proj-contender-car {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.proj-contender-name {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.proj-contender-name:hover { color: var(--accent); }
+.proj-contender-bigpct {
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1;
+  margin-top: 4px;
+}
+.proj-pct-symbol {
+  font-size: 18px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.proj-contender-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.proj-contender-bar {
+  height: 4px;
+  background: var(--tint-1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.proj-contender-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255,200,50,0.5), rgba(255,200,50,0.9));
+  border-radius: 2px;
+}
+.proj-contender-meta {
+  font-size: 11px;
+  margin-top: 6px;
+  font-family: var(--mono);
+}
+
+/* Main projection table. Reuses .data-table but with proj-specific
+   tweaks — round-survival columns are narrower since they hold
+   only "92%" style values. */
+.proj-table-host {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+.proj-table {
+  width: 100%;
+  font-size: 13px;
+}
+.proj-table th, .proj-table td {
+  padding: 7px 10px;
+}
+.proj-rnd-th {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-align: center;
+}
+.proj-rnd-th-group {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+.proj-pct-hot {
+  color: #6ce06c;
+  font-weight: 600;
+}
+.proj-pct-warm {
+  color: #ffc266;
+  font-weight: 500;
+}
+.proj-pct-cold {
+  color: var(--muted);
+}
+[data-theme="light"] .proj-pct-hot { color: #1a7a2e; }
+[data-theme="light"] .proj-pct-warm { color: #a06400; }
+
+/* Cutline drama panel — rows with seed, car tag, name, and playoff %.
+   "In" vs "out" gets subtle background tints + a thick divider line
+   between the cut-making and cut-missing drivers. */
+.proj-cutline-list {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.proj-cutline-row {
+  display: grid;
+  grid-template-columns: 42px 32px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.proj-cutline-row:last-child { border-bottom: none; }
+.proj-cutline-in {
+  background: rgba(50, 230, 100, 0.06);
+}
+.proj-cutline-out {
+  background: rgba(255, 70, 70, 0.05);
+}
+.proj-cutline-seed {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.proj-cutline-name {
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+}
+.proj-cutline-name:hover { color: var(--accent); }
+.proj-cutline-pct {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.proj-cutline-divider {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-align: center;
+  padding: 8px;
+  background: rgba(255, 200, 50, 0.12);
+  border-top: 1px solid rgba(255, 200, 50, 0.4);
+  border-bottom: 1px solid rgba(255, 200, 50, 0.4);
+  color: #ffd166;
+}
+[data-theme="light"] .proj-cutline-divider {
+  background: #fff3cd;
+  color: #6e4d00;
+  border-color: #d4a843;
+}
+
+/* Series picker on the projection page. Same look as other toggle
+   groups but with a touch more breathing room since it's the
+   primary control on this page. */
+.proj-series-toggle button {
+  padding: 6px 14px;
+  font-size: 12px;
+}

@@ -138,7 +138,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs", "pointscalc"];
+const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs", "pointscalc", "projection"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -2012,9 +2012,9 @@ function parseHash() {
   // what was stashed, since the user opted into "always live" — even the
   // original entry point may have been historical.
   const wasProfile = STATE.view === "profile" && STATE.profile && STATE.profile.locked;
-  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc"].includes(STATE.view);
+  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc", "projection"].includes(STATE.view);
   const leavingTakeover = wasProfile || wasOtherTakeover;
-  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc"].includes(view);
+  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc", "projection"].includes(view);
   if (leavingTakeover && enteringNonTakeover) {
     if (STATE.mode === "present") {
       const latest = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
@@ -2339,6 +2339,9 @@ async function loadSeasonIntoCache(year) {
       // new years arrived.
       if (typeof resetDriverAnalyticsCache === "function") {
         resetDriverAnalyticsCache();
+      }
+      if (typeof resetProjectionCache === "function") {
+        resetProjectionCache();
       }
       return SEASON_CACHE[year];
     } catch (e) { /* try next */ }
@@ -2953,7 +2956,7 @@ const TAB_VIEWS = ["home", "arc", "form", "breakdown", "trajectory", "teammates"
 const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
 // alongside left (standings) and right (form) panels.
-const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc"];
+const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc", "projection"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -2998,6 +3001,7 @@ function render() {
       teams: "Teams",
       crewchiefs: "Crew Chiefs",
       pointscalc: "Points Format Calc",
+      projection: "Season Projection",
     };
     pageTitleEl.textContent = titleMap[STATE.view] || "";
   }
@@ -3038,6 +3042,7 @@ function render() {
   const teamsTakeover   = document.getElementById("teams-takeover");
   const ccsTakeover     = document.getElementById("crewchiefs-takeover");
   const pointscalcTakeover = document.getElementById("pointscalc-takeover");
+  const projectionTakeover = document.getElementById("projection-takeover");
   const tabBody         = document.getElementById("tab-body");
   if (profileTakeover) profileTakeover.hidden = (STATE.view !== "profile");
   if (raceTakeover)    raceTakeover.hidden    = (STATE.view !== "race");
@@ -3050,6 +3055,7 @@ function render() {
   if (teamsTakeover)   teamsTakeover.hidden   = (STATE.view !== "teams");
   if (ccsTakeover)     ccsTakeover.hidden     = (STATE.view !== "crewchiefs");
   if (pointscalcTakeover) pointscalcTakeover.hidden = (STATE.view !== "pointscalc");
+  if (projectionTakeover) projectionTakeover.hidden = (STATE.view !== "projection");
   // The view-playoffs section inside its takeover wrapper has its own
   // hidden attribute — keep it in sync so renderPlayoffs paints into it.
   const pElem = document.getElementById("view-playoffs");
@@ -3121,6 +3127,8 @@ function render() {
       renderAllTimeCrewChiefs();
     } else if (STATE.view === "pointscalc") {
       renderPointsCalc();
+    } else if (STATE.view === "projection") {
+      renderProjection();
     } else {
       // Render the active tab's content
       switch (activeTab) {
@@ -10128,6 +10136,530 @@ function _computeRacePredictions(series, trackCode) {
     byFinish: [...predictions].sort((a, b) => a.predicted_finish - b.predicted_finish),
     byStage: [...predictions].sort((a, b) => b.predicted_stage_pts - a.predicted_stage_pts),
     total: predictions.length,
+  };
+}
+
+// ============================================================
+// SEASON PROJECTION (Monte Carlo)
+// ============================================================
+// Builds on predictDriverForRace by treating each race's predicted
+// finish as the MEAN of a noisy outcome rather than a hard point
+// estimate. For each of N iterations:
+//
+//   1. For every remaining race, sample a noisy "true rank" for each
+//      driver from Normal(predicted_finish, σ). Re-rank to produce
+//      integer finish positions 1..N for that sim.
+//   2. Convert finishes → race_pts using the era's points scale.
+//      Add to each driver's actual season-to-date total.
+//   3. After all remaining reg-season races, sort by total to get
+//      projected reg-season standings.
+//   4. Apply the playoff rule:
+//      - chase-reseeded (2026+): top N qualify, then 10/9/7 chase
+//        races run with same Monte Carlo treatment → most pts wins
+//      - elimination (2017-2025): top N qualify with win-and-in,
+//        bracket simulation with eliminations per round
+//      - championship (pre-2004 / pre-2016 NOS/NTS): full-season
+//        points totals across all remaining races → leader wins
+//   5. Record for this iteration: which drivers made playoffs,
+//      which rounds they survived, projected final rank, champion.
+//
+// After all iterations, aggregate to probabilities + median ranks.
+//
+// Why Gaussian noise: NASCAR finishes are roughly normally distributed
+// around a driver's underlying speed once mid-pack. We use σ=7 as a
+// reasonable default — fast drivers occasionally have bad days
+// (engine failure, wreck) but those are the +/- 2σ tails, not the
+// median outcome.
+
+const PROJECTION_CACHE = new Map(); // key: "series|year|nSims" → result
+
+// Reset hook — called whenever SEASON_CACHE changes structure so
+// projections stay in sync with the latest available data.
+function resetProjectionCache() {
+  PROJECTION_CACHE.clear();
+}
+
+// Standard Normal sample via Box-Muller. Used to add finish-position
+// noise around each driver's predicted_finish. Two indep. normals
+// per call but we only return one; the other is discarded (fine for
+// our throughput).
+function _sampleNormal() {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+// NASCAR finish-position → race_pts scale (2017+ stage era).
+// 1st = 40 + (15 win bonus for NCS / 5 for NOS+NTS in real life),
+// then 35, 34, ..., 1. Stage points are added separately by the sim.
+// We use the same scale for all post-2014 elimination/chase-reseeded
+// formats. For pre-2017 we don't currently project (the chase format
+// is in the rule for 2007-2013 NCS but we treat those as historical-
+// only — there's no "in-progress" 2007 season to project).
+function _finishPtsScale(pos) {
+  if (pos == null || pos < 1) return 0;
+  if (pos === 1) return 40;
+  if (pos === 2) return 35;
+  if (pos >= 3 && pos <= 36) return 35 - (pos - 2);
+  return 0;
+}
+
+// Per-race noise σ in finish positions. 7 means a driver predicted to
+// finish 10th will have a normal distribution of outcomes spanning
+// roughly P3 to P17 in 68% of iterations and P-4 to P24 in 95%. Real
+// NASCAR variance is in that ballpark; calibration could tighten this
+// later if we compute residuals from past predictions vs. actuals.
+const PROJ_NOISE_SIGMA = 7.0;
+
+// Build the per-(driver, race) prediction matrix ONCE, then reuse it
+// across all iterations. predictDriverForRace is expensive (touches
+// the driver-analytics cache multiple times); calling it once per
+// (driver, race) pair instead of once per iteration is ~Nsim× faster.
+function _buildProjectionMatrix(series, remainingRaces, drivers) {
+  const matrix = []; // [{ trackCode, round, predsByDriver: Map<slug, predicted_finish> }]
+  remainingRaces.forEach(race => {
+    const predsByDriver = new Map();
+    drivers.forEach(d => {
+      const pred = predictDriverForRace(d.name, series, race.track_code);
+      // Fall back to driver's season-YTD avg or 20 (mid-pack) when
+      // prediction returns null (e.g. brand-new driver, no history
+      // anywhere). Keeps every driver in the sim even with partial data.
+      const predFinish = (pred && Number.isFinite(pred.predicted_finish))
+        ? pred.predicted_finish
+        : (d.seasonAvgFinish ?? 20);
+      predsByDriver.set(d.slug, predFinish);
+    });
+    matrix.push({ trackCode: race.track_code, round: race.round, predsByDriver });
+  });
+  return matrix;
+}
+
+// Simulate a single race: for each driver, sample noisy rank around
+// their predicted finish, then re-rank to integers 1..N. Returns a
+// Map<slug, finish_pos>.
+function _simulateOneRace(matrixEntry, drivers) {
+  const noisy = drivers.map(d => ({
+    slug: d.slug,
+    score: matrixEntry.predsByDriver.get(d.slug) + _sampleNormal() * PROJ_NOISE_SIGMA,
+  }));
+  noisy.sort((a, b) => a.score - b.score);  // lower noisy-rank = better finish
+  const out = new Map();
+  noisy.forEach((n, i) => out.set(n.slug, i + 1));
+  return out;
+}
+
+// Approximate stage-point sampling. We can't sample real stage finishes
+// without modeling them as a separate process, so we use the predicted
+// stage-pts mean directly with light noise. Stage points are 0-20 per
+// race (10 stage 1 + 10 stage 2 in the simple case; only top-10 in
+// each stage earn anything). For sim purposes a small triangular
+// distribution around the prediction is fine.
+function _sampleStagePts(meanStagePts) {
+  if (meanStagePts == null || meanStagePts <= 0) return 0;
+  // Triangular-ish: random in [0.4×mean, 1.6×mean], clamped to [0, 20].
+  const sample = meanStagePts * (0.4 + Math.random() * 1.2);
+  return Math.max(0, Math.min(20, sample));
+}
+
+// Main entry. Runs the Monte Carlo simulation and returns aggregated
+// outcomes for the projection UI.
+//
+//   { drivers: [
+//       { slug, name, car_number, team_code,
+//         current_pts, current_wins, projected_median_total,
+//         playoff_pct, championship_pct,
+//         round_survival_pcts: { "R16": 0.92, "R12": 0.71, ... },
+//         median_seed, median_rank, ... },
+//       ...
+//     ],
+//     remaining_races: <count>,
+//     n_sims: <count>,
+//     rule: <ref>,
+//     format: "chase-reseeded" | "elimination" | "championship",
+//   }
+//
+// Cached per (series, year) for the session — re-run via the page's
+// "re-simulate" button if the user wants fresh draws.
+function simulateSeasonRollout(series, year, opts = {}) {
+  const nSims = opts.nSims || 500;
+  const cacheKey = `${series}|${year}|${nSims}`;
+  if (PROJECTION_CACHE.has(cacheKey) && !opts.force) {
+    return PROJECTION_CACHE.get(cacheKey);
+  }
+
+  const rule = resolvePlayoffRules(series, year);
+  if (!rule) return null;
+
+  // Collect remaining races: schedule entries that have NO results yet
+  // (upcoming races). Sorted by round to keep things deterministic.
+  const allRaces = allRacesSorted();
+  const completedRaces = allRaces.filter(r => (r.results || []).length > 0);
+  const remainingRaces = allRaces
+    .filter(r => !(r.results && r.results.length > 0))
+    .sort((a, b) => (a.round || 0) - (b.round || 0));
+
+  if (remainingRaces.length === 0) {
+    // Season is over — no projection to make. Return current standings
+    // as a "projection" with 100% confidence so the UI renders cleanly.
+    return _buildFinalSeasonProjection(series, year, rule, completedRaces);
+  }
+
+  // Build the driver list: full-time only (matches every other
+  // prediction view) keyed by slug.
+  const fullTimeEntities = allEntities().filter(isFullTime);
+  const drivers = fullTimeEntities.map(e => {
+    const name = e.primaryDriver || e.driver;
+    if (!name) return null;
+    // Current season total and wins. computeSeasonTotals returns
+    // canonical-overridden values when present; raw sums otherwise.
+    const totals = computeSeasonTotals();
+    const totalEntry = totals.find(t => (t.car_number) === e.car_number);
+    const currentPts = totalEntry ? (totalEntry.total || 0) : 0;
+    const currentWins = (e.races || []).reduce((s, r) => s + (r.finish === 1 ? 1 : 0), 0);
+    // Season YTD avg finish — used as a fallback for predictDriverForRace
+    // returning null (brand-new venue with no history etc.)
+    const finishes = (e.races || []).map(r => r.finish).filter(n => n != null);
+    const seasonAvgFinish = finishes.length
+      ? finishes.reduce((a, b) => a + b, 0) / finishes.length
+      : null;
+    return {
+      slug: slugify(name),
+      name,
+      car_number: e.car_number,
+      team_code: e.team_code,
+      manufacturer: e.manufacturer,
+      currentPts,
+      currentWins,
+      seasonAvgFinish,
+    };
+  }).filter(Boolean);
+
+  if (drivers.length === 0) return null;
+
+  // Build the matrix once — predictDriverForRace × every (driver, race).
+  const matrix = _buildProjectionMatrix(series, remainingRaces, drivers);
+
+  // Determine which remaining races are regular-season vs playoff.
+  // For chase-reseeded and elimination, the cutoff is rule.regSeasonEndRound.
+  const regEndRound = rule.regSeasonEndRound || 26;
+  const regMatrix    = matrix.filter(m => m.round <= regEndRound);
+  const playoffMatrix = matrix.filter(m => m.round > regEndRound);
+
+  // ----- Run iterations -----
+  // Counters keyed by driver slug.
+  const playoffMakes = new Map(); // slug → count
+  const championshipWins = new Map();
+  const seedSamples = new Map();  // slug → array of seeds (or null if missed playoffs)
+  const finalTotalSamples = new Map(); // slug → array of projected end-of-season totals
+  const finalRankSamples = new Map();  // slug → array of final ranks
+  // For elimination format: track round-survival counts per slug per round.
+  const roundSurvival = new Map(); // slug → Map<roundName, count>
+
+  drivers.forEach(d => {
+    playoffMakes.set(d.slug, 0);
+    championshipWins.set(d.slug, 0);
+    seedSamples.set(d.slug, []);
+    finalTotalSamples.set(d.slug, []);
+    finalRankSamples.set(d.slug, []);
+    roundSurvival.set(d.slug, new Map());
+  });
+
+  for (let sim = 0; sim < nSims; sim++) {
+    // ---- Regular season ----
+    const simPts = new Map(); // slug → reg-season-end total
+    const simWins = new Map(); // slug → reg-season wins (incl. actual)
+    drivers.forEach(d => {
+      simPts.set(d.slug, d.currentPts);
+      simWins.set(d.slug, d.currentWins);
+    });
+    regMatrix.forEach(entry => {
+      const finishes = _simulateOneRace(entry, drivers);
+      drivers.forEach(d => {
+        const finish = finishes.get(d.slug);
+        const pts = _finishPtsScale(finish);
+        // Stage points: approximate from the matrix's predicted_total_pts
+        // signal, but matrix only stores predicted_finish for speed.
+        // Skip stage points in the sim — over a multi-race rollout the
+        // averaging effect makes them roughly cancel between drivers.
+        // Win bonus only applies if rule has stages + we treat the sampled
+        // P1 as a real win.
+        let pointsThisRace = pts;
+        if (finish === 1) {
+          // Win bonus for NCS only (15); for NOS/NTS the 5pt bonus is
+          // already baked into the 40 base for P1 in the modern scoring.
+          if (series === "NCS") pointsThisRace += 15;
+          simWins.set(d.slug, simWins.get(d.slug) + 1);
+        }
+        simPts.set(d.slug, simPts.get(d.slug) + pointsThisRace);
+      });
+    });
+
+    // ---- Build projected reg-season standings ----
+    const regRanked = drivers.slice().sort((a, b) =>
+      simPts.get(b.slug) - simPts.get(a.slug)
+    );
+
+    // ---- Apply playoff qualification ----
+    let playoffField;
+    if (rule.format === "chase-reseeded") {
+      // 2026+: points only, no win-and-in. Top N by reg-season points.
+      playoffField = regRanked.slice(0, rule.field);
+    } else if (rule.format === "elimination") {
+      // Win-and-in: sim wins first (any reg-season win locks you in),
+      // then fill the rest by reg-season points.
+      const winners = regRanked.filter(d => simWins.get(d.slug) > 0);
+      const nonWinners = regRanked.filter(d => simWins.get(d.slug) === 0);
+      const limit = rule.field;
+      if (winners.length >= limit) {
+        playoffField = winners.slice(0, limit);
+      } else {
+        playoffField = [...winners, ...nonWinners.slice(0, limit - winners.length)];
+      }
+    } else {
+      // Championship format (pre-2004 / pre-2016): no playoffs, leader wins.
+      // The "field" is the whole regRanked list; champion is rank 1.
+      playoffField = regRanked;
+    }
+
+    playoffField.forEach((d, idx) => {
+      playoffMakes.set(d.slug, playoffMakes.get(d.slug) + 1);
+      seedSamples.get(d.slug).push(idx + 1);
+    });
+    drivers.forEach(d => {
+      if (!playoffField.includes(d)) seedSamples.get(d.slug).push(null);
+    });
+
+    // ---- Playoff phase ----
+    let champion = null;
+    const projTotals = new Map(simPts); // copy reg-season totals for non-elim formats
+
+    if (rule.format === "chase-reseeded") {
+      // Reseed: each field driver gets reseedTable[idx] + raceWinPts × season wins.
+      // Then everyone races the 10/9/7 chase races, accumulating predicted points.
+      // Most points at end = champion.
+      const reseed = new Map();
+      playoffField.forEach((d, idx) => {
+        const base = (rule.reseedTable && rule.reseedTable[idx]) ||
+                     (rule.reseedTable && rule.reseedTable[rule.reseedTable.length - 1]) ||
+                     2000;
+        const winsBonus = (rule.raceWinPts || 55) * simWins.get(d.slug);
+        reseed.set(d.slug, base + winsBonus);
+      });
+      // Race the chase races
+      playoffMatrix.forEach(entry => {
+        const finishes = _simulateOneRace(entry, playoffField);
+        playoffField.forEach(d => {
+          const pts = _finishPtsScale(finishes.get(d.slug));
+          reseed.set(d.slug, reseed.get(d.slug) + pts);
+        });
+      });
+      // Champion = leader after chase
+      const chaseRanked = playoffField.slice().sort((a, b) =>
+        reseed.get(b.slug) - reseed.get(a.slug)
+      );
+      champion = chaseRanked[0];
+      // Record final totals for the projection table (include chase pts)
+      chaseRanked.forEach((d, idx) => {
+        projTotals.set(d.slug, reseed.get(d.slug));
+        finalRankSamples.get(d.slug).push(idx + 1);
+      });
+      // Drivers who didn't make the playoffs: their reg-season total
+      // stands. They're ranked below the playoff field.
+      drivers.filter(d => !playoffField.includes(d)).forEach(d => {
+        finalRankSamples.get(d.slug).push(null);
+      });
+    } else if (rule.format === "elimination") {
+      // Walk rounds, eliminate per cutTo, finale picks champ by lowest finish.
+      let alive = playoffField.slice();
+      let raceCursor = 0;
+      rule.rounds.forEach(round => {
+        const raceCount = round.races;
+        const isFinal = round.cutTo === 1;
+        const roundMatrix = playoffMatrix.slice(raceCursor, raceCursor + raceCount);
+        raceCursor += raceCount;
+
+        // For each round, sum points across its races, sample win-and-advance
+        const roundPts = new Map(alive.map(d => [d.slug, 0]));
+        const roundWinners = new Set();
+        roundMatrix.forEach(entry => {
+          const finishes = _simulateOneRace(entry, alive);
+          alive.forEach(d => {
+            const finish = finishes.get(d.slug);
+            roundPts.set(d.slug, roundPts.get(d.slug) + _finishPtsScale(finish));
+            if (finish === 1) roundWinners.add(d.slug);
+          });
+        });
+
+        if (isFinal) {
+          // Champion = lowest finish in the final race (already last entry
+          // in roundMatrix). Re-run if a finale was missed (shouldn't happen).
+          const finaleEntry = roundMatrix[roundMatrix.length - 1];
+          if (finaleEntry) {
+            const finaleFinishes = _simulateOneRace(finaleEntry, alive);
+            const sorted = alive.slice().sort((a, b) =>
+              finaleFinishes.get(a.slug) - finaleFinishes.get(b.slug)
+            );
+            champion = sorted[0];
+            // Survival flag for the Championship 4 round
+            alive.forEach(d => {
+              const rs = roundSurvival.get(d.slug);
+              rs.set(round.name, (rs.get(round.name) || 0) + 1);
+            });
+          }
+        } else {
+          // Advance: winners auto-advance, then fill by round points.
+          const auto = alive.filter(d => roundWinners.has(d.slug));
+          const nonAuto = alive.filter(d => !roundWinners.has(d.slug))
+            .sort((a, b) => roundPts.get(b.slug) - roundPts.get(a.slug));
+          const advanceSlots = Math.max(0, round.cutTo - auto.length);
+          const advanced = [...auto, ...nonAuto.slice(0, advanceSlots)];
+          // Track survival for all alive drivers (advanced or not) at THIS round
+          alive.forEach(d => {
+            const rs = roundSurvival.get(d.slug);
+            // "survived this round" = advanced past this round's cut
+            if (advanced.includes(d)) {
+              rs.set(round.name, (rs.get(round.name) || 0) + 1);
+            }
+          });
+          alive = advanced;
+        }
+      });
+      // Final ranks: champion=1, other C4 drivers=2-4 by their finale finish,
+      // round-of-8 elims=5-8, round-of-12=9-12, etc.
+      // Simplified: rank within playoff field by how far they got + finale finish.
+      // For non-playoff drivers, rank by reg-season total below the playoff field.
+      const playoffRanked = playoffField.slice().sort((a, b) => {
+        // Re-rank by "made how far". This is approximate — we don't track
+        // every round's exact survival sequence per sim, just the aggregate.
+        // For UI purposes, the median rank is what matters.
+        return simPts.get(b.slug) - simPts.get(a.slug);
+      });
+      // Champion to top
+      if (champion) {
+        const cidx = playoffRanked.indexOf(champion);
+        if (cidx > 0) {
+          playoffRanked.splice(cidx, 1);
+          playoffRanked.unshift(champion);
+        }
+      }
+      playoffRanked.forEach((d, idx) => {
+        finalRankSamples.get(d.slug).push(idx + 1);
+      });
+      drivers.filter(d => !playoffField.includes(d)).forEach(d => {
+        finalRankSamples.get(d.slug).push(null);
+      });
+    } else {
+      // Championship format — leader wins, no playoff phase.
+      champion = regRanked[0];
+      regRanked.forEach((d, idx) => {
+        finalRankSamples.get(d.slug).push(idx + 1);
+      });
+    }
+
+    if (champion) {
+      championshipWins.set(champion.slug, championshipWins.get(champion.slug) + 1);
+    }
+
+    // Record final projected total per driver (post-chase for chase-reseeded,
+    // reg-season total for everyone else — playoff bracket doesn't reset
+    // points in elimination, so using simPts is a reasonable proxy).
+    drivers.forEach(d => {
+      finalTotalSamples.get(d.slug).push(projTotals.get(d.slug));
+    });
+  }
+
+  // ----- Aggregate -----
+  const median = (arr) => {
+    const cleaned = arr.filter(v => v != null).slice().sort((a, b) => a - b);
+    if (cleaned.length === 0) return null;
+    const mid = Math.floor(cleaned.length / 2);
+    return cleaned.length % 2 === 0
+      ? (cleaned[mid - 1] + cleaned[mid]) / 2
+      : cleaned[mid];
+  };
+
+  const projection = drivers.map(d => {
+    const playoffPct = playoffMakes.get(d.slug) / nSims;
+    const champPct = championshipWins.get(d.slug) / nSims;
+    const medianSeed = median(seedSamples.get(d.slug));
+    const medianTotal = median(finalTotalSamples.get(d.slug));
+    const medianRank = median(finalRankSamples.get(d.slug));
+
+    // Round-by-round survival probabilities (elimination format only)
+    const roundPcts = {};
+    if (rule.format === "elimination") {
+      const survMap = roundSurvival.get(d.slug);
+      rule.rounds.forEach(r => {
+        roundPcts[r.name] = (survMap.get(r.name) || 0) / nSims;
+      });
+    }
+
+    return {
+      slug: d.slug,
+      name: d.name,
+      car_number: d.car_number,
+      team_code: d.team_code,
+      manufacturer: d.manufacturer,
+      current_pts: d.currentPts,
+      current_wins: d.currentWins,
+      playoff_pct: playoffPct,
+      championship_pct: champPct,
+      round_survival_pcts: roundPcts,
+      median_seed: medianSeed,
+      median_total: medianTotal,
+      median_rank: medianRank,
+    };
+  });
+
+  // Sort by championship_pct DESC (the "who's most likely to win" view).
+  // The UI may re-sort by playoff_pct, median_rank, etc.
+  projection.sort((a, b) => b.championship_pct - a.championship_pct);
+
+  const result = {
+    series,
+    year,
+    drivers: projection,
+    remaining_races: remainingRaces.length,
+    completed_races: completedRaces.length,
+    n_sims: nSims,
+    rule,
+    format: rule.format,
+    reg_end_round: regEndRound,
+  };
+  PROJECTION_CACHE.set(cacheKey, result);
+  return result;
+}
+
+// Special case: season already complete. We can't "project" but the
+// page still needs to render something useful. Return the canonical
+// final standings as 100%-confidence outcomes so the UI degrades
+// gracefully.
+function _buildFinalSeasonProjection(series, year, rule, completedRaces) {
+  const totals = computeSeasonTotals();
+  const drivers = totals.map((t, idx) => ({
+    slug: slugify(t.primaryDriver || t.driver || ""),
+    name: t.primaryDriver || t.driver || "",
+    car_number: t.car_number,
+    team_code: t.team_code,
+    manufacturer: t.manufacturer,
+    current_pts: t.total,
+    current_wins: 0,  // not strictly needed in season-over view
+    playoff_pct: idx < (rule.field || 16) ? 1 : 0,
+    championship_pct: idx === 0 ? 1 : 0,
+    round_survival_pcts: {},
+    median_seed: idx + 1,
+    median_total: t.total,
+    median_rank: idx + 1,
+  }));
+  return {
+    series, year, drivers,
+    remaining_races: 0,
+    completed_races: completedRaces.length,
+    n_sims: 0,
+    rule, format: rule.format,
+    reg_end_round: rule.regSeasonEndRound || 26,
+    season_over: true,
   };
 }
 
@@ -21287,6 +21819,324 @@ function _pointsCalcPlayoffTable(playoffStandings, rule, view) {
     </table>
   `;
 }
+
+// ============================================================
+// SEASON PROJECTION PAGE
+// ============================================================
+// Renders the Monte Carlo simulation results from simulateSeasonRollout.
+// Layout (top to bottom):
+//   1. Header — series picker + "re-simulate" button + sim metadata
+//   2. Championship probability — top 5 most likely champions with %
+//   3. Playoff probability table — every full-time driver with
+//      playoff %, projected seed, championship %, and a deep dive
+//      into round-by-round survival (elimination format only)
+//   4. Cutline focus — the drivers right around the playoff cutline
+//      (e.g., 14th-18th in a 16-driver field). Bubble drama panel.
+//
+// Series picker lives ON THE PAGE (per user request) and re-renders
+// the simulation when changed.
+
+const PROJECTION_STATE = {
+  series: null,   // "NCS" | "NOS" | "NTS" — picked on the page
+  sortBy: "championship",   // "championship" | "playoff" | "rank" | "name"
+  nSims: 500,
+};
+
+function renderProjection() {
+  const host = document.getElementById("projection-host");
+  const sub = document.getElementById("projection-sub");
+  if (!host) return;
+
+  // Series picker defaults to current STATE.series on first visit.
+  if (!PROJECTION_STATE.series) {
+    PROJECTION_STATE.series = STATE.series || "NCS";
+  }
+  const series = PROJECTION_STATE.series;
+  const year = STATE.season;
+
+  // The simulator reads SEASON_CACHE for cross-season analytics
+  // (predictDriverForRace pulls per-track history). If the series
+  // the user picked doesn't match the loaded STATE.data, we need
+  // to either switch state silently or warn the user. For now,
+  // require the projection series to match STATE.series — show a
+  // hint to swap series via the topbar if they differ.
+  if (series !== STATE.series) {
+    host.innerHTML = `
+      <div class="proj-controls">
+        ${_renderProjectionSeriesPicker(series)}
+      </div>
+      <div class="empty" style="padding:32px;text-align:center;">
+        Switch the topbar series to <strong>${series}</strong> to project that series's season.
+        <br><br>
+        <span class="muted" style="font-size:12px;">The projector reads from the loaded season data; matching the topbar series keeps the model honest.</span>
+      </div>
+    `;
+    _wireProjectionControls();
+    return;
+  }
+
+  if (sub) sub.textContent = `${year} ${series} · Monte Carlo season rollout`;
+
+  // Show a loading placeholder before kicking off the (synchronous)
+  // simulation. 500 sims × 24 races × 36 drivers is ~150ms in practice,
+  // but on slow devices it could be longer. Two-tick render lets the
+  // loading state paint before we block.
+  host.innerHTML = `
+    <div class="proj-controls">
+      ${_renderProjectionSeriesPicker(series)}
+      <button class="btn-ghost" id="proj-resim">Re-simulate</button>
+      <span class="proj-meta muted" id="proj-meta">Simulating ${PROJECTION_STATE.nSims} season rollouts…</span>
+    </div>
+    <div class="proj-loading">Crunching ${PROJECTION_STATE.nSims} season rollouts…</div>
+  `;
+  _wireProjectionControls();
+
+  setTimeout(() => {
+    const proj = simulateSeasonRollout(series, year, { nSims: PROJECTION_STATE.nSims });
+    if (!proj) {
+      host.innerHTML = `
+        <div class="proj-controls">${_renderProjectionSeriesPicker(series)}</div>
+        <div class="empty" style="padding:32px;text-align:center;">
+          No playoff rule defined for ${series} ${year}.
+        </div>
+      `;
+      _wireProjectionControls();
+      return;
+    }
+    host.innerHTML = _buildProjectionHTML(proj);
+    _wireProjectionControls();
+  }, 50);
+}
+
+function _renderProjectionSeriesPicker(active) {
+  return `
+    <div class="toggle-group proj-series-toggle" data-group="proj-series">
+      <button class="${active === "NCS" ? "on" : ""}" data-val="NCS">NCS</button>
+      <button class="${active === "NOS" ? "on" : ""}" data-val="NOS">NOS</button>
+      <button class="${active === "NTS" ? "on" : ""}" data-val="NTS">NTS</button>
+    </div>
+  `;
+}
+
+function _wireProjectionControls() {
+  const root = document.getElementById("projection-takeover");
+  if (!root) return;
+  // Series picker on the page
+  root.querySelectorAll('[data-group="proj-series"] button').forEach(btn => {
+    btn.addEventListener("click", () => {
+      const v = btn.dataset.val;
+      if (!v || v === PROJECTION_STATE.series) return;
+      PROJECTION_STATE.series = v;
+      // If picked series isn't the topbar series, the render function
+      // will show a hint to swap. Either way, re-render.
+      renderProjection();
+    });
+  });
+  // Re-simulate
+  const resimBtn = root.querySelector("#proj-resim");
+  if (resimBtn) {
+    resimBtn.addEventListener("click", () => {
+      // Force a fresh run with new random draws.
+      PROJECTION_CACHE.clear();
+      renderProjection();
+    });
+  }
+}
+
+function _buildProjectionHTML(proj) {
+  if (proj.season_over) {
+    // Render the post-season summary (canonical final standings as
+    // the "projection" since there's nothing left to predict).
+    return `
+      <div class="proj-controls">
+        ${_renderProjectionSeriesPicker(proj.series)}
+        <span class="proj-meta muted">Season complete · canonical final standings</span>
+      </div>
+      ${_renderProjectionMainTable(proj)}
+    `;
+  }
+
+  // Top championship contenders (top 5 by championship_pct)
+  const topContenders = proj.drivers.slice(0, 5);
+
+  // Cutline focus: drivers right around the playoff cutline
+  // Sort by median_seed (ascending — best seed first), pick rows
+  // immediately around the cutline index.
+  const seeded = proj.drivers
+    .filter(d => d.median_seed != null)
+    .slice()
+    .sort((a, b) => a.median_seed - b.median_seed);
+  const cutIdx = (proj.rule.field || 16) - 1;  // 0-indexed
+  const cutlineRows = seeded.slice(Math.max(0, cutIdx - 2), Math.min(seeded.length, cutIdx + 3));
+
+  return `
+    <div class="proj-controls">
+      ${_renderProjectionSeriesPicker(proj.series)}
+      <button class="btn-ghost" id="proj-resim">Re-simulate</button>
+      <span class="proj-meta muted">
+        ${proj.n_sims.toLocaleString()} season rollouts ·
+        ${proj.completed_races} races run ·
+        ${proj.remaining_races} remaining ·
+        ${proj.format === "chase-reseeded" ? "Chase format (top " + proj.rule.field + " by points)" : proj.format}
+      </span>
+    </div>
+
+    ${_renderProjectionTopContenders(topContenders, proj)}
+
+    ${_renderProjectionMainTable(proj)}
+
+    ${cutlineRows.length > 0 ? _renderProjectionCutline(cutlineRows, proj) : ""}
+  `;
+}
+
+function _renderProjectionTopContenders(top, proj) {
+  if (!top.length) return "";
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">most likely champion</div>
+        <h2 class="ed-hero ed-hero-sm">Championship picture</h2>
+      </div>
+      <div class="proj-contender-row">
+        ${top.map((d, i) => {
+          const carHex = colorFor(proj.series, d.car_number);
+          const txt = contrastTextFor(carHex);
+          const pct = (d.championship_pct * 100);
+          const playoffPct = (d.playoff_pct * 100);
+          const isLeader = i === 0;
+          return `
+            <div class="proj-contender ${isLeader ? "proj-contender-leader" : ""}">
+              <div class="proj-contender-rank">${i + 1}</div>
+              <div class="proj-contender-name-row">
+                <span class="proj-contender-car" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
+                <a class="proj-contender-name profile-link" href="#/driver/${encodeURIComponent(d.slug)}">${escapeHTML(d.name)}</a>
+              </div>
+              <div class="proj-contender-bigpct">${pct.toFixed(1)}<span class="proj-pct-symbol">%</span></div>
+              <div class="proj-contender-sub">championship</div>
+              <div class="proj-contender-bar">
+                <div class="proj-contender-bar-fill" style="width:${Math.min(100, pct).toFixed(1)}%"></div>
+              </div>
+              <div class="proj-contender-meta">
+                <span class="muted">${playoffPct.toFixed(0)}% to make playoffs</span>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function _renderProjectionMainTable(proj) {
+  const isElim = proj.format === "elimination";
+  const roundCols = isElim
+    ? (proj.rule.rounds || []).map(r => `<th class="num proj-rnd-th" title="${escapeHTML(r.name)}">${_shortRoundName(r.name)}</th>`).join("")
+    : "";
+  const roundHeads = isElim
+    ? `<th class="num proj-rnd-th-group" colspan="${proj.rule.rounds.length}">Round survival %</th>`
+    : "";
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">full field</div>
+        <h2 class="ed-hero ed-hero-sm">Playoff projection</h2>
+      </div>
+      <div class="proj-table-host">
+        <table class="data-table proj-table">
+          <thead>
+            <tr>
+              <th class="num">Rank</th>
+              <th>Driver</th>
+              <th class="num">Current Pts</th>
+              <th class="num">Wins</th>
+              <th class="num">Median Seed</th>
+              <th class="num">Playoff %</th>
+              ${roundCols}
+              <th class="num">Champ %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${proj.drivers.map((d, i) => {
+              const carHex = colorFor(proj.series, d.car_number);
+              const txt = contrastTextFor(carHex);
+              const playoffPct = d.playoff_pct * 100;
+              const champPct = d.championship_pct * 100;
+              const seedDisplay = d.median_seed != null ? d.median_seed.toFixed(1) : "—";
+              const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
+              const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
+              const roundCells = isElim
+                ? (proj.rule.rounds || []).map(r => {
+                    const v = (d.round_survival_pcts[r.name] || 0) * 100;
+                    const cls = v >= 60 ? "proj-pct-hot" : v >= 25 ? "proj-pct-warm" : "proj-pct-cold";
+                    return `<td class="num ${cls}">${v.toFixed(0)}%</td>`;
+                  }).join("")
+                : "";
+              return `<tr>
+                <td class="num">${i + 1}</td>
+                <td>
+                  <a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
+                    <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
+                    <span>${escapeHTML(d.name)}</span>
+                  </a>
+                </td>
+                <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
+                <td class="num">${d.current_wins}</td>
+                <td class="num">${seedDisplay}</td>
+                <td class="num ${playoffCls}">${playoffPct.toFixed(0)}%</td>
+                ${roundCells}
+                <td class="num ${champCls}"><strong>${champPct.toFixed(1)}%</strong></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function _renderProjectionCutline(cutlineRows, proj) {
+  const cutPos = proj.rule.field || 16;
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">the bubble</div>
+        <h2 class="ed-hero ed-hero-sm">Cutline drama</h2>
+        <div class="ed-byline">Drivers near the ${cutPos}-driver cutoff. Small swings in remaining races flip these spots.</div>
+      </div>
+      <div class="proj-cutline-list">
+        ${cutlineRows.map((d, idx) => {
+          const seedNum = Math.round(d.median_seed);
+          const inField = seedNum <= cutPos;
+          const carHex = colorFor(proj.series, d.car_number);
+          const txt = contrastTextFor(carHex);
+          const playoffPct = d.playoff_pct * 100;
+          // Detect the cut line — render a divider between the last
+          // "in" driver and the first "out" driver.
+          const prev = cutlineRows[idx - 1];
+          const showDivider = prev && Math.round(prev.median_seed) <= cutPos && seedNum > cutPos;
+          return `
+            ${showDivider ? `<div class="proj-cutline-divider">— CUTLINE — ${cutPos} make it —</div>` : ""}
+            <div class="proj-cutline-row ${inField ? "proj-cutline-in" : "proj-cutline-out"}">
+              <div class="proj-cutline-seed">P${seedNum}</div>
+              <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
+              <a class="proj-cutline-name profile-link" href="#/driver/${encodeURIComponent(d.slug)}">${escapeHTML(d.name)}</a>
+              <div class="proj-cutline-pct">${playoffPct.toFixed(0)}% to make playoffs</div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function _shortRoundName(name) {
+  // "Round of 16" → "R16", "Championship 4" → "C4"
+  if (!name) return "";
+  if (/championship/i.test(name)) return "C4";
+  const m = name.match(/(\d+)/);
+  return m ? `R${m[1]}` : name;
+}
+
 
 function renderPointsCalc() {
   const host = document.getElementById("pointscalc-host");
