@@ -5767,10 +5767,18 @@ const TRACK_TYPES = {
   CHA: "road",         // Charlotte Roval
   ROV: "road",
   IRC: "road",         // Indy RC
-  CHI: "road",         // Chicago Street
-  CHG: "road",
+  CHG: "road",         // Chicago Street (2023-2025)
+  SDG: "road",         // San Diego street course (2026+)
   MXI: "road",         // Mexico City (road course for 2026)
   MEX: "road",
+
+  // Chicagoland — 1.5mi intermediate oval, returned to schedule 2026.
+  // Note: track code CHI was used by RR for both Chicago Street (2023-2025,
+  // a road course) and Chicagoland (2001-2019 + 2026, an intermediate).
+  // We map it to "inter" for 2026 correctness. Historical Chicago Street
+  // data (if loaded) will incorrectly show as intermediate — a year-aware
+  // override would fix this but isn't implemented yet.
+  CHI: "inter",
 };
 
 const TRACK_TYPE_LABELS = {
@@ -5809,8 +5817,9 @@ const TRACK_NAMES = {
   NHA: "New Hampshire",
   LOU: "New Hampshire",  // Loudon — same track
   POC: "Pocono",
-  CHI: "Chicago Street",
+  CHI: "Chicagoland",
   CHG: "Chicago Street",
+  SDG: "San Diego",
   NSH: "Nashville",         // Fairgrounds (modern, occasional Cup return)
   NSV: "Nashville Superspeedway",  // Lebanon TN — separate from NSH
   MIA: "Homestead",
@@ -11202,8 +11211,8 @@ function predictDriverForRace(driverName, series, trackCode) {
     { name: "track_last4",   label: "Last 4 here",        w: 0.30, val: trackStats?.last4_avg ?? null },
     { name: "type_last5",    label: "Last 5 same type",   w: 0.30, val: typeStats?.last5_avg ?? null },
     { name: "form_last8",    label: "Form (last 8)",      w: 0.15, val: form8?.avg_finish ?? null },
-    { name: "track_alltime", label: "All-time here",      w: 0.15, val: trackStats?.avg_finish ?? null },
-    { name: "season_ytd",    label: "Season YTD",         w: 0.10, val: seasonAvg },
+    { name: "track_alltime", label: "All-time here",      w: 0.20, val: trackStats?.avg_finish ?? null },
+    { name: "season_ytd",    label: "Season YTD",         w: 0.05, val: seasonAvg },
   ];
   const avail = signals.filter(s => s.val != null);
   if (avail.length === 0) return null;
@@ -22170,11 +22179,11 @@ function _wireProjectionTooltips() {
     if (hit) {
       const round = hit.dataset.round || "?";
       const cum = hit.dataset.cum || "?";
-      const race = hit.dataset.race || "";
+      const track = hit.dataset.track || "";
       const finish = hit.dataset.finish || "—";
       tip.innerHTML = `
         <div class="pc-tip-driver">${driver}</div>
-        ${race ? `<div class="pc-tip-row"><span>Race</span><span>${race}</span></div>` : ""}
+        ${track ? `<div class="pc-tip-row"><span>Track</span><span>${track}</span></div>` : ""}
         <div class="pc-tip-row"><span>Round</span><span>R${round}</span></div>
         ${finish !== "—" ? `<div class="pc-tip-row"><span>Proj finish</span><span>P${finish}</span></div>` : ""}
         <div class="pc-tip-row"><span>Cum. pts</span><span>${Number(cum).toLocaleString()}</span></div>
@@ -22312,19 +22321,19 @@ function _renderProjectionChart(proj) {
     .sort((a, b) => (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0))
     .slice(0, 25);
 
-  // Compute current standings rank for position-change arrows
+  const barH = 22;
+  const gap = 3;
+  const leftPad = 210; // room for: position + arrow + name
+  const rightPad = 120;
+  const chartW = 920;
+  const chartH = sorted.length * (barH + gap) + 40;
+  const maxPts = Math.max(...sorted.map(d => d.projected_reg_total || d.current_pts || 0), 1);
+
+  // Current standings rank for position-change arrows
   const currentRanked = proj.drivers.slice()
     .sort((a, b) => (b.current_pts || 0) - (a.current_pts || 0));
   const currentRankMap = new Map();
   currentRanked.forEach((d, i) => currentRankMap.set(d.slug, i + 1));
-
-  const barH = 22;
-  const gap = 3;
-  const leftPad = 200; // wider to fit arrows
-  const rightPad = 120;
-  const chartW = 900;
-  const chartH = sorted.length * (barH + gap) + 40;
-  const maxPts = Math.max(...sorted.map(d => d.projected_reg_total || d.current_pts || 0), 1);
 
   const bars = sorted.map((d, i) => {
     const y = i * (barH + gap) + 20;
@@ -22337,28 +22346,26 @@ function _renderProjectionChart(proj) {
     const pct = (d.playoff_pct * 100).toFixed(0);
     const isCutline = i === fieldSize - 1;
 
-    // Position change arrow
+    // Position change arrow — in its own column (x=52) so it doesn't overlap
     const projRank = i + 1;
     const curRank = currentRankMap.get(d.slug) || projRank;
-    const diff = curRank - projRank; // positive = gained positions
-    let arrowSVG = "";
+    const diff = curRank - projRank;
+    let arrowText = "";
     if (diff > 0) {
-      arrowSVG = `<text x="46" y="${y + barH / 2 + 4}" text-anchor="end"
-        style="font-family:var(--mono);font-size:10px;fill:#6ce06c;font-weight:700;">▲${diff}</text>`;
+      arrowText = `<text x="52" y="${y + barH / 2 + 4}" text-anchor="start"
+        style="font-family:var(--mono);font-size:9px;fill:#6ce06c;font-weight:700;">▲${diff}</text>`;
     } else if (diff < 0) {
-      arrowSVG = `<text x="46" y="${y + barH / 2 + 4}" text-anchor="end"
-        style="font-family:var(--mono);font-size:10px;fill:#ff6b6b;font-weight:700;">▼${Math.abs(diff)}</text>`;
-    } else {
-      arrowSVG = `<text x="46" y="${y + barH / 2 + 4}" text-anchor="end"
-        style="font-family:var(--mono);font-size:9px;fill:var(--muted);">—</text>`;
+      arrowText = `<text x="52" y="${y + barH / 2 + 4}" text-anchor="start"
+        style="font-family:var(--mono);font-size:9px;fill:#ff6b6b;font-weight:700;">▼${Math.abs(diff)}</text>`;
     }
+
     return `
       <g>
         <text x="18" y="${y + barH / 2 + 4}" text-anchor="start"
               style="font-family:var(--mono);font-size:11px;font-weight:700;fill:var(--muted);">
-          P${i + 1}
+          P${projRank}
         </text>
-        ${arrowSVG}
+        ${arrowText}
         <text x="${leftPad - 6}" y="${y + barH / 2 + 4}" text-anchor="end"
               style="font-family:var(--serif);font-size:12px;fill:var(--text-2);">
           ${escapeHTML(d.name)}
@@ -22520,7 +22527,7 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
       const predFinish = pred ? pred.predicted_finish : 20;
       const racePts = _finishPtsScale(Math.round(predFinish));
       cum += racePts;
-      points.push({ round: race.round, cum, predFinish: Math.round(predFinish) });
+      points.push({ round: race.round, cum, predFinish: Math.round(predFinish), track: race.track || race.track_code || "" });
     });
 
     return {
@@ -22573,10 +22580,18 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
     <path class="pc-line-hover" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-car="${d.car_number}" d="${pathD}" fill="none" stroke="transparent" stroke-width="12" stroke-linejoin="round" pointer-events="stroke"/>`;
   }).join("");
 
-  // Hit circles
+  // Visible dots at each data point
+  const dots = traces.flatMap(d => {
+    const carHex = colorFor(proj.series, d.car_number);
+    return d.points.filter(p => p.round > regEnd).map(p =>
+      `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="3" fill="${carHex}" stroke="var(--card)" stroke-width="1" opacity="0.9" pointer-events="none"/>`
+    );
+  }).join("");
+
+  // Hit circles (invisible, larger for hover)
   const hits = traces.flatMap(d =>
     d.points.filter(p => p.round > regEnd).map(p =>
-      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="12" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}" data-finish="${p.predFinish || ''}"/>`
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="12" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}" data-finish="${p.predFinish || ''}" data-track="${escapeHTML(p.track || '')}"/>`
     )
   ).join("");
 
@@ -22592,6 +22607,7 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
           ${gridLines.join("")}
           ${xLabels.join("")}
           ${lines}
+          ${dots}
           ${hits}
         </svg>
         <div class="pc-tooltip" hidden></div>
