@@ -10386,9 +10386,31 @@ function _sampleStagePts(meanStagePts) {
 // "re-simulate" button if the user wants fresh draws.
 function simulateSeasonRollout(series, year, opts = {}) {
   const nSims = opts.nSims || 500;
-  const cacheKey = `${series}|${year}|${nSims}`;
+
+  // Cache key includes completed race count so the sim only reruns
+  // when new race data arrives, not on every page refresh.
+  const allRacesForCount = allRacesSorted();
+  const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
+  const cacheKey = `${series}|${year}|${nSims}|${completedCount}`;
+
+  // Check in-memory cache first
   if (PROJECTION_CACHE.has(cacheKey) && !opts.force) {
     return PROJECTION_CACHE.get(cacheKey);
+  }
+
+  // Check localStorage for persistent cache across page refreshes
+  const lsKey = `proj_${series}_${year}_${completedCount}`;
+  if (!opts.force) {
+    try {
+      const stored = localStorage.getItem(lsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.n_sims === nSims) {
+          PROJECTION_CACHE.set(cacheKey, parsed);
+          return parsed;
+        }
+      }
+    } catch (_) { /* localStorage unavailable or corrupt — continue */ }
   }
 
   const rule = resolvePlayoffRules(series, year);
@@ -10420,6 +10442,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
     const totalEntry = totals.find(t => (t.car_number) === e.car_number);
     const currentPts = totalEntry ? (totalEntry.total || 0) : 0;
     const currentWins = (e.races || []).reduce((s, r) => s + (r.finish === 1 ? 1 : 0), 0);
+    const currentTop5 = (e.races || []).reduce((s, r) => s + (r.finish >= 1 && r.finish <= 5 ? 1 : 0), 0);
     // Season YTD avg finish — used as a fallback for predictDriverForRace
     // returning null (brand-new venue with no history etc.)
     const finishes = (e.races || []).map(r => r.finish).filter(n => n != null);
@@ -10451,32 +10474,36 @@ function simulateSeasonRollout(series, year, opts = {}) {
 
   // ----- Run iterations -----
   // Counters keyed by driver slug.
-  const playoffMakes = new Map(); // slug → count
+  const playoffMakes = new Map();
   const championshipWins = new Map();
-  const seedSamples = new Map();  // slug → array of seeds (or null if missed playoffs)
-  const finalTotalSamples = new Map(); // slug → array of projected end-of-season totals
-  const finalRankSamples = new Map();  // slug → array of final ranks
-  const winSamples = new Map(); // slug → array of total wins per sim
-  // For elimination format: track round-survival counts per slug per round.
-  const roundSurvival = new Map(); // slug → Map<roundName, count>
+  const seedSamples = new Map();
+  const regSeasonTotalSamples = new Map(); // slug → array of projected reg-season-end totals
+  const chaseTotalSamples = new Map(); // slug → array of post-chase totals (only for playoff sims)
+  const finalRankSamples = new Map();
+  const winSamples = new Map();
+  const top5Samples = new Map();
+  const roundSurvival = new Map();
 
   drivers.forEach(d => {
     playoffMakes.set(d.slug, 0);
     championshipWins.set(d.slug, 0);
     seedSamples.set(d.slug, []);
-    finalTotalSamples.set(d.slug, []);
+    regSeasonTotalSamples.set(d.slug, []);
+    chaseTotalSamples.set(d.slug, []);
     finalRankSamples.set(d.slug, []);
     winSamples.set(d.slug, []);
+    top5Samples.set(d.slug, []);
     roundSurvival.set(d.slug, new Map());
   });
 
   for (let sim = 0; sim < nSims; sim++) {
-    // ---- Regular season ----
-    const simPts = new Map(); // slug → reg-season-end total
-    const simWins = new Map(); // slug → reg-season wins (incl. actual)
+    const simPts = new Map();
+    const simWins = new Map();
+    const simTop5 = new Map();
     drivers.forEach(d => {
       simPts.set(d.slug, d.currentPts);
       simWins.set(d.slug, d.currentWins);
+      simTop5.set(d.slug, d.currentTop5 || 0);
     });
     regMatrix.forEach(entry => {
       const finishes = _simulateOneRace(entry, drivers);
@@ -10496,8 +10523,16 @@ function simulateSeasonRollout(series, year, opts = {}) {
           if (series === "NCS") pointsThisRace += 15;
           simWins.set(d.slug, simWins.get(d.slug) + 1);
         }
+        if (finish <= 5) {
+          simTop5.set(d.slug, simTop5.get(d.slug) + 1);
+        }
         simPts.set(d.slug, simPts.get(d.slug) + pointsThisRace);
       });
+    });
+
+    // Record reg-season projected totals for every driver.
+    drivers.forEach(d => {
+      regSeasonTotalSamples.get(d.slug).push(simPts.get(d.slug));
     });
 
     // ---- Build projected reg-season standings ----
@@ -10577,6 +10612,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
       // Record final totals for the projection table (include chase pts)
       chaseRanked.forEach((d, idx) => {
         projTotals.set(d.slug, reseed.get(d.slug));
+        chaseTotalSamples.get(d.slug).push(reseed.get(d.slug));
         finalRankSamples.get(d.slug).push(idx + 1);
       });
       // Drivers who didn't make the playoffs: their reg-season total
@@ -10682,6 +10718,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
     drivers.forEach(d => {
       finalTotalSamples.get(d.slug).push(projTotals.get(d.slug));
       winSamples.get(d.slug).push(simWins.get(d.slug) || 0);
+      top5Samples.get(d.slug).push(simTop5.get(d.slug) || 0);
     });
   }
 
@@ -10702,6 +10739,9 @@ function simulateSeasonRollout(series, year, opts = {}) {
     const medianTotal = median(finalTotalSamples.get(d.slug));
     const medianRank = median(finalRankSamples.get(d.slug));
     const projectedWins = median(winSamples.get(d.slug));
+    const projectedTop5 = median(top5Samples.get(d.slug));
+    const projectedRegTotal = median(regSeasonTotalSamples.get(d.slug));
+    const projectedChaseTotal = median(chaseTotalSamples.get(d.slug));
 
     // Round-by-round survival probabilities (elimination format only)
     const roundPcts = {};
@@ -10720,6 +10760,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
       manufacturer: d.manufacturer,
       current_pts: d.currentPts,
       current_wins: d.currentWins,
+      current_top5: d.currentTop5 || 0,
       playoff_pct: playoffPct,
       championship_pct: champPct,
       round_survival_pcts: roundPcts,
@@ -10727,6 +10768,9 @@ function simulateSeasonRollout(series, year, opts = {}) {
       median_total: medianTotal,
       median_rank: medianRank,
       projected_wins: projectedWins,
+      projected_top5: projectedTop5,
+      projected_reg_total: projectedRegTotal,
+      projected_chase_total: projectedChaseTotal,
     };
   });
 
@@ -10746,6 +10790,18 @@ function simulateSeasonRollout(series, year, opts = {}) {
     reg_end_round: regEndRound,
   };
   PROJECTION_CACHE.set(cacheKey, result);
+  // Persist to localStorage so the simulation survives page refreshes.
+  // Clear any stale projections for different race counts first.
+  try {
+    // Remove old entries for this series/year with different race counts
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(`proj_${series}_${year}_`) && k !== lsKey) {
+        localStorage.removeItem(k);
+      }
+    }
+    localStorage.setItem(lsKey, JSON.stringify(result));
+  } catch (_) { /* quota exceeded or unavailable — in-memory cache still works */ }
   return result;
 }
 
@@ -22122,11 +22178,12 @@ function _renderProjectionChart(proj) {
   const chartW = 800;
   const chartH = sorted.length * (barH + gap) + 40;
 
-  const maxPts = Math.max(...sorted.map(d => d.current_pts || 0), 1);
+  const maxPts = Math.max(...sorted.map(d => d.projected_reg_total || d.current_pts || 0), 1);
 
   const bars = sorted.map((d, i) => {
     const y = i * (barH + gap) + 20;
-    const w = ((d.current_pts || 0) / maxPts) * (chartW - leftPad - rightPad);
+    const projPts = d.projected_reg_total || d.current_pts || 0;
+    const w = (projPts / maxPts) * (chartW - leftPad - rightPad);
     const inField = i < fieldSize;
     const carHex = colorFor(proj.series, d.car_number);
     const pct = (d.playoff_pct * 100).toFixed(0);
@@ -22143,7 +22200,7 @@ function _renderProjectionChart(proj) {
         <rect x="${leftPad}" y="${y}" width="4" height="${barH}" rx="1" fill="${carHex}"/>
         <text x="${leftPad + Math.max(w, 2) + 6}" y="${y + barH / 2 + 4}"
               style="font-family:var(--mono);font-size:10px;fill:var(--muted);">
-          ${(d.current_pts || 0).toLocaleString()} · ${pct}%
+          ${Math.round(projPts).toLocaleString()} pts · ${pct}%
         </text>
       </g>
       ${isCutline ? `
@@ -22196,7 +22253,9 @@ function _renderProjectionRegSeasonTable(proj) {
             <th class="num">#</th>
             <th>Driver</th>
             <th class="num">Current Pts</th>
-            <th class="num">Wins</th>
+            <th class="num">Proj Pts</th>
+            <th class="num">Proj Wins</th>
+            <th class="num">Proj Top 5</th>
             <th class="num">Proj Seed</th>
             <th class="num">Chase %</th>
           </tr></thead>
@@ -22207,6 +22266,9 @@ function _renderProjectionRegSeasonTable(proj) {
               const playoffPct = d.playoff_pct * 100;
               const seedDisplay = d.median_seed != null ? d.median_seed.toFixed(1) : "—";
               const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
+              const projPts = d.projected_reg_total != null ? Math.round(d.projected_reg_total).toLocaleString() : "—";
+              const projWins = d.projected_wins != null ? d.projected_wins.toFixed(1) : "—";
+              const projTop5 = d.projected_top5 != null ? d.projected_top5.toFixed(1) : "—";
               const isCutline = d.median_seed != null && Math.round(d.median_seed) === fieldSize;
               return `<tr${i === fieldSize ? ' class="proj-table-cutline"' : ""}>
                 <td class="num">${i + 1}</td>
@@ -22217,7 +22279,9 @@ function _renderProjectionRegSeasonTable(proj) {
                   </a>
                 </td>
                 <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
-                <td class="num">${d.current_wins}</td>
+                <td class="num">${projPts}</td>
+                <td class="num">${projWins}</td>
+                <td class="num">${projTop5}</td>
                 <td class="num">${seedDisplay}</td>
                 <td class="num ${playoffCls}">${playoffPct.toFixed(0)}%</td>
               </tr>`;
@@ -22247,11 +22311,9 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
           <thead><tr>
             <th class="num">#</th>
             <th>Driver</th>
-            <th class="num">Current Pts</th>
-            <th class="num">Current Wins</th>
             <th class="num">Proj Wins</th>
-            <th class="num">Proj Seed</th>
-            <th class="num">Proj Total</th>
+            <th class="num">Proj Top 5</th>
+            <th class="num">Chase Pts</th>
             <th class="num">Champ %</th>
           </tr></thead>
           <tbody>
@@ -22260,9 +22322,9 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
               const txt = contrastTextFor(carHex);
               const champPct = d.championship_pct * 100;
               const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
-              const seedDisplay = d.median_seed != null ? d.median_seed.toFixed(1) : "—";
               const projWins = d.projected_wins != null ? d.projected_wins.toFixed(1) : "—";
-              const projTotal = d.median_total != null ? Math.round(d.median_total).toLocaleString() : "—";
+              const projTop5 = d.projected_top5 != null ? d.projected_top5.toFixed(1) : "—";
+              const chasePts = d.projected_chase_total != null ? Math.round(d.projected_chase_total).toLocaleString() : "—";
               return `<tr>
                 <td class="num">${i + 1}</td>
                 <td>
@@ -22271,11 +22333,9 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
                     <span>${escapeHTML(d.name)}</span>
                   </a>
                 </td>
-                <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
-                <td class="num">${d.current_wins}</td>
                 <td class="num">${projWins}</td>
-                <td class="num">${seedDisplay}</td>
-                <td class="num">${projTotal}</td>
+                <td class="num">${projTop5}</td>
+                <td class="num">${chasePts}</td>
                 <td class="num ${champCls}"><strong>${champPct.toFixed(1)}%</strong></td>
               </tr>`;
             }).join("")}
