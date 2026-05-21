@@ -3709,6 +3709,7 @@ function getDriverTrackTypeStats(driverName, series, trackTypeKey) {
     avg_finish: finishes.length ? sum(finishes) / finishes.length : null,
     avg_stage_pts: atType.length ? sum(stagePts) / atType.length : 0,
     last5_avg: lastNStartsAvg(5),
+    last10_avg: lastNStartsAvg(10),
     last5_stage_pts_avg: lastNStartsStageAvg(5),
     last5_race_pts_avg: lastNStartsRacePtsAvg(5),
   };
@@ -3739,6 +3740,58 @@ function getDriverRecentForm(driverName, series, lastN = 5) {
       return pts.length ? pts.reduce((a, b) => a + b, 0) / pts.length : null;
     })(),
   };
+}
+
+// Speed signals — qualifying, stage position, laps led, top-15 rate.
+// Used by the prediction model's Tier 2 (speed adjustment) to capture
+// raw pace independent of final finish (which can be ruined by wrecks,
+// pit strategy, penalties, etc.).
+
+// Average qualifying/start position over the last N races in the
+// current season. Lower = faster.
+function getDriverRecentQualAvg(driverName, series, lastN = 8) {
+  const history = getDriverRaceHistory(driverName, series);
+  const thisYear = history.filter(r => r.year === STATE.season);
+  const recent = thisYear.slice(0, lastN);
+  const starts = recent.map(r => r.start_pos).filter(n => n != null && n > 0);
+  if (starts.length === 0) return null;
+  return starts.reduce((a, b) => a + b, 0) / starts.length;
+}
+
+// Average mid-race position (mean of stage 1 + stage 2 finish positions)
+// over the last N races. Captures race pace immune to late-race incidents.
+// Returns null if no stage data available (pre-2017 races, or driver has
+// no races with stage positions).
+function getDriverRecentStageAvg(driverName, series, lastN = 8) {
+  const history = getDriverRaceHistory(driverName, series);
+  const thisYear = history.filter(r => r.year === STATE.season);
+  const recent = thisYear.slice(0, lastN);
+  const stageAvgs = recent.map(r => {
+    const s1 = r.stage_1_pos, s2 = r.stage_2_pos;
+    if (s1 != null && s2 != null) return (s1 + s2) / 2;
+    if (s1 != null) return s1;
+    if (s2 != null) return s2;
+    return null;
+  }).filter(n => n != null);
+  if (stageAvgs.length === 0) return null;
+  return stageAvgs.reduce((a, b) => a + b, 0) / stageAvgs.length;
+}
+
+// Speed bonus metrics for Tier 2 adjustment. Returns { lapsLedPerRace,
+// top15Rate, avgDriverRating } across the current season.
+function getDriverSpeedMetrics(driverName, series) {
+  const history = getDriverRaceHistory(driverName, series);
+  const thisYear = history.filter(r => r.year === STATE.season);
+  if (thisYear.length === 0) return null;
+  const totalLapsLed = thisYear.reduce((s, r) => s + (r.laps_led || 0), 0);
+  const lapsLedPerRace = totalLapsLed / thisYear.length;
+  const top15Count = thisYear.filter(r => r.finish_pos != null && r.finish_pos <= 15).length;
+  const top15Rate = top15Count / thisYear.length;
+  const ratings = thisYear.map(r => r.loop_driver_rating).filter(n => n != null);
+  const avgDriverRating = ratings.length > 0
+    ? ratings.reduce((a, b) => a + b, 0) / ratings.length
+    : null;
+  return { lapsLedPerRace, top15Rate, avgDriverRating, races: thisYear.length };
 }
 
 // "Best active drivers at THIS track" composite score. Higher = better.
@@ -11181,7 +11234,10 @@ function predictDriverForRace(driverName, series, trackCode) {
   // ----- Signal extraction -----
   const trackStats = getDriverTrackStats(driverName, series, trackCode);
   const typeStats = ttype ? getDriverTrackTypeStats(driverName, series, ttype) : null;
-  const form8 = getDriverRecentForm(driverName, series, 8);  // 15% slot
+  const form8 = getDriverRecentForm(driverName, series, 8);
+  const qualAvg = getDriverRecentQualAvg(driverName, series, 8);
+  const stageAvg = getDriverRecentStageAvg(driverName, series, 8);
+  const speedMetrics = getDriverSpeedMetrics(driverName, series);
 
   // Season YTD average finish — read from current entity races
   let seasonAvg = null;
@@ -11197,27 +11253,61 @@ function predictDriverForRace(driverName, series, trackCode) {
     }
   }
 
-  // ----- Five-signal blend (finish position) -----
-  // Weights per the model spec:
-  //   30% last 4 starts at THIS track
-  //   30% last 5 starts at this TRACK TYPE
-  //   15% form across last 8 season races (any track)
-  //   15% all-time avg at THIS track
-  //   10% season YTD average
+  // ----- Tier 1: Seven-signal weighted average (finish position) -----
   //
-  // Missing signals (e.g., debut at a venue) have their weight
-  // redistributed proportionally across the remaining available signals.
+  // Finish-based signals (where they end up):
+  //   25% last 4 starts at THIS track
+  //   20% last 10 starts at this TRACK TYPE
+  //   15% all-time avg at THIS track
+  //   10% recent form (last 8 finishes)
+  //    5% season YTD avg finish
+  //
+  // Speed signals (how fast they are, independent of finish):
+  //   10% avg qualifying position (last 8 races)
+  //   10% avg stage position (last 8 races)
+  //    5% season YTD avg finish
+  //
+  // Missing signals have their weight redistributed proportionally.
   const signals = [
-    { name: "track_last4",   label: "Last 4 here",        w: 0.30, val: trackStats?.last4_avg ?? null },
-    { name: "type_last5",    label: "Last 5 same type",   w: 0.30, val: typeStats?.last5_avg ?? null },
-    { name: "form_last8",    label: "Form (last 8)",      w: 0.15, val: form8?.avg_finish ?? null },
-    { name: "track_alltime", label: "All-time here",      w: 0.20, val: trackStats?.avg_finish ?? null },
-    { name: "season_ytd",    label: "Season YTD",         w: 0.05, val: seasonAvg },
+    { name: "track_last4",   label: "Last 4 here",          w: 0.25, val: trackStats?.last4_avg ?? null },
+    { name: "type_last10",   label: "Last 10 same type",    w: 0.20, val: typeStats?.last10_avg ?? typeStats?.last5_avg ?? null },
+    { name: "track_alltime", label: "All-time here",        w: 0.15, val: trackStats?.avg_finish ?? null },
+    { name: "qual_last8",    label: "Qualifying (last 8)",  w: 0.10, val: qualAvg },
+    { name: "stage_last8",   label: "Stage pos (last 8)",   w: 0.10, val: stageAvg },
+    { name: "form_last8",    label: "Form (last 8)",        w: 0.10, val: form8?.avg_finish ?? null },
+    { name: "season_ytd",    label: "Season YTD",           w: 0.10, val: seasonAvg },
   ];
   const avail = signals.filter(s => s.val != null);
   if (avail.length === 0) return null;
   const wSum = avail.reduce((s, x) => s + x.w, 0);
-  const predicted = avail.reduce((sum, x) => sum + (x.w / wSum) * x.val, 0);
+  let predicted = avail.reduce((sum, x) => sum + (x.w / wSum) * x.val, 0);
+
+  // ----- Tier 2: Speed bonus (bounded adjustment) -----
+  // Nudges the prediction favorably for drivers whose speed metrics
+  // indicate they're faster than their finishes suggest. Captures
+  // "fast but unlucky" (Bell, Larson) vs "slow but finishes" (Ware).
+  //
+  // Each metric contributes a small negative adjustment (lower predicted
+  // finish = better). Total bounded to [-3.5, 0] so it nudges, not
+  // overrides.
+  if (speedMetrics && speedMetrics.races >= 3) {
+    let speedBonus = 0;
+    // Laps led: if above 5 per race on average, nudge up to -1.5
+    if (speedMetrics.lapsLedPerRace > 0) {
+      speedBonus += Math.min(1.5, speedMetrics.lapsLedPerRace / 15);
+    }
+    // Top 15 rate: if finishing top-15 > 75% of races, nudge up to -1.0
+    if (speedMetrics.top15Rate > 0.5) {
+      speedBonus += Math.min(1.0, (speedMetrics.top15Rate - 0.5) * 2);
+    }
+    // Driver rating: if above 80 (roughly field average), nudge up to -1.0
+    if (speedMetrics.avgDriverRating != null && speedMetrics.avgDriverRating > 80) {
+      speedBonus += Math.min(1.0, (speedMetrics.avgDriverRating - 80) / 30);
+    }
+    predicted -= Math.min(3.5, speedBonus);
+    // Floor at 1.0 — can't predict better than winning
+    predicted = Math.max(1.0, predicted);
+  }
 
   // ----- Stage-points signals (separate model) -----
   // Stage points have lower variance than finish position so the simpler
@@ -22181,12 +22271,15 @@ function _wireProjectionTooltips() {
       const cum = hit.dataset.cum || "?";
       const track = hit.dataset.track || "";
       const finish = hit.dataset.finish || "—";
+      const seed = hit.dataset.seed || "";
+      const isReseed = track === "Reseed";
       tip.innerHTML = `
         <div class="pc-tip-driver">${driver}</div>
-        ${track ? `<div class="pc-tip-row"><span>Track</span><span>${track}</span></div>` : ""}
+        ${isReseed && seed ? `<div class="pc-tip-row"><span>Seed</span><span>#${seed}</span></div>` : ""}
+        ${track ? `<div class="pc-tip-row"><span>${isReseed ? "Race" : "Track"}</span><span>${track}</span></div>` : ""}
         <div class="pc-tip-row"><span>Round</span><span>R${round}</span></div>
-        ${finish !== "—" ? `<div class="pc-tip-row"><span>Proj finish</span><span>P${finish}</span></div>` : ""}
-        <div class="pc-tip-row"><span>Cum. pts</span><span>${Number(cum).toLocaleString()}</span></div>
+        ${!isReseed && finish !== "—" ? `<div class="pc-tip-row"><span>Proj finish</span><span>P${finish}</span></div>` : ""}
+        <div class="pc-tip-row"><span>${isReseed ? "Start pts" : "Cum. pts"}</span><span>${Number(cum).toLocaleString()}</span></div>
       `;
     } else {
       tip.innerHTML = `<div class="pc-tip-driver">${driver}</div>`;
@@ -22518,8 +22611,9 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
   // Reseed is flat — just the table value, no win bonus.
   const traces = byRegTotal.map((d, seedIdx) => {
     const startPts = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;
+    const seed = seedIdx + 1;
 
-    const points = [{ round: regEnd, cum: startPts }];
+    const points = [{ round: regEnd, cum: startPts, seed, isReseed: true, track: "Reseed" }];
     let cum = startPts;
     chaseRaces.forEach(race => {
       if (!race.track_code) return;
@@ -22532,7 +22626,7 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
 
     return {
       slug: d.slug, name: d.name, car_number: d.car_number,
-      champPct: d.championship_pct, points
+      champPct: d.championship_pct, seed, points
     };
   });
 
@@ -22580,18 +22674,18 @@ function _renderProjectionChaseChart(chaseDrivers, proj) {
     <path class="pc-line-hover" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-car="${d.car_number}" d="${pathD}" fill="none" stroke="transparent" stroke-width="12" stroke-linejoin="round" pointer-events="stroke"/>`;
   }).join("");
 
-  // Visible dots at each data point
+  // Visible dots at each data point (including reseed starting dot)
   const dots = traces.flatMap(d => {
     const carHex = colorFor(proj.series, d.car_number);
-    return d.points.filter(p => p.round > regEnd).map(p =>
-      `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="3" fill="${carHex}" stroke="var(--card)" stroke-width="1" opacity="0.9" pointer-events="none"/>`
+    return d.points.map(p =>
+      `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="${p.isReseed ? 4 : 3}" fill="${carHex}" stroke="var(--card)" stroke-width="1" opacity="0.9" pointer-events="none"/>`
     );
   }).join("");
 
   // Hit circles (invisible, larger for hover)
   const hits = traces.flatMap(d =>
-    d.points.filter(p => p.round > regEnd).map(p =>
-      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="12" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}" data-finish="${p.predFinish || ''}" data-track="${escapeHTML(p.track || '')}"/>`
+    d.points.map(p =>
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="12" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}" data-finish="${p.predFinish || ''}" data-track="${escapeHTML(p.track || '')}" data-seed="${p.seed || ''}"/>`
     )
   ).join("");
 
