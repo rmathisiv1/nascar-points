@@ -1228,7 +1228,18 @@ async function boot() {
     if (missing.length === 0) return;
     for (let i = 0; i < missing.length; i += 3) {
       const batch = missing.slice(i, i + 3);
-      await Promise.all(batch.map(y => loadSeasonIntoCache(y).catch(() => null)));
+      const loaded = await Promise.all(batch.map(y => loadSeasonIntoCache(y).catch(() => null)));
+      const anyLoaded = loaded.some(Boolean);
+      // After a batch lands, if the user is on a view that depends on
+      // cross-season driver analytics, re-render so the freshly-loaded
+      // years can populate any "no history" empty states. The analytics
+      // cache itself is already invalidated inside loadSeasonIntoCache;
+      // we just need to trigger the view to re-fold.
+      // Track view has its own batch-complete re-render hook already
+      // (see renderTrackPage), so we only need to handle home here.
+      if (anyLoaded && STATE.view === "home") {
+        try { renderHome(); } catch (_) { /* swallow — best effort */ }
+      }
       await new Promise(r => setTimeout(r, 60));
     }
   };
@@ -2317,6 +2328,18 @@ async function loadSeasonIntoCache(year) {
       if (!r.ok) continue;
       const payload = await r.json();
       SEASON_CACHE[year] = payload.series || {};
+      // Invalidate the cross-season driver analytics cache — its
+      // per-(driver, series) and per-(driver, series, trackCode)
+      // entries were built from a partial SEASON_CACHE and would now
+      // be stale (e.g., a `null` "no history" entry would persist
+      // even though we just added a year with race history). This
+      // was the cause of the intermittent "No active drivers have
+      // raced at <track>" empty state on Track / Home pages: a track
+      // page rendered during warmup poisoned the cache before the
+      // new years arrived.
+      if (typeof resetDriverAnalyticsCache === "function") {
+        resetDriverAnalyticsCache();
+      }
       return SEASON_CACHE[year];
     } catch (e) { /* try next */ }
   }
@@ -17803,6 +17826,29 @@ function renderTeamPage() {
   if (titleEl) titleEl.textContent = era.full || teamCode;
   if (subEl) subEl.textContent = `${STATE.season} ${STATE.series} · ${era.abbr}`;
 
+  // Inject (or remove) the championship pill INSIDE .view-head so it
+  // sits on the same row as the team name + sub. .view-head is a flex
+  // container with align-items: baseline; the pill uses margin-left:
+  // auto (via .tm-hero-champ-pill class in app.css) to right-justify.
+  // This unifies the team title and championship banner into one
+  // visual block instead of the previous "title pane, then pill row
+  // below" arrangement which made them feel like separate sections.
+  //
+  // The pill lives inside .view-head rather than #team-host because:
+  //   1. it's a hero detail tied to the team name, not body content
+  //   2. it survives re-renders of #team-host without re-creation
+  //      cost (we just update its inner text)
+  //   3. matches how driver profiles handle their hero-champ pill
+  const headEl = titleEl ? titleEl.parentElement : null;
+  if (headEl) {
+    // Always remove any prior pill before deciding whether to inject
+    // a new one. Avoids accumulating multiple pills across re-renders
+    // when the team changes (#team-host re-renders but .view-head
+    // doesn't get wiped).
+    const existing = headEl.querySelector(".tm-hero-champ");
+    if (existing) existing.remove();
+  }
+
   // Build a per-car index from computeSeasonTotals — that's where total +
   // canonicalRank are properly computed. wins/top5/top10 aren't on totals
   // either, so we roll them up below from each entity's race rows.
@@ -18141,8 +18187,6 @@ function renderTeamPage() {
   `;
 
   host.innerHTML = `
-    ${champLine ? `<div class="tm-hero-champ-row">${champLine}</div>` : ""}
-
     ${careerStripHTML}
 
     ${bestPanelsHTML}
@@ -18167,6 +18211,18 @@ function renderTeamPage() {
       <div class="rc-card-body" style="padding:0;">${renderTeamHistoryTable(historicalRows, teamCode)}</div>
     </div>
   `;
+
+  // Champion pill — append to .view-head if any championships exist.
+  // See the earlier removal step in this function for rationale.
+  if (headEl && champLine) {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = champLine;
+    const pillEl = wrapper.firstElementChild;
+    if (pillEl) {
+      pillEl.classList.add("tm-hero-champ-inline");
+      headEl.appendChild(pillEl);
+    }
+  }
 
   // If history is sparse, lazy-load more years and re-render
   const allYears = Object.keys(SEASON_CACHE).map(Number);

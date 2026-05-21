@@ -6471,19 +6471,14 @@ body.lightbox-open {
 [data-theme="light"] .profile-hero-champ .champ-count { color: #2e1f00; }
 [data-theme="light"] .profile-hero-champ .champ-trophy { filter: none; color: #8a5a00; }
 
-/* Team-hero championship row — a flex strip that sits at the top of
-   the team page and right-aligns the championship pill. The pill used
-   to be position: absolute relative to a `.tm-hero` wrapper, but that
-   wrapper no longer exists in the template (page structure was
-   refactored). Without it, absolute positioning made the pill float to
-   the page top-right where it landed behind the fixed topbar.
-   The row + flex layout keeps the pill in normal flow and avoids
-   stacking-context surprises. */
-.tm-hero-champ-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
+/* Team-hero championship pill — sits inline inside .view-head, on
+   the same baseline row as the team name + sub. Pushed to the right
+   edge with margin-left: auto so it acts as a hero detail alongside
+   the title rather than its own section.
+   The previous layout (.tm-hero-champ-row) put the pill in its own
+   strip below the title; before that it was position: absolute which
+   floated to a parent that no longer existed and ended up hidden
+   behind the topbar. */
 .tm-hero-champ {
   display: inline-flex;
   align-items: center;
@@ -6498,6 +6493,13 @@ body.lightbox-open {
   color: #ffd166;
   cursor: help;
   white-space: pre;
+}
+/* In-view-head variant: pushed to the right edge of the title row. */
+.tm-hero-champ-inline {
+  margin-left: auto;
+  /* Drop slightly below baseline so the pill visually centers with
+     the h1 cap-height instead of sitting on the baseline as text would. */
+  align-self: center;
 }
 .tm-hero-champ .champ-trophy {
   font-size: 14px;
