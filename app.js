@@ -20060,7 +20060,7 @@ function computeAllTimeDrivers() {
       if (!block || !block.races) return;
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
-          if (!d.driver || d.ineligible) return;
+          if (!d.driver) return;
           if (d.finish_pos == null) return;
           const slug = slugify(d.driver);
           let agg = byDrv.get(slug);
@@ -20097,7 +20097,6 @@ function computeAllTimeTeams() {
       if (!block || !block.races) return;
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
-          if (d.ineligible) return;
           if (d.finish_pos == null) return;
           const code = d.team_code
             || teamCodeFromName(d.team, SERIES_TO_KEY[sCode], d.car_number);
@@ -20141,7 +20140,6 @@ function computeAllTimeCrewChiefs() {
       if (!block || !block.races) return;
       block.races.forEach(race => {
         (race.results || []).forEach(d => {
-          if (d.ineligible) return;
           if (!d.crew_chief) return;
           if (d.finish_pos == null) return;
           const slug = slugify(d.crew_chief);
