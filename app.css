@@ -760,7 +760,8 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .profile-takeover #view-drivers,
 .profile-takeover #view-teams,
 .profile-takeover #view-crewchiefs,
-.profile-takeover #view-pointscalc {
+.profile-takeover #view-pointscalc,
+.profile-takeover #view-projection {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -779,7 +780,8 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .profile-takeover #view-drivers::-webkit-scrollbar,
 .profile-takeover #view-teams::-webkit-scrollbar,
 .profile-takeover #view-crewchiefs::-webkit-scrollbar,
-.profile-takeover #view-pointscalc::-webkit-scrollbar { display: none; }
+.profile-takeover #view-pointscalc::-webkit-scrollbar,
+.profile-takeover #view-projection::-webkit-scrollbar { display: none; }
 
 /* Slim toolbar variant for tabbed panels — no margin-bottom, tighter */
 .toolbar-slim {
@@ -11598,8 +11600,9 @@ body.lightbox-open {
   margin-top: 4px;
 }
 .tm-best-toggle {
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
   color: var(--accent);
   cursor: pointer;
   text-decoration: none;
@@ -11626,4 +11629,66 @@ body.lightbox-open {
 }
 .tm-best-table .profile-link:hover {
   color: var(--accent);
+}
+
+/* Team profile hero card — first-impression strip matching the
+   driver profile hero's design language. Shows years active, key
+   career numbers, and the championship pill in a compact,
+   visually rich strip. */
+.tm-hero-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 20px 24px;
+  margin-bottom: 14px;
+  border-left: 4px solid var(--accent);
+}
+.tm-hero-card-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.tm-hero-card-stats {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.tm-hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tm-hero-stat-k {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.tm-hero-stat-v {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.1;
+}
+.tm-hero-stat-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+}
+.tm-hero-card-champ {
+  flex-shrink: 0;
+  align-self: center;
+}
+@media (max-width: 767.98px) {
+  .tm-hero-card { padding: 14px 16px; }
+  .tm-hero-card-stats { gap: 18px; }
+  .tm-hero-stat-v { font-size: 20px; }
+  .tm-hero-card-main { flex-direction: column; }
+  .tm-hero-card-champ { align-self: flex-start; }
 }

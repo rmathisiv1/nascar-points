@@ -18442,41 +18442,21 @@ function renderTeamPage() {
 
   const era = teamLabelForEra(teamCode, STATE.season);
   if (titleEl) titleEl.textContent = era.full || teamCode;
+  if (subEl) subEl.textContent = `${STATE.season} ${STATE.series} · ${era.abbr}`;
 
-  // Compute career stats early so we can enrich the subtitle and
-  // reuse the same object for the career strip + best panels below.
+  // Compute career stats early — reused for hero card, career strip,
+  // and best-driver panels further down.
   const career = computeTeamCareerStats(teamCode);
-  const yearsRange = career.yearsActive
+  const yearsRangeStr = career.yearsActive
     ? (career.yearsActive[0] === career.yearsActive[1]
         ? `${career.yearsActive[0]}`
         : `${career.yearsActive[0]}–${career.yearsActive[1]}`)
     : null;
-  // Build an enriched subtitle: "2026 NCS · JGR · 1992–2026 · 35 seasons"
-  const subParts = [`${STATE.season} ${STATE.series} · ${era.abbr}`];
-  if (yearsRange) subParts.push(yearsRange);
-  if (career.seasonsRun > 0) subParts.push(`${career.seasonsRun} season${career.seasonsRun === 1 ? "" : "s"}`);
-  if (career.starts > 0) subParts.push(`${career.starts.toLocaleString()} starts`);
-  if (subEl) subEl.textContent = subParts.join(" · ");
 
-  // Inject (or remove) the championship pill INSIDE .view-head so it
-  // sits on the same row as the team name + sub. .view-head is a flex
-  // container with align-items: baseline; the pill uses margin-left:
-  // auto (via .tm-hero-champ-pill class in app.css) to right-justify.
-  // This unifies the team title and championship banner into one
-  // visual block instead of the previous "title pane, then pill row
-  // below" arrangement which made them feel like separate sections.
-  //
-  // The pill lives inside .view-head rather than #team-host because:
-  //   1. it's a hero detail tied to the team name, not body content
-  //   2. it survives re-renders of #team-host without re-creation
-  //      cost (we just update its inner text)
-  //   3. matches how driver profiles handle their hero-champ pill
+  // Remove any lingering championship pill from the view-head (was
+  // injected in a prior design iteration; now lives in the hero card).
   const headEl = titleEl ? titleEl.parentElement : null;
   if (headEl) {
-    // Always remove any prior pill before deciding whether to inject
-    // a new one. Avoids accumulating multiple pills across re-renders
-    // when the team changes (#team-host re-renders but .view-head
-    // doesn't get wiped).
     const existing = headEl.querySelector(".tm-hero-champ");
     if (existing) existing.remove();
   }
@@ -18859,7 +18839,43 @@ function renderTeamPage() {
     </section>
   `;
 
+  // Hero card — the team profile's "first impression" strip. Mirrors the
+  // driver profile hero (car badge, name, meta, rank) but with team-
+  // specific data: years active, key career numbers, championship pill.
+  const heroCardHTML = `
+    <div class="tm-hero-card">
+      <div class="tm-hero-card-main">
+        <div class="tm-hero-card-stats">
+          ${yearsRangeStr ? `<div class="tm-hero-stat">
+            <span class="tm-hero-stat-k">years</span>
+            <span class="tm-hero-stat-v">${yearsRangeStr}</span>
+            ${career.seasonsRun ? `<span class="tm-hero-stat-sub">${career.seasonsRun} season${career.seasonsRun === 1 ? "" : "s"}</span>` : ""}
+          </div>` : ""}
+          <div class="tm-hero-stat">
+            <span class="tm-hero-stat-k">starts</span>
+            <span class="tm-hero-stat-v">${career.starts.toLocaleString()}</span>
+          </div>
+          <div class="tm-hero-stat">
+            <span class="tm-hero-stat-k">wins</span>
+            <span class="tm-hero-stat-v">${career.wins.toLocaleString()}</span>
+          </div>
+          <div class="tm-hero-stat">
+            <span class="tm-hero-stat-k">top 10</span>
+            <span class="tm-hero-stat-v">${career.top10.toLocaleString()}</span>
+          </div>
+          <div class="tm-hero-stat">
+            <span class="tm-hero-stat-k">poles</span>
+            <span class="tm-hero-stat-v">${career.poles.toLocaleString()}</span>
+          </div>
+        </div>
+        ${champLine ? `<div class="tm-hero-card-champ">${champLine}</div>` : ""}
+      </div>
+    </div>
+  `;
+
   host.innerHTML = `
+    ${heroCardHTML}
+
     ${careerStripHTML}
 
     ${bestPanelsHTML}
@@ -18884,18 +18900,6 @@ function renderTeamPage() {
       <div class="rc-card-body" style="padding:0;">${renderTeamHistoryTable(historicalRows, teamCode)}</div>
     </div>
   `;
-
-  // Champion pill — append to .view-head if any championships exist.
-  // See the earlier removal step in this function for rationale.
-  if (headEl && champLine) {
-    const wrapper = document.createElement("div");
-    wrapper.innerHTML = champLine;
-    const pillEl = wrapper.firstElementChild;
-    if (pillEl) {
-      pillEl.classList.add("tm-hero-champ-inline");
-      headEl.appendChild(pillEl);
-    }
-  }
 
   // Wire "see all N drivers →" toggles on the best-driver panels.
   // Each .tm-best-toggle has a data-series attribute; clicking it toggles
@@ -21992,152 +21996,56 @@ function _pointsCalcPlayoffTable(playoffStandings, rule, view) {
 //   4. Cutline focus — the drivers right around the playoff cutline
 //      (e.g., 14th-18th in a 16-driver field). Bubble drama panel.
 //
-// Series picker lives ON THE PAGE (per user request) and re-renders
-// the simulation when changed.
-
-const PROJECTION_STATE = {
-  series: null,   // "NCS" | "NOS" | "NTS" — picked on the page
-  sortBy: "championship",   // "championship" | "playoff" | "rank" | "name"
-  nSims: 500,
-};
+// Uses the topbar series/season — switches when the user changes series.
 
 function renderProjection() {
   const host = document.getElementById("projection-host");
   const sub = document.getElementById("projection-sub");
   if (!host) return;
 
-  // Series picker defaults to current STATE.series on first visit.
-  if (!PROJECTION_STATE.series) {
-    PROJECTION_STATE.series = STATE.series || "NCS";
-  }
-  const series = PROJECTION_STATE.series;
+  const series = STATE.series;
   const year = STATE.season;
-
-  // The simulator reads SEASON_CACHE for cross-season analytics
-  // (predictDriverForRace pulls per-track history). If the series
-  // the user picked doesn't match the loaded STATE.data, we need
-  // to either switch state silently or warn the user. For now,
-  // require the projection series to match STATE.series — show a
-  // hint to swap series via the topbar if they differ.
-  if (series !== STATE.series) {
-    host.innerHTML = `
-      <div class="proj-controls">
-        ${_renderProjectionSeriesPicker(series)}
-      </div>
-      <div class="empty" style="padding:32px;text-align:center;">
-        Switch the topbar series to <strong>${series}</strong> to project that series's season.
-        <br><br>
-        <span class="muted" style="font-size:12px;">The projector reads from the loaded season data; matching the topbar series keeps the model honest.</span>
-      </div>
-    `;
-    _wireProjectionControls();
-    return;
-  }
+  const nSims = 500;
 
   if (sub) sub.textContent = `${year} ${series} · Monte Carlo season rollout`;
 
-  // Show a loading placeholder before kicking off the (synchronous)
-  // simulation. 500 sims × 24 races × 36 drivers is ~150ms in practice,
-  // but on slow devices it could be longer. Two-tick render lets the
-  // loading state paint before we block.
-  host.innerHTML = `
-    <div class="proj-controls">
-      ${_renderProjectionSeriesPicker(series)}
-      <button class="btn-ghost" id="proj-resim">Re-simulate</button>
-      <span class="proj-meta muted" id="proj-meta">Simulating ${PROJECTION_STATE.nSims} season rollouts…</span>
-    </div>
-    <div class="proj-loading">Crunching ${PROJECTION_STATE.nSims} season rollouts…</div>
-  `;
-  _wireProjectionControls();
+  host.innerHTML = `<div class="proj-loading">Simulating ${nSims} season rollouts…</div>`;
 
   setTimeout(() => {
-    const proj = simulateSeasonRollout(series, year, { nSims: PROJECTION_STATE.nSims });
+    const proj = simulateSeasonRollout(series, year, { nSims });
     if (!proj) {
-      host.innerHTML = `
-        <div class="proj-controls">${_renderProjectionSeriesPicker(series)}</div>
-        <div class="empty" style="padding:32px;text-align:center;">
-          No playoff rule defined for ${series} ${year}.
-        </div>
-      `;
-      _wireProjectionControls();
+      host.innerHTML = `<div class="empty" style="padding:32px;text-align:center;">
+        No playoff rule defined for ${series} ${year}.
+      </div>`;
       return;
     }
     host.innerHTML = _buildProjectionHTML(proj);
-    _wireProjectionControls();
   }, 50);
-}
-
-function _renderProjectionSeriesPicker(active) {
-  return `
-    <div class="toggle-group proj-series-toggle" data-group="proj-series">
-      <button class="${active === "NCS" ? "on" : ""}" data-val="NCS">NCS</button>
-      <button class="${active === "NOS" ? "on" : ""}" data-val="NOS">NOS</button>
-      <button class="${active === "NTS" ? "on" : ""}" data-val="NTS">NTS</button>
-    </div>
-  `;
-}
-
-function _wireProjectionControls() {
-  const root = document.getElementById("projection-takeover");
-  if (!root) return;
-  // Series picker on the page
-  root.querySelectorAll('[data-group="proj-series"] button').forEach(btn => {
-    btn.addEventListener("click", () => {
-      const v = btn.dataset.val;
-      if (!v || v === PROJECTION_STATE.series) return;
-      PROJECTION_STATE.series = v;
-      // If picked series isn't the topbar series, the render function
-      // will show a hint to swap. Either way, re-render.
-      renderProjection();
-    });
-  });
-  // Re-simulate
-  const resimBtn = root.querySelector("#proj-resim");
-  if (resimBtn) {
-    resimBtn.addEventListener("click", () => {
-      // Force a fresh run with new random draws.
-      PROJECTION_CACHE.clear();
-      renderProjection();
-    });
-  }
 }
 
 function _buildProjectionHTML(proj) {
   if (proj.season_over) {
-    // Render the post-season summary (canonical final standings as
-    // the "projection" since there's nothing left to predict).
     return `
-      <div class="proj-controls">
-        ${_renderProjectionSeriesPicker(proj.series)}
-        <span class="proj-meta muted">Season complete · canonical final standings</span>
-      </div>
+      <div class="proj-meta muted" style="margin-bottom:16px;">Season complete · canonical final standings</div>
       ${_renderProjectionMainTable(proj)}
     `;
   }
 
-  // Top championship contenders (top 5 by championship_pct)
   const topContenders = proj.drivers.slice(0, 5);
 
-  // Cutline focus: drivers right around the playoff cutline
-  // Sort by median_seed (ascending — best seed first), pick rows
-  // immediately around the cutline index.
   const seeded = proj.drivers
     .filter(d => d.median_seed != null)
     .slice()
     .sort((a, b) => a.median_seed - b.median_seed);
-  const cutIdx = (proj.rule.field || 16) - 1;  // 0-indexed
+  const cutIdx = (proj.rule.field || 16) - 1;
   const cutlineRows = seeded.slice(Math.max(0, cutIdx - 2), Math.min(seeded.length, cutIdx + 3));
 
   return `
-    <div class="proj-controls">
-      ${_renderProjectionSeriesPicker(proj.series)}
-      <button class="btn-ghost" id="proj-resim">Re-simulate</button>
-      <span class="proj-meta muted">
-        ${proj.n_sims.toLocaleString()} season rollouts ·
-        ${proj.completed_races} races run ·
-        ${proj.remaining_races} remaining ·
-        ${proj.format === "chase-reseeded" ? "Chase format (top " + proj.rule.field + " by points)" : proj.format}
-      </span>
+    <div class="proj-meta muted" style="margin-bottom:16px;">
+      ${proj.n_sims.toLocaleString()} simulations ·
+      ${proj.completed_races} races complete ·
+      ${proj.remaining_races} remaining ·
+      ${proj.format === "chase-reseeded" ? "Chase format (top " + proj.rule.field + " by points)" : proj.format}
     </div>
 
     ${_renderProjectionTopContenders(topContenders, proj)}
