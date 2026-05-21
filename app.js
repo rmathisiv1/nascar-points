@@ -10398,7 +10398,10 @@ function simulateSeasonRollout(series, year, opts = {}) {
   }
 
   // Check localStorage for persistent cache across page refreshes
-  const lsKey = `proj_${series}_${year}_${completedCount}`;
+  // Version bump invalidates stale localStorage results when the sim
+  // logic changes (e.g., fixing currentTop5 not being tracked).
+  const PROJ_VERSION = 3;
+  const lsKey = `proj_v${PROJ_VERSION}_${series}_${year}_${completedCount}`;
   if (!opts.force) {
     try {
       const stored = localStorage.getItem(lsKey);
@@ -10480,8 +10483,10 @@ function simulateSeasonRollout(series, year, opts = {}) {
   const regSeasonTotalSamples = new Map(); // slug → array of projected reg-season-end totals
   const chaseTotalSamples = new Map(); // slug → array of post-chase totals (only for playoff sims)
   const finalRankSamples = new Map();
-  const winSamples = new Map();
-  const top5Samples = new Map();
+  const winSamples = new Map();       // reg-season wins
+  const top5Samples = new Map();      // reg-season top 5's
+  const fullWinSamples = new Map();   // full-season wins (reg + chase)
+  const fullTop5Samples = new Map();  // full-season top 5's (reg + chase)
   const roundSurvival = new Map();
 
   drivers.forEach(d => {
@@ -10493,6 +10498,8 @@ function simulateSeasonRollout(series, year, opts = {}) {
     finalRankSamples.set(d.slug, []);
     winSamples.set(d.slug, []);
     top5Samples.set(d.slug, []);
+    fullWinSamples.set(d.slug, []);
+    fullTop5Samples.set(d.slug, []);
     roundSurvival.set(d.slug, new Map());
   });
 
@@ -10531,8 +10538,12 @@ function simulateSeasonRollout(series, year, opts = {}) {
     });
 
     // Record reg-season projected totals for every driver.
+    // These are captured BEFORE the chase phase so they reflect
+    // regular-season-only stats.
     drivers.forEach(d => {
       regSeasonTotalSamples.get(d.slug).push(simPts.get(d.slug));
+      winSamples.get(d.slug).push(simWins.get(d.slug) || 0);
+      top5Samples.get(d.slug).push(simTop5.get(d.slug) || 0);
     });
 
     // ---- Build projected reg-season standings ----
@@ -10603,8 +10614,12 @@ function simulateSeasonRollout(series, year, opts = {}) {
       playoffMatrix.forEach(entry => {
         const finishes = _simulateOneRace(entry, drivers);
         playoffField.forEach(d => {
-          const pts = _finishPtsScale(finishes.get(d.slug));
+          const finish = finishes.get(d.slug);
+          const pts = _finishPtsScale(finish);
           reseed.set(d.slug, reseed.get(d.slug) + pts);
+          // Track chase-race wins/top5 for full-season projections
+          if (finish === 1) simWins.set(d.slug, simWins.get(d.slug) + 1);
+          if (finish <= 5) simTop5.set(d.slug, simTop5.get(d.slug) + 1);
         });
       });
       // Champion = leader after chase
@@ -10719,8 +10734,8 @@ function simulateSeasonRollout(series, year, opts = {}) {
     // reg-season total for everyone else — playoff bracket doesn't reset
     // points in elimination, so using simPts is a reasonable proxy).
     drivers.forEach(d => {
-      winSamples.get(d.slug).push(simWins.get(d.slug) || 0);
-      top5Samples.get(d.slug).push(simTop5.get(d.slug) || 0);
+      fullWinSamples.get(d.slug).push(simWins.get(d.slug) || 0);
+      fullTop5Samples.get(d.slug).push(simTop5.get(d.slug) || 0);
     });
   }
 
@@ -10742,6 +10757,8 @@ function simulateSeasonRollout(series, year, opts = {}) {
     const medianRank = median(finalRankSamples.get(d.slug));
     const projectedWins = median(winSamples.get(d.slug));
     const projectedTop5 = median(top5Samples.get(d.slug));
+    const fullSeasonWins = median(fullWinSamples.get(d.slug));
+    const fullSeasonTop5 = median(fullTop5Samples.get(d.slug));
     const projectedRegTotal = median(regSeasonTotalSamples.get(d.slug));
     const projectedChaseTotal = median(chaseTotalSamples.get(d.slug));
 
@@ -10769,8 +10786,10 @@ function simulateSeasonRollout(series, year, opts = {}) {
       median_seed: medianSeed,
       median_total: medianTotal,
       median_rank: medianRank,
-      projected_wins: projectedWins,
-      projected_top5: projectedTop5,
+      projected_wins: projectedWins,        // reg-season only
+      projected_top5: projectedTop5,        // reg-season only
+      full_season_wins: fullSeasonWins,     // reg + chase
+      full_season_top5: fullSeasonTop5,     // reg + chase
       projected_reg_total: projectedRegTotal,
       projected_chase_total: projectedChaseTotal,
     };
@@ -10798,7 +10817,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
     // Remove old entries for this series/year with different race counts
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && k.startsWith(`proj_${series}_${year}_`) && k !== lsKey) {
+      if (k && k.startsWith(`proj_`) && k !== lsKey) {
         localStorage.removeItem(k);
       }
     }
@@ -22712,8 +22731,8 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
               const txt = contrastTextFor(carHex);
               const champPct = d.championship_pct * 100;
               const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
-              const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
-              const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
+              const projWins = d.full_season_wins != null ? Math.round(d.full_season_wins) : "—";
+              const projTop5 = d.full_season_top5 != null ? Math.round(d.full_season_top5) : "—";
               const chasePts = d.projected_chase_total != null ? Math.round(d.projected_chase_total) : 0;
               const fromLeader = i === 0 ? "—" : `−${Math.abs(leaderChasePts - chasePts).toLocaleString()}`;
               return `<tr>
