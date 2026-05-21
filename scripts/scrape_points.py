@@ -251,7 +251,16 @@ TRACK_CODES = {
     "nashville": "NSH",
     "michigan": "MCH",
     "pocono": "POC", "san diego": "SDG", "sonoma": "SON",
-    "chicago": "CHI", "chicagoland": "CHI",
+    # Chicago Street Race (2023-2025, road course) vs Chicagoland
+    # (intermediate oval, ≤2020 + 2026). More-specific substring FIRST
+    # since matching is first-hit-wins.
+    "chicago street": "CHG",          # street course 2023-2025
+    "grant park": "CHG",              # alternate name for Chicago Street
+    "chicagoland": "CHI",             # oval
+    "chicago": "CHI",                 # fallback — Chicagoland in most eras
+    # Mexico
+    "mexico": "MXI",
+    "autodromo": "MXI",
     "north wilkesboro": "NWB", "indianapolis": "IND",
     "iowa": "IOW", "richmond": "RCH",
     "loudon": "LOU", "new hampshire": "LOU",

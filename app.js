@@ -2265,13 +2265,11 @@ async function loadCurrentData() {
   if (!seriesBlock) {
     return showError(`No data for series ${sCode} in season ${year}`);
   }
-  STATE.data = seriesBlock;
-  // Mirror the full year payload into SEASON_CACHE so views that read
-  // from there (heatmap, all-time pages) see the current year without
-  // a separate fetch. Idempotent — overwrites are safe.
   if (payload.series) {
+    _normalizeTrackCodes(payload.series, year);
     SEASON_CACHE[year] = payload.series;
   }
+  STATE.data = seriesBlock;
   renderSeasonPill();
   document.getElementById("footer-updated").textContent =
     `Updated ${(payload.generated_at || "").slice(0,10)}`;
@@ -2318,6 +2316,30 @@ function scheduleLengthForSeries(series) {
 // ============================================================
 const SEASON_CACHE = {};
 
+// Track code normalization — fixes cases where Racing Reference reuses
+// the same track code for physically different tracks across eras.
+// Called once at data-load time so all downstream consumers (predictions,
+// profiles, analytics, track type lookups) see the corrected codes.
+function _normalizeTrackCodes(seriesBlock, year) {
+  if (!seriesBlock) return;
+  // CHI split: "CHI" = Chicagoland (1.5mi intermediate, ≤2020 and 2026+)
+  //            "CHG" = Chicago Street Race (road course, 2023-2025)
+  // Racing Reference tags both as "CHI". We remap 2023-2025 to "CHG".
+  if (year >= 2023 && year <= 2025) {
+    Object.values(seriesBlock).forEach(block => {
+      if (!block || !block.races) return;
+      block.races.forEach(race => {
+        if (race.track_code === "CHI") {
+          race.track_code = "CHG";
+          if (!race.track || race.track === "Chicagoland") {
+            race.track = "Chicago Street";
+          }
+        }
+      });
+    });
+  }
+}
+
 async function loadSeasonIntoCache(year) {
   // Returns the full payload (all series) for a year. Cached after first hit.
   if (SEASON_CACHE[year]) return SEASON_CACHE[year];
@@ -2328,6 +2350,10 @@ async function loadSeasonIntoCache(year) {
       if (!r.ok) continue;
       const payload = await r.json();
       SEASON_CACHE[year] = payload.series || {};
+      // Normalize track codes that map to physically different tracks
+      // across eras. Must run BEFORE any analytics or rendering touches
+      // this data so every downstream consumer sees the corrected codes.
+      _normalizeTrackCodes(SEASON_CACHE[year], year);
       // Invalidate the cross-season driver analytics cache — its
       // per-(driver, series) and per-(driver, series, trackCode)
       // entries were built from a partial SEASON_CACHE and would now
@@ -3677,7 +3703,7 @@ function getDriverTrackTypeStats(driverName, series, trackTypeKey) {
     return DRIVER_ANALYTICS_CACHE.typeStats.get(cacheKey);
   }
   const history = getDriverRaceHistory(driverName, series);
-  const atType = history.filter(r => trackType(r.track_code, r.year) === trackTypeKey);
+  const atType = history.filter(r => trackType(r.track_code) === trackTypeKey);
   if (atType.length === 0) {
     DRIVER_ANALYTICS_CACHE.typeStats.set(cacheKey, null);
     return null;
@@ -5825,9 +5851,10 @@ const TRACK_TYPES = {
   MXI: "road",         // Mexico City (road course for 2026)
   MEX: "road",
 
-  // Chicagoland — 1.5mi intermediate oval, returned to schedule 2026.
-  // CHI is year-aware: see trackType() function below.
-  // CHI: handled in trackType()
+  // Chicagoland — 1.5mi intermediate oval, ≤2020 + 2026+.
+  // Chicago Street (2023-2025) is remapped to "CHG" at data-load time
+  // by _normalizeTrackCodes(), so "CHI" here is always Chicagoland.
+  CHI: "inter",
 };
 
 const TRACK_TYPE_LABELS = {
@@ -5837,14 +5864,7 @@ const TRACK_TYPE_LABELS = {
   road: "Road Course",
 };
 
-function trackType(trackCode, year) {
-  // Year-aware overrides — tracks whose type changed across eras.
-  // CHI: Chicago Street (road course, 2023-2025) vs Chicagoland
-  // (intermediate oval, ≤2020 and 2026+).
-  if (trackCode === "CHI") {
-    const y = year || STATE.season || new Date().getFullYear();
-    return (y >= 2023 && y <= 2025) ? "road" : "inter";
-  }
+function trackType(trackCode) {
   return TRACK_TYPES[trackCode] || null;
 }
 
@@ -22234,7 +22254,7 @@ function renderProjection() {
       host.querySelectorAll("[data-proj-view]").forEach(btn => {
         btn.addEventListener("click", () => {
           const view = btn.dataset.projView;
-          host.querySelectorAll(".proj-view-toggle .scope-btn").forEach(b => b.classList.toggle("active", b === btn));
+          host.querySelectorAll(".toggle-group [data-proj-view]").forEach(b => b.classList.toggle("on", b === btn));
           host.querySelectorAll(".proj-view").forEach(div => {
             div.hidden = !div.classList.contains("proj-view-" + view);
           });
@@ -22413,10 +22433,10 @@ function _buildProjectionHTML(proj) {
       ${proj.format === "chase-reseeded" ? "Chase format · top " + fieldSize + " by points · points reset for chase" : proj.format}
     </div>
 
-    <div class="proj-view-toggle" style="display:flex;gap:4px;margin-bottom:16px;">
-      <button class="scope-btn active" data-proj-view="driver">Driver</button>
-      <button class="scope-btn" data-proj-view="owner">Owner</button>
-      <button class="scope-btn" data-proj-view="mfr">Manufacturer</button>
+    <div class="toggle-group" style="margin-bottom:16px;">
+      <button class="on" data-proj-view="driver">Driver</button>
+      <button data-proj-view="owner">Owner</button>
+      <button data-proj-view="mfr">Manufacturer</button>
     </div>
 
     <div class="proj-view proj-view-driver">
@@ -22811,91 +22831,67 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
   `;
 }
 
-// Owner (team) projection table — aggregates per-driver sim results
-// by team_code. Shows each team's combined projected points, wins,
-// number of playoff-qualifying cars, and best championship driver.
+// Owner projection table — per car number (matching NASCAR owner standings).
+// Each car number is its own entry with its primary driver's projection.
 function _renderProjectionOwnerTable(proj) {
   const fieldSize = proj.rule.field || 16;
-  // Sort drivers by projected points for playoff cutline reference
-  const allSorted = proj.drivers.slice().sort((a, b) =>
+  const sorted = proj.drivers.slice().sort((a, b) =>
     (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
   );
-
-  // Group by team_code
-  const teams = new Map();
-  proj.drivers.forEach(d => {
-    const tc = d.team_code || "???";
-    if (!teams.has(tc)) {
-      teams.set(tc, {
-        team_code: tc,
-        cars: [],
-        total_current_pts: 0,
-        total_proj_pts: 0,
-        total_current_wins: 0,
-        total_proj_wins: 0,
-        total_proj_top5: 0,
-        playoff_cars: 0,
-        best_champ_pct: 0,
-        best_champ_driver: null,
-      });
-    }
-    const t = teams.get(tc);
-    t.cars.push(d);
-    t.total_current_pts += (d.current_pts || 0);
-    t.total_proj_pts += Math.round(d.projected_reg_total || d.current_pts || 0);
-    t.total_current_wins += (d.current_wins || 0);
-    t.total_proj_wins += Math.round(d.projected_wins || 0);
-    t.total_proj_top5 += Math.round(d.projected_top5 || 0);
-    // Check if this driver is projected to make playoffs
-    const driverRank = allSorted.indexOf(d);
-    if (driverRank >= 0 && driverRank < fieldSize) t.playoff_cars++;
-    if (d.championship_pct > t.best_champ_pct) {
-      t.best_champ_pct = d.championship_pct;
-      t.best_champ_driver = d.name;
-    }
-  });
-
-  const sorted = Array.from(teams.values()).sort((a, b) => b.total_proj_pts - a.total_proj_pts);
-  const leaderPts = sorted.length > 0 ? sorted[0].total_proj_pts : 0;
+  const leaderPts = sorted.length > 0 ? Math.round(sorted[0].projected_reg_total || sorted[0].current_pts || 0) : 0;
+  const cutlinePts = sorted.length > fieldSize
+    ? Math.round(sorted[fieldSize - 1].projected_reg_total || sorted[fieldSize - 1].current_pts || 0)
+    : leaderPts;
 
   return `
     <section class="proj-section">
       <div class="proj-section-head">
         <div class="ed-kicker">owner standings</div>
-        <h2 class="ed-hero ed-hero-sm">Projected team standings</h2>
+        <h2 class="ed-hero ed-hero-sm">Projected owner standings</h2>
       </div>
       <div class="proj-table-host">
         <table class="data-table proj-table">
           <thead><tr>
             <th class="num">#</th>
+            <th>Car</th>
+            <th>Driver</th>
             <th>Team</th>
-            <th class="num">Cars</th>
             <th class="num">Current Pts</th>
             <th class="num">Proj Pts</th>
             <th class="num">Proj Wins</th>
-            <th class="num">Proj Top 5</th>
-            <th class="num">Playoff Cars</th>
             <th class="num">From Leader</th>
-            <th>Best Champ Driver</th>
-            <th class="num">Champ %</th>
+            <th class="num">From Cutline</th>
+            <th class="num">Chase %</th>
           </tr></thead>
           <tbody>
-            ${sorted.map((t, i) => {
-              const fromLeader = i === 0 ? "—" : `−${(leaderPts - t.total_proj_pts).toLocaleString()}`;
-              const champPct = (t.best_champ_pct * 100);
-              const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
-              return `<tr>
+            ${sorted.map((d, i) => {
+              const carHex = colorFor(proj.series, d.car_number);
+              const txt = contrastTextFor(carHex);
+              const projPts = Math.round(d.projected_reg_total || d.current_pts || 0);
+              const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : 0;
+              const playoffPct = d.playoff_pct * 100;
+              const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
+              const fromLeader = i === 0 ? "—" : `−${(leaderPts - projPts).toLocaleString()}`;
+              const fromCutline = i < fieldSize
+                ? (projPts === cutlinePts ? "CUTLINE" : `+${(projPts - cutlinePts).toLocaleString()}`)
+                : `−${Math.abs(cutlinePts - projPts).toLocaleString()}`;
+              return `<tr${i === fieldSize ? ' class="proj-table-cutline"' : ""}>
                 <td class="num">${i + 1}</td>
-                <td><a class="profile-link" href="#/team/${encodeURIComponent(t.team_code)}">${escapeHTML(t.team_code)}</a></td>
-                <td class="num">${t.cars.length}</td>
-                <td class="num">${t.total_current_pts.toLocaleString()}</td>
-                <td class="num">${t.total_proj_pts.toLocaleString()}</td>
-                <td class="num">${t.total_proj_wins}</td>
-                <td class="num">${t.total_proj_top5}</td>
-                <td class="num">${t.playoff_cars}</td>
+                <td>
+                  <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
+                </td>
+                <td>
+                  <a class="profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
+                    ${escapeHTML(d.name)}
+                  </a>
+                </td>
+                <td>${escapeHTML(d.team_code || "")}</td>
+                <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
+                <td class="num">${projPts.toLocaleString()}</td>
+                <td class="num">${projWins}</td>
                 <td class="num">${fromLeader}</td>
-                <td>${t.best_champ_driver ? escapeHTML(t.best_champ_driver) : "—"}</td>
-                <td class="num ${champCls}">${champPct > 0 ? champPct.toFixed(1) + "%" : "—"}</td>
+                <td class="num">${fromCutline}</td>
+                <td class="num ${playoffCls}">${playoffPct.toFixed(0)}%</td>
               </tr>`;
             }).join("")}
           </tbody>
