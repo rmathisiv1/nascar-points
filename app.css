@@ -11434,7 +11434,7 @@ body.lightbox-open {
 }
 .proj-contender-name {
   font-family: var(--serif);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
   text-decoration: none;
@@ -11446,7 +11446,7 @@ body.lightbox-open {
 .proj-contender-name:hover { color: var(--accent); }
 .proj-contender-bigpct {
   font-family: var(--serif);
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text);
@@ -11454,7 +11454,7 @@ body.lightbox-open {
   margin-top: 2px;
 }
 .proj-pct-symbol {
-  font-size: 18px;
+  font-size: 14px;
   color: var(--muted);
   font-weight: 400;
 }
