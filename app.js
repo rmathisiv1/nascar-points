@@ -10390,17 +10390,14 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const cacheKey = `${series}|${year}|${nSims}|${completedCount}`;
+  const PROJ_VERSION = 5;
+  const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
   if (PROJECTION_CACHE.has(cacheKey) && !opts.force) {
     return PROJECTION_CACHE.get(cacheKey);
   }
 
-  // Check localStorage for persistent cache across page refreshes
-  // Version bump invalidates stale localStorage results when the sim
-  // logic changes (e.g., fixing currentTop5 not being tracked).
-  const PROJ_VERSION = 3;
   const lsKey = `proj_v${PROJ_VERSION}_${series}_${year}_${completedCount}`;
   if (!opts.force) {
     try {
@@ -22128,6 +22125,8 @@ function renderProjection() {
         return;
       }
       host.innerHTML = _buildProjectionHTML(proj);
+      // Wire chart hover tooltips (same interaction as PFC chart)
+      _wireProjectionChartTooltips(host);
       _wireProjectionTooltips();
     } catch (err) {
       console.error("[projection] simulation error:", err);
@@ -22211,6 +22210,59 @@ function _wireProjectionTooltips() {
       delete wrap.dataset.hoverSlug;
       wrap.querySelectorAll(".pc-line.is-hovered").forEach(el => el.classList.remove("is-hovered"));
     });
+  });
+}
+
+function _wireProjectionChartTooltips(host) {
+  if (!host || host._projTooltipWired) return;
+  host._projTooltipWired = true;
+
+  host.addEventListener("mousemove", (e) => {
+    const hit = e.target.closest(".pc-hit");
+    const lineHover = e.target.closest(".pc-line-hover");
+    const target = hit || lineHover;
+    if (!target) return;
+    const wrap = target.closest(".pc-chart-wrap");
+    if (!wrap) return;
+    const tip = wrap.querySelector(".pc-tooltip");
+    if (!tip) return;
+
+    const slug = target.dataset.slug;
+    const driver = target.dataset.driver || slug;
+    const car = target.dataset.car || "";
+    const round = target.dataset.round;
+    const cum = target.dataset.cum;
+    const finish = target.dataset.finish;
+
+    // Highlight the hovered line
+    wrap.dataset.hoverSlug = slug;
+    wrap.querySelectorAll(".pc-line.is-hovered").forEach(el => el.classList.remove("is-hovered"));
+    const matchLine = wrap.querySelector(`.pc-line[data-slug="${CSS.escape(slug)}"]`);
+    if (matchLine) matchLine.classList.add("is-hovered");
+
+    tip.hidden = false;
+    tip.innerHTML = `<strong>${escapeHTML(driver)}</strong>` +
+      (round ? `<br>Round: <strong>R${round}</strong>` : "") +
+      (cum ? `<br>Cum. pts: <strong>${Number(cum).toLocaleString()}</strong>` : "") +
+      (finish ? `<br>Pred. finish: <strong>P${finish}</strong>` : "");
+
+    const wrapRect = wrap.getBoundingClientRect();
+    const x = e.clientX - wrapRect.left + 12;
+    const y = e.clientY - wrapRect.top + 12;
+    tip.style.left = `${Math.min(x, wrapRect.width - 180)}px`;
+    tip.style.top = `${Math.min(y, wrapRect.height - 80)}px`;
+  });
+
+  host.addEventListener("mouseout", (e) => {
+    if (e.target.closest(".pc-hit, .pc-line-hover")) {
+      const wrap = e.target.closest(".pc-chart-wrap");
+      if (wrap) {
+        const tip = wrap.querySelector(".pc-tooltip");
+        if (tip) tip.hidden = true;
+        delete wrap.dataset.hoverSlug;
+        wrap.querySelectorAll(".pc-line.is-hovered").forEach(el => el.classList.remove("is-hovered"));
+      }
+    }
   });
 }
 
@@ -22402,8 +22454,8 @@ function _renderProjectionRegSeasonTable(proj) {
               const playoffPct = d.playoff_pct * 100;
               const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
               const projPts = Math.round(d.projected_reg_total || d.current_pts || 0);
-              const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
-              const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
+              const projWins = d.full_season_wins != null ? Math.round(d.full_season_wins) : "—";
+              const projTop5 = d.full_season_top5 != null ? Math.round(d.full_season_top5) : "—";
               const fromLeader = i === 0 ? "—" : `−${(leaderPts - projPts).toLocaleString()}`;
               const fromCutline = i < fieldSize
                 ? (projPts === cutlinePts ? "CUTLINE" : `+${(projPts - cutlinePts).toLocaleString()}`)
@@ -22439,208 +22491,68 @@ function _renderProjectionRegSeasonTable(proj) {
 // drivers across each chase round. Uses predictDriverForRace deterministically
 // for each track to build the per-round data. Hover shows driver + round + pts.
 // Matches the PFC playoffs chart visual style.
+// Chase line graph — projected cumulative points per round for all 16
+// chase drivers, matching the PFC playoffs chart style with hover tooltips.
+// Uses deterministic predictions (predictDriverForRace) for each chase
+// track to build per-round cumulative totals.
 function _renderProjectionChaseChart(chaseDrivers, proj) {
   const fieldSize = proj.rule.field || 16;
   const top = chaseDrivers.slice(0, fieldSize);
   if (top.length === 0) return "";
 
-  // Get chase race tracks from the schedule
-  const regEnd = proj.reg_end_round || 26;
-  const chaseRaces = allRacesSorted()
-    .filter(r => r.round > regEnd)
-    .sort((a, b) => (a.round || 0) - (b.round || 0));
-  if (chaseRaces.length === 0) return "";
-
-  // Compute reseed starting points + per-race projected cumulative totals
-  const reseedTable = proj.rule.reseedTable || [];
-  const perWinBonus = proj.rule.reseedWinBonus || proj.rule.winBonus || 10;
-  const lines = top.map((d, seedIdx) => {
-    // Reseed base: use driver's projected seed (rank in reg-season table)
-    // Since chase drivers are from the top-N of the projected standings,
-    // their "seed" in the reseed is their index + 1.
-    const allSorted = proj.drivers.slice().sort((a, b) =>
-      (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
-    );
-    const seedRank = allSorted.findIndex(x => x.slug === d.slug);
-    const base = reseedTable[seedRank] || reseedTable[reseedTable.length - 1] || 2000;
-    const wins = d.projected_wins != null ? Math.round(d.projected_wins) : d.current_wins;
-    const startPts = base + perWinBonus * wins;
-
-    // Per-race predicted points
-    let cumPts = startPts;
-    const points = [{ round: `Seed`, pts: startPts }];
-    chaseRaces.forEach(race => {
-      const pred = predictDriverForRace(d.name, proj.series, race.track_code);
-      const predFinish = pred ? pred.predicted_finish : 20;
-      const racePts = _finishPtsScale(Math.round(predFinish));
-      cumPts += racePts;
-      points.push({ round: `R${race.round}`, pts: cumPts });
-    });
-
-    return {
-      slug: d.slug,
-      name: d.name,
-      car_number: d.car_number,
-      color: colorFor(proj.series, d.car_number),
-      champPct: d.championship_pct,
-      points,
-    };
-  });
-
-  // SVG dimensions
-  const W = 980, H = 300;
-  const pad = { top: 14, right: 160, bottom: 28, left: 52 };
-  const innerW = W - pad.left - pad.right;
-  const innerH = H - pad.top - pad.bottom;
-
-  const nPoints = lines[0].points.length;
-  const allPts = lines.flatMap(l => l.points.map(p => p.pts));
-  const yMin = Math.min(...allPts) - 20;
-  const yMax = Math.max(...allPts) + 20;
-
-  const xScale = (i) => pad.left + (i / Math.max(1, nPoints - 1)) * innerW;
-  const yScale = (v) => pad.top + (1 - (v - yMin) / (yMax - yMin)) * innerH;
-
-  // Gridlines
-  const gridSteps = 4;
-  const gridSVG = [];
-  for (let i = 0; i <= gridSteps; i++) {
-    const y = pad.top + (i / gridSteps) * innerH;
-    const val = Math.round(yMax - (yMax - yMin) * (i / gridSteps));
-    gridSVG.push(`<line x1="${pad.left}" x2="${W - pad.right}" y1="${y}" y2="${y}" stroke="var(--border)" stroke-width="0.5"/>`);
-    gridSVG.push(`<text x="${pad.left - 6}" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-family="var(--mono)" font-size="10">${val}</text>`);
-  }
-
-  // X labels
-  const xLabels = lines[0].points.map((p, i) =>
-    `<text x="${xScale(i)}" y="${H - 6}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">${p.round}</text>`
-  ).join("");
-
-  // Sort lines so highest final value renders last (on top)
-  const sortedLines = lines.slice().sort((a, b) =>
-    a.points[a.points.length - 1].pts - b.points[b.points.length - 1].pts
-  );
-
-  // Label collision avoidance on right edge
-  const labeled = sortedLines.map(s => {
-    const lastPts = s.points[s.points.length - 1].pts;
-    return { ...s, labelY: yScale(lastPts) };
-  }).sort((a, b) => a.labelY - b.labelY);
-  const MIN_GAP = 12;
-  for (let i = 1; i < labeled.length; i++) {
-    if (labeled[i].labelY - labeled[i - 1].labelY < MIN_GAP) {
-      labeled[i].labelY = labeled[i - 1].labelY + MIN_GAP;
-    }
-  }
-
-  // Render lines + right-edge labels
-  const lineSVG = labeled.map(s => {
-    const pts = s.points.map((p, i) => `${xScale(i)},${yScale(p.pts)}`).join(" ");
-    const lastPts = s.points[s.points.length - 1].pts;
-    const xEnd = xScale(nPoints - 1);
-    const yEnd = yScale(lastPts);
-    const champStr = (s.champPct * 100).toFixed(1);
-    return `<g>
-      <polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round" opacity="0.85"/>
-      <line x1="${xEnd + 2}" y1="${yEnd}" x2="${xEnd + 5}" y2="${s.labelY}" stroke="${s.color}" stroke-width="0.8" opacity="0.5"/>
-      <text x="${xEnd + 8}" y="${s.labelY + 3}" fill="${s.color}" font-family="var(--serif)" font-size="10" font-weight="600">
-        ${escapeHTML(s.name)} ${champStr}%
-      </text>
-    </g>`;
-  }).join("");
-
-  // Invisible hover columns for tooltips
-  const colW = innerW / Math.max(1, nPoints - 1);
-  const hoverCols = lines[0].points.map((_, i) => {
-    const x = xScale(i) - colW / 2;
-    return `<rect x="${Math.max(pad.left, x)}" y="${pad.top}" width="${colW}" height="${innerH}"
-      fill="transparent" class="proj-hover-col" data-round-idx="${i}"/>`;
-  }).join("");
-
-  // Tooltip data as a JSON attr for JS to read
-  const tooltipData = JSON.stringify(labeled.map(s => ({
-    name: s.name, car: s.car_number, color: s.color,
-    points: s.points.map(p => p.pts),
-  })));
-
-  return `
-    <section class="proj-section">
-      <div class="proj-section-head">
-        <div class="ed-kicker">championship chase</div>
-        <h2 class="ed-hero ed-hero-sm">Projected chase standings</h2>
-        <div class="ed-byline">Deterministic per-track prediction · reseed + cumulative race points</div>
-      </div>
-      <div class="proj-chart-host" style="overflow-x:auto;">
-        <svg id="proj-chase-line-chart" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;"
-             data-tooltip='${escapeHTML(tooltipData)}'>
-          ${gridSVG.join("")}
-          ${xLabels}
-          ${lineSVG}
-          ${hoverCols}
-        </svg>
-      </div>
-    </section>
-  `;
-}
-
-// Chase line graph — shows projected cumulative points per round for
-// all 16 chase drivers, with hover tooltips showing race/round/finish/pts.
-// Uses deterministic predictions (predictDriverForRace) for the per-race
-// projections, and median projected wins for the reseed win bonus.
-function _renderProjectionChaseLineChart(chaseDrivers, proj) {
-  const series = proj.series;
-  const regEnd = proj.reg_end_round;
-  const rule = proj.rule;
-  const fieldSize = rule.field || 16;
-  const top = chaseDrivers.slice(0, fieldSize);
-
-  // Get chase race schedule (tracks + rounds)
+  // Get chase race schedule (races after reg-season cutoff)
   const allRaces = allRacesSorted();
+  const regEnd = proj.reg_end_round || 26;
   const chaseRaces = allRaces
     .filter(r => (r.round || 0) > regEnd)
     .sort((a, b) => (a.round || 0) - (b.round || 0));
   if (chaseRaces.length === 0) return "";
 
-  // Compute reseed base + traces for each driver
-  const traces = top.map((d, seedIdx) => {
-    const base = (rule.reseedTable && rule.reseedTable[seedIdx]) || 2000;
-    const perWinBonus = rule.reseedWinBonus || rule.winBonus || 10;
-    const projWins = d.projected_wins || d.current_wins || 0;
-    const reseedStart = base + perWinBonus * Math.round(projWins);
+  // Compute reseed starting points. Sort top by projected_reg_total to
+  // get seed order, then apply reseedTable + win bonus.
+  const byRegTotal = top.slice().sort((a, b) =>
+    (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
+  );
+  const reseedTable = proj.rule.reseedTable || [2100];
+  const perWinBonus = proj.rule.reseedWinBonus || proj.rule.winBonus || 10;
 
-    const points = [{ round: regEnd, cum: reseedStart, race: "Reseed", projFinish: null }];
-    let cum = reseedStart;
+  // Build traces: for each driver, compute predicted points per chase race
+  const traces = byRegTotal.map((d, seedIdx) => {
+    const base = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;
+    const wins = d.full_season_wins || d.current_wins || 0;
+    const startPts = base + perWinBonus * wins;
+
+    const points = [{ round: regEnd, cum: startPts }];
+    let cum = startPts;
     chaseRaces.forEach(race => {
-      const pred = predictDriverForRace(d.name, series, race.track_code);
-      const projFinish = pred ? Math.round(pred.predicted_finish) : 20;
-      const racePts = _finishPtsScale(projFinish);
+      if (!race.track_code) return;
+      const pred = predictDriverForRace(d.name, proj.series, race.track_code);
+      const predFinish = pred ? pred.predicted_finish : 20;
+      const racePts = _finishPtsScale(Math.round(predFinish));
       cum += racePts;
-      points.push({
-        round: race.round,
-        cum,
-        race: race.track || race.name || `R${race.round}`,
-        projFinish,
-      });
+      points.push({ round: race.round, cum, predFinish: Math.round(predFinish) });
     });
-    return { ...d, trace: points };
+
+    return {
+      slug: d.slug, name: d.name, car_number: d.car_number,
+      champPct: d.championship_pct, points
+    };
   });
 
-  // SVG dimensions (matching PFC chart)
+  // Chart dimensions (match PFC)
   const W = 800, H = 340;
   const pad = { t: 16, r: 80, b: 36, l: 56 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
+  const lastRound = chaseRaces.length > 0 ? chaseRaces[chaseRaces.length - 1].round : regEnd + 10;
 
-  const allCums = traces.flatMap(t => t.trace.map(p => p.cum));
+  const allCums = traces.flatMap(t => t.points.map(p => p.cum));
   const minPts = Math.min(...allCums);
   const maxPts = Math.max(...allCums);
   const padPts = (maxPts - minPts) * 0.08 || 50;
   const yMin = Math.floor((minPts - padPts) / 50) * 50;
   const yMax = Math.ceil((maxPts + padPts) / 50) * 50;
-
-  const firstRound = regEnd;
-  const lastRound = chaseRaces[chaseRaces.length - 1].round;
-  const xScale = r => pad.l + ((r - firstRound) / Math.max(1, lastRound - firstRound)) * innerW;
+  const xScale = r => pad.l + ((r - regEnd) / Math.max(1, lastRound - regEnd)) * innerW;
   const yScale = v => pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
 
   // Grid lines
@@ -22651,32 +22563,30 @@ function _renderProjectionChaseLineChart(chaseDrivers, proj) {
     gridLines.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
     gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
   }
-
   // X labels
   const xLabels = [];
-  traces[0].trace.forEach(p => {
-    xLabels.push(`<text class="axis-label" x="${xScale(p.round)}" y="${H - 10}" text-anchor="middle">R${p.round}</text>`);
-  });
+  for (let i = 0; i < chaseRaces.length; i++) {
+    const r = chaseRaces[i];
+    xLabels.push(`<text class="axis-label" x="${xScale(r.round)}" y="${H - 10}" text-anchor="middle">R${r.round}</text>`);
+  }
 
-  // Lines — draw bottom-ranked drivers first, top last
-  const sortedForDraw = traces.slice().reverse();
+  // Lines — draw lowest champ % first, highest last (on top)
+  const sortedForDraw = traces.slice().sort((a, b) => a.champPct - b.champPct);
   const lines = sortedForDraw.map(d => {
-    const carHex = colorFor(series, d.car_number);
-    const trace = d.trace;
-    const pathD = trace.map((p, i) =>
+    const carHex = colorFor(proj.series, d.car_number);
+    const pts = d.points;
+    if (pts.length < 2) return "";
+    const pathD = pts.map((p, i) =>
       `${i === 0 ? "M" : "L"}${xScale(p.round).toFixed(1)},${yScale(p.cum).toFixed(1)}`
     ).join(" ");
-    const overlay = `<path class="pc-line-hover" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-car="${d.car_number}" d="${pathD}" fill="none" stroke="transparent" stroke-width="12" stroke-linejoin="round" pointer-events="stroke"/>`;
-    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${carHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>${overlay}`;
+    return `<path class="pc-line" data-slug="${d.slug}" d="${pathD}" fill="none" stroke="${carHex}" stroke-width="2" opacity="0.85" stroke-linejoin="round"/>
+    <path class="pc-line-hover" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-car="${d.car_number}" d="${pathD}" fill="none" stroke="transparent" stroke-width="12" stroke-linejoin="round" pointer-events="stroke"/>`;
   }).join("");
 
-  // Hit targets at every point
+  // Hit circles
   const hits = traces.flatMap(d =>
-    d.trace.map(p =>
-      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="14" fill="transparent"
-        data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}"
-        data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}"
-        data-race="${escapeHTML(p.race)}" data-finish="${p.projFinish || '—'}"/>`
+    d.points.filter(p => p.round > regEnd).map(p =>
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="12" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}" data-finish="${p.predFinish || ''}"/>`
     )
   ).join("");
 
@@ -22684,10 +22594,10 @@ function _renderProjectionChaseLineChart(chaseDrivers, proj) {
     <section class="proj-section">
       <div class="proj-section-head">
         <div class="ed-kicker">championship chase</div>
-        <h2 class="ed-hero ed-hero-sm">Projected points per round</h2>
-        <div class="ed-byline">Hover a line or dot to see projected race finish and cumulative chase points</div>
+        <h2 class="ed-hero ed-hero-sm">Projected chase points</h2>
+        <div class="ed-byline">Deterministic prediction per track · hover to see driver + projected finish</div>
       </div>
-      <div class="pc-chart-wrap proj-line-chart-wrap">
+      <div class="pc-chart-wrap">
         <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
           ${gridLines.join("")}
           ${xLabels.join("")}
