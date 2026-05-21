@@ -130,6 +130,7 @@
   <a href="#/trackstats" class="mobile-nav-link" data-view="trackstats">Tracks</a>
   <a href="#/crewchiefs" class="mobile-nav-link" data-view="crewchiefs">Crew Chiefs</a>
   <a href="#/pointscalc" class="mobile-nav-link" data-view="pointscalc">Points Format Calc</a>
+  <a href="#/projection" class="mobile-nav-link" data-view="projection">Season Projection</a>
 </nav>
 
 <div class="metricbar" id="metricbar"></div>
@@ -191,6 +192,7 @@
           <a href="#/trackstats"  class="dash-subitem" data-view="trackstats">Tracks</a>
           <a href="#/crewchiefs"  class="dash-subitem" data-view="crewchiefs">Crew Chiefs</a>
           <a href="#/pointscalc"  class="dash-subitem" data-view="pointscalc">Points Format Calc</a>
+          <a href="#/projection"  class="dash-subitem" data-view="projection">Season Projection</a>
         </div>
       </div>
     </nav>
@@ -300,6 +302,7 @@
           <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
           <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
           <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
+          <a href="#/projection" class="takeover-sibling" data-view="projection">Projection</a>
         </div>
       </div>
       <section class="view" id="view-drivers">
@@ -320,6 +323,7 @@
           <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
           <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
           <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
+          <a href="#/projection" class="takeover-sibling" data-view="projection">Projection</a>
         </div>
       </div>
       <section class="view" id="view-teams">
@@ -340,6 +344,7 @@
           <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
           <a href="#/crewchiefs" class="takeover-sibling active" data-view="crewchiefs">Crew Chiefs</a>
           <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
+          <a href="#/projection" class="takeover-sibling" data-view="projection">Projection</a>
         </div>
       </div>
       <section class="view" id="view-crewchiefs">
@@ -360,6 +365,7 @@
           <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
           <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
           <a href="#/pointscalc" class="takeover-sibling active" data-view="pointscalc">Points Format Calc</a>
+          <a href="#/projection" class="takeover-sibling" data-view="projection">Projection</a>
         </div>
       </div>
       <section class="view" id="view-pointscalc">
@@ -368,6 +374,27 @@
           <div class="view-sub" id="pointscalc-sub">Recompute any season's standings under any playoff format</div>
         </div>
         <div id="pointscalc-host"></div>
+      </section>
+    </div>
+
+    <div class="profile-takeover" id="projection-takeover" hidden>
+      <div class="profile-takeover-head">
+        <a href="#" class="takeover-back" id="projection-back">← Back</a>
+        <div class="takeover-siblings">
+          <a href="#/drivers" class="takeover-sibling" data-view="drivers">Drivers</a>
+          <a href="#/teams" class="takeover-sibling" data-view="teams">Teams</a>
+          <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
+          <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
+          <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
+          <a href="#/projection" class="takeover-sibling active" data-view="projection">Projection</a>
+        </div>
+      </div>
+      <section class="view" id="view-projection">
+        <div class="view-head">
+          <h1>Season Projection</h1>
+          <div class="view-sub" id="projection-sub">Monte Carlo season rollout</div>
+        </div>
+        <div id="projection-host"></div>
       </section>
     </div>
 

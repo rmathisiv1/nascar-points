@@ -7517,18 +7517,29 @@ function renderProfile() {
   // bioDriverName is also passed so the panel can compute on-the-fly
   // loop-data aggregates (avg Driver Rating, etc.) by walking
   // SEASON_CACHE — these don't live in the static drivers.json.
-  const careerPanelHTML = (bio && bio.career && Object.keys(bio.career).length > 0)
-    ? renderCareerTotalsPanel(bio.career, kind === "owner" ? bioDriverName : null, bioDriverName)
-    : (STATE.driverBios === null
-        ? "" // no data file yet — just hide the panel instead of showing a nag
-        : `<div class="profile-panel full">
+  // Career By Series: try bio.career first (from drivers.json), then
+  // compute from SEASON_CACHE as a fallback (handles drivers not in the
+  // manually-curated driver_keys.json — e.g. Richard Petty).
+  const careerPanelHTML = (() => {
+    const bioCar = bio && bio.career && Object.keys(bio.career).length > 0 ? bio.career : null;
+    if (bioCar) return renderCareerTotalsPanel(bioCar, kind === "owner" ? bioDriverName : null, bioDriverName);
+    // No bio — try SEASON_CACHE.
+    if (bioDriverName) {
+      const cacheCar = _computeDriverCareerFromCache(bioDriverName);
+      if (Object.keys(cacheCar).length > 0) {
+        return renderCareerTotalsPanel(cacheCar, kind === "owner" ? bioDriverName : null, bioDriverName);
+      }
+    }
+    if (STATE.driverBios === null) return ""; // no data file yet
+    return `<div class="profile-panel full">
              <div class="profile-panel-head">
                <span class="profile-panel-title">Career By Series</span>
              </div>
              <div class="profile-panel-body">
                <div class="muted" style="padding:10px 4px;font-size:12px;">No career data available for ${escapeHTML(bioDriverName)} yet.</div>
              </div>
-           </div>`);
+           </div>`;
+  })();
 
   // Championship count across all series. Walks SEASON_CACHE for every
   // (year, series) and counts where final_standings[0] matches the driver.
@@ -7906,7 +7917,82 @@ function computeDriverTrackTypeLoop(driverName, seriesScope) {
 // `driverName` is the driver to look up for on-the-fly loop-data aggregates
 // (avg Driver Rating, etc.) — these are computed by walking SEASON_CACHE
 // since loop data lives in the per-season JSON, not in drivers.json.
+// Compute a driver's career stats from SEASON_CACHE when no bio is
+// available in drivers.json. Walks every loaded season and aggregates
+// per-series. Returns the same shape as bio.career: { NCS: {...}, ... }
+// so renderCareerTotalsPanel can consume it unchanged.
+function _computeDriverCareerFromCache(driverName) {
+  if (!driverName) return {};
+  const norm = normalizeDriverName(driverName);
+  if (!norm) return {};
+  const cache = (typeof SEASON_CACHE !== "undefined") ? SEASON_CACHE : {};
+  const seriesMap = { NCS: "cup_series", NOS: "xfinity_series", NTS: "truck_series" };
+  const out = {};
+  Object.keys(cache).forEach(yearStr => {
+    const year = parseInt(yearStr, 10);
+    if (isNaN(year)) return;
+    const block = cache[year];
+    ["NCS", "NOS", "NTS"].forEach(sCode => {
+      const sk = seriesMap[sCode];
+      const sData = block[sk] || block[sCode];
+      if (!sData || !sData.races) return;
+      sData.races.forEach(race => {
+        if (!race.results || race.results.length === 0) return;
+        race.results.forEach(d => {
+          if (normalizeDriverName(d.driver) !== norm) return;
+          if (!out[sCode]) {
+            out[sCode] = {
+              years: new Set(),
+              starts: 0, wins: 0, top5: 0, top10: 0, poles: 0,
+              laps_led: 0, startSum: 0, finishSum: 0,
+            };
+          }
+          const o = out[sCode];
+          o.years.add(year);
+          o.starts += 1;
+          if (d.finish_pos === 1) o.wins += 1;
+          if (d.finish_pos <= 5) o.top5 += 1;
+          if (d.finish_pos <= 10) o.top10 += 1;
+          const isPole = (d.qual_pos === 1) || (d.qual_pos == null && d.start_pos === 1);
+          if (isPole) o.poles += 1;
+          o.laps_led += (d.laps_led || 0);
+          if (d.start_pos) o.startSum += d.start_pos;
+          if (d.finish_pos) o.finishSum += d.finish_pos;
+        });
+      });
+    });
+  });
+  // Finalize: convert Sets to counts, compute averages.
+  const final = {};
+  Object.keys(out).forEach(sCode => {
+    const o = out[sCode];
+    if (o.starts === 0) return;
+    final[sCode] = {
+      years: o.years.size,
+      starts: o.starts,
+      wins: o.wins,
+      top5: o.top5,
+      top10: o.top10,
+      poles: o.poles,
+      laps_led: o.laps_led,
+      avg_start: o.starts > 0 ? o.startSum / o.starts : null,
+      avg_finish: o.starts > 0 ? o.finishSum / o.starts : null,
+    };
+  });
+  return Object.keys(final).length > 0 ? final : {};
+}
+
 function renderCareerTotalsPanel(career, carModeDriverName, driverName) {
+  // If the bio-sourced career is empty but we have race data in
+  // SEASON_CACHE, compute career stats on-the-fly so drivers NOT
+  // in drivers.json (e.g. Richard Petty — manually-curated bio list
+  // doesn't include him) still get a panel. The computed stats won't
+  // have laps/running_at_finish/lead_lap_finishes, but the main
+  // numbers (starts/wins/top-5/top-10/poles/avg-finish/avg-start/
+  // laps-led) are all derivable from race results.
+  if ((!career || Object.keys(career).length === 0) && driverName) {
+    career = _computeDriverCareerFromCache(driverName);
+  }
   const SERIES_ORDER = ["NCS", "NOS", "NTS"];
   // Career stats span all years; use the modern label (no season context).
   // The Xfinity → O'Reilly rename only kicks in when a specific season is
@@ -18356,7 +18442,21 @@ function renderTeamPage() {
 
   const era = teamLabelForEra(teamCode, STATE.season);
   if (titleEl) titleEl.textContent = era.full || teamCode;
-  if (subEl) subEl.textContent = `${STATE.season} ${STATE.series} · ${era.abbr}`;
+
+  // Compute career stats early so we can enrich the subtitle and
+  // reuse the same object for the career strip + best panels below.
+  const career = computeTeamCareerStats(teamCode);
+  const yearsRange = career.yearsActive
+    ? (career.yearsActive[0] === career.yearsActive[1]
+        ? `${career.yearsActive[0]}`
+        : `${career.yearsActive[0]}–${career.yearsActive[1]}`)
+    : null;
+  // Build an enriched subtitle: "2026 NCS · JGR · 1992–2026 · 35 seasons"
+  const subParts = [`${STATE.season} ${STATE.series} · ${era.abbr}`];
+  if (yearsRange) subParts.push(yearsRange);
+  if (career.seasonsRun > 0) subParts.push(`${career.seasonsRun} season${career.seasonsRun === 1 ? "" : "s"}`);
+  if (career.starts > 0) subParts.push(`${career.starts.toLocaleString()} starts`);
+  if (subEl) subEl.textContent = subParts.join(" · ");
 
   // Inject (or remove) the championship pill INSIDE .view-head so it
   // sits on the same row as the team name + sub. .view-head is a flex
@@ -18493,15 +18593,14 @@ function renderTeamPage() {
   // numbers tie back to the user's pre-takeover context.
   const allSeriesCurrentCars = computeAllSeriesCurrentCars(teamCode);
 
-  // All-time career stats — walks every loaded year and aggregates
-  // starts/wins/T5/T10/poles/lapsLed plus per-driver and per-car-number
-  // breakdowns. SEASON_CACHE may be partial (opportunistic load below
-  // fills more years and re-renders), so these numbers grow over the
-  // first few seconds on a cold page load.
-  const career = computeTeamCareerStats(teamCode);
+  // All-time career stats — already computed at the top of this function
+  // (before the subtitle was set, so the subtitle can display years/starts).
+  // The derivative values below (bestDriver, bestCar, yearsRangeDisplay)
+  // are computed here because they're used by the career strip + best
+  // panels further down.
   const bestDriver = career.byDriver.length ? career.byDriver[0] : null;
   const bestCar    = career.byCarNumber.length ? career.byCarNumber[0] : null;
-  const yearsRange = career.yearsActive
+  const yearsRangeDisplay = career.yearsActive
     ? (career.yearsActive[0] === career.yearsActive[1]
         ? `${career.yearsActive[0]}`
         : `${career.yearsActive[0]} – ${career.yearsActive[1]}`)
@@ -18589,7 +18688,7 @@ function renderTeamPage() {
         <h2 class="ed-hero ed-hero-sm">Career totals</h2>
       </div>
       <div class="tm-career-tiles">
-        ${tile("Years", yearsRange, career.seasonsRun ? `${career.seasonsRun} season${career.seasonsRun === 1 ? "" : "s"}` : "")}
+        ${tile("Years", yearsRangeDisplay, career.seasonsRun ? `${career.seasonsRun} season${career.seasonsRun === 1 ? "" : "s"}` : "")}
         ${tile("Starts", career.starts.toLocaleString(), "")}
         ${tile("Wins",  career.wins.toLocaleString(), winsBreakdown)}
         ${tile("Top 5", career.top5.toLocaleString(), "")}
@@ -18610,10 +18709,48 @@ function renderTeamPage() {
   // top driver (in-series wins) and top car number (in-series wins).
   // Falls back to the global single-best layout when no series has data
   // — keeps the page from looking empty for partially-loaded caches.
+  // Build an inline comparison table for ALL drivers of a given series.
+  // Used inside the "most successful driver" card: clicking "see all →"
+  // toggles this table so the user can see how close the other drivers
+  // are to the leader.
+  const _allDriversTableHTML = (s) => {
+    const all = career.byDriver
+      .filter(d => d.bySeries && d.bySeries[s] && d.bySeries[s].starts > 0)
+      .slice()
+      .sort((a, b) => (b.bySeries[s].wins - a.bySeries[s].wins) || (b.bySeries[s].starts - a.bySeries[s].starts));
+    if (all.length <= 1) return "";
+    const rows = all.map((d, i) => {
+      const sb = d.bySeries[s];
+      const slug = slugify(d.driver);
+      return `<tr>
+        <td class="num">${i + 1}</td>
+        <td><a class="profile-link" href="#/driver/${slug}">${escapeHTML(d.driver)}</a></td>
+        <td class="num">${sb.starts}</td>
+        <td class="num">${sb.wins}</td>
+        <td class="num">${sb.top5}</td>
+        <td class="num">${sb.top10}</td>
+        <td class="num">${sb.poles}</td>
+        <td class="num">${sb.lapsLed ? sb.lapsLed.toLocaleString() : "0"}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="tm-best-expand" hidden>
+      <table class="data-table tm-best-table">
+        <thead><tr>
+          <th class="num">#</th><th>Driver</th><th class="num">Starts</th>
+          <th class="num">Wins</th><th class="num">T5</th><th class="num">T10</th>
+          <th class="num">Poles</th><th class="num">Laps Led</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  };
+
   const renderBestDriverCard = (s, drv) => {
     if (!drv || !drv.bySeries || !drv.bySeries[s]) return "";
     const sb = drv.bySeries[s];
-    return `<div class="tm-best-panel">
+    const allCount = career.byDriver.filter(d => d.bySeries && d.bySeries[s] && d.bySeries[s].starts > 0).length;
+    const expandTable = _allDriversTableHTML(s);
+    return `<div class="tm-best-panel tm-best-panel-clickable" data-expand-series="${s}">
       <div class="ed-kicker"><span class="series-tag series-${s.toLowerCase()}">${s}</span> most successful driver</div>
       <div class="tm-best-name ed-hero ed-hero-sm">${escapeHTML(drv.driver)}</div>
       <div class="tm-best-meta">
@@ -18623,7 +18760,11 @@ function renderTeamPage() {
         <span class="tm-best-meta-sep">·</span>
         <span class="tm-best-meta-pair"><span class="ed-number">${sb.top10}</span> top-10s</span>
       </div>
-      <a class="tm-best-link" href="#/driver/${slugify(drv.driver)}">view profile →</a>
+      <div class="tm-best-links">
+        <a class="tm-best-link" href="#/driver/${slugify(drv.driver)}" onclick="event.stopPropagation()">view profile →</a>
+        ${allCount > 1 ? `<span class="tm-best-toggle" data-series="${s}">see all ${allCount} drivers →</span>` : ""}
+      </div>
+      ${expandTable}
     </div>`;
   };
   const renderBestCarCard = (s, car) => {
@@ -18755,6 +18896,24 @@ function renderTeamPage() {
       headEl.appendChild(pillEl);
     }
   }
+
+  // Wire "see all N drivers →" toggles on the best-driver panels.
+  // Each .tm-best-toggle has a data-series attribute; clicking it toggles
+  // the .tm-best-expand table in the SAME parent panel.
+  host.querySelectorAll(".tm-best-toggle").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const panel = btn.closest(".tm-best-panel");
+      if (!panel) return;
+      const expand = panel.querySelector(".tm-best-expand");
+      if (!expand) return;
+      const isHidden = expand.hidden;
+      expand.hidden = !isHidden;
+      btn.textContent = isHidden
+        ? "hide table ↑"
+        : `see all ${expand.querySelectorAll("tbody tr").length} drivers →`;
+    });
+  });
 
   // If history is sparse, lazy-load more years and re-render
   const allYears = Object.keys(SEASON_CACHE).map(Number);

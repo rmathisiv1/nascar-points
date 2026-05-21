@@ -11589,3 +11589,41 @@ body.lightbox-open {
   padding: 6px 14px;
   font-size: 12px;
 }
+
+/* Expandable driver comparison table inside "most successful driver" panels */
+.tm-best-links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.tm-best-toggle {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+.tm-best-toggle:hover {
+  text-decoration: underline;
+}
+.tm-best-expand {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.tm-best-table {
+  width: 100%;
+  font-size: 12px;
+}
+.tm-best-table th,
+.tm-best-table td {
+  padding: 4px 8px;
+}
+.tm-best-table .profile-link {
+  color: var(--text);
+  text-decoration: none;
+}
+.tm-best-table .profile-link:hover {
+  color: var(--accent);
+}
