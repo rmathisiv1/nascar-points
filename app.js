@@ -2410,12 +2410,22 @@ async function applySeriesChangeGlobal(next) {
   STATE.series = next;
   syncSeriesUIGlobal(next);
   if (STATE.mode === "present") STATE.lastPresentSeries = next;
+  // Clamp current season into the new series's available range.
+  // Example: user is on 1955 NCS and switches to NOS (which starts
+  // 1982). Without clamping, we'd try to load NOS data for 1955 and
+  // either 404 or load an NCS-only block. Pick the most recent
+  // available year for the new series instead.
+  const seriesYears = seasonsAvailableForSeries(next);
+  if (seriesYears.length > 0 && !seriesYears.includes(STATE.season)) {
+    STATE.season = seriesYears[0];  // seasonsAvailable is sorted desc, so this is the latest
+  }
   STATE.throughRound = null;
   STATE.arc.selected.clear();
   STATE.trajectory.selected.clear();
   STATE.trajectory.seasons.clear();
   await loadCurrentData();
   resetRenderCache();
+  populateSeasonPicker();  // dropdown must reflect new series's available years
   populateRacePicker();
   renderTimeCursorBanner();
   render();
@@ -2795,10 +2805,24 @@ function wireUIControls() {
   });
 }
 
+// Earliest season per NASCAR national series, used to filter the
+// season-picker dropdown when the user switches series. Showing 1949
+// in the dropdown while on NOS is misleading — that data file might
+// exist but won't have an NOS block. Hardcoded because the inception
+// years are fixed historical facts (NASCAR Cup 1949, Busch/Xfinity
+// 1982, Craftsman Truck 1995).
+const SERIES_MIN_YEAR = { NCS: 1949, NOS: 1982, NTS: 1995 };
+
+function seasonsAvailableForSeries(series) {
+  const min = SERIES_MIN_YEAR[series] || 1949;
+  return (STATE.seasonsAvailable || []).filter(y => y >= min);
+}
+
 function populateSeasonPicker() {
   const sel = document.getElementById("season-picker");
   if (!sel) return;
-  sel.innerHTML = STATE.seasonsAvailable
+  const years = seasonsAvailableForSeries(STATE.series);
+  sel.innerHTML = years
     .map(y => `<option value="${y}" ${y === STATE.season ? "selected" : ""}>${y}</option>`)
     .join("");
   sel.addEventListener("change", async () => {
@@ -3364,13 +3388,21 @@ function renderCoDriverBadge(entity) {
 // highlighted). Safe to call multiple times — it re-binds only the nodes
 // inside `host`. Data comes from the current allEntities() snapshot, keyed
 // by car number.
-function wireCoDriverBadges(host) {
+function wireCoDriverBadges(host, customEntities) {
   if (!host) return;
   const tip = document.getElementById("metric-tooltip");
   if (!tip) return;
-  // Build a lookup of car_number → entity (for the active dataset).
+  // Build a lookup of car_number → entity. By default we use the
+  // current loaded season's entities (allEntities()), which is right
+  // for views that always render from STATE.data. The PFC may render
+  // from a different season block — it passes its own entity array
+  // (rows from playoffStandings) via customEntities so the tooltip
+  // shows drivers from THAT season, not whatever STATE.data is.
   const byCar = new Map();
-  allEntities().forEach(e => byCar.set(String(e.car_number), e));
+  const sourceEntities = Array.isArray(customEntities) ? customEntities : allEntities();
+  sourceEntities.forEach(e => {
+    if (e && e.car_number != null) byCar.set(String(e.car_number), e);
+  });
 
   host.querySelectorAll(".co-badge").forEach(el => {
     const car = el.getAttribute("data-car");
@@ -3382,7 +3414,9 @@ function wireCoDriverBadges(host) {
       const s = dc.starts || 0;
       return `<div class="co-tip-row ${cls}"><span>${escapeHTML(dc.name)}</span><span class="n">${s} race${s === 1 ? "" : "s"}</span></div>`;
     }).join("");
-    const totalRaces = ent.races ? ent.races.length : 0;
+    const totalRaces = ent.races
+      ? ent.races.length
+      : (ent.driversByStarts.reduce((s, dc) => s + (dc.starts || 0), 0));
     const html = `<div class="co-tip-hdr">Shared Car #${escapeHTML(String(car))} · ${totalRaces} races total</div>${rowsHTML}`;
 
     const show = (evt) => {
@@ -20103,23 +20137,33 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
   // Owner mode: pick the primary driver name for each car (whoever
   // has the most starts in that car this season). This makes the
   // standings table read sensibly — "#19 — Brent Crews" instead of
-  // "#19 — Hailie Deegan" because she ran one race.
+  // "#19 — Hailie Deegan" because she ran one race. Also attach the
+  // full driver-start breakdown so the table renderer can show all
+  // drivers via the shared co-driver badge/tooltip.
   if (view === "owner") {
     for (const [carKey, starts] of carDriverStarts) {
       const ent = drivers.get(carKey);
       if (!ent) continue;
       let bestDriver = ent.name;
       let bestCount = 0;
+      const driversByStarts = [];
       for (const [driver, count] of starts) {
+        driversByStarts.push({ name: driver, starts: count });
         if (count > bestCount) {
           bestCount = count;
           bestDriver = driver;
         }
       }
+      driversByStarts.sort((a, b) => b.starts - a.starts);
       ent.name = bestDriver;
       // Slug for profile-link routing — in owner mode we still want
       // clicks to go to the driver's profile, using primary driver.
       ent.slug = slugify(bestDriver) || carKey;
+      ent.primaryDriver = bestDriver;
+      ent.driversByStarts = driversByStarts;
+      // Co-drivers list (everyone but primary), used by the badge
+      // tooltip rendering convention shared with the Standings page.
+      ent.coDrivers = driversByStarts.slice(1);
     }
   }
 
@@ -20938,20 +20982,38 @@ function _pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound) {
   `;
 }
 
-// Render the playoff standings table
-function _pointsCalcPlayoffTable(playoffStandings, rule) {
+// Render the playoff standings table.
+//
+// `view` controls owner-vs-driver presentation:
+//   - "driver": column header reads "Driver"; cell shows car-tag + name
+//   - "owner":  column header reads "Car"; cell shows car-tag + primary
+//               driver name + a co-badge (asterisk-style indicator) for
+//               cars with multiple drivers across the season. Hovering
+//               or tapping the badge opens the shared driver-list
+//               tooltip (wireCoDriverBadges). The primary driver is
+//               whoever made the most starts in that car this season.
+function _pointsCalcPlayoffTable(playoffStandings, rule, view) {
   if (playoffStandings.length === 0) return `<div class="empty">No playoff phase for this format.</div>`;
+  const isOwner = view === "owner";
   const rows = playoffStandings.map((d, i) => {
     const carHex = colorFor(STATE.pointscalc.series, d.car_number);
     const txt = contrastTextFor(carHex);
     const seedDisplay = d.seed ? `<td class="num">${d.seed}</td>` : `<td class="num">—</td>`;
     const endNote = d.lastRoundName ? `<td>${escapeHTML(d.lastRoundName)}</td>` : "";
+    const coCount = isOwner && Array.isArray(d.coDrivers) ? d.coDrivers.length : 0;
+    // Co-badge HTML follows the same convention as standings/playoff
+    // pages so wireCoDriverBadges() picks it up unchanged. data-car
+    // is the join key; the (i) symbol is a screen-friendly affordance
+    // hint that more info is available on hover.
+    const coBadge = coCount > 0
+      ? ` <sup class="co-badge" data-car="${escapeHTML(String(d.car_number))}" aria-label="${coCount} co-driver${coCount === 1 ? "" : "s"}">⁕<span class="co-i">i</span></sup>`
+      : "";
     return `<tr ${i === 0 ? 'class="pc-row-champion"' : ""}>
       <td class="num">${i + 1}${i === 0 ? " 🏆" : ""}</td>
       ${seedDisplay}
       <td><a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
         <span class="car-tag" style="background:${carHex};color:${txt}">${d.car_number}</span>
-        <span>${escapeHTML(d.name)}</span>
+        <span>${escapeHTML(d.name)}${coBadge}</span>
       </a></td>
       <td class="num">${d.wins}</td>
       <td class="num">${d.playoffPts || 0}</td>
@@ -20965,7 +21027,7 @@ function _pointsCalcPlayoffTable(playoffStandings, rule) {
       <thead><tr>
         <th class="num">Pos</th>
         <th class="num">Seed</th>
-        <th>Driver</th>
+        <th>${isOwner ? "Car" : "Driver"}</th>
         <th class="num">Wins</th>
         <th class="num">PO Pts</th>
         <th class="num">Final</th>
@@ -21133,7 +21195,7 @@ function renderPointsCalc() {
           <span class="ed-byline">R${regEndRound + 1}–R${lastRound} · ${rule.format === "elimination" ? "elimination rounds applied" : "reseeded then cumulative"}</span>
         </div>
         <div class="pc-chart-host">${_pointsCalcPlayoffChart(playoffStandings, regEndRound, lastRound)}</div>
-        <div class="pc-table-host">${_pointsCalcPlayoffTable(playoffStandings, rule)}</div>
+        <div class="pc-table-host">${_pointsCalcPlayoffTable(playoffStandings, rule, pcView)}</div>
       </div>
     `;
 
@@ -21161,6 +21223,13 @@ function renderPointsCalc() {
 
   _pointsCalcWireControls();
   _pointsCalcWireTooltips();
+  // Co-driver badges in the playoff table (owner-mode only — the
+  // renderer only emits them when view === "owner"). Pass the PFC's
+  // own playoffStandings as the entity source so the tooltip resolves
+  // car-number → driversByStarts from THAT season's aggregate, not
+  // whatever STATE.data happens to be (the PFC can show any cached
+  // season, not necessarily the currently-loaded one).
+  wireCoDriverBadges(host, playoffStandings);
 }
 
 function _pointsCalcControls(loadedYears, seriesCatalog) {
