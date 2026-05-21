@@ -22126,24 +22126,21 @@ function _buildProjectionHTML(proj) {
     `;
   }
 
-  // Split drivers into "likely in" and "likely out" for the two tables
-  const allByPlayoff = proj.drivers.slice().sort((a, b) => b.playoff_pct - a.playoff_pct || b.current_pts - a.current_pts);
+  // Sort all drivers by projected reg-season total — the one true sort
+  // that determines NASCAR standings. Every table and chart uses this.
+  const allSorted = proj.drivers.slice().sort((a, b) =>
+    (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
+  );
   const fieldSize = proj.rule.field || 16;
-  const chaseDrivers = proj.drivers
-    .filter(d => d.playoff_pct > 0.01)
+
+  // Chase drivers = top fieldSize from the projected standings, then
+  // re-sorted by championship % for the chase table/chart.
+  const chaseDrivers = allSorted.slice(0, fieldSize)
     .slice()
     .sort((a, b) => b.championship_pct - a.championship_pct);
 
-  // Top 5 contenders
+  // Top 5 contenders by championship probability
   const topContenders = chaseDrivers.slice(0, 5);
-
-  // Cutline
-  const seeded = proj.drivers
-    .filter(d => d.median_seed != null)
-    .slice()
-    .sort((a, b) => a.median_seed - b.median_seed);
-  const cutIdx = fieldSize - 1;
-  const cutlineRows = seeded.slice(Math.max(0, cutIdx - 2), Math.min(seeded.length, cutIdx + 3));
 
   return `
     <div class="proj-meta muted" style="margin-bottom:16px;">
@@ -22171,12 +22168,7 @@ function _buildProjectionHTML(proj) {
 function _renderProjectionChart(proj) {
   const fieldSize = proj.rule.field || 16;
   const sorted = proj.drivers.slice()
-    .sort((a, b) => {
-      if (a.median_seed != null && b.median_seed == null) return -1;
-      if (a.median_seed == null && b.median_seed != null) return 1;
-      if (a.median_seed != null && b.median_seed != null) return a.median_seed - b.median_seed;
-      return (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0);
-    })
+    .sort((a, b) => (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0))
     .slice(0, 25);
 
   const barH = 22;
@@ -22191,8 +22183,8 @@ function _renderProjectionChart(proj) {
     const y = i * (barH + gap) + 20;
     const projPts = Math.round(d.projected_reg_total || d.current_pts || 0);
     const curPts = d.current_pts || 0;
-    const barW = (projPts / maxPts) * (chartW - leftPad - rightPad);
-    const curW = (curPts / maxPts) * (chartW - leftPad - rightPad);
+    const fullBarW = Math.max((projPts / maxPts) * (chartW - leftPad - rightPad), 2);
+    const curBarW = Math.max((curPts / maxPts) * (chartW - leftPad - rightPad), 2);
     const inField = i < fieldSize;
     const carHex = colorFor(proj.series, d.car_number);
     const pct = (d.playoff_pct * 100).toFixed(0);
@@ -22207,15 +22199,22 @@ function _renderProjectionChart(proj) {
               style="font-family:var(--serif);font-size:12px;fill:var(--text-2);">
           ${escapeHTML(d.name)}
         </text>
-        <rect x="${leftPad}" y="${y}" width="${Math.max(barW, 2)}" height="${barH}" rx="2"
-              fill="${inField ? 'rgba(100,220,100,0.45)' : 'rgba(255,100,100,0.2)'}"
-              stroke="${inField ? 'rgba(100,220,100,0.7)' : 'rgba(255,100,100,0.4)'}" stroke-width="1"/>
+        <!-- Projected portion (lighter) -->
+        <rect x="${leftPad}" y="${y}" width="${fullBarW}" height="${barH}" rx="2"
+              fill="${inField ? 'rgba(100,220,100,0.25)' : 'rgba(255,100,100,0.12)'}"
+              stroke="${inField ? 'rgba(100,220,100,0.5)' : 'rgba(255,100,100,0.3)'}" stroke-width="1"/>
+        <!-- Current points portion (solid fill) -->
+        <rect x="${leftPad}" y="${y}" width="${curBarW}" height="${barH}" rx="2"
+              fill="${inField ? 'rgba(100,220,100,0.55)' : 'rgba(255,100,100,0.3)'}"/>
+        <!-- Car color accent -->
         <rect x="${leftPad}" y="${y}" width="4" height="${barH}" rx="1" fill="${carHex}"/>
+        <!-- Current pts label inside bar -->
         <text x="${leftPad + 10}" y="${y + barH / 2 + 4}"
-              style="font-family:var(--mono);font-size:9px;fill:var(--text);opacity:0.7;">
-          ${curPts.toLocaleString()} now
+              style="font-family:var(--mono);font-size:9px;fill:var(--text);opacity:0.8;">
+          ${curPts.toLocaleString()}
         </text>
-        <text x="${leftPad + Math.max(barW, 2) + 6}" y="${y + barH / 2 + 4}"
+        <!-- Projected total after bar -->
+        <text x="${leftPad + fullBarW + 6}" y="${y + barH / 2 + 4}"
               style="font-family:var(--mono);font-size:10px;fill:var(--muted);">
           ${projPts.toLocaleString()} pts · ${pct}%
         </text>
@@ -22250,12 +22249,9 @@ function _renderProjectionChart(proj) {
 // projected standings position. Shows current points, projected wins,
 // chase qualification probability, and expected seed.
 function _renderProjectionRegSeasonTable(proj) {
-  const sorted = proj.drivers.slice().sort((a, b) => {
-    if (a.median_seed != null && b.median_seed == null) return -1;
-    if (a.median_seed == null && b.median_seed != null) return 1;
-    if (a.median_seed != null && b.median_seed != null) return a.median_seed - b.median_seed;
-    return (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0);
-  });
+  const sorted = proj.drivers.slice().sort((a, b) =>
+    (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
+  );
   const fieldSize = proj.rule.field || 16;
   const leaderPts = sorted.length > 0 ? Math.round(sorted[0].projected_reg_total || sorted[0].current_pts || 0) : 0;
   const cutlinePts = sorted.length > fieldSize
@@ -22292,7 +22288,7 @@ function _renderProjectionRegSeasonTable(proj) {
               const fromLeader = i === 0 ? "—" : `−${(leaderPts - projPts).toLocaleString()}`;
               const fromCutline = i < fieldSize
                 ? (projPts === cutlinePts ? "CUTLINE" : `+${(projPts - cutlinePts).toLocaleString()}`)
-                : `−${(cutlinePts - projPts).toLocaleString()}`;
+                : `−${Math.abs(cutlinePts - projPts).toLocaleString()}`;
               return `<tr${i === fieldSize ? ' class="proj-table-cutline"' : ""}>
                 <td class="num">${i + 1}</td>
                 <td>
