@@ -1,0 +1,65 @@
+<!--
+=========================================================================
+PASTE INSTRUCTIONS for index.html
+
+The Season Projection page needs:
+
+  1. A takeover container  (paste BLOCK A below)
+  2. Sibling nav links     (paste/update BLOCK B in the existing data-page
+                            takeovers so users can navigate over to it)
+  3. Side-menu nav link    (paste BLOCK C in the dropdown menu, optional)
+  4. Mobile nav link       (paste BLOCK D in the mobile nav, optional)
+
+Look for the existing `pointscalc-takeover` in index.html as a sibling
+example — projection goes RIGHT AFTER it.
+=========================================================================
+-->
+
+
+<!-- ===== BLOCK A: Takeover container ============================== -->
+<!-- Paste this RIGHT AFTER the closing </div> of #pointscalc-takeover -->
+
+<div class="profile-takeover" id="projection-takeover" hidden>
+  <div class="profile-takeover-head">
+    <a href="#" class="takeover-back" id="projection-back">← Back</a>
+    <div class="takeover-siblings">
+      <a href="#/drivers" class="takeover-sibling" data-view="drivers">Drivers</a>
+      <a href="#/teams" class="takeover-sibling" data-view="teams">Teams</a>
+      <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
+      <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
+      <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
+      <a href="#/projection" class="takeover-sibling active" data-view="projection">Projection</a>
+    </div>
+  </div>
+  <section class="view" id="view-projection">
+    <div class="view-head">
+      <h1>Season Projection</h1>
+      <div class="view-sub" id="projection-sub">Monte Carlo season rollout</div>
+    </div>
+    <div id="projection-host"></div>
+  </section>
+</div>
+
+
+<!-- ===== BLOCK B: Sibling nav additions ============================ -->
+<!-- ADD a new line into the existing .takeover-siblings of EACH of:    -->
+<!--   #drivers-takeover, #teams-takeover, #trackstats-takeover,        -->
+<!--   #crewchiefs-takeover, #pointscalc-takeover, #playoffs-takeover   -->
+<!-- The new line is identical in all of them (just adds the link):     -->
+
+<a href="#/projection" class="takeover-sibling" data-view="projection">Projection</a>
+
+
+<!-- ===== BLOCK C: Side-menu link (Data dropdown) =================== -->
+<!-- Paste inside whatever <div class="dash-submenu"> currently holds  -->
+<!-- the "Points Format Calc" link (search for `data-view="pointscalc"`-->
+<!-- in the dash-submenu block, line ~193)                              -->
+
+<a href="#/projection" class="dash-subitem" data-view="projection">Season Projection</a>
+
+
+<!-- ===== BLOCK D: Mobile nav link ================================== -->
+<!-- Paste near the existing `data-view="pointscalc"` mobile-nav-link  -->
+<!-- (line ~132 in current index.html)                                  -->
+
+<a href="#/projection" class="mobile-nav-link" data-view="projection">Season Projection</a>
