@@ -2693,12 +2693,20 @@ function wireUIControls() {
     renderTrajectory();
   });
 
-  // Profile-takeover click delegation. We bind one listener at the takeover
-  // root and let event.target.closest() figure out what was clicked. Two
-  // interactive controls live here:
-  //   1. .ctx-chip — career timeline chips (year + series jumps)
-  //   2. #profile-splits-toggle button — Track Splits Season/Career toggle
-  document.getElementById("profile-takeover")?.addEventListener("click", (e) => {
+  // Profile/CC takeover click delegation. We bind one listener per
+  // takeover root and let event.target.closest() figure out what was
+  // clicked. The same handler covers both because they share most of
+  // the same interactive controls (heatmap series toggle, etc.).
+  // CC-specific controls (`#cc-heatmap-series-toggle`) only ever
+  // appear inside `#cc-takeover`; driver-specific ones only inside
+  // `#profile-takeover`. Branches that don't match for a given
+  // takeover just no-op.
+  //
+  // Why two listeners instead of one on document.body: keeps event
+  // dispatch scoped (no firing for clicks outside takeovers) and
+  // sidesteps any other body-level click capture/preventDefault that
+  // would interfere.
+  const _takeoverClickHandler = (e) => {
     // Both .ctx-chip (year/series chip) and .ctx-today (Today escape hatch)
     // use data-ctx-year/data-ctx-series so we handle them in one branch.
     const ctxBtn = e.target.closest(".ctx-chip, .ctx-today");
@@ -2802,7 +2810,9 @@ function wireUIControls() {
       );
       paintCrewChiefCareerHeatmap();
     }
-  });
+  };
+  document.getElementById("profile-takeover")?.addEventListener("click", _takeoverClickHandler);
+  document.getElementById("cc-takeover")?.addEventListener("click", _takeoverClickHandler);
 }
 
 // Earliest season per NASCAR national series, used to filter the
@@ -17891,6 +17901,38 @@ function renderTeamPage() {
         : `${career.yearsActive[0]} – ${career.yearsActive[1]}`)
     : "—";
 
+  // Per-series breakdowns. The user wants the all-time totals AND the
+  // "most successful driver / car" panels split by series so a team
+  // like Hendrick reads as "in Cup: X / in Xfinity: Y / in Trucks: Z"
+  // instead of an undifferentiated cross-series total.
+  //
+  // Best driver per series: walk byDriver (already sorted by wins desc)
+  // and pick the FIRST driver who has any starts in that series. The
+  // `bySeries[s]` accumulator was added in computeTeamCareerStats
+  // alongside the global totals — same wins/top5/etc. fields, scoped.
+  //
+  // Best car per series: byCarNumber rows already carry `series` (the
+  // key is series-prefixed), so we just filter by series and pick the
+  // first (already sorted by wins).
+  const seriesList = ["NCS", "NOS", "NTS"];
+  const bestDriverBySeries = {};
+  seriesList.forEach(s => {
+    // Re-rank drivers WITHIN this series by their in-series win count.
+    // Global byDriver order (wins-desc overall) would mis-prioritize a
+    // driver with 10 Cup wins + 1 NTS win as "best truck driver" over
+    // someone with 0/0/5. So we sort by `bySeries[s].wins`.
+    const ranked = career.byDriver
+      .filter(d => d.bySeries && d.bySeries[s] && d.bySeries[s].starts > 0)
+      .slice()
+      .sort((a, b) => (b.bySeries[s].wins - a.bySeries[s].wins) || (b.bySeries[s].starts - a.bySeries[s].starts));
+    bestDriverBySeries[s] = ranked.length ? ranked[0] : null;
+  });
+  const bestCarBySeries = {};
+  seriesList.forEach(s => {
+    const inSeries = career.byCarNumber.filter(c => c.series === s);
+    bestCarBySeries[s] = inSeries.length ? inSeries[0] : null;
+  });
+
   // Renderer for a single career-stat tile (label + display-serif number).
   // Inline to keep the template self-contained; we re-use the editorial
   // vocabulary classes (.ed-kicker, .ed-number) declared in app.css.
@@ -17905,12 +17947,34 @@ function renderTeamPage() {
   // big Wins number to give the user a breakdown without clutter.
   const winsBreakdown = (() => {
     const parts = [];
-    ["NCS", "NOS", "NTS"].forEach(s => {
+    seriesList.forEach(s => {
       const n = career.bySeries[s].wins;
       if (n > 0) parts.push(`${s} ${n}`);
     });
     return parts.join(" · ");
   })();
+
+  // Per-series career strip — same card layout as the "Right now"
+  // section just below, but populated with all-time series totals.
+  // Hidden when a series has no starts (avoids "0 / 0 / 0" filler
+  // for teams that only ran one series).
+  const careerBySeriesHTML = seriesList.map(s => {
+    const stats = career.bySeries[s];
+    if (!stats || stats.starts === 0) return "";
+    return `<div class="tm-stats-card tm-stats-${s.toLowerCase()}">
+      <div class="tm-stats-card-head">
+        <span class="series-tag series-${s.toLowerCase()}">${s}</span>
+        <span class="tm-stats-card-cars">${stats.starts.toLocaleString()} start${stats.starts === 1 ? "" : "s"}</span>
+      </div>
+      <div class="tm-stats-card-body">
+        <div class="tm-stat"><span class="k">Wins</span><span class="v">${stats.wins.toLocaleString()}</span></div>
+        <div class="tm-stat"><span class="k">Top 5</span><span class="v">${stats.top5.toLocaleString()}</span></div>
+        <div class="tm-stat"><span class="k">Top 10</span><span class="v">${stats.top10.toLocaleString()}</span></div>
+        <div class="tm-stat"><span class="k">Poles</span><span class="v">${stats.poles.toLocaleString()}</span></div>
+        <div class="tm-stat"><span class="k">Laps led</span><span class="v">${stats.lapsLed.toLocaleString()}</span></div>
+      </div>
+    </div>`;
+  }).join("");
 
   const careerStripHTML = career.starts > 0 ? `
     <section class="tm-career-strip">
@@ -17927,12 +17991,66 @@ function renderTeamPage() {
         ${tile("Poles", career.poles.toLocaleString(), "")}
         ${tile("Laps led", career.lapsLed.toLocaleString(), "")}
       </div>
+      ${careerBySeriesHTML ? `
+        <div class="tm-career-strip-subhead">
+          <div class="ed-kicker">by series</div>
+        </div>
+        <div class="tm-stats-multi">${careerBySeriesHTML}</div>` : ""}
     </section>
   ` : "";
 
-  // Best driver / best car editorial panels. Hide when career has no
-  // data (very fresh team, brand-new alliance code, etc.).
-  const bestPanelsHTML = (bestDriver || bestCar) ? `
+  // Best driver / best car panels, NOW SPLIT BY SERIES.
+  // Render one card per series that has any data. Each card shows the
+  // top driver (in-series wins) and top car number (in-series wins).
+  // Falls back to the global single-best layout when no series has data
+  // — keeps the page from looking empty for partially-loaded caches.
+  const renderBestDriverCard = (s, drv) => {
+    if (!drv || !drv.bySeries || !drv.bySeries[s]) return "";
+    const sb = drv.bySeries[s];
+    return `<div class="tm-best-panel">
+      <div class="ed-kicker"><span class="series-tag series-${s.toLowerCase()}">${s}</span> most successful driver</div>
+      <div class="tm-best-name ed-hero ed-hero-sm">${escapeHTML(drv.driver)}</div>
+      <div class="tm-best-meta">
+        <span class="tm-best-meta-pair"><span class="ed-number">${sb.wins}</span> wins</span>
+        <span class="tm-best-meta-sep">·</span>
+        <span class="tm-best-meta-pair"><span class="ed-number">${sb.starts}</span> starts</span>
+        <span class="tm-best-meta-sep">·</span>
+        <span class="tm-best-meta-pair"><span class="ed-number">${sb.top10}</span> top-10s</span>
+      </div>
+      <a class="tm-best-link" href="#/driver/${slugify(drv.driver)}">view profile →</a>
+    </div>`;
+  };
+  const renderBestCarCard = (s, car) => {
+    if (!car) return "";
+    return `<div class="tm-best-panel">
+      <div class="ed-kicker"><span class="series-tag series-${s.toLowerCase()}">${s}</span> most successful car</div>
+      <div class="tm-best-name ed-hero ed-hero-sm">#${escapeHTML(car.car_number)}</div>
+      <div class="tm-best-meta">
+        <span class="tm-best-meta-pair"><span class="ed-number">${car.wins}</span> wins</span>
+        <span class="tm-best-meta-sep">·</span>
+        <span class="tm-best-meta-pair"><span class="ed-number">${car.starts}</span> starts</span>
+        ${car.primary_driver ? `<span class="tm-best-meta-sep">·</span>
+        <span class="tm-best-meta-pair">primarily <em>${escapeHTML(car.primary_driver)}</em></span>` : ""}
+      </div>
+    </div>`;
+  };
+
+  const hasAnyPerSeriesBest = seriesList.some(s => bestDriverBySeries[s] || bestCarBySeries[s]);
+  const bestPanelsHTML = hasAnyPerSeriesBest ? `
+    <section class="tm-best-row tm-best-row-multi">
+      ${seriesList.map(s => {
+        const drv = bestDriverBySeries[s];
+        const car = bestCarBySeries[s];
+        if (!drv && !car) return "";
+        // Within-series card pair — wrapper so they stack nicely on
+        // narrow viewports while still flexing on wide ones.
+        return `<div class="tm-best-series-pair">
+          ${renderBestDriverCard(s, drv)}
+          ${renderBestCarCard(s, car)}
+        </div>`;
+      }).join("")}
+    </section>
+  ` : (bestDriver || bestCar) ? `
     <section class="tm-best-row">
       ${bestDriver ? `
         <div class="tm-best-panel">
@@ -18096,13 +18214,22 @@ function computeTeamCareerStats(teamCode) {
           if (teamGroup(code, year) !== teamCode && code !== teamCode) return;
 
           teamRanThisSeries = true;
+          // Pole detection: a driver "took pole" when they were the
+          // qualifying-session leader. If the scraper attached qual_pos
+          // (sessions enabled), prefer that since it's resilient to
+          // pole-sitter penalties that drop the qual winner to the back.
+          // Otherwise fall back to start_pos === 1 — same convention
+          // every other place in this app uses (search for `start_pos === 1`).
+          // The old `d.qualifying_pos` / `d.pole` checks never matched
+          // because the scraper never set those keys.
+          const isPole = (d.qual_pos === 1) || (d.qual_pos == null && d.start_pos === 1);
           // Global / series totals
           empty.starts += 1;
           empty.bySeries[sCode].starts += 1;
           if (d.finish_pos === 1)        { empty.wins  += 1; empty.bySeries[sCode].wins  += 1; }
           if (d.finish_pos <= 5)         { empty.top5  += 1; empty.bySeries[sCode].top5  += 1; }
           if (d.finish_pos <= 10)        { empty.top10 += 1; empty.bySeries[sCode].top10 += 1; }
-          if (d.qualifying_pos === 1 || d.pole === true) {
+          if (isPole) {
             empty.poles += 1; empty.bySeries[sCode].poles += 1;
           }
           empty.lapsLed += d.laps_led || 0;
@@ -18115,16 +18242,23 @@ function computeTeamCareerStats(teamCode) {
               driverMap.set(dKey, {
                 driver: d.driver, starts: 0,
                 wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0,
+                bySeries: {
+                  NCS: { starts: 0, wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0 },
+                  NOS: { starts: 0, wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0 },
+                  NTS: { starts: 0, wins: 0, top5: 0, top10: 0, poles: 0, lapsLed: 0 },
+                },
               });
             }
             const e = driverMap.get(dKey);
             e.driver = d.driver;  // refresh to latest seen variant
             e.starts += 1;
-            if (d.finish_pos === 1)  e.wins  += 1;
-            if (d.finish_pos <= 5)   e.top5  += 1;
-            if (d.finish_pos <= 10)  e.top10 += 1;
-            if (d.qualifying_pos === 1 || d.pole === true) e.poles += 1;
+            e.bySeries[sCode].starts += 1;
+            if (d.finish_pos === 1)  { e.wins  += 1; e.bySeries[sCode].wins  += 1; }
+            if (d.finish_pos <= 5)   { e.top5  += 1; e.bySeries[sCode].top5  += 1; }
+            if (d.finish_pos <= 10)  { e.top10 += 1; e.bySeries[sCode].top10 += 1; }
+            if (isPole) { e.poles += 1; e.bySeries[sCode].poles += 1; }
             e.lapsLed += d.laps_led || 0;
+            e.bySeries[sCode].lapsLed += d.laps_led || 0;
           }
 
           // Per-car-number. Keyed by SERIES+NUMBER so a team's Cup #20
@@ -18148,7 +18282,7 @@ function computeTeamCareerStats(teamCode) {
             if (d.finish_pos === 1)  e.wins  += 1;
             if (d.finish_pos <= 5)   e.top5  += 1;
             if (d.finish_pos <= 10)  e.top10 += 1;
-            if (d.qualifying_pos === 1 || d.pole === true) e.poles += 1;
+            if (isPole) e.poles += 1;
             e.lapsLed += d.laps_led || 0;
             if (d.driver) {
               e.driverStarts[d.driver] = (e.driverStarts[d.driver] || 0) + 1;
@@ -19260,22 +19394,54 @@ function computeAllTimeCrewChiefs() {
 // based on active scope + generation + series filters. Returns null if
 // no entries match (caller should drop the row). The returned object
 // has the shape the table expects.
+//
+// SCOPE SEMANTICS:
+//   - "all"     → use every (year, series) entry that passes the other filters
+//   - "current" → row is INCLUDED only if the entity has at least one entry
+//                 in `currentSeason`. The stat block returned still aggregates
+//                 across all years/series (career totals). I.e. "current"
+//                 acts as a row filter ("only entities active this year"),
+//                 NOT a column filter ("only show this year's stats"). The
+//                 user wants to browse active drivers/teams/CCs and see
+//                 their career history, not just what they've done so far
+//                 this season.
 function foldRecordByFilters(rec, scope, gens, seriesFilter, currentSeason) {
-  const filtered = [];
-  // Gen chips only apply to NCS — when the series filter is anything else
-  // (All / NOS / NTS), ignore the gen set even if it's populated. Keeps
-  // user-data-clear flow consistent with the UI which hides the chips
-  // outside NCS so they can't see what's filtering them.
+  // First pass: does the row qualify for inclusion at all?
+  // For scope === "current", we need at least one entry in the current
+  // season. The series/gens filters still apply to the qualifying check
+  // — a row that has 2026 entries only in NCS shouldn't appear when the
+  // series filter is set to NOS.
   const applyGens = seriesFilter === "NCS";
-  rec.byYearSeries.forEach((stats) => {
-    if (scope === "current" && stats.year !== currentSeason) return;
-    if (seriesFilter && seriesFilter !== "all" && stats.series !== seriesFilter) return;
+  const passesNonScopeFilters = (stats) => {
+    if (seriesFilter && seriesFilter !== "all" && stats.series !== seriesFilter) return false;
     if (applyGens && gens && gens.size > 0) {
       const inGen = NASCAR_GENERATIONS.some(g =>
         gens.has(g.id) && stats.year >= g.year_start && stats.year <= g.year_end
       );
-      if (!inGen) return;
+      if (!inGen) return false;
     }
+    return true;
+  };
+
+  if (scope === "current") {
+    // Inclusion check: does this entity have ANY current-season entry
+    // that also passes the series/gen filters?
+    let hasCurrent = false;
+    rec.byYearSeries.forEach((stats) => {
+      if (stats.year === currentSeason && passesNonScopeFilters(stats)) {
+        hasCurrent = true;
+      }
+    });
+    if (!hasCurrent) return null;
+  }
+
+  // Stat aggregation: in BOTH scopes we sum across every (year, series)
+  // entry that passes the non-scope filters. The scope filter changes
+  // WHICH rows are shown; the stats columns always show the entity's
+  // full historical totals filtered only by series + generation.
+  const filtered = [];
+  rec.byYearSeries.forEach((stats) => {
+    if (!passesNonScopeFilters(stats)) return;
     filtered.push(stats);
   });
   if (filtered.length === 0) return null;
@@ -21006,7 +21172,7 @@ function _pointsCalcPlayoffTable(playoffStandings, rule, view) {
     // is the join key; the (i) symbol is a screen-friendly affordance
     // hint that more info is available on hover.
     const coBadge = coCount > 0
-      ? ` <sup class="co-badge" data-car="${escapeHTML(String(d.car_number))}" aria-label="${coCount} co-driver${coCount === 1 ? "" : "s"}">⁕<span class="co-i">i</span></sup>`
+      ? ` <span class="co-badge" data-car="${escapeHTML(String(d.car_number))}" title="Shared car — hover for drivers">i</span>`
       : "";
     return `<tr ${i === 0 ? 'class="pc-row-champion"' : ""}>
       <td class="num">${i + 1}${i === 0 ? " 🏆" : ""}</td>

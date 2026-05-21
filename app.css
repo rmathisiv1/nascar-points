@@ -2767,6 +2767,18 @@ td.neg { color: var(--neg); }
   opacity: 0.4;
   cursor: not-allowed;
 }
+/* Mobile: the 9px / 3px 10px mini toggles are too small to tap reliably
+   (target ~18px tall, ~30px wide). Apple HIG / Material both recommend
+   44px / 48px. We can't blow up font size without breaking the panel
+   head layout, but expanding padding gets us a workable hit area
+   without changing typographic weight. */
+@media (max-width: 767.98px) {
+  .toggle-group.mini button {
+    padding: 8px 12px;
+    font-size: 10px;
+    min-height: 32px;
+  }
+}
 .track-splits-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -9091,6 +9103,34 @@ body.lightbox-open {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-bottom: 14px;
+}
+/* Per-series variant: one column per series (NCS, NOS, NTS), each
+   containing a driver + car pair stacked. Wider grid than the global
+   two-column .tm-best-row so all three series fit side-by-side on
+   desktop. Auto-fit lets the page reflow to a single column on narrow
+   viewports without a media query. */
+.tm-best-row-multi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tm-best-series-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* Sub-header inside the career strip — used to separate the all-time
+   totals row from the per-series breakdown that sits beneath. */
+.tm-career-strip-subhead {
+  margin: 18px 0 8px;
+}
+/* Series tag inline with the "most successful driver" kicker. The
+   global kicker is tracked-caps; the tag should sit baseline-aligned
+   with it without disrupting the typographic rhythm. */
+.tm-best-panel .ed-kicker .series-tag {
+  margin-right: 6px;
+  vertical-align: 1px;
 }
 .tm-best-panel {
   background: var(--card);
