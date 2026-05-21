@@ -15073,26 +15073,378 @@ function canonicalStandingsMap() {
 
 // Owner-side canonical standings map. Keyed by "#NN" (car number) so
 // owner-mode rows (which carry car_number) can match cleanly. Returns
-// null when the scraper hasn't fetched owner_final_standings yet —
-// caller falls back gracefully (no override, raw sums preserved).
+// null when the scraper hasn't fetched owner_final_standings AND the
+// computed fallback can't be built — caller falls back gracefully (no
+// override, raw sums preserved).
 function canonicalOwnerStandingsMap() {
+  // Prefer scraped data when available (some future version of the
+  // scraper might populate this from an authoritative source).
   const arr = STATE.data && STATE.data.owner_final_standings;
-  if (!Array.isArray(arr) || arr.length === 0) return null;
+  if (Array.isArray(arr) && arr.length > 0) {
+    const m = new Map();
+    arr.forEach(row => {
+      const raw = row.car_number != null ? String(row.car_number) : "";
+      const cleaned = raw.replace(/^#/, "").trim();
+      if (!cleaned) return;
+      m.set(`#${cleaned}`, {
+        rank: row.rank,
+        points: row.points,
+        wins: row.wins,
+        gap: row.gap,
+        car_number: cleaned,
+        owner: row.owner,
+        primary_driver: row.primary_driver,
+      });
+    });
+    return m;
+  }
+
+  // Fallback: COMPUTE the owner final standings from race-by-race
+  // data using the playoff rule for this (series, season). NASCAR
+  // owners championship has the same structure as drivers — playoff
+  // field, eliminations, finale — applied to CARS instead of drivers.
+  //
+  // Cars accumulate points for ALL drivers who race them, including
+  // cross-series interlopers (whose driver-points are 0 but car-
+  // points are normal). Then the same elimination bracket runs.
+  return _computeOwnerCanonicalFallback();
+}
+
+// Owner-side fallback: synthesize the canonical owner standings by
+// running NASCAR's actual playoff rules against the race results we
+// already have. Returns Map<"#NN", row> mirroring the shape scraped
+// data would have. Returns null when:
+//  - no playoff rule applies (very early seasons)
+//  - season is in progress (we don't synthesize partial-season totals
+//    because tier ordering would be misleading)
+//
+// Behaves like a memoized function: result is cached on the block
+// under `_computedOwnerCanonical` so subsequent calls are O(1).
+//
+// Optional args allow computing for any block (PFC views any season),
+// not just STATE.data. When omitted, falls back to STATE.data and the
+// current series/year.
+function _computeOwnerCanonicalFallback(blockArg, seriesArg, yearArg) {
+  const block = blockArg || STATE.data;
+  if (!block) return null;
+  if (block._computedOwnerCanonical !== undefined) {
+    return block._computedOwnerCanonical;
+  }
+  // Mark as null first so any thrown exception below leaves us in a
+  // safe state for next call (we'll just have no override that time).
+  block._computedOwnerCanonical = null;
+
+  const series = seriesArg || STATE.series;
+  const year = yearArg != null ? yearArg : (block.season || STATE.season);
+  const rule = resolvePlayoffRules(series, year);
+  if (!rule) return null;
+
+  const races = (block.races || []).slice().sort((a, b) => (a.round || 0) - (b.round || 0));
+  if (!races.length) return null;
+
+  // Don't synthesize partial-season standings. Only finalize once the
+  // last scheduled race has results. Mid-season the rankings are TBD
+  // and showing them as "canonical" would mislead.
+  const allRun = races.every(r => (r.results || []).length > 0);
+  if (!allRun) return null;
+
+  // Build per-car perRace structure (mirrors what
+  // _pointsCalcSeasonAggregate does for owner mode, but using the
+  // already-loaded RACE data instead of a season block).
+  const carData = new Map(); // "#NN" -> { pts, perRace, drivers Map, wins, stageWins }
+  const finishPtsForPos = (pos) => {
+    if (pos == null || pos < 1) return 0;
+    if (pos === 1) return 40;
+    if (pos === 2) return 35;
+    if (pos >= 3 && pos <= 36) return 35 - (pos - 2);
+    return 0;
+  };
+  const ownerPtsForResult = (d) => {
+    // For ineligible drivers the scraper records race_pts = 0 (because
+    // they don't earn driver championship points), but the CAR still
+    // earns owner points. Reconstruct from finish + stages + FL.
+    if (d.ineligible && d.finish_pos != null) {
+      let fin = finishPtsForPos(d.finish_pos);
+      if (d.finish_pos === 1) {
+        // Win bonus differs by series: NCS = +15, NOS/NTS = +5.
+        const winBonus = (series === "NCS") ? 15 : 5;
+        fin += winBonus;
+      }
+      return fin + (d.stage_1_pts || 0) + (d.stage_2_pts || 0) + (d.fastest_lap_pt || 0);
+    }
+    return d.race_pts || 0;
+  };
+
+  for (const race of races) {
+    for (const d of (race.results || [])) {
+      const carNum = d.car_number;
+      if (carNum == null) continue;
+      const key = `#${carNum}`;
+      const pts = ownerPtsForResult(d);
+      if (!carData.has(key)) {
+        carData.set(key, {
+          car_number: String(carNum),
+          totalSeasonPts: 0,
+          perRace: [],
+          drivers: new Map(),
+          wins: 0,
+        });
+      }
+      const ent = carData.get(key);
+      const stageWins = ((d.stage_1_pts || 0) === 10 ? 1 : 0)
+                     + ((d.stage_2_pts || 0) === 10 ? 1 : 0);
+      ent.totalSeasonPts += pts;
+      ent.perRace.push({
+        round: race.round,
+        race_pts: pts,
+        isWin: d.finish_pos === 1,
+        stageWins,
+        finish: d.finish_pos,
+      });
+      if (d.finish_pos === 1) ent.wins += 1;
+      ent.drivers.set(d.driver, (ent.drivers.get(d.driver) || 0) + 1);
+    }
+  }
+  // Sort each car's perRace by round for deterministic iteration
+  for (const ent of carData.values()) {
+    ent.perRace.sort((a, b) => a.round - b.round);
+    // Pick primary driver = most starts in this car this season
+    let bestDriver = null, bestCount = 0;
+    for (const [name, count] of ent.drivers) {
+      if (count > bestCount) { bestCount = count; bestDriver = name; }
+    }
+    ent.primary_driver = bestDriver;
+  }
+
+  // For non-elimination formats, just rank by totalSeasonPts.
+  if (rule.format !== "elimination") {
+    const sorted = [...carData.entries()]
+      .sort((a, b) => b[1].totalSeasonPts - a[1].totalSeasonPts);
+    const m = new Map();
+    let prevPts = null;
+    sorted.forEach(([key, ent], i) => {
+      const points = ent.totalSeasonPts;
+      const gap = i === 0 ? 0 : points - sorted[0][1].totalSeasonPts;
+      m.set(key, {
+        rank: i + 1,
+        points,
+        wins: ent.wins,
+        gap,
+        car_number: ent.car_number,
+        owner: null,
+        primary_driver: ent.primary_driver,
+      });
+    });
+    block._computedOwnerCanonical = m;
+    return m;
+  }
+
+  // Elimination format: run the full playoff bracket sim against
+  // car-keyed data. Mirrors the driver-side simulation in
+  // _pointsCalcPlayoffStandings.
+
+  // Regular-season standings for seeding + bonus calc
+  const regEnd = rule.regSeasonEndRound;
+  const regSeasonByCar = new Map();
+  for (const [key, ent] of carData) {
+    const regRaces = ent.perRace.filter(p => p.round <= regEnd);
+    if (!regRaces.length) continue;
+    regSeasonByCar.set(key, {
+      regPts: regRaces.reduce((s, p) => s + p.race_pts, 0),
+      regWins: regRaces.filter(p => p.isWin).length,
+      regStageWins: regRaces.reduce((s, p) => s + p.stageWins, 0),
+    });
+  }
+
+  // Field selection: win-and-in then top-points fill
+  const allCars = [...regSeasonByCar.entries()].map(([k, v]) => ({
+    key: k, ...v,
+  }));
+  const winners = allCars.filter(c => c.regWins > 0)
+    .sort((a, b) => b.regWins - a.regWins || b.regPts - a.regPts);
+  const nonWinners = allCars.filter(c => c.regWins === 0)
+    .sort((a, b) => b.regPts - a.regPts);
+  const field = [...winners.slice(0, rule.field)];
+  if (field.length < rule.field) {
+    field.push(...nonWinners.slice(0, rule.field - field.length));
+  }
+  const fieldKeys = field.map(c => c.key);
+  const fieldSet = new Set(fieldKeys);
+
+  // Compute regSeasonPP (race-wins PP + stage-wins PP + top-10 bonus)
+  const regSeasonPP = new Map();
+  for (const c of field) {
+    regSeasonPP.set(c.key,
+      c.regWins * (rule.raceWinPP || 0)
+      + c.regStageWins * (rule.stageWinPP || 0));
+  }
+  if (rule.regBonus) {
+    const BONUS = [15, 10, 8, 7, 6, 5, 4, 3, 2, 1];
+    const allRanked = allCars.slice().sort((a, b) => b.regPts - a.regPts);
+    allRanked.slice(0, 10).forEach((c, i) => {
+      if (regSeasonPP.has(c.key)) {
+        regSeasonPP.set(c.key, regSeasonPP.get(c.key) + BONUS[i]);
+      }
+    });
+  }
+
+  // Advancement-score helper
+  const scoreThrough = (key, throughRound) => {
+    const ent = carData.get(key);
+    if (!ent) return 0;
+    const playoffRaces = ent.perRace.filter(p => p.round > regEnd && p.round <= throughRound);
+    const pw = playoffRaces.filter(p => p.isWin).length;
+    const psw = playoffRaces.reduce((s, p) => s + p.stageWins, 0);
+    return (regSeasonPP.get(key) || 0)
+      + pw * (rule.raceWinPP || 0)
+      + psw * (rule.stageWinPP || 0)
+      + playoffRaces.reduce((s, p) => s + p.race_pts, 0);
+  };
+
+  // Run rounds
+  let alive = fieldKeys.slice();
+  let cursor = regEnd;
+  // eliminationRound[key] = ri at which the car was eliminated.
+  // Set to rounds.length-1 for C4 finalists (they "reached" the
+  // final round). Cars not in field have null.
+  const eliminationRound = new Map();
+  const c4FinaleFinish = new Map(); // key -> finale finish_pos
+  const rounds = rule.rounds || [];
+  let finaleRound = regEnd;
+  for (const r of rounds) finaleRound += r.races;
+
+  for (let ri = 0; ri < rounds.length; ri++) {
+    const round = rounds[ri];
+    const roundStart = cursor;
+    const roundEnd = cursor + round.races;
+    const isFinalRound = (ri === rounds.length - 1);
+
+    if (isFinalRound) {
+      // All alive cars marked as having reached the final round
+      for (const key of alive) {
+        eliminationRound.set(key, ri);
+        const ent = carData.get(key);
+        const finaleEntry = ent && ent.perRace.find(p => p.round === roundEnd);
+        c4FinaleFinish.set(key, finaleEntry ? finaleEntry.finish : Infinity);
+      }
+      // Sort C4 by finale finish ascending
+      alive = alive.slice().sort((a, b) =>
+        (c4FinaleFinish.get(a) ?? Infinity) - (c4FinaleFinish.get(b) ?? Infinity)
+      );
+      break;
+    }
+
+    const autoAdvancers = alive.filter(key => {
+      const ent = carData.get(key);
+      return ent && ent.perRace.some(p =>
+        p.round > roundStart && p.round <= roundEnd && p.isWin);
+    });
+    const autoSet = new Set(autoAdvancers);
+    const scored = alive
+      .filter(key => !autoSet.has(key))
+      .map(key => ({ key, score: scoreThrough(key, roundEnd) }))
+      .sort((a, b) => b.score - a.score);
+    const slotsLeft = Math.max(0, round.cutTo - autoAdvancers.length);
+    const filled = scored.slice(0, slotsLeft).map(s => s.key);
+    const newAlive = [...autoAdvancers, ...filled];
+    // Cars in alive but not in newAlive were eliminated this round
+    for (const key of alive) {
+      if (!newAlive.includes(key)) {
+        eliminationRound.set(key, ri);
+      }
+    }
+    alive = newAlive;
+    cursor = roundEnd;
+  }
+
+  // Build final standings ranking. Tier order:
+  //  1) C4 finalists (eliminationRound = rounds.length - 1), sorted by
+  //     finale finish (champion at top)
+  //  2) Round-before-final eliminations (eliminationRound = rounds.length - 2),
+  //     sorted by advancement score at that round's end
+  //  3) ... and so on down to first-round eliminations
+  //  4) Non-playoff cars, sorted by totalSeasonPts
+  const tieredRanks = [];
+
+  // C4: already sorted in `alive` after final round
+  for (const key of alive) tieredRanks.push(key);
+
+  // Earlier-round eliminations
+  for (let ri = rounds.length - 2; ri >= 0; ri--) {
+    const roundEnd = regEnd + rounds.slice(0, ri + 1).reduce((s, r) => s + r.races, 0);
+    const elimsAtRound = fieldKeys.filter(k => eliminationRound.get(k) === ri);
+    elimsAtRound.sort((a, b) => scoreThrough(b, roundEnd) - scoreThrough(a, roundEnd));
+    tieredRanks.push(...elimsAtRound);
+  }
+
+  // Non-playoff cars (those not in field), ranked by season total
+  const nonPlayoff = [...carData.entries()]
+    .filter(([k]) => !fieldSet.has(k))
+    .sort((a, b) => b[1].totalSeasonPts - a[1].totalSeasonPts)
+    .map(([k]) => k);
+  tieredRanks.push(...nonPlayoff);
+
+  // Synthesize realistic-looking points values. NASCAR's published
+  // owner standings use post-reset totals (C4 ~ 4040, R8 elim ~ 2230,
+  // R12 elim ~ 2200, non-playoff = raw season sum). Mirror that
+  // structure so the points column reads sensibly in the UI.
+  //
+  // We don't need the exact NASCAR formula — we just need rank-
+  // consistent values where C4 > R8 elim > R12 elim > non-playoff
+  // and within each tier values decrease monotonically. The
+  // applyCanonicalStandings consumer sorts by points so this
+  // ordering must hold.
   const m = new Map();
-  arr.forEach(row => {
-    const raw = row.car_number != null ? String(row.car_number) : "";
-    const cleaned = raw.replace(/^#/, "").trim();
-    if (!cleaned) return;
-    m.set(`#${cleaned}`, {
-      rank: row.rank,
-      points: row.points,
-      wins: row.wins,
-      gap: row.gap,
-      car_number: cleaned,
-      owner: row.owner,
-      primary_driver: row.primary_driver,
+  const leaderPts = (() => {
+    // Anchor: champion's points = 4000 + finale race_pts (matches
+    // real NASCAR conventions for elimination format).
+    if (alive.length > 0) {
+      const champEnt = carData.get(alive[0]);
+      const finaleEntry = champEnt && champEnt.perRace.find(p => p.round === finaleRound);
+      return 4000 + (finaleEntry ? finaleEntry.race_pts : 40);
+    }
+    return null;
+  })();
+
+  tieredRanks.forEach((key, i) => {
+    const rank = i + 1;
+    const ent = carData.get(key);
+    let points;
+    if (fieldSet.has(key)) {
+      const elimRi = eliminationRound.get(key);
+      if (elimRi === rounds.length - 1) {
+        // C4 finalist
+        const finaleEntry = ent.perRace.find(p => p.round === finaleRound);
+        points = 4000 + (finaleEntry ? finaleEntry.race_pts : 0);
+      } else {
+        // Eliminated at round elimRi. Base = 1000 * (elimRi + 2)
+        // approximates NASCAR's reset structure (R12 elim base ~ 2000,
+        // R8 elim base ~ 3000, etc., but with eliminated finalists
+        // never reaching the next base).
+        const base = 1000 * (elimRi + 2);
+        // Add a small per-rank decrement so within-tier ordering is
+        // preserved as monotonically decreasing.
+        const tierStart = tieredRanks.findIndex(k =>
+          fieldSet.has(k) && eliminationRound.get(k) === elimRi);
+        const withinTier = rank - (tierStart + 1);
+        points = base + 240 - withinTier * 3;
+      }
+    } else {
+      points = ent ? ent.totalSeasonPts : 0;
+    }
+    const gap = leaderPts != null ? points - leaderPts : 0;
+    m.set(key, {
+      rank,
+      points,
+      wins: ent ? ent.wins : 0,
+      gap,
+      car_number: ent ? ent.car_number : key.replace(/^#/, ""),
+      owner: null,
+      primary_driver: ent ? ent.primary_driver : null,
     });
   });
+
+  block._computedOwnerCanonical = m;
   return m;
 }
 
@@ -19771,14 +20123,35 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
     }
   }
 
+  // Resolve owner_final_standings: prefer the data file's scraped
+  // version if present, otherwise compute it locally from race data
+  // (NASCAR doesn't publish a season-specific owner-standings URL on
+  // Racing-Reference, so we synthesize using the same playoff rules
+  // applied to car-keyed data — see _computeOwnerCanonicalFallback).
+  // Only relevant for owner view; we compute it lazily either way.
+  let ownerFinalStandings = seasonBlock.owner_final_standings || null;
+  if (!ownerFinalStandings && view === "owner" && useScraperPts) {
+    const computed = _computeOwnerCanonicalFallback(
+      seasonBlock,
+      seasonBlock.series_code || null,
+      seasonYear
+    );
+    if (computed && computed.size > 0) {
+      // Convert Map<key, row> back to array shape that matches scraped
+      // owner_final_standings format, so downstream code (which expects
+      // the array form) doesn't need to know it was computed.
+      ownerFinalStandings = [...computed.values()]
+        .sort((a, b) => a.rank - b.rank);
+    }
+  }
+
   // Attach metadata the field-builder and round-by-round derivation
   // need downstream:
   //  - finalStandings: NASCAR's published DRIVER championship table
   //    (driver mode authoritative source for field + round tiers)
-  //  - ownerFinalStandings: NASCAR's published OWNER (car) championship
-  //    table (owner mode authoritative source). May be absent if the
-  //    scraper hasn't fetched it yet for this season; downstream code
-  //    falls back gracefully.
+  //  - ownerFinalStandings: NASCAR's OWNER (car) championship table —
+  //    scraped if available, otherwise synthesized from race data
+  //    using the same playoff rules applied car-by-car.
   //  - view: 'driver' or 'owner' — controls which final_standings the
   //    derivation logic uses.
   //  - useScraperPts: true when the chosen rule is the season's native
@@ -19796,7 +20169,7 @@ function _pointsCalcSeasonAggregate(seasonBlock, rule, view = "driver") {
     drivers,
     rounds,
     finalStandings: seasonBlock.final_standings || null,
-    ownerFinalStandings: seasonBlock.owner_final_standings || null,
+    ownerFinalStandings,
     view,
     useScraperPts,
   };
