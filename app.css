@@ -11614,7 +11614,11 @@ body.lightbox-open {
   margin-top: 12px;
   border-top: 1px solid var(--border);
   padding-top: 10px;
+  overflow-x: auto;
 }
+/* The panel must constrain its children — without this, the expanded
+   table pushes into sibling grid cells on the per-series layout. */
+.tm-best-panel { overflow: hidden; }
 .tm-best-table {
   width: 100%;
   font-size: 12px;
@@ -11691,4 +11695,11 @@ body.lightbox-open {
   .tm-hero-stat-v { font-size: 20px; }
   .tm-hero-card-main { flex-direction: column; }
   .tm-hero-card-champ { align-self: flex-start; }
+}
+
+/* Visual cutline in the regular season projection table — a thick
+   border between the last qualifying driver and the first non-qualifying
+   driver, matching the standings sidebar cutline aesthetic. */
+.proj-table-cutline td {
+  border-top: 2px dashed rgba(255, 200, 50, 0.5);
 }

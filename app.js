@@ -10291,12 +10291,19 @@ function _finishPtsScale(pos) {
   return 0;
 }
 
-// Per-race noise σ in finish positions. 7 means a driver predicted to
-// finish 10th will have a normal distribution of outcomes spanning
-// roughly P3 to P17 in 68% of iterations and P-4 to P24 in 95%. Real
-// NASCAR variance is in that ballpark; calibration could tighten this
-// later if we compute residuals from past predictions vs. actuals.
-const PROJ_NOISE_SIGMA = 7.0;
+// Per-race noise σ in finish positions. 10 means a driver predicted to
+// finish 5th will have a normal distribution spanning roughly P-5 to P15
+// in 68% of iterations. Real NASCAR variance is high — engine failures,
+// crashes, pit road penalties, and weather routinely produce P30+ results
+// for top drivers. σ=7 was too tight and produced overly confident
+// championship projections (e.g. Reddick at 98%).
+const PROJ_NOISE_SIGMA = 10.0;
+
+// Probability per race per driver of a "catastrophic event" (mechanical
+// failure, major crash, penalty) that overrides predicted finish with a
+// random P25–P38 result. ~5% matches the real-world DNF rate for top
+// drivers over a modern NASCAR season.
+const PROJ_CATASTROPHE_PCT = 0.05;
 
 // Build the per-(driver, race) prediction matrix ONCE, then reuse it
 // across all iterations. predictDriverForRace is expensive (touches
@@ -10325,10 +10332,17 @@ function _buildProjectionMatrix(series, remainingRaces, drivers) {
 // their predicted finish, then re-rank to integers 1..N. Returns a
 // Map<slug, finish_pos>.
 function _simulateOneRace(matrixEntry, drivers) {
-  const noisy = drivers.map(d => ({
-    slug: d.slug,
-    score: matrixEntry.predsByDriver.get(d.slug) + _sampleNormal() * PROJ_NOISE_SIGMA,
-  }));
+  const noisy = drivers.map(d => {
+    // Catastrophic event: ~5% chance of a mechanical failure / wreck
+    // that drops the driver to the back regardless of underlying speed.
+    if (Math.random() < PROJ_CATASTROPHE_PCT) {
+      return { slug: d.slug, score: 25 + Math.random() * 15 }; // P25-P40 range
+    }
+    return {
+      slug: d.slug,
+      score: matrixEntry.predsByDriver.get(d.slug) + _sampleNormal() * PROJ_NOISE_SIGMA,
+    };
+  });
   noisy.sort((a, b) => a.score - b.score);  // lower noisy-rank = better finish
   const out = new Map();
   noisy.forEach((n, i) => out.set(n.slug, i + 1));
@@ -22025,17 +22039,27 @@ function _buildProjectionHTML(proj) {
   if (proj.season_over) {
     return `
       <div class="proj-meta muted" style="margin-bottom:16px;">Season complete · canonical final standings</div>
-      ${_renderProjectionMainTable(proj)}
+      ${_renderProjectionRegSeasonTable(proj)}
     `;
   }
 
-  const topContenders = proj.drivers.slice(0, 5);
+  // Split drivers into "likely in" and "likely out" for the two tables
+  const allByPlayoff = proj.drivers.slice().sort((a, b) => b.playoff_pct - a.playoff_pct || b.current_pts - a.current_pts);
+  const fieldSize = proj.rule.field || 16;
+  const chaseDrivers = proj.drivers
+    .filter(d => d.playoff_pct > 0.01)
+    .slice()
+    .sort((a, b) => b.championship_pct - a.championship_pct);
 
+  // Top 5 contenders
+  const topContenders = chaseDrivers.slice(0, 5);
+
+  // Cutline
   const seeded = proj.drivers
     .filter(d => d.median_seed != null)
     .slice()
     .sort((a, b) => a.median_seed - b.median_seed);
-  const cutIdx = (proj.rule.field || 16) - 1;
+  const cutIdx = fieldSize - 1;
   const cutlineRows = seeded.slice(Math.max(0, cutIdx - 2), Math.min(seeded.length, cutIdx + 3));
 
   return `
@@ -22043,14 +22067,120 @@ function _buildProjectionHTML(proj) {
       ${proj.n_sims.toLocaleString()} simulations ·
       ${proj.completed_races} races complete ·
       ${proj.remaining_races} remaining ·
-      ${proj.format === "chase-reseeded" ? "Chase format (top " + proj.rule.field + " by points)" : proj.format}
+      ${proj.format === "chase-reseeded" ? "Chase format · top " + fieldSize + " by points · points reset for chase" : proj.format}
     </div>
 
     ${_renderProjectionTopContenders(topContenders, proj)}
 
-    ${_renderProjectionMainTable(proj)}
+    ${_renderProjectionRegSeasonTable(proj)}
+
+    ${chaseDrivers.length > 0 ? _renderProjectionChaseTable(chaseDrivers, proj) : ""}
 
     ${cutlineRows.length > 0 ? _renderProjectionCutline(cutlineRows, proj) : ""}
+  `;
+}
+
+// Table 1: Regular season projection — all full-time drivers sorted by
+// projected standings position. Shows current points, projected wins,
+// chase qualification probability, and expected seed.
+function _renderProjectionRegSeasonTable(proj) {
+  const sorted = proj.drivers.slice().sort((a, b) => {
+    // Sort by median_seed (best seed first); null seeds (unlikely to qualify) last
+    if (a.median_seed != null && b.median_seed == null) return -1;
+    if (a.median_seed == null && b.median_seed != null) return 1;
+    if (a.median_seed != null && b.median_seed != null) return a.median_seed - b.median_seed;
+    return b.current_pts - a.current_pts;
+  });
+  const fieldSize = proj.rule.field || 16;
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">regular season</div>
+        <h2 class="ed-hero ed-hero-sm">Projected standings</h2>
+      </div>
+      <div class="proj-table-host">
+        <table class="data-table proj-table">
+          <thead><tr>
+            <th class="num">#</th>
+            <th>Driver</th>
+            <th class="num">Current Pts</th>
+            <th class="num">Wins</th>
+            <th class="num">Proj Seed</th>
+            <th class="num">Chase %</th>
+          </tr></thead>
+          <tbody>
+            ${sorted.map((d, i) => {
+              const carHex = colorFor(proj.series, d.car_number);
+              const txt = contrastTextFor(carHex);
+              const playoffPct = d.playoff_pct * 100;
+              const seedDisplay = d.median_seed != null ? d.median_seed.toFixed(1) : "—";
+              const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
+              const isCutline = d.median_seed != null && Math.round(d.median_seed) === fieldSize;
+              return `<tr${i === fieldSize ? ' class="proj-table-cutline"' : ""}>
+                <td class="num">${i + 1}</td>
+                <td>
+                  <a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
+                    <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
+                    <span>${escapeHTML(d.name)}</span>
+                  </a>
+                </td>
+                <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
+                <td class="num">${d.current_wins}</td>
+                <td class="num">${seedDisplay}</td>
+                <td class="num ${playoffCls}">${playoffPct.toFixed(0)}%</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+// Table 2: Chase projection — only drivers with >1% playoff probability,
+// sorted by championship probability. Shows projected points after reset,
+// projected wins, and championship %.
+function _renderProjectionChaseTable(chaseDrivers, proj) {
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">championship chase</div>
+        <h2 class="ed-hero ed-hero-sm">Projected champion</h2>
+        <div class="ed-byline">Points reset after regular season · top ${proj.rule.field || 16} qualify · ${proj.rule.playoffRaces || 10} chase races</div>
+      </div>
+      <div class="proj-table-host">
+        <table class="data-table proj-table">
+          <thead><tr>
+            <th class="num">#</th>
+            <th>Driver</th>
+            <th class="num">Wins</th>
+            <th class="num">Chase %</th>
+            <th class="num">Champ %</th>
+          </tr></thead>
+          <tbody>
+            ${chaseDrivers.map((d, i) => {
+              const carHex = colorFor(proj.series, d.car_number);
+              const txt = contrastTextFor(carHex);
+              const champPct = d.championship_pct * 100;
+              const playoffPct = d.playoff_pct * 100;
+              const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
+              return `<tr>
+                <td class="num">${i + 1}</td>
+                <td>
+                  <a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
+                    <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
+                    <span>${escapeHTML(d.name)}</span>
+                  </a>
+                </td>
+                <td class="num">${d.current_wins}</td>
+                <td class="num">${playoffPct.toFixed(0)}%</td>
+                <td class="num ${champCls}"><strong>${champPct.toFixed(1)}%</strong></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
   `;
 }
 
@@ -22087,73 +22217,6 @@ function _renderProjectionTopContenders(top, proj) {
             </div>
           `;
         }).join("")}
-      </div>
-    </section>
-  `;
-}
-
-function _renderProjectionMainTable(proj) {
-  const isElim = proj.format === "elimination";
-  const roundCols = isElim
-    ? (proj.rule.rounds || []).map(r => `<th class="num proj-rnd-th" title="${escapeHTML(r.name)}">${_shortRoundName(r.name)}</th>`).join("")
-    : "";
-  const roundHeads = isElim
-    ? `<th class="num proj-rnd-th-group" colspan="${proj.rule.rounds.length}">Round survival %</th>`
-    : "";
-  return `
-    <section class="proj-section">
-      <div class="proj-section-head">
-        <div class="ed-kicker">full field</div>
-        <h2 class="ed-hero ed-hero-sm">Playoff projection</h2>
-      </div>
-      <div class="proj-table-host">
-        <table class="data-table proj-table">
-          <thead>
-            <tr>
-              <th class="num">Rank</th>
-              <th>Driver</th>
-              <th class="num">Current Pts</th>
-              <th class="num">Wins</th>
-              <th class="num">Median Seed</th>
-              <th class="num">Playoff %</th>
-              ${roundCols}
-              <th class="num">Champ %</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${proj.drivers.map((d, i) => {
-              const carHex = colorFor(proj.series, d.car_number);
-              const txt = contrastTextFor(carHex);
-              const playoffPct = d.playoff_pct * 100;
-              const champPct = d.championship_pct * 100;
-              const seedDisplay = d.median_seed != null ? d.median_seed.toFixed(1) : "—";
-              const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
-              const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
-              const roundCells = isElim
-                ? (proj.rule.rounds || []).map(r => {
-                    const v = (d.round_survival_pcts[r.name] || 0) * 100;
-                    const cls = v >= 60 ? "proj-pct-hot" : v >= 25 ? "proj-pct-warm" : "proj-pct-cold";
-                    return `<td class="num ${cls}">${v.toFixed(0)}%</td>`;
-                  }).join("")
-                : "";
-              return `<tr>
-                <td class="num">${i + 1}</td>
-                <td>
-                  <a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
-                    <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
-                    <span>${escapeHTML(d.name)}</span>
-                  </a>
-                </td>
-                <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
-                <td class="num">${d.current_wins}</td>
-                <td class="num">${seedDisplay}</td>
-                <td class="num ${playoffCls}">${playoffPct.toFixed(0)}%</td>
-                ${roundCells}
-                <td class="num ${champCls}"><strong>${champPct.toFixed(1)}%</strong></td>
-              </tr>`;
-            }).join("")}
-          </tbody>
-        </table>
       </div>
     </section>
   `;
