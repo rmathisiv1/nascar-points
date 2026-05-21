@@ -3085,6 +3085,7 @@ function render() {
     let active = false;
     if (tv === "race")          active = (v === "race");
     else if (tv === "schedule") active = (v === "schedule");
+    else if (tv === "projection") active = (v === "projection");
     else                        active = (!inCenterTakeover && tv === activeTab);
     a.classList.toggle("active", active);
   });
@@ -3093,9 +3094,11 @@ function render() {
     const tv = a.dataset.view;
     a.classList.toggle("active", tv === v);
   });
-  // Parent tab groups: highlight when any child subitem is active
+  // Parent tab groups: highlight when any child subitem is active.
+  // Exception: "projection" has its own top-level tab, so if the active
+  // subitem is projection, don't highlight the parent Standings group.
   document.querySelectorAll(".dash-tab-group").forEach(grp => {
-    const anyActive = !!grp.querySelector(".dash-subitem.active");
+    const anyActive = !!grp.querySelector(".dash-subitem.active:not([data-view='projection'])");
     grp.classList.toggle("has-active-child", anyActive);
   });
 
@@ -10453,6 +10456,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   const seedSamples = new Map();  // slug → array of seeds (or null if missed playoffs)
   const finalTotalSamples = new Map(); // slug → array of projected end-of-season totals
   const finalRankSamples = new Map();  // slug → array of final ranks
+  const winSamples = new Map(); // slug → array of total wins per sim
   // For elimination format: track round-survival counts per slug per round.
   const roundSurvival = new Map(); // slug → Map<roundName, count>
 
@@ -10462,6 +10466,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
     seedSamples.set(d.slug, []);
     finalTotalSamples.set(d.slug, []);
     finalRankSamples.set(d.slug, []);
+    winSamples.set(d.slug, []);
     roundSurvival.set(d.slug, new Map());
   });
 
@@ -10543,7 +10548,17 @@ function simulateSeasonRollout(series, year, opts = {}) {
         const base = (rule.reseedTable && rule.reseedTable[idx]) ||
                      (rule.reseedTable && rule.reseedTable[rule.reseedTable.length - 1]) ||
                      2000;
-        const winsBonus = (rule.raceWinPts || 55) * simWins.get(d.slug);
+      // Reseed win bonus: each regular-season win earns a small bonus
+      // added to the reseed base. `rule.reseedWinBonus` if explicitly set;
+      // otherwise 10 per win (matching the 2007-2013 chase precedent).
+      // NOT `rule.raceWinPts` (55) — that's the total race-win point value
+      // (40 finish + 15 bonus), a completely different concept. Using 55
+      // per win made the points leader nearly unbeatable (97%+ champ
+      // probability) because 6 wins × 55 = 330 bonus points on a 2100
+      // base. With 10 per win, 6 wins = 60 bonus — meaningful but not
+      // insurmountable across 10 chase races.
+      const perWinBonus = rule.reseedWinBonus || rule.winBonus || 10;
+        const winsBonus = perWinBonus * simWins.get(d.slug);
         reseed.set(d.slug, base + winsBonus);
       });
       // Race the chase races
@@ -10666,6 +10681,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
     // points in elimination, so using simPts is a reasonable proxy).
     drivers.forEach(d => {
       finalTotalSamples.get(d.slug).push(projTotals.get(d.slug));
+      winSamples.get(d.slug).push(simWins.get(d.slug) || 0);
     });
   }
 
@@ -10685,6 +10701,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
     const medianSeed = median(seedSamples.get(d.slug));
     const medianTotal = median(finalTotalSamples.get(d.slug));
     const medianRank = median(finalRankSamples.get(d.slug));
+    const projectedWins = median(winSamples.get(d.slug));
 
     // Round-by-round survival probabilities (elimination format only)
     const roundPcts = {};
@@ -10709,6 +10726,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
       median_seed: medianSeed,
       median_total: medianTotal,
       median_rank: medianRank,
+      projected_wins: projectedWins,
     };
   });
 
@@ -22072,11 +22090,85 @@ function _buildProjectionHTML(proj) {
 
     ${_renderProjectionTopContenders(topContenders, proj)}
 
+    ${_renderProjectionChart(proj)}
+
     ${_renderProjectionRegSeasonTable(proj)}
 
     ${chaseDrivers.length > 0 ? _renderProjectionChaseTable(chaseDrivers, proj) : ""}
 
     ${cutlineRows.length > 0 ? _renderProjectionCutline(cutlineRows, proj) : ""}
+  `;
+}
+
+// Projected standings bar chart — horizontal bars for each driver sorted
+// by projected seed, with a cutline at the playoff field boundary.
+// Toggle between "points" (current pts) and "rank" views.
+function _renderProjectionChart(proj) {
+  const fieldSize = proj.rule.field || 16;
+  const sorted = proj.drivers.slice()
+    .sort((a, b) => {
+      if (a.median_seed != null && b.median_seed == null) return -1;
+      if (a.median_seed == null && b.median_seed != null) return 1;
+      if (a.median_seed != null && b.median_seed != null) return a.median_seed - b.median_seed;
+      return b.current_pts - a.current_pts;
+    })
+    .slice(0, 25); // top 25 for readability
+
+  const chartId = "proj-chart-" + Date.now();
+  const barH = 22;
+  const gap = 3;
+  const leftPad = 140;
+  const rightPad = 60;
+  const chartW = 800;
+  const chartH = sorted.length * (barH + gap) + 40;
+
+  const maxPts = Math.max(...sorted.map(d => d.current_pts || 0), 1);
+
+  const bars = sorted.map((d, i) => {
+    const y = i * (barH + gap) + 20;
+    const w = ((d.current_pts || 0) / maxPts) * (chartW - leftPad - rightPad);
+    const inField = i < fieldSize;
+    const carHex = colorFor(proj.series, d.car_number);
+    const pct = (d.playoff_pct * 100).toFixed(0);
+    const isCutline = i === fieldSize - 1;
+    return `
+      <g>
+        <text x="${leftPad - 6}" y="${y + barH / 2 + 4}" text-anchor="end"
+              style="font-family:var(--serif);font-size:12px;fill:var(--text-2);">
+          ${escapeHTML(d.name)}
+        </text>
+        <rect x="${leftPad}" y="${y}" width="${Math.max(w, 2)}" height="${barH}" rx="2"
+              fill="${inField ? 'rgba(100,220,100,0.5)' : 'rgba(255,100,100,0.25)'}"
+              stroke="${inField ? 'rgba(100,220,100,0.8)' : 'rgba(255,100,100,0.5)'}" stroke-width="1"/>
+        <rect x="${leftPad}" y="${y}" width="4" height="${barH}" rx="1" fill="${carHex}"/>
+        <text x="${leftPad + Math.max(w, 2) + 6}" y="${y + barH / 2 + 4}"
+              style="font-family:var(--mono);font-size:10px;fill:var(--muted);">
+          ${(d.current_pts || 0).toLocaleString()} · ${pct}%
+        </text>
+      </g>
+      ${isCutline ? `
+        <line x1="${leftPad}" y1="${y + barH + gap / 2}"
+              x2="${chartW - 10}" y2="${y + barH + gap / 2}"
+              stroke="rgba(255,200,50,0.7)" stroke-width="2" stroke-dasharray="6,4"/>
+        <text x="${chartW - 8}" y="${y + barH + gap / 2 + 4}" text-anchor="end"
+              style="font-family:var(--mono);font-size:9px;fill:#ffd166;font-weight:700;">
+          CUTOFF
+        </text>` : ""}
+    `;
+  }).join("");
+
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">visual</div>
+        <h2 class="ed-hero ed-hero-sm">Projected standings</h2>
+      </div>
+      <div class="proj-chart-host" style="overflow-x:auto;">
+        <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;max-width:${chartW}px;height:auto;display:block;">
+          ${bars}
+        </svg>
+      </div>
+    </section>
   `;
 }
 
@@ -22141,29 +22233,36 @@ function _renderProjectionRegSeasonTable(proj) {
 // sorted by championship probability. Shows projected points after reset,
 // projected wins, and championship %.
 function _renderProjectionChaseTable(chaseDrivers, proj) {
+  const fieldSize = proj.rule.field || 16;
+  const top = chaseDrivers.slice(0, fieldSize);
   return `
     <section class="proj-section">
       <div class="proj-section-head">
         <div class="ed-kicker">championship chase</div>
         <h2 class="ed-hero ed-hero-sm">Projected champion</h2>
-        <div class="ed-byline">Points reset after regular season · top ${proj.rule.field || 16} qualify · ${proj.rule.playoffRaces || 10} chase races</div>
+        <div class="ed-byline">Points reset after regular season · top ${fieldSize} qualify · ${proj.rule.playoffRaces || 10} chase races</div>
       </div>
       <div class="proj-table-host">
         <table class="data-table proj-table">
           <thead><tr>
             <th class="num">#</th>
             <th>Driver</th>
-            <th class="num">Wins</th>
-            <th class="num">Chase %</th>
+            <th class="num">Current Pts</th>
+            <th class="num">Current Wins</th>
+            <th class="num">Proj Wins</th>
+            <th class="num">Proj Seed</th>
+            <th class="num">Proj Total</th>
             <th class="num">Champ %</th>
           </tr></thead>
           <tbody>
-            ${chaseDrivers.map((d, i) => {
+            ${top.map((d, i) => {
               const carHex = colorFor(proj.series, d.car_number);
               const txt = contrastTextFor(carHex);
               const champPct = d.championship_pct * 100;
-              const playoffPct = d.playoff_pct * 100;
               const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
+              const seedDisplay = d.median_seed != null ? d.median_seed.toFixed(1) : "—";
+              const projWins = d.projected_wins != null ? d.projected_wins.toFixed(1) : "—";
+              const projTotal = d.median_total != null ? Math.round(d.median_total).toLocaleString() : "—";
               return `<tr>
                 <td class="num">${i + 1}</td>
                 <td>
@@ -22172,8 +22271,11 @@ function _renderProjectionChaseTable(chaseDrivers, proj) {
                     <span>${escapeHTML(d.name)}</span>
                   </a>
                 </td>
+                <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
                 <td class="num">${d.current_wins}</td>
-                <td class="num">${playoffPct.toFixed(0)}%</td>
+                <td class="num">${projWins}</td>
+                <td class="num">${seedDisplay}</td>
+                <td class="num">${projTotal}</td>
                 <td class="num ${champCls}"><strong>${champPct.toFixed(1)}%</strong></td>
               </tr>`;
             }).join("")}
