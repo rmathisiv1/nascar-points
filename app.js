@@ -9573,7 +9573,7 @@ function paintProfileTrackPicker(entity) {
       <div class="profile-track-stat"><span class="k">Avg Fin</span><span class="v">${stats.avgFin != null ? stats.avgFin.toFixed(1) : "—"}</span></div>
       <div class="profile-track-stat"><span class="k">Laps Led</span><span class="v">${stats.lapsLed.toLocaleString()}</span></div>
       <div class="profile-track-stat"><span class="k">Stage Pts</span><span class="v">${stats.stagePts}</span></div>
-      <div class="profile-track-stat"><span class="k">Total Pts</span><span class="v">${stats.totalPts}</span></div>
+      <div class="profile-track-stat"><span class="k">Total Pts</span><span class="v">${stats.totalPts}${stats.totalPts < 0 ? ' <span style="font-size:9px;color:#ff6b6b;font-weight:700;">PEN</span>' : ""}</span></div>
     </div>
   `;
 
@@ -9588,7 +9588,8 @@ function paintProfileTrackPicker(entity) {
         <th class="num">Start</th>
         <th class="num">Finish</th>
         <th class="num">Laps Led</th>
-        <th class="num">Pts</th>
+        <th class="num">Stage Pts</th>
+        <th class="num">Total Pts</th>
       </tr></thead>
       <tbody>
         ${sortedForTable.map(r => {
@@ -9597,6 +9598,8 @@ function paintProfileTrackPicker(entity) {
                     : r.finish <= 10 ? "fin-t10"
                     : r.finish >= 31 ? "fin-bad"
                     : "";
+          const pts = r.totalPts || 0;
+          const penBadge = pts < 0 ? ' <span style="font-size:9px;color:#ff6b6b;font-weight:700;">PEN</span>' : "";
           return `<tr>
             <td class="num">${r.year}</td>
             <td>${r.series}</td>
@@ -9604,7 +9607,8 @@ function paintProfileTrackPicker(entity) {
             <td class="num">${r.start != null ? r.start : "—"}</td>
             <td class="num ${cls}">${r.finish}</td>
             <td class="num">${r.lapsLed || 0}</td>
-            <td class="num">${r.totalPts || 0}</td>
+            <td class="num">${r.stagePts || 0}</td>
+            <td class="num">${pts}${penBadge}</td>
           </tr>`;
         }).join("")}
       </tbody>
