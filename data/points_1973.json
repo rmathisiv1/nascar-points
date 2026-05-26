@@ -1,6 +1,6 @@
 {
   "season": 1973,
-  "generated_at": "2026-05-21T21:00:42Z",
+  "generated_at": "2026-05-26T20:40:07Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -5585,7 +5585,7 @@
           "round": 4,
           "date": "1973-03-18",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -51911,7 +51911,7 @@
           "round": 28,
           "date": "1973-10-21",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
