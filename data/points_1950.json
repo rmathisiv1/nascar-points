@@ -1,6 +1,6 @@
 {
   "season": 1950,
-  "generated_at": "2026-05-21T19:04:57Z",
+  "generated_at": "2026-05-26T18:05:40Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -59,7 +59,7 @@
           "round": 3,
           "date": "2050-04-16",
           "track": "Langhorne",
-          "track_code": "LAN",
+          "track_code": "LGH",
           "name": "",
           "time": "",
           "tv": "",
@@ -1625,7 +1625,7 @@
           "round": 8,
           "date": "2050-07-02",
           "track": "Rochester",
-          "track_code": "ROC",
+          "track_code": "RCT",
           "name": "",
           "time": "",
           "tv": "",
@@ -5514,7 +5514,7 @@
           "round": 14,
           "date": "2050-09-17",
           "track": "Langhorne",
-          "track_code": "LAN",
+          "track_code": "LGH",
           "name": "",
           "time": "",
           "tv": "",
@@ -6907,7 +6907,7 @@
           "round": 18,
           "date": "2050-10-15",
           "track": "Winchester",
-          "track_code": "WIN",
+          "track_code": "WCH",
           "name": "",
           "time": "",
           "tv": "",
@@ -6949,6 +6949,20 @@
           "results": []
         }
       ],
+      "final_standings": []
+    },
+    "NOS": {
+      "series_code": "NOS",
+      "series_name": "O'Reilly Auto Parts Series",
+      "season": 1950,
+      "races": [],
+      "final_standings": []
+    },
+    "NTS": {
+      "series_code": "NTS",
+      "series_name": "NASCAR Craftsman Truck Series",
+      "season": 1950,
+      "races": [],
       "final_standings": []
     }
   }
