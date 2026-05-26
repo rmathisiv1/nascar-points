@@ -11732,8 +11732,7 @@ body.lightbox-open {
   color: var(--muted);
 }
 .sd-bars {
-  max-height: 520px;
-  overflow-y: auto;
+  overflow: visible;
 }
 /* Reuse .sp-row styles but inside sd-bars */
 .sd-bars .sp-row { font-size: 11px; }

@@ -5333,6 +5333,8 @@ function renderBreakdown() {
       expandBtn.className = "sd-expand-btn";
       expandBtn.textContent = `Show all ${rows.length}`;
       expandBtn.addEventListener("click", () => {
+        barsEl.style.maxHeight = "none";
+        barsEl.style.overflow = "visible";
         barsEl.innerHTML = renderRows(rows);
       });
       barsEl.appendChild(expandBtn);
