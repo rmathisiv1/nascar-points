@@ -2338,6 +2338,23 @@ function _normalizeTrackCodes(seriesBlock, year) {
     });
   }
 
+  // Nashville split: "NSH" = Nashville Fairgrounds (short track, ≤2000)
+  //                  "NSV" = Nashville Superspeedway (1.33mi intermediate, 2001+)
+  // Racing Reference uses NSH for both. Remap 2001+ to NSV.
+  if (year >= 2001) {
+    Object.values(seriesBlock).forEach(block => {
+      if (!block || !block.races) return;
+      block.races.forEach(race => {
+        if (race.track_code === "NSH") {
+          race.track_code = "NSV";
+          if (race.track === "Nashville" || race.track === "Nashville Fairgrounds") {
+            race.track = "Nashville Superspeedway";
+          }
+        }
+      });
+    });
+  }
+
   // Team code fixes: correct codes that collide across eras/teams.
   // Applied at load time so all downstream consumers see the corrected codes.
   const TEAM_CODE_FIXES = {
@@ -5889,6 +5906,7 @@ const TRACK_TYPES = {
   NWK: "short",
   BGR: "short",        // Bowman Gray (Clash venue)
   IOW: "short",        // 0.875mi oval
+  NSH: "short",        // Nashville Fairgrounds (0.596mi, ≤2000)
 
   // Intermediate — 1.5mi-ish ovals + atlanta-as-drafting + dover (1mi concrete)
   ECH: "inter",        // Atlanta — pack racing now but still classed intermediate by teams
@@ -5897,7 +5915,7 @@ const TRACK_TYPES = {
   KAN: "inter",
   CLT: "inter",
   TEX: "inter",
-  NSH: "inter",        // Nashville Superspeedway (1.33mi)
+  NSV: "inter",        // Nashville Superspeedway (1.33mi, 2001+)
   MIA: "inter",
   HOM: "inter",
   MCH: "inter",        // Michigan 2mi
@@ -5967,8 +5985,8 @@ const TRACK_NAMES = {
   CHI: "Chicagoland",
   CHG: "Chicago Street",
   SDG: "San Diego",
-  NSH: "Nashville",         // Fairgrounds (modern, occasional Cup return)
-  NSV: "Nashville Superspeedway",  // Lebanon TN — separate from NSH
+  NSH: "Nashville Fairgrounds",
+  NSV: "Nashville Superspeedway",
   MIA: "Homestead",
   HOM: "Homestead",
   IOW: "Iowa",
@@ -17938,8 +17956,8 @@ function trackTypeLabel(code) {
 // which scrape touched it. Same map used by lastWinnerAt() in the schedule
 // renderer — keep them in sync if you add more.
 const TRACK_CODE_ALIASES_LOOKUP = {
-  NSV: ["NSV", "NSH"],              // Nashville Superspeedway
-  NSH: ["NSV", "NSH"],              // (legacy code, same track)
+  // Nashville Fairgrounds (NSH) and Nashville Superspeedway (NSV) are
+  // different physical tracks. No alias — the normalizer handles the split.
   FON: ["FON", "AUS", "CAL"],       // Fontana — pre-migration files use AUS or CAL
   CAL: ["FON", "AUS", "CAL"],
   // COTA is its own track. Some old scrapes used AUS for Auto Club AND
