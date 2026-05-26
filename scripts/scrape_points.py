@@ -227,6 +227,10 @@ class Race:
 
 TRACK_CODES = {
     # Modern tracks (current schedule)
+    # Daytona: oval (superspeedway) vs road course — different configurations.
+    # Road course variants MUST appear before bare 'daytona'.
+    "daytona international speedway road course": "DRC",
+    "daytona road course": "DRC",
     "daytona": "DAY", "atlanta": "ATL", "austin": "AUS",
     "circuit of the americas": "AUS", "cota": "AUS",
     "phoenix": "PHO", "las vegas": "LAS", "darlington": "DAR",
@@ -265,7 +269,12 @@ TRACK_CODES = {
     # Mexico
     "mexico": "MXI",
     "autodromo": "MXI",
-    "north wilkesboro": "NWB", "indianapolis": "IND",
+    "north wilkesboro": "NWB",
+    # Indianapolis: oval vs road course — different configurations.
+    # Road course MUST appear before bare 'indianapolis'.
+    "indianapolis motor speedway road course": "IRC",
+    "indianapolis road course": "IRC",
+    "indianapolis": "IND",
     "iowa": "IOW", "richmond": "RCH",
     "loudon": "LOU", "new hampshire": "LOU",
     "gateway": "GTW", "world wide technology": "GTW",
@@ -293,6 +302,18 @@ TRACK_CODES = {
     "o'reilly raceway park": "IRP",       # NOS 2002-2010
     "irp": "IRP",
     "evergreen": "EVG",                   # NTS '01
+    # NOS/NTS road courses
+    "road america": "ELK",                # Elkhart Lake, WI — NOS/NTS
+    "elkhart lake": "ELK",
+    "mid-ohio": "MDO",                    # NOS/NTS
+    "mid ohio": "MDO",
+    "portland": "PTL",                    # NOS/NTS
+    "canadian tire": "MOS",              # Canadian Tire Motorsport Park (Mosport)
+    "mosport": "MOS",
+    # Historical tracks (pre-1990)
+    "riverside": "RIV",                   # Riverside Int'l Raceway, closed 1988
+    "ontario motor": "ONT",              # Ontario Motor Speedway, closed 1980
+    "ontario": "ONT",                    # bare "Ontario" = Ontario Motor Speedway
 }
 
 

@@ -2363,6 +2363,25 @@ function _normalizeTrackCodes(seriesBlock, year) {
   });
 
   // Team code fixes: correct codes that collide across eras/teams.
+
+  // Daytona & Indianapolis road course splits: if the track name says
+  // "road course", remap DAY→DRC or IND→IRC.
+  Object.values(seriesBlock).forEach(block => {
+    if (!block || !block.races) return;
+    block.races.forEach(race => {
+      const tname = ((race.track || "") + " " + (race.name || "")).toLowerCase();
+      if (race.track_code === "DAY" && tname.includes("road course")) {
+        race.track_code = "DRC";
+        race.track = "Daytona Road Course";
+      }
+      if (race.track_code === "IND" && tname.includes("road course")) {
+        race.track_code = "IRC";
+        race.track = "Indianapolis Road Course";
+      }
+    });
+  });
+
+  // Team code fixes: correct codes that collide across eras/teams.
   // Applied at load time so all downstream consumers see the corrected codes.
   const TEAM_CODE_FIXES = {
     // "Sam Hunt" owner → was "SHR" (collision with Stewart-Haas Racing)
@@ -5902,6 +5921,7 @@ const TRACK_TYPES = {
   // Superspeedways — pack drafting, plates/tapered spacers
   DAY: "super",
   TAL: "super",
+  ONT: "super",        // Ontario Motor Speedway (closed 1980)
 
   // Short tracks — <1 mile ovals
   BRI: "short",
@@ -5941,11 +5961,19 @@ const TRACK_TYPES = {
   WGI: "road",
   CHA: "road",         // Charlotte Roval
   ROV: "road",
-  IRC: "road",         // Indy RC
+  IRC: "road",         // Indianapolis Motor Speedway Road Course
+  DRC: "road",         // Daytona International Speedway Road Course
   CHG: "road",         // Chicago Street (2023-2025)
   SDG: "road",         // San Diego street course (2026+)
   MXI: "road",         // Mexico City (road course for 2026)
   MEX: "road",
+  ELK: "road",         // Road America (Elkhart Lake, WI)
+  MDO: "road",         // Mid-Ohio
+  PTL: "road",         // Portland International Raceway
+  MOS: "road",         // Mosport / Canadian Tire Motorsport Park
+  LRP: "road",         // Lime Rock Park
+  STP: "road",         // Streets of St. Petersburg
+  RIV: "road",         // Riverside International Raceway (closed 1988)
 
   // Chicagoland — 1.5mi intermediate oval, ≤2020 + 2026+.
   // Chicago Street (2023-2025) is remapped to "CHG" at data-load time
@@ -6030,6 +6058,14 @@ const TRACK_NAMES = {
   LRP: "Lime Rock",          // Lime Rock Park CT
   CAL: "Auto Club",          // California Speedway (Fontana) — distinct from AUS!
   FON: "Auto Club",          // alt code for Fontana
+  DRC: "Daytona RC",         // Daytona International Speedway Road Course
+  ELK: "Road America",       // Elkhart Lake, WI
+  MDO: "Mid-Ohio",           // Mid-Ohio Sports Car Course
+  PTL: "Portland",           // Portland International Raceway
+  MOS: "Mosport",            // Canadian Tire Motorsport Park
+  RIV: "Riverside",          // Riverside International Raceway (closed 1988)
+  ONT: "Ontario",            // Ontario Motor Speedway (closed 1980)
+  ECH: "EchoPark",           // EchoPark Speedway (Austin TX oval)
 
   // Bowman Gray / Daytona / etc. internationals already covered above
 };
