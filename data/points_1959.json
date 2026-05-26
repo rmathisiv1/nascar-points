@@ -1,6 +1,6 @@
 {
   "season": 1959,
-  "generated_at": "2026-05-21T19:25:30Z",
+  "generated_at": "2026-05-26T18:24:37Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -10175,7 +10175,7 @@
           "round": 23,
           "date": "1959-06-21",
           "track": "Atlantic Rural Fairgrounds",
-          "track_code": "ATL",
+          "track_code": "ARF",
           "name": "Richmond 200",
           "time": "",
           "tv": "",
@@ -11322,7 +11322,7 @@
           "round": 25,
           "date": "2059-06-28",
           "track": "Weaverville",
-          "track_code": "WEA",
+          "track_code": "AWV",
           "name": "",
           "time": "",
           "tv": "",
@@ -14835,7 +14835,7 @@
           "round": 32,
           "date": "1959-08-16",
           "track": "Asheville-Weaverville Speedway",
-          "track_code": "ASH",
+          "track_code": "AWV",
           "name": "Western North Carolina 500",
           "time": "",
           "tv": "",
@@ -20226,7 +20226,7 @@
           "round": 38,
           "date": "1959-09-13",
           "track": "Atlantic Rural Fairgrounds",
-          "track_code": "ATL",
+          "track_code": "ARF",
           "name": "Capital City 200",
           "time": "",
           "tv": "",
@@ -23470,7 +23470,7 @@
           "round": 42,
           "date": "2059-10-11",
           "track": "Weaverville",
-          "track_code": "WEA",
+          "track_code": "AWV",
           "name": "",
           "time": "",
           "tv": "",
@@ -26537,6 +26537,20 @@
           ]
         }
       ],
+      "final_standings": []
+    },
+    "NOS": {
+      "series_code": "NOS",
+      "series_name": "O'Reilly Auto Parts Series",
+      "season": 1959,
+      "races": [],
+      "final_standings": []
+    },
+    "NTS": {
+      "series_code": "NTS",
+      "series_name": "NASCAR Craftsman Truck Series",
+      "season": 1959,
+      "races": [],
       "final_standings": []
     }
   }
