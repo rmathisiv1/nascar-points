@@ -2338,22 +2338,24 @@ function _normalizeTrackCodes(seriesBlock, year) {
     });
   }
 
-  // Nashville split: "NSH" = Nashville Fairgrounds (short track, ≤2000)
-  //                  "NSV" = Nashville Superspeedway (1.33mi intermediate, 2001+)
-  // Racing Reference uses NSH for both. Remap 2001+ to NSV.
-  if (year >= 2001) {
-    Object.values(seriesBlock).forEach(block => {
-      if (!block || !block.races) return;
-      block.races.forEach(race => {
-        if (race.track_code === "NSH") {
+  // Nashville split: "NSH" = Nashville Fairgrounds/Speedway (short track, 0.596mi)
+  //                  "NSV" = Nashville Superspeedway (1.33mi intermediate, Lebanon TN)
+  // Racing Reference uses distinct names: "Nashville Speedway" vs "Nashville
+  // Superspeedway". The scraper maps these correctly when the name is specific.
+  // This normalization catches any stale data where both were tagged "NSH" —
+  // if the race name contains "superspeedway" or "Lebanon", remap to NSV.
+  Object.values(seriesBlock).forEach(block => {
+    if (!block || !block.races) return;
+    block.races.forEach(race => {
+      if (race.track_code === "NSH") {
+        const name = (race.track || "").toLowerCase() + " " + (race.name || "").toLowerCase();
+        if (name.includes("superspeedway") || name.includes("lebanon")) {
           race.track_code = "NSV";
-          if (race.track === "Nashville" || race.track === "Nashville Fairgrounds") {
-            race.track = "Nashville Superspeedway";
-          }
+          race.track = "Nashville Superspeedway";
         }
-      });
+      }
     });
-  }
+  });
 
   // Team code fixes: correct codes that collide across eras/teams.
   // Applied at load time so all downstream consumers see the corrected codes.

@@ -245,10 +245,14 @@ TRACK_CODES = {
     "charlotte road course": "ROV",
     "roval": "ROV",
     "charlotte": "CLT",
-    # Specific 'nashville superspeedway' MUST appear before bare 'nashville'
-    # since matching is substring-based (first hit wins).
+    # Nashville: two different tracks per Racing Reference.
+    #   "Nashville Superspeedway, Lebanon, TN" (1.333mi inter) → NSV
+    #   "Nashville Speedway, Nashville, TN" (0.596mi short) → NSH
+    # More-specific substrings FIRST since matching is first-hit-wins.
     "nashville superspeedway": "NSV",
-    "nashville": "NSH",
+    "nashville speedway": "NSH",       # Fairgrounds short track
+    "nashville fairgrounds": "NSH",    # alt name for the short track
+    "nashville": "NSV",                # bare = Superspeedway (modern schedule default)
     "michigan": "MCH",
     "pocono": "POC", "san diego": "SDG", "sonoma": "SON",
     # Chicago Street Race (2023-2025, road course) vs Chicagoland
