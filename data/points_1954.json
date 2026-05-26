@@ -1,6 +1,6 @@
 {
   "season": 1954,
-  "generated_at": "2026-05-21T19:16:40Z",
+  "generated_at": "2026-05-26T18:14:29Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -1421,7 +1421,7 @@
           "round": 10,
           "date": "2054-05-02",
           "track": "Langhorne",
-          "track_code": "LAN",
+          "track_code": "LGH",
           "name": "",
           "time": "",
           "tv": "",
@@ -5553,7 +5553,7 @@
           "round": 20,
           "date": "2054-06-25",
           "track": "Rochester",
-          "track_code": "ROC",
+          "track_code": "RCT",
           "name": "",
           "time": "",
           "tv": "",
@@ -5622,7 +5622,7 @@
           "round": 23,
           "date": "2054-07-04",
           "track": "Weaverville",
-          "track_code": "WEA",
+          "track_code": "AWV",
           "name": "",
           "time": "",
           "tv": "",
@@ -5645,7 +5645,7 @@
           "round": 24,
           "date": "2054-07-10",
           "track": "Willow Springs",
-          "track_code": "WIL",
+          "track_code": "WLS",
           "name": "",
           "time": "",
           "tv": "",
@@ -8376,7 +8376,7 @@
           "round": 34,
           "date": "2054-09-26",
           "track": "Langhorne",
-          "track_code": "LAN",
+          "track_code": "LGH",
           "name": "",
           "time": "",
           "tv": "",
@@ -12666,6 +12666,20 @@
           ]
         }
       ],
+      "final_standings": []
+    },
+    "NOS": {
+      "series_code": "NOS",
+      "series_name": "O'Reilly Auto Parts Series",
+      "season": 1954,
+      "races": [],
+      "final_standings": []
+    },
+    "NTS": {
+      "series_code": "NTS",
+      "series_name": "NASCAR Craftsman Truck Series",
+      "season": 1954,
+      "races": [],
       "final_standings": []
     }
   }
