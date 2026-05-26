@@ -1,6 +1,6 @@
 {
   "season": 1958,
-  "generated_at": "2026-05-21T19:22:56Z",
+  "generated_at": "2026-05-26T18:21:24Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -2709,7 +2709,7 @@
           "round": 16,
           "date": "2058-05-11",
           "track": "Greensboro",
-          "track_code": "GRE",
+          "track_code": "GBO",
           "name": "",
           "time": "",
           "tv": "",
@@ -2732,7 +2732,7 @@
           "round": 17,
           "date": "2058-05-15",
           "track": "Roanoke",
-          "track_code": "ROA",
+          "track_code": "RNK",
           "name": "",
           "time": "",
           "tv": "",
@@ -9716,7 +9716,7 @@
           "round": 27,
           "date": "2058-06-29",
           "track": "Weaverville",
-          "track_code": "WEA",
+          "track_code": "AWV",
           "name": "",
           "time": "",
           "tv": "",
@@ -12605,7 +12605,7 @@
           "round": 33,
           "date": "2058-07-25",
           "track": "Rochester",
-          "track_code": "ROC",
+          "track_code": "RCT",
           "name": "",
           "time": "",
           "tv": "",
@@ -12651,7 +12651,7 @@
           "round": 35,
           "date": "2058-08-02",
           "track": "Bridgehampton",
-          "track_code": "BRI",
+          "track_code": "BRH",
           "name": "",
           "time": "",
           "tv": "",
@@ -14321,7 +14321,7 @@
           "round": 38,
           "date": "1958-08-17",
           "track": "Asheville-Weaverville Speedway",
-          "track_code": "ASH",
+          "track_code": "AWV",
           "name": "Western North Carolina 500",
           "time": "",
           "tv": "",
@@ -18807,7 +18807,7 @@
           "round": 46,
           "date": "1958-09-14",
           "track": "Atlantic Rural Fairgrounds",
-          "track_code": "ATL",
+          "track_code": "ARF",
           "name": "Richmond 200",
           "time": "",
           "tv": "",
@@ -23244,6 +23244,20 @@
           "results": []
         }
       ],
+      "final_standings": []
+    },
+    "NOS": {
+      "series_code": "NOS",
+      "series_name": "O'Reilly Auto Parts Series",
+      "season": 1958,
+      "races": [],
+      "final_standings": []
+    },
+    "NTS": {
+      "series_code": "NTS",
+      "series_name": "NASCAR Craftsman Truck Series",
+      "season": 1958,
+      "races": [],
       "final_standings": []
     }
   }
