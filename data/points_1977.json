@@ -1,6 +1,6 @@
 {
   "season": 1977,
-  "generated_at": "2026-05-21T22:27:26Z",
+  "generated_at": "2026-05-26T21:02:23Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -5435,7 +5435,7 @@
           "round": 4,
           "date": "1977-03-13",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -47861,7 +47861,7 @@
           "round": 28,
           "date": "1977-10-23",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
