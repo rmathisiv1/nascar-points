@@ -3681,7 +3681,8 @@ function getDriverTrackStats(driverName, series, trackCode) {
     return DRIVER_ANALYTICS_CACHE.trackStats.get(cacheKey);
   }
   const history = getDriverRaceHistory(driverName, series);
-  const atTrack = history.filter(r => r.track_code === trackCode);
+  const codes = typeof trackCodesForLookup === "function" ? trackCodesForLookup(trackCode) : [trackCode];
+  const atTrack = history.filter(r => codes.includes(r.track_code));
   if (atTrack.length === 0) {
     DRIVER_ANALYTICS_CACHE.trackStats.set(cacheKey, null);
     return null;
@@ -3864,7 +3865,8 @@ function getDriverSpeedMetrics(driverName, series) {
 function driverTrackScore(driverName, series, trackCode) {
   if (!driverName || !trackCode) return -Infinity;
   const history = getDriverRaceHistory(driverName, series);
-  const atTrack = history.filter(r => r.track_code === trackCode);
+  const codes = typeof trackCodesForLookup === "function" ? trackCodesForLookup(trackCode) : [trackCode];
+  const atTrack = history.filter(r => codes.includes(r.track_code));
   if (atTrack.length === 0) return -Infinity;
   const currentYear = STATE.season || new Date().getFullYear();
   let score = 0;
@@ -18493,9 +18495,8 @@ function renderTrackPage() {
         ${completedHistory.map(h => {
           const winner = (h.results || []).find(d => d.finish_pos === 1);
           const pole   = (h.results || []).find(d => d.start_pos === 1);
-          // Resolve series for color mapping — each history row carries its
-          // own series since the track page can be toggled per-series.
           const seriesForRow = h.series || tSeries;
+          const raceHref = `#/race/${h.round}?_y=${h.year}&_s=${seriesForRow}`;
           const wDrvSlug = winner ? slugify(winner.driver || "") : "";
           const pDrvSlug = pole ? slugify(pole.driver || "") : "";
           const wHTML = winner ? `
@@ -18518,7 +18519,7 @@ function renderTrackPage() {
               <span class="car-tag" style="background:${colorFor(seriesForRow, pole.car_number)};color:${contrastTextFor(colorFor(seriesForRow, pole.car_number))}">${pole.car_number}</span>
               <span>${escapeHTML(lastNameOf(pole.driver))}</span>
             </a>` : `<span class="muted">—</span>`;
-          return `<tr>
+          return `<tr class="profile-link" style="cursor:pointer;" onclick="location.hash='${raceHref.replace(/'/g, "\\'")}'"  title="View race results">
             <td>${h.year}</td>
             <td class="num">R${h.round}</td>
             <td>${wHTML}</td>
