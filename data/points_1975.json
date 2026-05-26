@@ -1,6 +1,6 @@
 {
   "season": 1975,
-  "generated_at": "2026-05-21T21:14:08Z",
+  "generated_at": "2026-05-26T20:50:20Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -4935,7 +4935,7 @@
           "round": 4,
           "date": "1975-03-02",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -45787,7 +45787,7 @@
           "round": 27,
           "date": "1975-10-19",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
