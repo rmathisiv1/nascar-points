@@ -1,6 +1,6 @@
 {
   "season": 2026,
-  "generated_at": "2026-05-26T13:17:55Z",
+  "generated_at": "2026-05-26T15:45:46Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -54319,7 +54319,7 @@
           "date": "2026-06-20",
           "track": "San Diego",
           "track_code": "SDG",
-          "name": "NOAPS Race at San Diego",
+          "name": "United Rentals Driven to Serve 250",
           "time": "5:00 PM",
           "tv": "CW",
           "track_length": 0.0,
@@ -54342,7 +54342,7 @@
           "date": "2026-06-27",
           "track": "Sonoma",
           "track_code": "SON",
-          "name": "NOAPS Race at Sonoma",
+          "name": "PitBoss / FoodMaxx 250",
           "time": "5:30 PM",
           "tv": "CW",
           "track_length": 0.0,
