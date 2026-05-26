@@ -15930,7 +15930,9 @@ function manufacturerStandingsThroughRound(maxRound) {
     // Find best finisher per manufacturer
     const bestByMfr = new Map();
     (r.results || []).forEach(d => {
-      if (d.ineligible) return;
+      // Manufacturer standings include ALL entries — ineligible crossover
+      // drivers still represent their brand. A Cup driver finishing P3 in
+      // a Ford at an NOS race earns Ford those manufacturer points.
       const m = d.manufacturer;
       if (!m || d.finish_pos == null) return;
       const cur = bestByMfr.get(m);
