@@ -1,6 +1,6 @@
 {
   "season": 1976,
-  "generated_at": "2026-05-21T22:21:48Z",
+  "generated_at": "2026-05-26T20:55:45Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -3911,7 +3911,7 @@
           "round": 3,
           "date": "1976-02-29",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -47961,7 +47961,7 @@
           "round": 28,
           "date": "1976-10-24",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
