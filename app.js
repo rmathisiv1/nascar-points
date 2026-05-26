@@ -3300,13 +3300,28 @@ function entitiesFromRaces(races) {
       if (teamCode) e.team_code = teamCode;
       e.manufacturer = d.manufacturer || e.manufacturer;
 
-      // Ineligible results are excluded from the entity's races array
-      // (they don't earn points in this series) but are still counted
-      // in totalStarts above so the car appears in projection filters.
-      if (d.ineligible) return;
+      // Ineligible results: the driver is not eligible for series championship
+      // points, but they DID race. Include in the entity's races array so the
+      // heatmap shows their finish positions. Points fields are zeroed so
+      // computeSeasonTotals sums correctly.
+      if (d.ineligible) {
+        e.races.push({
+          round: r.round,
+          season: r.season,
+          finish: d.finish_pos,
+          start: d.start_pos,
+          s1: 0, s2: 0, fin: 0, fl: 0, total: 0,
+          status: d.status,
+          driver: d.driver,
+          track_code: r.track_code,
+          track: r.track,
+          ineligible: true,
+        });
+        return;
+      }
       e.races.push({
         round: r.round,
-        season: r.season,   // set by trajectoryEntities for multi-year; undefined for single-season
+        season: r.season,
         finish: d.finish_pos,
         start: d.start_pos,
         s1: d.stage_1_pts || 0,
@@ -3314,6 +3329,7 @@ function entitiesFromRaces(races) {
         fin: d.finish_pts || 0,
         fl: d.fastest_lap_pt || 0,
         total: d.race_pts || 0,
+        lapsLed: d.laps_led || 0,
         status: d.status,
         driver: d.driver,
         track_code: r.track_code,
@@ -5205,115 +5221,115 @@ function renderArcGrid() {
 // per-race component breakdown.
 // ============================================================
 function renderBreakdown() {
-  const host = document.getElementById("stage-points-bars");
-  const sub = document.getElementById("stage-points-sub");
-  const titleEl = document.querySelector(".stage-points-title");
-  if (!host || !STATE.data) return;
+  // ---- Season Data: 6 bar charts in a 2×3 grid ----
+  // Each chart shows a different stat accumulated across the season.
+  // The old "stage points" card is now one of six.
+  const sdHost = document.getElementById("stage-points-card");
+  if (!sdHost || !STATE.data) return;
 
   const mode = (STATE.breakdown && STATE.breakdown.mode) || "drivers";
-  if (titleEl) {
-    titleEl.textContent = mode === "teams"
-      ? "Stage points · season total by team"
-      : "Stage points · season total";
-  }
+  const entities = allEntities();
+  const completed = (allRacesSorted() || []).filter(r =>
+    (r.results || []).some(d => d.finish_pos === 1)
+  ).length;
 
-  // Aggregate by entity (driver) or by team. Both use s1+s2 fields from
-  // the per-entity per-race data, so the totals are consistent across
-  // modes — switching just re-buckets the same point sums.
-  let rows = [];
-  if (mode === "teams") {
-    // Group entities by their team_code, sum stage points across cars.
-    const byTeam = new Map();
-    allEntities().forEach(e => {
-      const teamCode = e.team_code || teamCodeFromName(e.team, SERIES_TO_KEY[STATE.series], e.car_number);
-      if (!teamCode) return;
-      const grp = teamGroup(teamCode, STATE.season) || teamCode;
-      let agg = byTeam.get(grp);
-      if (!agg) {
-        agg = { team_code: grp, stagePts: 0, cars: new Set() };
-        byTeam.set(grp, agg);
-      }
-      (e.races || []).forEach(r => {
-        if (r.dns) return;
-        agg.stagePts += (r.s1 || 0) + (r.s2 || 0);
-      });
-      agg.cars.add(e.car_number);
+  // Build per-entity stats for all 6 metrics at once
+  const entityStats = entities.map(e => {
+    let pts = 0, stagePts = 0, wins = 0, top5 = 0, poles = 0, lapsLed = 0;
+    (e.races || []).forEach(r => {
+      if (r.ineligible) return;
+      pts += r.total || 0;
+      stagePts += (r.s1 || 0) + (r.s2 || 0);
+      if (r.finish === 1) wins++;
+      if (r.finish >= 1 && r.finish <= 5) top5++;
+      if (r.start === 1) poles++;
+      lapsLed += r.lapsLed || 0;
     });
-    rows = Array.from(byTeam.values())
-      .filter(r => r.stagePts > 0)
-      .sort((a, b) => b.stagePts - a.stagePts);
-  } else {
-    rows = allEntities().map(e => {
-      let stagePts = 0;
-      (e.races || []).forEach(r => {
-        if (r.dns) return;
-        stagePts += (r.s1 || 0) + (r.s2 || 0);
-      });
-      return {
-        entity: e,
-        driver: e.primaryDriver || e.driver,
-        car_number: e.car_number,
-        stagePts,
-      };
-    })
-    .filter(r => r.stagePts > 0)
-    .sort((a, b) => b.stagePts - a.stagePts);
-  }
+    return {
+      entity: e,
+      driver: e.primaryDriver || e.driver,
+      car_number: e.car_number,
+      team_code: e.team_code,
+      pts, stagePts, wins, top5, poles, lapsLed,
+    };
+  });
 
-  const max = rows.length > 0 ? rows[0].stagePts : 1;
+  // Generic bar chart renderer — takes a metric key, renders sorted bars
+  function renderSDChart(containerId, metricKey, label) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const barsEl = container.querySelector(".sd-bars");
+    const subEl = container.querySelector(".sd-sub");
+    if (!barsEl) return;
 
-  if (sub) {
-    const totalAll = rows.reduce((acc, r) => acc + r.stagePts, 0);
-    const completed = (allRacesSorted() || []).filter(r =>
-      (r.results || []).some(d => d.finish_pos === 1)
-    ).length;
-    // Stage points scoring (NCS/NOS post-2017): top 10 in each of 2 stages
-    // get 10-9-8-7-6-5-4-3-2-1. So per race: 110 distributed across all
-    // drivers, max 20 to any one driver. Subtitle reflects both views so
-    // readers don't mistake the season total for a per-driver number.
-    const perDriverMax = completed * 20;
-    const noun = mode === "teams" ? "teams" : "drivers";
-    sub.textContent = `${rows.length} ${noun} · ${completed} race${completed === 1 ? "" : "s"} · max ${perDriverMax} pts per driver`;
-  }
-
-  if (rows.length === 0) {
-    host.innerHTML = `<div class="muted" style="padding:24px;text-align:center;">No stage points scored yet this season.</div>`;
-    return;
-  }
-
-  host.innerHTML = rows.map((r, i) => {
+    let rows;
     if (mode === "teams") {
-      // Team row — color from the team palette. teamLabelForEra doesn't
-      // carry a .color field (it's for label text); use orgColorForTeam
-      // which reads STATE.colors.teams[code].org.
-      const lbl = teamLabelForEra(r.team_code, STATE.season);
-      const teamHex = orgColorForTeam(r.team_code) || "var(--accent)";
-      const txt = contrastTextFor(teamHex);
-      const pct = (r.stagePts / max) * 100;
-      const fullName = (lbl && lbl.full) || r.team_code;
-      return `<a class="sp-row sp-row-team profile-link" href="#/team/${encodeURIComponent(r.team_code)}">
-        <span class="sp-rank">${i + 1}</span>
-        <span class="sp-team-tag" style="background:${teamHex};color:${txt}">${escapeHTML(r.team_code)}</span>
-        <span class="sp-name">${escapeHTML(fullName)}</span>
-        <span class="sp-bar-track">
-          <span class="sp-bar-fill" style="width:${pct}%;background:${teamHex}"></span>
-        </span>
-        <span class="sp-pts">${r.stagePts}</span>
-      </a>`;
+      const byTeam = new Map();
+      entityStats.forEach(es => {
+        const tc = es.team_code || teamCodeFromName(es.entity.team, SERIES_TO_KEY[STATE.series], es.car_number);
+        if (!tc) return;
+        const grp = teamGroup(tc, STATE.season) || tc;
+        if (!byTeam.has(grp)) byTeam.set(grp, { team_code: grp, val: 0, cars: new Set() });
+        const agg = byTeam.get(grp);
+        agg.val += es[metricKey] || 0;
+        agg.cars.add(es.car_number);
+      });
+      rows = Array.from(byTeam.values())
+        .filter(r => r.val > 0)
+        .sort((a, b) => b.val - a.val);
+    } else {
+      rows = entityStats
+        .map(es => ({ ...es, val: es[metricKey] || 0 }))
+        .filter(r => r.val > 0)
+        .sort((a, b) => b.val - a.val);
     }
-    const carHex = colorFor(STATE.series, r.car_number);
-    const txt = contrastTextFor(carHex);
-    const pct = (r.stagePts / max) * 100;
-    return `<a class="sp-row profile-link" href="#/driver/${slugify(r.driver || '')}">
-      <span class="sp-rank">${i + 1}</span>
-      <span class="sp-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
-      <span class="sp-name">${escapeHTML(lastNameOf(r.driver || ''))}</span>
-      <span class="sp-bar-track">
-        <span class="sp-bar-fill" style="width:${pct}%;background:${carHex}"></span>
-      </span>
-      <span class="sp-pts">${r.stagePts}</span>
-    </a>`;
-  }).join("");
+
+    const max = rows.length > 0 ? rows[0].val : 1;
+    if (subEl) {
+      const noun = mode === "teams" ? "teams" : "drivers";
+      subEl.textContent = `${rows.length} ${noun} · ${completed} races`;
+    }
+
+    if (rows.length === 0) {
+      barsEl.innerHTML = `<div class="muted" style="padding:12px;text-align:center;font-size:11px;">No data yet.</div>`;
+      return;
+    }
+
+    barsEl.innerHTML = rows.map((r, i) => {
+      if (mode === "teams") {
+        const lbl = teamLabelForEra(r.team_code, STATE.season);
+        const teamHex = orgColorForTeam(r.team_code) || "var(--accent)";
+        const txt = contrastTextFor(teamHex);
+        const pct = (r.val / max) * 100;
+        const fullName = (lbl && lbl.full) || r.team_code;
+        return `<a class="sp-row sp-row-team profile-link" href="#/team/${encodeURIComponent(r.team_code)}">
+          <span class="sp-rank">${i + 1}</span>
+          <span class="sp-team-tag" style="background:${teamHex};color:${txt}">${escapeHTML(r.team_code)}</span>
+          <span class="sp-name">${escapeHTML(fullName)}</span>
+          <span class="sp-bar-track"><span class="sp-bar-fill" style="width:${pct}%;background:${teamHex}"></span></span>
+          <span class="sp-pts">${r.val.toLocaleString()}</span>
+        </a>`;
+      }
+      const carHex = colorFor(STATE.series, r.car_number);
+      const txt = contrastTextFor(carHex);
+      const pct = (r.val / max) * 100;
+      return `<a class="sp-row profile-link" href="#/driver/${slugify(r.driver || '')}">
+        <span class="sp-rank">${i + 1}</span>
+        <span class="sp-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
+        <span class="sp-name">${escapeHTML(lastNameOf(r.driver || ''))}</span>
+        <span class="sp-bar-track"><span class="sp-bar-fill" style="width:${pct}%;background:${carHex}"></span></span>
+        <span class="sp-pts">${r.val.toLocaleString()}</span>
+      </a>`;
+    }).join("");
+  }
+
+  // Render all 6 charts
+  renderSDChart("sd-points", "pts", "Points earned");
+  renderSDChart("sd-stage", "stagePts", "Stage points");
+  renderSDChart("sd-wins", "wins", "Race wins");
+  renderSDChart("sd-top5", "top5", "Top 5 finishes");
+  renderSDChart("sd-poles", "poles", "Poles");
+  renderSDChart("sd-laps", "lapsLed", "Laps led");
 }
 
 // ============================================================
@@ -15193,8 +15209,7 @@ function renderHeatmap() {
   const host = document.getElementById("heatmap-wrap");
   if (!STATE.data) return;
   const races = racesSorted();
-  const drivers = computeSeasonTotals()
-    .filter(d => d.races && d.races.length > 0);
+  const drivers = computeSeasonTotals();
   if (drivers.length === 0 || races.length === 0) {
     host.innerHTML = `<div class="loading">No data yet.</div>`;
     return;
@@ -15209,7 +15224,7 @@ function renderHeatmap() {
   toggleBar.style.marginBottom = "8px";
   ["finish", "points"].forEach(m => {
     const btn = document.createElement("button");
-    btn.textContent = m === "finish" ? "Finish Position" : "Points Earned";
+    btn.textContent = m === "finish" ? "Finish Position" : "Points";
     if (m === mode) btn.classList.add("on");
     btn.addEventListener("click", () => {
       STATE.heatmapMode = m;
@@ -15276,9 +15291,10 @@ function renderHeatmap() {
         cell.title = `R${r.round} · ${trackLabel} — DNS`;
       } else if (mode === "points") {
         const pts = mine.total || 0;
+        const isWin = mine.finish === 1;
         cell.textContent = pts;
-        cell.style.background = heatmapColorPts(pts);
-        cell.style.color = pts >= 30 ? "#1a1a1a" : "var(--text)";
+        cell.style.background = isWin ? "rgba(240, 197, 88, 0.85)" : heatmapColorPts(pts);
+        cell.style.color = (isWin || pts >= 35) ? "#1a1a1a" : "var(--text)";
         cell.title = `R${r.round} · ${trackLabel} · ${d.driver} — P${mine.finish} · ${pts} pts`;
       } else {
         const f = mine.finish;
@@ -15343,12 +15359,12 @@ function heatmapText(finish) {
 // Scale: 0 pts = deep red, ~20 pts = neutral, 40+ pts = bright green, 50+ = gold (win-level).
 function heatmapColorPts(pts) {
   if (pts == null || pts <= 0) return "rgba(180, 50, 50, 0.35)";
-  if (pts >= 50) return "rgba(240, 197, 88, 0.85)"; // win-level gold
-  if (pts >= 40) return "rgba(60, 180, 75, 0.65)";
-  if (pts >= 30) return "rgba(80, 170, 80, 0.45)";
-  if (pts >= 20) return "rgba(100, 150, 80, 0.25)";
-  if (pts >= 10) return "rgba(180, 120, 60, 0.2)";
-  return "rgba(180, 70, 50, 0.2)";
+  if (pts >= 45) return "rgba(40, 200, 60, 0.75)";   // top finishes
+  if (pts >= 35) return "rgba(50, 190, 70, 0.6)";
+  if (pts >= 25) return "rgba(70, 170, 70, 0.45)";
+  if (pts >= 15) return "rgba(100, 150, 70, 0.3)";
+  if (pts >= 8)  return "rgba(140, 130, 60, 0.2)";
+  return "rgba(180, 80, 50, 0.2)";
 }
 
 // ============================================================

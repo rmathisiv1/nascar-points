@@ -11703,3 +11703,45 @@ body.lightbox-open {
 .proj-table-cutline td {
   border-top: 2px dashed rgba(255, 200, 50, 0.5);
 }
+
+/* Season Data page — 2×3 grid of bar charts */
+.season-data-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 8px;
+}
+.sd-chart {
+  min-width: 0;
+  overflow: hidden;
+}
+.sd-chart .stage-points-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sd-title {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.sd-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+.sd-bars {
+  max-height: 520px;
+  overflow-y: auto;
+}
+/* Reuse .sp-row styles but inside sd-bars */
+.sd-bars .sp-row { font-size: 11px; }
+.sd-bars .sp-rank { min-width: 18px; }
+.sd-bars .sp-name { min-width: 60px; max-width: 90px; }
+
+@media (max-width: 768px) {
+  .season-data-grid {
+    grid-template-columns: 1fr;
+  }
+}
