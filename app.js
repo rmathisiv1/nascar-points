@@ -2324,7 +2324,6 @@ function _normalizeTrackCodes(seriesBlock, year) {
   if (!seriesBlock) return;
   // CHI split: "CHI" = Chicagoland (1.5mi intermediate, ≤2020 and 2026+)
   //            "CHG" = Chicago Street Race (road course, 2023-2025)
-  // Racing Reference tags both as "CHI". We remap 2023-2025 to "CHG".
   if (year >= 2023 && year <= 2025) {
     Object.values(seriesBlock).forEach(block => {
       if (!block || !block.races) return;
@@ -2338,6 +2337,26 @@ function _normalizeTrackCodes(seriesBlock, year) {
       });
     });
   }
+
+  // Team code fixes: correct codes that collide across eras/teams.
+  // Applied at load time so all downstream consumers see the corrected codes.
+  const TEAM_CODE_FIXES = {
+    // "Sam Hunt" owner → was "SHR" (collision with Stewart-Haas Racing)
+    "Sam Hunt": "HUNT",
+  };
+  Object.values(seriesBlock).forEach(block => {
+    if (!block || !block.races) return;
+    block.races.forEach(race => {
+      (race.results || []).forEach(d => {
+        if (!d.team) return;
+        for (const [ownerSubstr, newCode] of Object.entries(TEAM_CODE_FIXES)) {
+          if (d.team.includes(ownerSubstr) && d.team_code !== newCode) {
+            d.team_code = newCode;
+          }
+        }
+      });
+    });
+  });
 }
 
 async function loadSeasonIntoCache(year) {
@@ -4522,7 +4541,7 @@ const OWNER_TO_TEAM_CODE = {
   "Jordan Anderson":          "JAR",
   "Mike Harmon":              "MHR",
   "Mario Gosselin":           "DGM",
-  "Sam Hunt":                 "SHR",
+  "Sam Hunt":                 "HUNT",
   "Joey Gase Motorsports  With Sc": "JGM",
   "Joey Gase Motorsports":    "JGM",
   "Bobby Dotter":             "SSG",
@@ -5989,6 +6008,7 @@ const TEAM_FULL_NAMES = {
   "KR": "Kaulig Racing",
   "HAAS": "Haas Factory Team",
   "SHR": "Stewart-Haas Racing",
+  "HUNT": "Sam Hunt Racing",
   "HYAK": "HYAK Motorsports",
   "WBR": "Wood Brothers Racing",
   "JTG": "JTG Daugherty Racing",
@@ -6028,7 +6048,7 @@ const TEAM_FULL_NAMES = {
   "MGM": "GMS Racing",
   "REV": "Rev Racing",
   "BAR": "Stanton Barrett Motorsports",
-  "VAV": "VaVia Motorsports",
+  "VAV": "Viking Motorsports",
   "RGM": "Robby Gordon Motorsports",
   "GO": "Go FAS Racing",
 
