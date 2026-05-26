@@ -5336,6 +5336,16 @@ function renderBreakdown() {
         barsEl.style.maxHeight = "none";
         barsEl.style.overflow = "visible";
         barsEl.innerHTML = renderRows(rows);
+        const collapseBtn = document.createElement("button");
+        collapseBtn.className = "sd-expand-btn";
+        collapseBtn.textContent = "Show less";
+        collapseBtn.addEventListener("click", () => {
+          barsEl.style.maxHeight = "";
+          barsEl.style.overflow = "";
+          barsEl.innerHTML = renderRows(visibleRows);
+          barsEl.appendChild(expandBtn);
+        });
+        barsEl.appendChild(collapseBtn);
       });
       barsEl.appendChild(expandBtn);
     }
