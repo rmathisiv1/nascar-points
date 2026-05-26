@@ -15193,11 +15193,30 @@ function renderHeatmap() {
   const host = document.getElementById("heatmap-wrap");
   if (!STATE.data) return;
   const races = racesSorted();
-  const drivers = computeSeasonTotals();
+  const drivers = computeSeasonTotals()
+    .filter(d => d.races && d.races.length > 0);
   if (drivers.length === 0 || races.length === 0) {
     host.innerHTML = `<div class="loading">No data yet.</div>`;
     return;
   }
+
+  // Heatmap display mode: "finish" (default) or "points"
+  const mode = STATE.heatmapMode || "finish";
+
+  // Toggle bar
+  const toggleBar = document.createElement("div");
+  toggleBar.className = "toggle-group";
+  toggleBar.style.marginBottom = "8px";
+  ["finish", "points"].forEach(m => {
+    const btn = document.createElement("button");
+    btn.textContent = m === "finish" ? "Finish Position" : "Points Earned";
+    if (m === mode) btn.classList.add("on");
+    btn.addEventListener("click", () => {
+      STATE.heatmapMode = m;
+      renderHeatmap();
+    });
+    toggleBar.appendChild(btn);
+  });
 
   const grid = document.createElement("div");
   grid.className = "heatmap-grid";
@@ -15255,6 +15274,12 @@ function renderHeatmap() {
         cell.textContent = "·";
         cell.style.color = "var(--dim)";
         cell.title = `R${r.round} · ${trackLabel} — DNS`;
+      } else if (mode === "points") {
+        const pts = mine.total || 0;
+        cell.textContent = pts;
+        cell.style.background = heatmapColorPts(pts);
+        cell.style.color = pts >= 30 ? "#1a1a1a" : "var(--text)";
+        cell.title = `R${r.round} · ${trackLabel} · ${d.driver} — P${mine.finish} · ${pts} pts`;
       } else {
         const f = mine.finish;
         cell.textContent = f;
@@ -15273,6 +15298,7 @@ function renderHeatmap() {
   });
 
   host.innerHTML = "";
+  host.appendChild(toggleBar);
   host.appendChild(grid);
   wireCoDriverBadges(grid);
 }
@@ -15311,6 +15337,18 @@ function heatmapText(finish) {
   if (finish <= 10) return isLight ? "#1a3a1a" : "#cef5d9";
   if (finish >= 25) return isLight ? "#5a1a14" : "#ffd2d2";
   return isLight ? "#1a1612" : "#eef0f5";
+}
+
+// Points-earned heatmap color: higher points = greener, lower = redder.
+// Scale: 0 pts = deep red, ~20 pts = neutral, 40+ pts = bright green, 50+ = gold (win-level).
+function heatmapColorPts(pts) {
+  if (pts == null || pts <= 0) return "rgba(180, 50, 50, 0.35)";
+  if (pts >= 50) return "rgba(240, 197, 88, 0.85)"; // win-level gold
+  if (pts >= 40) return "rgba(60, 180, 75, 0.65)";
+  if (pts >= 30) return "rgba(80, 170, 80, 0.45)";
+  if (pts >= 20) return "rgba(100, 150, 80, 0.25)";
+  if (pts >= 10) return "rgba(180, 120, 60, 0.2)";
+  return "rgba(180, 70, 50, 0.2)";
 }
 
 // ============================================================
