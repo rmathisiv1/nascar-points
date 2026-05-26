@@ -1,6 +1,6 @@
 {
   "season": 1961,
-  "generated_at": "2026-05-21T19:36:21Z",
+  "generated_at": "2026-05-26T18:35:35Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -6404,7 +6404,7 @@
           "round": 7,
           "date": "2061-03-05",
           "track": "Weaverville",
-          "track_code": "WEA",
+          "track_code": "AWV",
           "name": "",
           "time": "",
           "tv": "",
@@ -13789,7 +13789,7 @@
           "round": 17,
           "date": "1961-04-23",
           "track": "Atlantic Rural Fairgrounds",
-          "track_code": "ATL",
+          "track_code": "ARF",
           "name": "Richmond 200",
           "time": "",
           "tv": "",
@@ -25474,7 +25474,7 @@
           "round": 29,
           "date": "1961-06-17",
           "track": "Norwood Arena",
-          "track_code": "NOR",
+          "track_code": "NWD",
           "name": "Yankee 500",
           "time": "",
           "tv": "",
@@ -26398,7 +26398,7 @@
           "round": 30,
           "date": "2061-06-23",
           "track": "Hartsville",
-          "track_code": "HAR",
+          "track_code": "HTV",
           "name": "",
           "time": "",
           "tv": "",
@@ -26421,7 +26421,7 @@
           "round": 31,
           "date": "2061-06-24",
           "track": "Roanoke",
-          "track_code": "ROA",
+          "track_code": "RNK",
           "name": "",
           "time": "",
           "tv": "",
@@ -33509,7 +33509,7 @@
           "round": 39,
           "date": "1961-08-13",
           "track": "Asheville-Weaverville Speedway",
-          "track_code": "ASH",
+          "track_code": "AWV",
           "name": "Western North Carolina 500",
           "time": "",
           "tv": "",
@@ -38677,7 +38677,7 @@
           "round": 44,
           "date": "1961-09-10",
           "track": "Atlantic Rural Fairgrounds",
-          "track_code": "ATL",
+          "track_code": "ARF",
           "name": "Capital City 200",
           "time": "",
           "tv": "",
@@ -49236,6 +49236,20 @@
           "results": []
         }
       ],
+      "final_standings": []
+    },
+    "NOS": {
+      "series_code": "NOS",
+      "series_name": "O'Reilly Auto Parts Series",
+      "season": 1961,
+      "races": [],
+      "final_standings": []
+    },
+    "NTS": {
+      "series_code": "NTS",
+      "series_name": "NASCAR Craftsman Truck Series",
+      "season": 1961,
+      "races": [],
       "final_standings": []
     }
   }
