@@ -1,6 +1,6 @@
 {
   "season": 1949,
-  "generated_at": "2026-05-21T19:03:40Z",
+  "generated_at": "2026-05-26T18:04:54Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -82,7 +82,7 @@
           "round": 4,
           "date": "2049-09-11",
           "track": "Langhorne",
-          "track_code": "LAN",
+          "track_code": "LGH",
           "name": "",
           "time": "",
           "tv": "",
@@ -1294,6 +1294,20 @@
           ]
         }
       ],
+      "final_standings": []
+    },
+    "NOS": {
+      "series_code": "NOS",
+      "series_name": "O'Reilly Auto Parts Series",
+      "season": 1949,
+      "races": [],
+      "final_standings": []
+    },
+    "NTS": {
+      "series_code": "NTS",
+      "series_name": "NASCAR Craftsman Truck Series",
+      "season": 1949,
+      "races": [],
       "final_standings": []
     }
   }
