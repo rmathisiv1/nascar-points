@@ -16861,7 +16861,16 @@ function renderStandingsMini() {
 
   const races = racesSorted();
   const lastRound = races.length ? races[races.length - 1].round : 0;
-  const rows = rankingRowsFrom(pointsMapThroughRound(lastRound));
+  // Sidebar always shows DRIVER standings (not owner/car-keyed).
+  const driverMap = driverPointsMapThroughRound(lastRound);
+  const rows = Array.from(driverMap.values())
+    .map(e => ({
+      ...e,
+      primaryDriver: e.driver,
+      displayLabel: `#${e.car_number} · ${e.driver}`,
+      avgFinish: e.finishes.length ? e.finishes.reduce((s, x) => s + x, 0) / e.finishes.length : null,
+    }))
+    .sort((a, b) => b.total - a.total);
 
   const rule = resolvePlayoffRules(STATE.series, STATE.season);
   // Determine cutoff position based on rule.field (during regular season)
@@ -16885,7 +16894,7 @@ function renderStandingsMini() {
     }
   }
 
-  if (subEl) subEl.textContent = cutoffPos ? `${cutoffPos} in` : `${rows.length} cars`;
+  if (subEl) subEl.textContent = cutoffPos ? `${cutoffPos} in` : `${rows.length} drivers`;
 
   const cutoffPts = (cutoffPos && rows.length >= cutoffPos) ? rows[cutoffPos - 1].total : null;
 
