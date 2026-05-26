@@ -10505,7 +10505,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 7;
+  const PROJ_VERSION = 8;
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -10554,16 +10554,19 @@ function simulateSeasonRollout(series, year, opts = {}) {
   const fullTimeEntities = allEntities().filter(e =>
     (e.totalStarts || e.races.length) >= projMinRaces
   );
-  const drivers = fullTimeEntities.map(e => {
+  // Use DRIVER standings points (not car/owner totals) so the projection
+  // matches the sidebar and official driver standings.
+  const lastCompletedRound = completedRaces.length ? completedRaces[completedRaces.length - 1].round : 0;
+  const driverStandingsMap = driverPointsMapThroughRound(lastCompletedRound);
+
+  let drivers = fullTimeEntities.map(e => {
     const name = e.primaryDriver || e.driver;
     if (!name) return null;
-    // Current season total and wins. computeSeasonTotals returns
-    // canonical-overridden values when present; raw sums otherwise.
-    const totals = computeSeasonTotals();
-    const totalEntry = totals.find(t => (t.car_number) === e.car_number);
-    const currentPts = totalEntry ? (totalEntry.total || 0) : 0;
-    const currentWins = (e.races || []).reduce((s, r) => s + (r.finish === 1 ? 1 : 0), 0);
-    const currentTop5 = (e.races || []).reduce((s, r) => s + (r.finish >= 1 && r.finish <= 5 ? 1 : 0), 0);
+    const driverKey = normalizeDriverName(name);
+    const driverEntry = driverStandingsMap.get(driverKey);
+    const currentPts = driverEntry ? (driverEntry.total || 0) : 0;
+    const currentWins = driverEntry ? (driverEntry.wins || 0) : 0;
+    const currentTop5 = driverEntry ? (driverEntry.top5 || 0) : 0;
     // Season YTD avg finish — used as a fallback for predictDriverForRace
     // returning null (brand-new venue with no history etc.)
     const finishes = (e.races || []).map(r => r.finish).filter(n => n != null);
@@ -10583,7 +10586,19 @@ function simulateSeasonRollout(series, year, opts = {}) {
     };
   }).filter(Boolean);
 
-  if (drivers.length === 0) return null;
+  // Deduplicate by driver name — a driver who raced multiple cars (e.g.
+  // Rajah Caruth in #88 and #32) would appear as two entities. Keep only
+  // the entry with the most points so the projection has one row per driver.
+  const byName = new Map();
+  drivers.forEach(d => {
+    const existing = byName.get(d.slug);
+    if (!existing || d.currentPts > existing.currentPts) {
+      byName.set(d.slug, d);
+    }
+  });
+  const dedupedDrivers = Array.from(byName.values());
+  if (dedupedDrivers.length === 0) return null;
+  drivers = dedupedDrivers;
 
   // Build the matrix once — predictDriverForRace × every (driver, race).
   const matrix = _buildProjectionMatrix(series, remainingRaces, drivers);
