@@ -2340,16 +2340,21 @@ function _normalizeTrackCodes(seriesBlock, year) {
 
   // Nashville split: "NSH" = Nashville Fairgrounds/Speedway (short track, 0.596mi)
   //                  "NSV" = Nashville Superspeedway (1.33mi intermediate, Lebanon TN)
-  // Racing Reference uses distinct names: "Nashville Speedway" vs "Nashville
-  // Superspeedway". The scraper maps these correctly when the name is specific.
-  // This normalization catches any stale data where both were tagged "NSH" —
-  // if the race name contains "superspeedway" or "Lebanon", remap to NSV.
+  // Racing Reference uses distinct names on race pages: "Nashville Speedway"
+  // vs "Nashville Superspeedway". Schedule pages may say just "Nashville".
+  // Remap NSH → NSV when the name indicates the Superspeedway OR when
+  // the name is bare "Nashville" (Fairgrounds would say "Nashville Speedway"
+  // or "Nashville Fairgrounds" on its race page).
   Object.values(seriesBlock).forEach(block => {
     if (!block || !block.races) return;
     block.races.forEach(race => {
       if (race.track_code === "NSH") {
-        const name = (race.track || "").toLowerCase() + " " + (race.name || "").toLowerCase();
-        if (name.includes("superspeedway") || name.includes("lebanon")) {
+        const tname = (race.track || "").toLowerCase().trim();
+        const rname = (race.name || "").toLowerCase();
+        if (tname.includes("superspeedway") || rname.includes("superspeedway")
+            || tname.includes("lebanon")
+            || tname === "nashville") {
+          // Bare "Nashville" or explicit Superspeedway → NSV
           race.track_code = "NSV";
           race.track = "Nashville Superspeedway";
         }
@@ -4946,7 +4951,7 @@ function renderArc() {
     "arc-team-filter",
     "arc",
     (teamCode) => {
-      const teamCars = allEntities().filter(e => e.team_code === teamCode);
+      const teamCars = allEntities().filter(e => e.team_code === teamCode && isFullTime(e));
       const allOn = teamCars.length > 0 && teamCars.every(e => STATE.arc.selected.has(entityKey(e)));
       teamCars.forEach(e => {
         const k = entityKey(e);
@@ -5390,7 +5395,7 @@ function renderTrajectory() {
     "trajectory-team-filter",
     "trajectory",
     (teamCode) => {
-      const teamCars = allEntities().filter(e => e.team_code === teamCode);
+      const teamCars = allEntities().filter(e => e.team_code === teamCode && isFullTime(e));
       const allOn = teamCars.length > 0 && teamCars.every(e => STATE.trajectory.selected.has(entityKey(e)));
       teamCars.forEach(e => {
         const k = entityKey(e);
