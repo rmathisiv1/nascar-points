@@ -15892,50 +15892,32 @@ function driverRankingRowsFrom(map) {
 // ---- Manufacturer standings ----
 // NASCAR's manufacturer championship is fundamentally different from
 // driver/owner championships: each race the top-finishing CAR of each
-// Modern (2014+) NASCAR manufacturer points: best-finishing car's finish
-// position points + bonuses. The formula mirrors the owner/driver position
-// scale but only the single highest finisher per manufacturer counts.
-// Bonus: +3 to race-winning mfr, +1 per mfr with a car that led a lap,
-// +1 for the mfr whose cars led the most total laps.
-// Note: this is an approximation — the exact formula may include
-// additional factors not captured in our data.
-function manufacturerPointsForRace(race) {
-  const results = race.results || [];
-  const byMfr = new Map();
-  results.forEach(d => {
-    if (d.ineligible) return;
-    const m = d.manufacturer;
-    if (!m || d.finish_pos == null) return;
-    if (!byMfr.has(m)) byMfr.set(m, []);
-    byMfr.get(m).push(d);
-  });
-
-  // Find which mfr led the most total laps
-  let mostLapsMfr = null, mostLaps = 0;
-  byMfr.forEach((drivers, m) => {
-    const total = drivers.reduce((s, d) => s + (d.laps_led || 0), 0);
-    if (total > mostLaps) { mostLaps = total; mostLapsMfr = m; }
-  });
-
-  const out = [];
-  byMfr.forEach((drivers, m) => {
-    const best = drivers.reduce((a, b) => a.finish_pos < b.finish_pos ? a : b);
-    let pts = best.finish_pts || 0;
-    // Bonuses
-    if (best.finish_pos === 1) pts += 3;
-    if (drivers.some(d => (d.laps_led || 0) > 0)) pts += 1;
-    if (m === mostLapsMfr && mostLaps > 0) pts += 1;
-    out.push({ manufacturer: m, best_finish: best.finish_pos, pts });
-  });
-  return out;
+// NASCAR manufacturer points: best-finishing car's POSITION-BASED points.
+// Uses the standard finish position scale: P1=55 (40+15 win bonus),
+// P2=35, P3=34, P4=33, ..., P36+=1. No stage points, no lap-led bonuses.
+// Verified exact match to NASCAR.com for NCS. NOS/NTS may use slightly
+// different scales — this is the best approximation.
+function mfrPositionPoints(pos) {
+  if (pos == null || pos < 1) return 0;
+  if (pos === 1) return 55;   // 40 + 15 win bonus
+  return Math.max(1, 37 - pos);  // P2=35, P3=34, ..., P36=1, P37+=1
 }
 
 function manufacturerStandingsThroughRound(maxRound) {
   const map = new Map();
   const races = (STATE.data?.races || []).filter(r => r.round <= maxRound);
   races.forEach(r => {
-    const ranked = manufacturerPointsForRace(r);
-    ranked.forEach(({ manufacturer, best_finish, pts }) => {
+    // Find best finisher per manufacturer
+    const bestByMfr = new Map();
+    (r.results || []).forEach(d => {
+      if (d.ineligible) return;
+      const m = d.manufacturer;
+      if (!m || d.finish_pos == null) return;
+      const cur = bestByMfr.get(m);
+      if (!cur || d.finish_pos < cur.finish_pos) bestByMfr.set(m, d);
+    });
+
+    bestByMfr.forEach((best, manufacturer) => {
       if (!map.has(manufacturer)) {
         map.set(manufacturer, {
           key: manufacturer,
@@ -15949,12 +15931,13 @@ function manufacturerStandingsThroughRound(maxRound) {
         });
       }
       const e = map.get(manufacturer);
+      const pts = mfrPositionPoints(best.finish_pos);
       e.total += pts;
       e.starts += 1;
-      e.best_finishes.push(best_finish);
-      if (best_finish === 1)  e.wins  += 1;
-      if (best_finish <= 5)   e.top5  += 1;
-      if (best_finish <= 10)  e.top10 += 1;
+      e.best_finishes.push(best.finish_pos);
+      if (best.finish_pos === 1)  e.wins  += 1;
+      if (best.finish_pos <= 5)   e.top5  += 1;
+      if (best.finish_pos <= 10)  e.top10 += 1;
     });
   });
   const rows = Array.from(map.values()).map(e => {
