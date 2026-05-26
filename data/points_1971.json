@@ -1,6 +1,6 @@
 {
   "season": 1971,
-  "generated_at": "2026-05-21T20:50:40Z",
+  "generated_at": "2026-05-26T20:29:13Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -11407,7 +11407,7 @@
           "round": 7,
           "date": "1971-03-14",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -74195,7 +74195,7 @@
           "round": 44,
           "date": "1971-10-24",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
@@ -76269,7 +76269,7 @@
           "round": 45,
           "date": "1971-11-07",
           "track": "Middle Georgia Raceway",
-          "track_code": "MID",
+          "track_code": "MGR",
           "name": "Georgia 500",
           "time": "",
           "tv": "",
