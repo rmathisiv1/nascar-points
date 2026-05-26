@@ -197,7 +197,7 @@ OWNER_TO_TEAM_CODE = {
     "Jordan Anderson":          "JAR",
     "Mike Harmon":              "MHR",
     "Mario Gosselin":           "DGM",
-    "Sam Hunt":                 "SHR",
+    "Sam Hunt":                 "HUNT",
     "Joey Gase Motorsports  With Sc": "JGM",
     "Joey Gase Motorsports":    "JGM",
     "Bobby Dotter":             "SSG",
