@@ -5255,7 +5255,7 @@ function renderBreakdown() {
   });
 
   // Generic bar chart renderer — takes a metric key, renders sorted bars
-  function renderSDChart(containerId, metricKey, label) {
+  function renderSDChart(containerId, metricKey) {
     const container = document.getElementById(containerId);
     if (!container) return;
     const barsEl = container.querySelector(".sd-bars");
@@ -5339,13 +5339,13 @@ function renderBreakdown() {
     }
   }
 
-  // Render all 6 charts
-  renderSDChart("sd-points", "pts", "Points earned");
-  renderSDChart("sd-stage", "stagePts", "Stage points");
-  renderSDChart("sd-wins", "wins", "Race wins");
-  renderSDChart("sd-top5", "top5", "Top 5 finishes");
-  renderSDChart("sd-poles", "poles", "Poles");
-  renderSDChart("sd-laps", "lapsLed", "Laps led");
+  // Render all 6 charts (order matches 2×3 grid layout)
+  renderSDChart("sd-points", "pts");
+  renderSDChart("sd-stage", "stagePts");
+  renderSDChart("sd-laps", "lapsLed");
+  renderSDChart("sd-top5", "top5");
+  renderSDChart("sd-wins", "wins");
+  renderSDChart("sd-poles", "poles");
 }
 
 // ============================================================
