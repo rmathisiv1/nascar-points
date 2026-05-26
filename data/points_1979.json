@@ -1,6 +1,6 @@
 {
   "season": 1979,
-  "generated_at": "2026-05-21T22:39:32Z",
+  "generated_at": "2026-05-26T21:15:40Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -3861,7 +3861,7 @@
           "round": 3,
           "date": "1979-03-04",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -49185,7 +49185,7 @@
           "round": 29,
           "date": "1979-10-21",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
