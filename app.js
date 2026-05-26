@@ -15562,7 +15562,7 @@ function renderStandings() {
         <button class="${view === "owner"  ? "on" : ""}" data-val="owner">Owner</button>
         <button class="${view === "manufacturer" ? "on" : ""}" data-val="manufacturer">Manufacturer</button>
       </div>
-      ${view === "manufacturer" ? `<span class="standings-mfr-note">Points computed using NASCAR's modern (2011+) manufacturer scale.</span>` : ""}
+      ${view === "manufacturer" ? `<span class="standings-mfr-note">Points computed using NASCAR's modern (2014+) manufacturer scale.</span>` : ""}
     </div>
   `;
 
@@ -15892,66 +15892,50 @@ function driverRankingRowsFrom(map) {
 // ---- Manufacturer standings ----
 // NASCAR's manufacturer championship is fundamentally different from
 // driver/owner championships: each race the top-finishing CAR of each
-// manufacturer wins points from a fixed mfr-only scale, and those
-// per-race manufacturer points accumulate over the season. Lower-
-// finishing cars of the same manufacturer contribute nothing.
-//
-// Modern (2011+) NASCAR scale for ALL three series:
-//   1st mfr: 40, 2nd: 38, 3rd: 36, 4th: 34, 5th: 32
-//   6th+:    31, 30, 29... (descending by 1)
-// Pre-2011 NASCAR used different scales; we apply the modern scale to
-// every year (1949+) for consistency. The standings page surfaces a
-// disclaimer in the header so users know what they're seeing.
-const MFR_SCALE = [40, 38, 36, 34, 32]; // positions 1-5
-function manufacturerPointsForRank(rank) {
-  if (rank < 1) return 0;
-  if (rank <= 5) return MFR_SCALE[rank - 1];
-  // 6th = 31, 7th = 30, ... down to a floor of 1.
-  return Math.max(1, 31 - (rank - 6));
-}
-
-// Per-race, rank manufacturers by best-finishing car. The list returned
-// is rank-ordered ([mfr_code, best_finish], ...). Ties (two mfrs whose
-// best car finished at the same position — rare but possible) get the
-// same rank, but the next rank skips: 1, 1, 3, 4... This mirrors NASCAR
-// practice for tiebreaks.
-function rankManufacturersForRace(race) {
-  const bestByMfr = new Map();
-  (race.results || []).forEach(d => {
+// Modern (2014+) NASCAR manufacturer points: best-finishing car's finish
+// position points + bonuses. The formula mirrors the owner/driver position
+// scale but only the single highest finisher per manufacturer counts.
+// Bonus: +3 to race-winning mfr, +1 per mfr with a car that led a lap,
+// +1 for the mfr whose cars led the most total laps.
+// Note: this is an approximation — the exact formula may include
+// additional factors not captured in our data.
+function manufacturerPointsForRace(race) {
+  const results = race.results || [];
+  const byMfr = new Map();
+  results.forEach(d => {
     if (d.ineligible) return;
     const m = d.manufacturer;
-    if (!m) return;
-    if (d.finish_pos == null) return;
-    const cur = bestByMfr.get(m);
-    if (!cur || d.finish_pos < cur) bestByMfr.set(m, d.finish_pos);
+    if (!m || d.finish_pos == null) return;
+    if (!byMfr.has(m)) byMfr.set(m, []);
+    byMfr.get(m).push(d);
   });
-  const sorted = Array.from(bestByMfr.entries())
-    .sort((a, b) => a[1] - b[1]);
-  // Assign ranks with tie awareness.
-  const ranked = [];
-  let lastBest = null, lastRank = 0;
-  sorted.forEach(([m, best], i) => {
-    let rank;
-    if (best === lastBest) {
-      rank = lastRank;     // tie — same rank as previous
-    } else {
-      rank = i + 1;
-      lastBest = best;
-      lastRank = rank;
-    }
-    ranked.push({ manufacturer: m, best_finish: best, rank });
+
+  // Find which mfr led the most total laps
+  let mostLapsMfr = null, mostLaps = 0;
+  byMfr.forEach((drivers, m) => {
+    const total = drivers.reduce((s, d) => s + (d.laps_led || 0), 0);
+    if (total > mostLaps) { mostLaps = total; mostLapsMfr = m; }
   });
-  return ranked;
+
+  const out = [];
+  byMfr.forEach((drivers, m) => {
+    const best = drivers.reduce((a, b) => a.finish_pos < b.finish_pos ? a : b);
+    let pts = best.finish_pts || 0;
+    // Bonuses
+    if (best.finish_pos === 1) pts += 3;
+    if (drivers.some(d => (d.laps_led || 0) > 0)) pts += 1;
+    if (m === mostLapsMfr && mostLaps > 0) pts += 1;
+    out.push({ manufacturer: m, best_finish: best.finish_pos, pts });
+  });
+  return out;
 }
 
-// Build a manufacturer-keyed accumulator. Returns rows shaped like the
-// driver/owner rows so the same table render code can be reused.
 function manufacturerStandingsThroughRound(maxRound) {
   const map = new Map();
   const races = (STATE.data?.races || []).filter(r => r.round <= maxRound);
   races.forEach(r => {
-    const ranked = rankManufacturersForRace(r);
-    ranked.forEach(({ manufacturer, best_finish, rank }) => {
+    const ranked = manufacturerPointsForRace(r);
+    ranked.forEach(({ manufacturer, best_finish, pts }) => {
       if (!map.has(manufacturer)) {
         map.set(manufacturer, {
           key: manufacturer,
@@ -15965,7 +15949,7 @@ function manufacturerStandingsThroughRound(maxRound) {
         });
       }
       const e = map.get(manufacturer);
-      e.total += manufacturerPointsForRank(rank);
+      e.total += pts;
       e.starts += 1;
       e.best_finishes.push(best_finish);
       if (best_finish === 1)  e.wins  += 1;
