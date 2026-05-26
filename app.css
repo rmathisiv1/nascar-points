@@ -11745,3 +11745,39 @@ body.lightbox-open {
     grid-template-columns: 1fr;
   }
 }
+
+/* Season Data expand button */
+.sd-expand-btn {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  margin-top: 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+  text-align: center;
+}
+.sd-expand-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* Narrower team pill in Season Data to allow more room for team name */
+.sd-bars .sp-team-tag {
+  min-width: 32px;
+  max-width: 42px;
+  font-size: 8px;
+  padding: 2px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Team name in Season Data — show full on hover via title attribute */
+.sd-bars .sp-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}

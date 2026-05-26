@@ -5295,17 +5295,21 @@ function renderBreakdown() {
       return;
     }
 
-    barsEl.innerHTML = rows.map((r, i) => {
+    const INITIAL_SHOW = 15;
+    const hasMore = rows.length > INITIAL_SHOW;
+    const visibleRows = rows.slice(0, INITIAL_SHOW);
+
+    const renderRows = (list) => list.map((r, i) => {
       if (mode === "teams") {
         const lbl = teamLabelForEra(r.team_code, STATE.season);
         const teamHex = orgColorForTeam(r.team_code) || "var(--accent)";
         const txt = contrastTextFor(teamHex);
         const pct = (r.val / max) * 100;
         const fullName = (lbl && lbl.full) || r.team_code;
-        return `<a class="sp-row sp-row-team profile-link" href="#/team/${encodeURIComponent(r.team_code)}">
+        return `<a class="sp-row sp-row-team profile-link" href="#/team/${encodeURIComponent(r.team_code)}" title="${escapeHTML(fullName)}">
           <span class="sp-rank">${i + 1}</span>
           <span class="sp-team-tag" style="background:${teamHex};color:${txt}">${escapeHTML(r.team_code)}</span>
-          <span class="sp-name">${escapeHTML(fullName)}</span>
+          <span class="sp-name" title="${escapeHTML(fullName)}">${escapeHTML(fullName)}</span>
           <span class="sp-bar-track"><span class="sp-bar-fill" style="width:${pct}%;background:${teamHex}"></span></span>
           <span class="sp-pts">${r.val.toLocaleString()}</span>
         </a>`;
@@ -5321,6 +5325,18 @@ function renderBreakdown() {
         <span class="sp-pts">${r.val.toLocaleString()}</span>
       </a>`;
     }).join("");
+
+    barsEl.innerHTML = renderRows(visibleRows);
+
+    if (hasMore) {
+      const expandBtn = document.createElement("button");
+      expandBtn.className = "sd-expand-btn";
+      expandBtn.textContent = `Show all ${rows.length}`;
+      expandBtn.addEventListener("click", () => {
+        barsEl.innerHTML = renderRows(rows);
+      });
+      barsEl.appendChild(expandBtn);
+    }
   }
 
   // Render all 6 charts
@@ -15358,13 +15374,13 @@ function heatmapText(finish) {
 // Points-earned heatmap color: higher points = greener, lower = redder.
 // Scale: 0 pts = deep red, ~20 pts = neutral, 40+ pts = bright green, 50+ = gold (win-level).
 function heatmapColorPts(pts) {
-  if (pts == null || pts <= 0) return "rgba(180, 50, 50, 0.35)";
-  if (pts >= 45) return "rgba(40, 200, 60, 0.75)";   // top finishes
+  if (pts == null || pts <= 0) return "rgba(200, 55, 55, 0.5)";
+  if (pts >= 45) return "rgba(40, 200, 60, 0.75)";
   if (pts >= 35) return "rgba(50, 190, 70, 0.6)";
   if (pts >= 25) return "rgba(70, 170, 70, 0.45)";
   if (pts >= 15) return "rgba(100, 150, 70, 0.3)";
-  if (pts >= 8)  return "rgba(140, 130, 60, 0.2)";
-  return "rgba(180, 80, 50, 0.2)";
+  if (pts >= 8)  return "rgba(170, 110, 50, 0.25)";
+  return "rgba(200, 60, 50, 0.4)";
 }
 
 // ============================================================
