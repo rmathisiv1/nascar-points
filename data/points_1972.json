@@ -1,6 +1,6 @@
 {
   "season": 1972,
-  "generated_at": "2026-05-21T20:55:52Z",
+  "generated_at": "2026-05-26T20:35:22Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -8159,7 +8159,7 @@
           "round": 5,
           "date": "1972-03-12",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -56109,7 +56109,7 @@
           "round": 30,
           "date": "1972-10-22",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
