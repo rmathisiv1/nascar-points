@@ -1,6 +1,6 @@
 {
   "season": 1960,
-  "generated_at": "2026-05-21T19:29:43Z",
+  "generated_at": "2026-05-26T18:29:26Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -13743,7 +13743,7 @@
           "round": 15,
           "date": "2060-04-24",
           "track": "Weaverville",
-          "track_code": "WEA",
+          "track_code": "AWV",
           "name": "",
           "time": "",
           "tv": "",
@@ -15436,7 +15436,7 @@
           "round": 19,
           "date": "1960-06-05",
           "track": "Atlantic Rural Fairgrounds",
-          "track_code": "ATL",
+          "track_code": "ARF",
           "name": "Richmond 200",
           "time": "",
           "tv": "",
@@ -16410,7 +16410,7 @@
           "round": 20,
           "date": "1960-06-12",
           "track": "Marchbanks Speedway",
-          "track_code": "MAR",
+          "track_code": "MRB",
           "name": "California 250",
           "time": "",
           "tv": "",
@@ -28397,7 +28397,7 @@
           "round": 30,
           "date": "1960-08-14",
           "track": "Asheville-Weaverville Speedway",
-          "track_code": "ASH",
+          "track_code": "AWV",
           "name": "Western North Carolina 500",
           "time": "",
           "tv": "",
@@ -40103,7 +40103,7 @@
           "round": 43,
           "date": "1960-10-23",
           "track": "Atlantic Rural Fairgrounds",
-          "track_code": "ATL",
+          "track_code": "ARF",
           "name": "Capital City 200",
           "time": "",
           "tv": "",
@@ -43347,6 +43347,20 @@
           ]
         }
       ],
+      "final_standings": []
+    },
+    "NOS": {
+      "series_code": "NOS",
+      "series_name": "O'Reilly Auto Parts Series",
+      "season": 1960,
+      "races": [],
+      "final_standings": []
+    },
+    "NTS": {
+      "series_code": "NTS",
+      "series_name": "NASCAR Craftsman Truck Series",
+      "season": 1960,
+      "races": [],
       "final_standings": []
     }
   }
