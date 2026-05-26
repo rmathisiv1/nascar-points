@@ -307,13 +307,67 @@ TRACK_CODES = {
     "elkhart lake": "ELK",
     "mid-ohio": "MDO",                    # NOS/NTS
     "mid ohio": "MDO",
-    "portland": "PTL",                    # NOS/NTS
+    "portland international raceway": "PTL",  # NOS/NTS road course
     "canadian tire": "MOS",              # Canadian Tire Motorsport Park (Mosport)
     "mosport": "MOS",
-    # Historical tracks (pre-1990)
+    # Historical tracks — road courses
     "riverside": "RIV",                   # Riverside Int'l Raceway, closed 1988
+    "bridgehampton": "BRH",              # Long Island road course (1958-1966)
+    "road atlanta": "RAT",               # Road Atlanta (1986-1987 Cup)
+    "willow springs": "WLS",             # Willow Springs (CA)
+    "augusta international": "AGI",      # Augusta International Raceway
+    # Historical tracks — ovals that collide with modern tracks
+    "atlantic rural fairgrounds": "ARF",  # Atlanta Fairgrounds (0.5mi)
+    "charlotte fairgrounds": "CLF",       # Pre-CMS Charlotte
+    "daytona beach": "DYB",              # Beach/road course (1949-1958)
+    "michigan state fairgrounds": "MSF",  # Detroit (1951-1952)
+    "fonda speedway": "FND",             # Fonda NY
+    "fonda": "FND",
+    "texas world speedway": "TWS",       # Texas World (2.0mi, different from TEX)
+    "texas world": "TWS",
+    "louisville": "LVL",                 # Louisville Motor Speedway
+    "roanoke": "RNK",
+    "middle georgia": "MGR",
+    "rochester": "RCT",
+    "memphis-arkansas": "MAS",
+    "portland speedway": "PRS",           # Portland oval (0.5mi)
+    "portland": "PTL",                    # bare = Portland Int'l Raceway (road)
+    # Langhorne area tracks
+    "langhorne": "LGH",
+    "lancaster": "LCS",
+    "langley": "LGL",
+    "lanier": "LNR",
+    # Norfolk area
+    "norfolk": "NFK",
+    "norwood arena": "NWD",
+    "norwood": "NWD",
+    "north platte": "NPL",
+    "north carolina state fair": "NCSF",
+    "north carolina motor speedway": "ROC",  # = Rockingham
+    "north carolina speedway": "ROC",
+    # Other historical collisions
+    "columbus": "CBS",
+    "colorado national": "CNS",
+    "monroe": "MNR",
+    "marchbanks": "MRB",
+    "maryville": "MRV",
+    "walt disney": "WDW",
+    "winchester": "WCH",
+    "carrell": "CRL",
+    "greensboro": "GBO",
+    "south bend": "SBD",
+    "pensacola": "PNS",
+    "old dominion": "ODM",
+    "hartsville": "HTV",
+    "asheville-weaverville": "AWV",
+    "weaverville": "AWV",                 # Asheville-Weaverville alt name
+    "orange county speedway": "OCS",
+    "san jose": "SJO",
+    "virginia beach": "VBH",
+    "chicago motor speedway": "CMS",      # Different from Chicagoland
     "ontario motor": "ONT",              # Ontario Motor Speedway, closed 1980
-    "ontario": "ONT",                    # bare "Ontario" = Ontario Motor Speedway
+    "ontario": "ONT",
+    "indianapolis grand prix": "IRC",     # IMS road course
 }
 
 

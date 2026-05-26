@@ -2364,8 +2364,7 @@ function _normalizeTrackCodes(seriesBlock, year) {
 
   // Team code fixes: correct codes that collide across eras/teams.
 
-  // Daytona & Indianapolis road course splits: if the track name says
-  // "road course", remap DAY→DRC or IND→IRC.
+  // Daytona & Indianapolis road course splits
   Object.values(seriesBlock).forEach(block => {
     if (!block || !block.races) return;
     block.races.forEach(race => {
@@ -2377,6 +2376,128 @@ function _normalizeTrackCodes(seriesBlock, year) {
       if (race.track_code === "IND" && tname.includes("road course")) {
         race.track_code = "IRC";
         race.track = "Indianapolis Road Course";
+      }
+    });
+  });
+
+  // ── COMPREHENSIVE TRACK CODE NORMALIZATION ──
+  // Phase 1: MERGES — same physical track, different codes across eras.
+  const TRACK_MERGES = {
+    ALA: "TAL",   // Alabama International Motor Speedway = Talladega
+    SEA: "SON",   // Sears Point = Sonoma
+    INF: "SON",   // Infineon Raceway = Sonoma
+    LOW: "CLT",   // Lowe's Motor Speedway = Charlotte Motor Speedway
+    ISM: "PHO",   // ISM Raceway = Phoenix Raceway
+  };
+
+  // Phase 2: SPLITS — different physical tracks sharing one code.
+  // Each rule: [oldCode, nameSubstring, newCode]
+  // More-specific substrings MUST come first (matched top-down, first hit wins).
+  const TRACK_SPLITS = [
+    // Bristol vs Bridgehampton (2.85mi road course, Long Island)
+    ["BRI", "bridgehampton", "BRH"],
+    // Atlanta: Rural Fairgrounds (0.5mi) and Road Atlanta (road course)
+    ["ATL", "rural fairgrounds", "ARF"],
+    ["ATL", "road atlanta", "RAT"],
+    // Charlotte Fairgrounds (pre-CMS, 0.5-0.75mi)
+    ["CLT", "fairgrounds", "CLF"],
+    // Daytona Beach (4.1mi beach/road course, 1949-1958)
+    ["DAY", "daytona beach", "DYB"],
+    ["DAY", "beach", "DYB"],
+    // Michigan State Fairgrounds (1.0mi, Detroit)
+    ["MCH", "state fairgrounds", "MSF"],
+    ["MCH", "fairgrounds", "MSF"],
+    // Fonda Speedway (NY, 0.5mi) vs Fontana/Auto Club
+    ["FON", "fonda", "FND"],
+    // Texas World Speedway (2.0mi) vs Texas Motor Speedway
+    ["TEX", "texas world", "TWS"],
+    // Louisville Motor Speedway vs New Hampshire
+    ["LOU", "louisville", "LVL"],
+    // Roanoke vs Road America
+    ["ROA", "roanoke", "RNK"],
+    // Middle Georgia Raceway vs Mid-Ohio
+    ["MID", "middle georgia", "MGR"],
+    // Rochester (NY) vs Rockingham
+    ["ROC", "rochester", "RCT"],
+    // Memphis-Arkansas Speedway vs Kansas Speedway
+    ["KAN", "memphis-arkansas", "MAS"],
+    ["KAN", "memphis", "MAS"],
+    // Portland Speedway (0.5mi oval) vs Portland International Raceway
+    ["POR", "portland speedway", "PRS"],
+    // Langhorne, Lancaster, Langley, Lanier — all different tracks
+    ["LAN", "langhorne", "LGH"],
+    ["LAN", "lancaster", "LCS"],
+    ["LAN", "langley", "LGL"],
+    ["LAN", "lanier", "LNR"],
+    // Norfolk, Norwood, North Platte, NC State Fairgrounds, NC Motor Speedway
+    ["NOR", "north carolina motor", "ROC"],  // = Rockingham
+    ["NOR", "north carolina state fair", "NCSF"],
+    ["NOR", "norfolk", "NFK"],
+    ["NOR", "norwood", "NWD"],
+    ["NOR", "north platte", "NPL"],
+    // Columbia vs Columbus vs Colorado National
+    ["COL", "columbus", "CBS"],
+    ["COL", "colorado", "CNS"],
+    // Monroe vs Montgomery
+    ["MON", "monroe", "MNR"],
+    // Marchbanks and Maryville are NOT Martinsville
+    ["MAR", "marchbanks", "MRB"],
+    ["MAR", "maryville", "MRV"],
+    // Wall vs Walt Disney World
+    ["WAL", "disney", "WDW"],
+    // Wilson vs Willow Springs
+    ["WIL", "willow", "WLS"],
+    // Winchester vs Winston-Salem
+    ["WIN", "winchester", "WCH"],
+    // Carrell Speedway vs Caraway
+    ["CAR", "carrell", "CRL"],
+    // Greensboro vs Greenville-Pickens
+    ["GRE", "greensboro", "GBO"],
+    // South Bend vs South Boston
+    ["SOU", "south bend", "SBD"],
+    // Pensacola vs Pennsylvania International
+    ["PEN", "pensacola", "PNS"],
+    // Old Dominion vs Old Bridge
+    ["OLD", "old dominion", "ODM"],
+    // Hartsville vs Harris
+    ["HAR", "hartsville", "HTV"],
+    // Asheville-Weaverville vs Asheville Speedway
+    ["ASH", "weaverville", "AWV"],
+    // Augusta International Raceway (road, 3.0mi) vs Augusta Speedway
+    ["AUG", "international", "AGI"],
+    // Orange County Speedway vs Orange Speedway
+    ["ORA", "orange county", "OCS"],
+    // San Jose vs San Mateo
+    ["SAN", "san jose", "SJO"],
+    // Virginia Beach vs Virginia State Fairgrounds
+    ["VIR", "virginia beach", "VBH"],
+    ["VIR", "viriginia beach", "VBH"],  // typo in RR data
+    // Indianapolis: IRP and Grand Prix Circuit
+    ["IND", "raceway park", "IRP"],
+    ["IND", "grand prix", "IRC"],
+    // Chicago Motor Speedway (2.14mi, 2000-2001) vs Chicagoland
+    ["CHI", "chicago motor speedway", "CMS"],
+  ];
+
+  Object.values(seriesBlock).forEach(block => {
+    if (!block || !block.races) return;
+    block.races.forEach(race => {
+      const code = race.track_code;
+      if (!code) return;
+
+      // Apply merges first
+      if (TRACK_MERGES[code]) {
+        race.track_code = TRACK_MERGES[code];
+        return; // merged, skip splits
+      }
+
+      // Apply splits — check track name against rules
+      const tname = ((race.track || "") + " " + (race.name || "")).toLowerCase();
+      for (const [oldCode, substr, newCode] of TRACK_SPLITS) {
+        if (code === oldCode && tname.includes(substr)) {
+          race.track_code = newCode;
+          return; // first match wins
+        }
       }
     });
   });
@@ -5934,6 +6055,40 @@ const TRACK_TYPES = {
   BGR: "short",        // Bowman Gray (Clash venue)
   IOW: "short",        // 0.875mi oval
   NSH: "short",        // Nashville Fairgrounds (0.596mi, ≤2000)
+  // Historical short tracks from track audit
+  ARF: "short",        // Atlanta Fairgrounds
+  CLF: "short",        // Charlotte Fairgrounds
+  MSF: "short",        // Michigan Fairgrounds
+  FND: "short",        // Fonda Speedway
+  LVL: "short",        // Louisville Motor Speedway
+  RNK: "short",        // Roanoke
+  MGR: "short",        // Middle Georgia Raceway
+  RCT: "short",        // Rochester
+  PRS: "short",        // Portland Speedway (oval)
+  LGH: "short",        // Langhorne
+  LCS: "short",        // Lancaster
+  LGL: "short",        // Langley
+  LNR: "short",        // Lanier
+  NFK: "short",        // Norfolk
+  NWD: "short",        // Norwood Arena
+  NPL: "short",        // North Platte
+  NCSF: "short",       // NC State Fairgrounds
+  CBS: "short",        // Columbus
+  CNS: "short",        // Colorado National
+  MNR: "short",        // Monroe
+  MRV: "short",        // Maryville
+  WDW: "short",        // Walt Disney World
+  WCH: "short",        // Winchester
+  CRL: "short",        // Carrell
+  GBO: "short",        // Greensboro
+  SBD: "short",        // South Bend
+  PNS: "short",        // Pensacola
+  ODM: "short",        // Old Dominion
+  HTV: "short",        // Hartsville
+  AWV: "short",        // Asheville-Weaverville
+  OCS: "short",        // Orange County
+  SJO: "short",        // San Jose
+  VBH: "short",        // Virginia Beach
 
   // Intermediate — 1.5mi-ish ovals + atlanta-as-drafting + dover (1mi concrete)
   ECH: "inter",        // Atlanta — pack racing now but still classed intermediate by teams
@@ -5974,11 +6129,21 @@ const TRACK_TYPES = {
   LRP: "road",         // Lime Rock Park
   STP: "road",         // Streets of St. Petersburg
   RIV: "road",         // Riverside International Raceway (closed 1988)
+  // Historical road courses from track audit
+  BRH: "road",         // Bridgehampton (Long Island)
+  RAT: "road",         // Road Atlanta
+  DYB: "road",         // Daytona Beach (beach/road course)
+  WLS: "road",         // Willow Springs
+  AGI: "road",         // Augusta International Raceway
 
   // Chicagoland — 1.5mi intermediate oval, ≤2020 + 2026+.
   // Chicago Street (2023-2025) is remapped to "CHG" at data-load time
   // by _normalizeTrackCodes(), so "CHI" here is always Chicagoland.
   CHI: "inter",
+  // Historical intermediate tracks from track audit
+  MRB: "inter",        // Marchbanks Speedway (1.4mi)
+  MAS: "inter",        // Memphis-Arkansas Speedway
+  CMS: "inter",        // Chicago Motor Speedway (2.14mi)
 };
 
 const TRACK_TYPE_LABELS = {
@@ -6066,6 +6231,49 @@ const TRACK_NAMES = {
   RIV: "Riverside",          // Riverside International Raceway (closed 1988)
   ONT: "Ontario",            // Ontario Motor Speedway (closed 1980)
   ECH: "EchoPark",           // EchoPark Speedway (Austin TX oval)
+
+  // Historical tracks resolved by track audit (splits + merges)
+  BRH: "Bridgehampton",      // Long Island road course (1958-1966)
+  ARF: "Atlanta Fairgrounds", // Atlantic Rural Fairgrounds (0.5mi)
+  RAT: "Road Atlanta",       // Road Atlanta (road course)
+  CLF: "Charlotte Fairgrounds", // Pre-CMS (0.5-0.75mi)
+  DYB: "Daytona Beach",      // Beach/road course (1949-1958)
+  MSF: "Michigan Fairgrounds", // Michigan State Fairgrounds (Detroit)
+  FND: "Fonda",              // Fonda Speedway (NY)
+  LVL: "Louisville",         // Louisville Motor Speedway
+  RNK: "Roanoke",            // Roanoke (VA)
+  MGR: "Middle Georgia",     // Middle Georgia Raceway
+  RCT: "Rochester",          // Rochester (NY)
+  MAS: "Memphis-Arkansas",   // Memphis-Arkansas Speedway
+  PRS: "Portland Speedway",  // Portland Speedway (0.5mi oval)
+  LGH: "Langhorne",          // Langhorne Speedway (PA)
+  LCS: "Lancaster",          // Lancaster (PA)
+  LGL: "Langley",            // Langley Field Speedway (VA)
+  LNR: "Lanier",             // Lanier Speedway (GA)
+  NFK: "Norfolk",            // Norfolk (VA)
+  NWD: "Norwood Arena",      // Norwood Arena (MA)
+  NPL: "North Platte",       // North Platte (NE)
+  NCSF: "NC Fairgrounds",    // North Carolina State Fairgrounds
+  CBS: "Columbus",           // Columbus (GA)
+  CNS: "Colorado National",  // Colorado National Speedway
+  MNR: "Monroe",             // Monroe (MI)
+  MRB: "Marchbanks",         // Marchbanks Speedway (CA, 1.4mi)
+  MRV: "Maryville",          // Maryville (TN)
+  WDW: "Disney World",       // Walt Disney World Speedway
+  WLS: "Willow Springs",     // Willow Springs (CA)
+  WCH: "Winchester",         // Winchester (IN)
+  CRL: "Carrell",            // Carrell Speedway (CA)
+  GBO: "Greensboro",         // Greensboro (NC)
+  SBD: "South Bend",         // South Bend (IN)
+  PNS: "Pensacola",          // Pensacola (FL)
+  ODM: "Old Dominion",       // Old Dominion Speedway (VA)
+  HTV: "Hartsville",         // Hartsville (SC)
+  AWV: "Asheville-Weaverville", // Asheville-Weaverville Speedway
+  AGI: "Augusta Int'l",      // Augusta International Raceway
+  OCS: "Orange County",      // Orange County Speedway
+  SJO: "San Jose",           // San Jose (CA)
+  VBH: "Virginia Beach",     // Virginia Beach (VA)
+  CMS: "Chicago Motor",      // Chicago Motor Speedway (2000-2001)
 
   // Bowman Gray / Daytona / etc. internationals already covered above
 };
