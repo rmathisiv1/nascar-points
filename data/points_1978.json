@@ -1,6 +1,6 @@
 {
   "season": 1978,
-  "generated_at": "2026-05-21T22:33:32Z",
+  "generated_at": "2026-05-26T21:09:49Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -5385,7 +5385,7 @@
           "round": 4,
           "date": "1978-03-05",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -48111,7 +48111,7 @@
           "round": 28,
           "date": "1978-10-22",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
