@@ -3246,7 +3246,6 @@ function entitiesFromRaces(races) {
   const map = new Map();
   races.forEach(r => {
     (r.results || []).forEach(d => {
-      if (d.ineligible) return;
       // Car-centric: key is always car number. Multiple drivers across a
       // season roll up into the same entity row and get surfaced via the
       // "i" tooltip in each view.
@@ -3270,15 +3269,22 @@ function entitiesFromRaces(races) {
           team_code: teamCode,
           manufacturer: d.manufacturer,
           races: [],
+          totalStarts: 0,     // includes ineligible — used by projection filter
         });
       }
       const e = map.get(key);
+      e.totalStarts += 1;    // always count, even if ineligible
       e.driversSet.add(d.driver);
       e.driverStarts[d.driver] = (e.driverStarts[d.driver] || 0) + 1;
-      e.driver = d.driver;  // keeps the "most recent driver seen" for legacy callers
+      e.driver = d.driver;
       e.team = d.team;
       if (teamCode) e.team_code = teamCode;
       e.manufacturer = d.manufacturer || e.manufacturer;
+
+      // Ineligible results are excluded from the entity's races array
+      // (they don't earn points in this series) but are still counted
+      // in totalStarts above so the car appears in projection filters.
+      if (d.ineligible) return;
       e.races.push({
         round: r.round,
         season: r.season,   // set by trajectoryEntities for multi-year; undefined for single-season
@@ -10479,7 +10485,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 6;
+  const PROJ_VERSION = 7;
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -10526,7 +10532,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   const totalRacesSoFar = completedRaces.length;
   const projMinRaces = Math.max(1, totalRacesSoFar - 3);
   const fullTimeEntities = allEntities().filter(e =>
-    e.races && e.races.length >= projMinRaces
+    (e.totalStarts || e.races.length) >= projMinRaces
   );
   const drivers = fullTimeEntities.map(e => {
     const name = e.primaryDriver || e.driver;
