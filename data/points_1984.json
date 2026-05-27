@@ -1,6 +1,6 @@
 {
   "season": 1984,
-  "generated_at": "2026-05-21T23:13:56Z",
+  "generated_at": "2026-05-27T15:28:00Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -3761,7 +3761,7 @@
           "round": 3,
           "date": "1984-03-04",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Warner W. Hodgdon Carolina 500",
           "time": "",
           "tv": "",
@@ -49811,7 +49811,7 @@
           "round": 28,
           "date": "1984-10-21",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Warner W. Hodgdon American 500",
           "time": "",
           "tv": "",
@@ -59807,7 +59807,7 @@
           "round": 3,
           "date": "1984-03-03",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Komfort Koach 200",
           "time": "",
           "tv": "",
@@ -66203,7 +66203,7 @@
           "round": 7,
           "date": "1984-04-21",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Mason Day Paving 200",
           "time": "",
           "tv": "",
@@ -68601,7 +68601,7 @@
           "round": 9,
           "date": "1984-05-05",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Hampton 200",
           "time": "",
           "tv": "",
@@ -76995,7 +76995,7 @@
           "round": 15,
           "date": "1984-06-16",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "L.D. Swain & Son 200",
           "time": "",
           "tv": "",
@@ -79543,7 +79543,7 @@
           "round": 17,
           "date": "1984-07-07",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Miller 200",
           "time": "",
           "tv": "",
@@ -83215,7 +83215,7 @@
           "round": 20,
           "date": "1984-08-11",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Busch 200",
           "time": "",
           "tv": "",
@@ -94957,7 +94957,7 @@
           "round": 28,
           "date": "1984-10-20",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Komfort Koach 200",
           "time": "",
           "tv": "",
@@ -99088,8 +99088,7 @@
           "wins": 0,
           "gap": -4506
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
