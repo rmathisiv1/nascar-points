@@ -1,6 +1,6 @@
 {
   "season": 1987,
-  "generated_at": "2026-05-21T23:35:45Z",
+  "generated_at": "2026-05-27T15:58:41Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -2137,7 +2137,7 @@
           "round": 2,
           "date": "1987-03-01",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Goodwrench 500",
           "time": "",
           "tv": "",
@@ -49737,7 +49737,7 @@
           "round": 27,
           "date": "1987-10-25",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "AC Delco 500",
           "time": "",
           "tv": "",
@@ -65423,7 +65423,7 @@
           "round": 6,
           "date": "1987-05-02",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Hampton 200",
           "time": "",
           "tv": "",
@@ -73593,7 +73593,7 @@
           "round": 11,
           "date": "1987-06-27",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Poole Equipment 150",
           "time": "",
           "tv": "",
@@ -82787,7 +82787,7 @@
           "round": 17,
           "date": "1987-08-09",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Busch 200",
           "time": "",
           "tv": "",
@@ -84111,7 +84111,7 @@
           "round": 18,
           "date": "1987-08-15",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Carpenter Chevy 150",
           "time": "",
           "tv": "",
@@ -97853,7 +97853,7 @@
           "round": 26,
           "date": "1987-10-24",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "AC-Delco 200",
           "time": "",
           "tv": "",
@@ -102016,8 +102016,7 @@
           "wins": 0,
           "gap": -3919
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
