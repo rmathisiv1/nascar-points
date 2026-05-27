@@ -1,6 +1,6 @@
 {
   "season": 1981,
-  "generated_at": "2026-05-21T22:50:46Z",
+  "generated_at": "2026-05-27T12:24:35Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -5485,7 +5485,7 @@
           "round": 4,
           "date": "1981-03-01",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -49985,7 +49985,7 @@
           "round": 29,
           "date": "1981-11-01",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "American 500",
           "time": "",
           "tv": "",
