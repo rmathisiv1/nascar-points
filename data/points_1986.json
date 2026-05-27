@@ -1,6 +1,6 @@
 {
   "season": 1986,
-  "generated_at": "2026-05-21T23:28:37Z",
+  "generated_at": "2026-05-27T15:48:28Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -3711,7 +3711,7 @@
           "round": 3,
           "date": "1986-03-02",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Goodwrench 500",
           "time": "",
           "tv": "",
@@ -49187,7 +49187,7 @@
           "round": 27,
           "date": "1986-10-19",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Nationwise 500",
           "time": "",
           "tv": "",
@@ -58432,7 +58432,7 @@
           "round": 2,
           "date": "1986-03-01",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Protecta-Liner 200",
           "time": "",
           "tv": "",
@@ -67876,7 +67876,7 @@
           "round": 8,
           "date": "1986-05-03",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Hampton 200",
           "time": "",
           "tv": "",
@@ -76870,7 +76870,7 @@
           "round": 14,
           "date": "1986-06-14",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Poole Equipment 150",
           "time": "",
           "tv": "",
@@ -87138,7 +87138,7 @@
           "round": 21,
           "date": "1986-08-02",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Busch 200",
           "time": "",
           "tv": "",
@@ -88412,7 +88412,7 @@
           "round": 22,
           "date": "1986-08-16",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "L.D. Swain 150",
           "time": "",
           "tv": "",
@@ -97706,7 +97706,7 @@
           "round": 28,
           "date": "1986-09-28",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Roses Stores 150",
           "time": "",
           "tv": "",
@@ -101054,7 +101054,7 @@
           "round": 30,
           "date": "1986-10-18",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Sandhills 200",
           "time": "",
           "tv": "",
@@ -105078,8 +105078,7 @@
           "wins": 0,
           "gap": -4477
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
