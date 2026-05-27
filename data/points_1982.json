@@ -1,6 +1,6 @@
 {
   "season": 1982,
-  "generated_at": "2026-05-21T22:56:30Z",
+  "generated_at": "2026-05-27T15:00:44Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -7309,7 +7309,7 @@
           "round": 5,
           "date": "1982-03-28",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Warner W. Hodgdon Carolina 500",
           "time": "",
           "tv": "",
@@ -48111,7 +48111,7 @@
           "round": 28,
           "date": "1982-10-31",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Warner W. Hodgdon American 500",
           "time": "",
           "tv": "",
@@ -67152,7 +67152,7 @@
           "round": 10,
           "date": "1982-05-08",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Hampton Chevy 200",
           "time": "",
           "tv": "",
@@ -75770,7 +75770,7 @@
           "round": 17,
           "date": "1982-06-27",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Coca-Cola 200",
           "time": "",
           "tv": "",
@@ -81116,7 +81116,7 @@
           "round": 21,
           "date": "1982-08-07",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Gene Lovelace 200",
           "time": "",
           "tv": "",
@@ -95725,8 +95725,7 @@
           "wins": 0,
           "gap": -4443
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
