@@ -1,6 +1,6 @@
 {
   "season": 1988,
-  "generated_at": "2026-05-21T23:43:54Z",
+  "generated_at": "2026-05-27T16:12:42Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -3761,7 +3761,7 @@
           "round": 3,
           "date": "1988-03-06",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Goodwrench 500",
           "time": "",
           "tv": "",
@@ -50637,7 +50637,7 @@
           "round": 27,
           "date": "1988-10-23",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "AC Delco 500",
           "time": "",
           "tv": "",
@@ -61096,7 +61096,7 @@
           "round": 3,
           "date": "1988-03-05",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Goodwrench 200",
           "time": "",
           "tv": "",
@@ -68092,7 +68092,7 @@
           "round": 7,
           "date": "1988-04-30",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Hampton 200",
           "time": "",
           "tv": "",
@@ -77736,7 +77736,7 @@
           "round": 13,
           "date": "1988-06-11",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Roses Stores 150",
           "time": "",
           "tv": "",
@@ -79010,7 +79010,7 @@
           "round": 14,
           "date": "1988-06-19",
           "track": "Lanier Speedway",
-          "track_code": "LAN",
+          "track_code": "LNR",
           "name": "Big Star / Coca-Cola 200",
           "time": "",
           "tv": "",
@@ -79984,7 +79984,7 @@
           "round": 15,
           "date": "1988-06-25",
           "track": "Louisville Motor Speedway",
-          "track_code": "LOU",
+          "track_code": "LVL",
           "name": "Granger Select 200",
           "time": "",
           "tv": "",
@@ -87654,7 +87654,7 @@
           "round": 20,
           "date": "1988-07-30",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Busch 200",
           "time": "",
           "tv": "",
@@ -90552,7 +90552,7 @@
           "round": 22,
           "date": "1988-08-13",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Poole Equipment 150",
           "time": "",
           "tv": "",
@@ -102970,7 +102970,7 @@
           "round": 29,
           "date": "1988-10-22",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "AC-Delco 200",
           "time": "",
           "tv": "",
@@ -107294,8 +107294,7 @@
           "wins": 0,
           "gap": -4238
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
