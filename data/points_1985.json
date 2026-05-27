@@ -1,6 +1,6 @@
 {
   "season": 1985,
-  "generated_at": "2026-05-21T23:21:10Z",
+  "generated_at": "2026-05-27T15:38:28Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -3561,7 +3561,7 @@
           "round": 3,
           "date": "1985-03-03",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Carolina 500",
           "time": "",
           "tv": "",
@@ -46613,7 +46613,7 @@
           "round": 26,
           "date": "1985-10-20",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Nationwise 500",
           "time": "",
           "tv": "",
@@ -55668,7 +55668,7 @@
           "round": 2,
           "date": "1985-03-02",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Komfort Koach 200",
           "time": "",
           "tv": "",
@@ -64762,7 +64762,7 @@
           "round": 8,
           "date": "1985-05-04",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Hampton 200",
           "time": "",
           "tv": "",
@@ -72132,7 +72132,7 @@
           "round": 13,
           "date": "1985-06-15",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Puryear Truck 150",
           "time": "",
           "tv": "",
@@ -76104,7 +76104,7 @@
           "round": 16,
           "date": "1985-08-03",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Busch 200",
           "time": "",
           "tv": "",
@@ -85872,7 +85872,7 @@
           "round": 23,
           "date": "1985-09-28",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Goody's 150",
           "time": "",
           "tv": "",
@@ -90444,7 +90444,7 @@
           "round": 26,
           "date": "1985-10-19",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Sandhills 200",
           "time": "",
           "tv": "",
@@ -94561,8 +94561,7 @@
           "wins": 0,
           "gap": -4069
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
