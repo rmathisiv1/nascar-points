@@ -1,6 +1,6 @@
 {
   "season": 1989,
-  "generated_at": "2026-05-21T23:50:25Z",
+  "generated_at": "2026-05-27T16:27:44Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -2137,7 +2137,7 @@
           "round": 2,
           "date": "1989-03-05",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Goodwrench 500",
           "time": "",
           "tv": "",
@@ -50237,7 +50237,7 @@
           "round": 27,
           "date": "1989-10-22",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "AC Delco 500",
           "time": "",
           "tv": "",
@@ -59222,7 +59222,7 @@
           "round": 2,
           "date": "1989-03-04",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Goodwrench 200",
           "time": "",
           "tv": "",
@@ -71290,7 +71290,7 @@
           "round": 9,
           "date": "1989-05-13",
           "track": "Lanier Speedway",
-          "track_code": "LAN",
+          "track_code": "LNR",
           "name": "Big Star / Nestle 200",
           "time": "",
           "tv": "",
@@ -77886,7 +77886,7 @@
           "round": 13,
           "date": "1989-06-10",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Roses Stores 200",
           "time": "",
           "tv": "",
@@ -79210,7 +79210,7 @@
           "round": 14,
           "date": "1989-06-24",
           "track": "Louisville Motor Speedway",
-          "track_code": "LOU",
+          "track_code": "LVL",
           "name": "Granger Select 200",
           "time": "",
           "tv": "",
@@ -89578,7 +89578,7 @@
           "round": 21,
           "date": "1989-08-12",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Texas Pete 200",
           "time": "",
           "tv": "",
@@ -102146,7 +102146,7 @@
           "round": 28,
           "date": "1989-10-21",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "AC-Delco 200",
           "time": "",
           "tv": "",
@@ -106470,8 +106470,7 @@
           "wins": 0,
           "gap": -3961
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
