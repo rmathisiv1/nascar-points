@@ -1,6 +1,6 @@
 {
   "season": 1983,
-  "generated_at": "2026-05-21T23:05:39Z",
+  "generated_at": "2026-05-27T15:16:04Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -3761,7 +3761,7 @@
           "round": 3,
           "date": "1983-03-13",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Warner W. Hodgdon Carolina 500",
           "time": "",
           "tv": "",
@@ -48561,7 +48561,7 @@
           "round": 28,
           "date": "1983-10-30",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Warner W. Hodgdon American 500",
           "time": "",
           "tv": "",
@@ -58734,7 +58734,7 @@
           "round": 3,
           "date": "1983-03-05",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Coca-Cola 200",
           "time": "",
           "tv": "",
@@ -67628,7 +67628,7 @@
           "round": 9,
           "date": "1983-05-07",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Hampton Chevy 200",
           "time": "",
           "tv": "",
@@ -76372,7 +76372,7 @@
           "round": 15,
           "date": "1983-06-18",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "L.D. Swain & Son 200",
           "time": "",
           "tv": "",
@@ -78720,7 +78720,7 @@
           "round": 17,
           "date": "1983-07-02",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Mason Day Paving 200",
           "time": "",
           "tv": "",
@@ -81168,7 +81168,7 @@
           "round": 19,
           "date": "1983-07-09",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Mello Yello 200",
           "time": "",
           "tv": "",
@@ -84790,7 +84790,7 @@
           "round": 22,
           "date": "1983-08-06",
           "track": "Langley Field Speedway",
-          "track_code": "LAN",
+          "track_code": "LGL",
           "name": "Virginia 200",
           "time": "",
           "tv": "",
@@ -97880,7 +97880,7 @@
           "round": 32,
           "date": "1983-10-01",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Solomon Enterprises 200",
           "time": "",
           "tv": "",
@@ -105402,8 +105402,7 @@
           "wins": 0,
           "gap": -5414
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
