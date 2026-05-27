@@ -1,6 +1,6 @@
 {
   "season": 1990,
-  "generated_at": "2026-05-21T23:58:55Z",
+  "generated_at": "2026-05-27T16:40:34Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -3961,7 +3961,7 @@
           "round": 3,
           "date": "1990-03-04",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "GM Goodwrench 500",
           "time": "",
           "tv": "",
@@ -50087,7 +50087,7 @@
           "round": 27,
           "date": "1990-10-21",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "AC Delco 500",
           "time": "",
           "tv": "",
@@ -61151,7 +61151,7 @@
           "round": 3,
           "date": "1990-03-03",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "Goodwrench 200",
           "time": "",
           "tv": "",
@@ -69971,7 +69971,7 @@
           "round": 8,
           "date": "1990-04-28",
           "track": "Lanier Speedway",
-          "track_code": "LAN",
+          "track_code": "LNR",
           "name": "U-Can-Rent 200",
           "time": "",
           "tv": "",
@@ -80415,7 +80415,7 @@
           "round": 14,
           "date": "1990-06-09",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Roses Stores 200",
           "time": "",
           "tv": "",
@@ -94307,7 +94307,7 @@
           "round": 22,
           "date": "1990-08-11",
           "track": "Orange County Speedway",
-          "track_code": "ORA",
+          "track_code": "OCS",
           "name": "Texas Pete 200",
           "time": "",
           "tv": "",
@@ -109249,7 +109249,7 @@
           "round": 30,
           "date": "1990-10-20",
           "track": "North Carolina Motor Speedway",
-          "track_code": "NOR",
+          "track_code": "ROC",
           "name": "AC-Delco 200",
           "time": "",
           "tv": "",
@@ -113671,8 +113671,7 @@
           "wins": 0,
           "gap": -4344
         }
-      ],
-      "owner_final_standings": []
+      ]
     }
   }
 }
