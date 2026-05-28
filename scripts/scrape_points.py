@@ -227,15 +227,24 @@ class Race:
 
 TRACK_CODES = {
     # Modern tracks (current schedule)
-    # Daytona: oval (superspeedway) vs road course — different configurations.
-    # Road course variants MUST appear before bare 'daytona'.
+    # Daytona: oval (superspeedway) vs road course vs beach course vs Dayton OH.
+    # Road course and beach MUST appear before bare 'daytona'.
+    # 'daytona' MUST appear before 'dayton' (since 'dayton' is in 'daytona').
     "daytona international speedway road course": "DRC",
     "daytona road course": "DRC",
-    "daytona": "DAY", "atlanta": "ATL", "austin": "AUS",
+    "daytona intl. speedway road course": "DRC",
+    "daytona beach": "DYB",               # Beach/road course (1949-1958)
+    "daytona": "DAY",
+    "dayton": "DYT",                       # Dayton, Ohio (NOT Daytona)
+    "road atlanta": "RAT",                # Road Atlanta (road course, 1986-1987)
+    "atlanta": "ATL", "austin": "AUS",
     "circuit of the americas": "AUS", "cota": "AUS",
     "phoenix": "PHO", "las vegas": "LAS", "darlington": "DAR",
     "martinsville": "MAR", "bristol": "BRI", "kansas": "KAN",
-    "talladega": "TAL", "texas": "TEX", "fort worth": "TEX",
+    "talladega": "TAL",
+    "texas world speedway": "TWS",     # Texas World (2.0mi, 1969-1981)
+    "texas world": "TWS",
+    "texas": "TEX", "fort worth": "TEX",
     "watkins glen": "WGI", "glen": "WGI",
     # Charlotte Motor Speedway hosts TWO distinct races: the 1.5-mile oval
     # (Coke 600, Bank of America 500) and the "Roval" road course (added
@@ -247,6 +256,7 @@ TRACK_CODES = {
     # (CLR is taken — it's a team code for Coulter Racing.)
     "charlotte motor speedway road course": "ROV",  # the Roval
     "charlotte road course": "ROV",
+    "charlotte fairgrounds": "CLF",       # Pre-CMS Charlotte (0.5-0.75mi)
     "roval": "ROV",
     "charlotte": "CLT",
     # Nashville: two different tracks per Racing Reference.
@@ -257,6 +267,7 @@ TRACK_CODES = {
     "nashville speedway": "NSH",       # Fairgrounds short track
     "nashville fairgrounds": "NSH",    # alt name for the short track
     "nashville": "NSV",                # bare = Superspeedway (modern schedule default)
+    "michigan state fairgrounds": "MSF",  # Detroit (1951-1952)
     "michigan": "MCH",
     "pocono": "POC", "san diego": "SDG", "sonoma": "SON",
     # Chicago Street Race (2023-2025, road course) vs Chicagoland
@@ -265,6 +276,7 @@ TRACK_CODES = {
     "chicago street": "CHG",          # street course 2023-2025
     "grant park": "CHG",              # alternate name for Chicago Street
     "chicagoland": "CHI",             # oval
+    "chicago motor speedway": "CMS",  # 2.14mi (2000-2001), different from Chicagoland
     "chicago": "CHI",                 # fallback — Chicagoland in most eras
     # Mexico
     "mexico": "MXI",
@@ -296,7 +308,6 @@ TRACK_CODES = {
     "milwaukee": "MIL",                   # NOS, NTS
     "kentucky speedway": "KEN",
     "kentucky": "KEN",
-    "texas world": "TWS",                 # NTS '01
     "lucas oil raceway": "IRP",           # NOS — formerly Indianapolis Raceway Park
     "indianapolis raceway park": "IRP",
     "o'reilly raceway park": "IRP",       # NOS 2002-2010
@@ -313,18 +324,12 @@ TRACK_CODES = {
     # Historical tracks — road courses
     "riverside": "RIV",                   # Riverside Int'l Raceway, closed 1988
     "bridgehampton": "BRH",              # Long Island road course (1958-1966)
-    "road atlanta": "RAT",               # Road Atlanta (1986-1987 Cup)
     "willow springs": "WLS",             # Willow Springs (CA)
     "augusta international": "AGI",      # Augusta International Raceway
     # Historical tracks — ovals that collide with modern tracks
     "atlantic rural fairgrounds": "ARF",  # Atlanta Fairgrounds (0.5mi)
-    "charlotte fairgrounds": "CLF",       # Pre-CMS Charlotte
-    "daytona beach": "DYB",              # Beach/road course (1949-1958)
-    "michigan state fairgrounds": "MSF",  # Detroit (1951-1952)
     "fonda speedway": "FND",             # Fonda NY
     "fonda": "FND",
-    "texas world speedway": "TWS",       # Texas World (2.0mi, different from TEX)
-    "texas world": "TWS",
     "louisville": "LVL",                 # Louisville Motor Speedway
     "roanoke": "RNK",
     "middle georgia": "MGR",
@@ -344,7 +349,6 @@ TRACK_CODES = {
     "north platte": "NPL",
     "north carolina state fair": "NCSF",
     "north carolina motor speedway": "ROC",  # = Rockingham
-    "north carolina speedway": "ROC",
     # Other historical collisions
     "columbus": "CBS",
     "colorado national": "CNS",
@@ -364,7 +368,16 @@ TRACK_CODES = {
     "orange county speedway": "OCS",
     "san jose": "SJO",
     "virginia beach": "VBH",
-    "chicago motor speedway": "CMS",      # Different from Chicagoland
+    "mansfield": "MNF",                   # Mansfield Motorsports (OH)
+    "new asheville": "NAS",
+    "new concord": "NCN",
+    "new river valley": "NRV",
+    "new oxford": "NOX",
+    "newberry": "NBY",
+    "newport": "NPT",
+    "virginia state fair": "VSF",
+    "linden airport": "LND",
+    "linden": "LND",
     "ontario motor": "ONT",              # Ontario Motor Speedway, closed 1980
     "ontario": "ONT",
     "indianapolis grand prix": "IRC",     # IMS road course

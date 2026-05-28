@@ -2477,6 +2477,21 @@ function _normalizeTrackCodes(seriesBlock, year) {
     ["IND", "grand prix", "IRC"],
     // Chicago Motor Speedway (2.14mi, 2000-2001) vs Chicagoland
     ["CHI", "chicago motor speedway", "CMS"],
+    // Manassas (VA, 1958-1965) vs Mansfield Motorsports (OH, 2004-2008)
+    ["MAN", "mansfield", "MNF"],
+    // Portland bare (1956-1957, 0.5mi oval) — should be PRS not PTL
+    ["PTL", "portland speedway", "PRS"],
+    // NEW: 6 different tracks all starting with "New"
+    ["NEW", "new asheville", "NAS"],
+    ["NEW", "new concord", "NCN"],
+    ["NEW", "new river valley", "NRV"],
+    ["NEW", "new oxford", "NOX"],
+    ["NEW", "newberry", "NBY"],
+    ["NEW", "newport", "NPT"],
+    // Virginia Beach vs Virginia State Fairgrounds
+    ["VIR", "virginia state fair", "VSF"],
+    // Linden Airport (1954) is NOT Indianapolis Raceway Park
+    ["IRP", "linden", "LND"],
   ];
 
   Object.values(seriesBlock).forEach(block => {
@@ -2493,6 +2508,20 @@ function _normalizeTrackCodes(seriesBlock, year) {
 
       // Apply splits — check track name against rules
       const tname = ((race.track || "") + " " + (race.name || "")).toLowerCase();
+      // Special case: "Dayton" (Ohio, 1950-1952) vs "Daytona" — can't use
+      // substring matching because "dayton" is inside "daytona".
+      if (code === "DAY" && (race.track || "").toLowerCase().trim() === "dayton") {
+        race.track_code = "DYT";
+        return;
+      }
+      // Special case: bare "Portland" (1956-57, 0.5mi oval) vs Portland
+      // International Raceway (1.97mi road). If no "international" in the
+      // name, it's the old oval.
+      if (code === "PTL" && !(race.track || "").toLowerCase().includes("international")
+          && !(race.track || "").toLowerCase().includes("raceway")) {
+        race.track_code = "PRS";
+        return;
+      }
       for (const [oldCode, substr, newCode] of TRACK_SPLITS) {
         if (code === oldCode && tname.includes(substr)) {
           race.track_code = newCode;
@@ -6089,6 +6118,17 @@ const TRACK_TYPES = {
   OCS: "short",        // Orange County
   SJO: "short",        // San Jose
   VBH: "short",        // Virginia Beach
+  // Additional historical short tracks from second audit pass
+  MNF: "short",        // Mansfield Motorsports Speedway
+  DYT: "short",        // Dayton, Ohio
+  NAS: "short",        // New Asheville Speedway
+  NCN: "short",        // New Concord Speedway
+  NRV: "short",        // New River Valley Speedway
+  NOX: "short",        // New Oxford
+  NBY: "short",        // Newberry
+  NPT: "short",        // Newport
+  VSF: "short",        // Virginia State Fairgrounds
+  LND: "short",        // Linden Airport
 
   // Intermediate — 1.5mi-ish ovals + atlanta-as-drafting + dover (1mi concrete)
   ECH: "inter",        // Atlanta — pack racing now but still classed intermediate by teams
@@ -6274,6 +6314,16 @@ const TRACK_NAMES = {
   SJO: "San Jose",           // San Jose (CA)
   VBH: "Virginia Beach",     // Virginia Beach (VA)
   CMS: "Chicago Motor",      // Chicago Motor Speedway (2000-2001)
+  MNF: "Mansfield",          // Mansfield Motorsports Speedway (OH)
+  DYT: "Dayton",             // Dayton, Ohio (NOT Daytona)
+  NAS: "New Asheville",      // New Asheville Speedway
+  NCN: "New Concord",        // New Concord Speedway
+  NRV: "New River Valley",   // New River Valley Speedway
+  NOX: "New Oxford",         // New Oxford (PA)
+  NBY: "Newberry",           // Newberry (SC)
+  NPT: "Newport",            // Newport (TN)
+  VSF: "VA Fairgrounds",     // Virginia State Fairgrounds
+  LND: "Linden Airport",     // Linden Airport (NJ, 1954)
 
   // Bowman Gray / Daytona / etc. internationals already covered above
 };
