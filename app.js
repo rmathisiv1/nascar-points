@@ -1166,6 +1166,7 @@ async function boot() {
   wireSearch();
   wireRaceLightbox();
   wireTabDropdowns();
+  observeMobileDropdowns();   // self-heals mobile <select> mirrors on any render
   await loadColors();
   loadDriverBios();  // async, not awaited — profile will use it whenever it arrives
   await discoverSeasons();
@@ -1800,6 +1801,52 @@ function syncMobileDropdowns() {
     const activePill = pills.find(p => p.classList.contains("active"));
     sel.value = activePill ? (activePill.dataset.team || "") : "";
   });
+}
+
+// syncMobileDropdowns() only runs when something explicitly calls it — the
+// global render() pipeline, plus a few views (compare/heatmap) that re-render
+// internally without going through render(). That coverage is fragile: any
+// view that rebuilds a .toggle-group on its own (e.g. the standings
+// view-switcher) or renders ASYNCHRONOUSLY after data loads (e.g. a profile
+// whose bio arrives a beat late) ends up with pill buttons and no mobile
+// <select> mirror, so the dropdown is missing/vanishes on mobile.
+//
+// Rather than hunt down every such path, observe the DOM: whenever a
+// .toggle-group or .team-filter is added anywhere, re-mirror. The mirror is
+// idempotent (data-sig), and the <select>s we inject are filtered out below
+// so we never feed our own mutations back into a loop. rAF-debounced so a
+// big render fires the sync at most once per frame.
+let _ddSyncScheduled = false;
+function scheduleMobileDropdownSync() {
+  if (_ddSyncScheduled) return;
+  _ddSyncScheduled = true;
+  requestAnimationFrame(() => {
+    _ddSyncScheduled = false;
+    syncMobileDropdowns();
+  });
+}
+function observeMobileDropdowns() {
+  if (window._ddObserver) return;            // wire once
+  const root = document.body;
+  if (!root || typeof MutationObserver === "undefined") return;
+  const obs = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType !== 1) continue;   // elements only
+        // Ignore the <select> mirrors we inject ourselves — avoids feeding
+        // our own DOM writes back through the observer.
+        if (node.matches && node.matches("select.mobile-dd")) continue;
+        const isToggle = node.matches && node.matches(".toggle-group, .team-filter");
+        const hasToggle = node.querySelector && node.querySelector(".toggle-group, .team-filter");
+        if (isToggle || hasToggle) {
+          scheduleMobileDropdownSync();
+          return;
+        }
+      }
+    }
+  });
+  obs.observe(root, { childList: true, subtree: true });
+  window._ddObserver = obs;
 }
 
 function parseHash() {
