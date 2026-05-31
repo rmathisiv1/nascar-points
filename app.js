@@ -15687,6 +15687,15 @@ function renderHeatmap() {
   host.appendChild(toggleBar);
   host.appendChild(grid);
   wireCoDriverBadges(grid);
+
+  // The Finish/Points toggle re-renders the heatmap WITHOUT going through
+  // the global render() pipeline, so the freshly-rebuilt toggle bar has no
+  // mobile <select> mirror until the next full render — making the dropdown
+  // vanish on mobile after a toggle. Re-mirror directly here (idempotent via
+  // data-sig), same pattern as renderCompare().
+  if (typeof syncMobileDropdowns === "function") {
+    syncMobileDropdowns();
+  }
 }
 
 function heatmapColor(finish) {
