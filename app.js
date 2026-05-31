@@ -3640,6 +3640,19 @@ function manufacturerName(code) {
   return MFR_DISPLAY[code] || code;
 }
 
+// Manufacturer swatch colors — single source of truth for the standings
+// manufacturer view AND the per-row Mfr column on driver/owner standings.
+// Public-association proxies (Chevy gold, Ford blue, Toyota red); RAM is a
+// neutral gunmetal so it reads clearly against those three in NTS 2026+.
+const MFR_SWATCH = {
+  CHV: "#fdbb30", FRD: "#00407a", TYT: "#eb1a23", RAM: "#7d8084",
+  DOD: "#a31818", PNT: "#cf9800", BUI: "#700000", OLD: "#5b6770",
+  MER: "#8b8589", PLY: "#1f4d8a", CHR: "#7e1e1e",
+};
+function mfrSwatchColor(code) {
+  return MFR_SWATCH[code] || "#777";
+}
+
 // Normalize a driver name for cross-year matching. Strips suffixes (Jr/Sr/etc),
 // case, accents, internal punctuation. "Dale Earnhardt Jr." → "dale earnhardt"
 // — used to dedupe drivers between years where punctuation may differ
@@ -15846,11 +15859,9 @@ function renderStandings() {
       } else {
         pcPill = `<span class="pos-change down">▼${Math.abs(pc)}</span>`;
       }
-      // Manufacturer color uses the team palette as a rough proxy (Chevy =
-      // blue, Ford = blue, Toyota = red is the common public association).
-      // Hardcoded so it's visually distinct across all years.
-      const mfrColors = { CHV: "#fdbb30", FRD: "#00407a", TYT: "#eb1a23", RAM: "#7d8084", DOD: "#a31818", PNT: "#cf9800", BUI: "#700000", OLD: "#5b6770", MER: "#8b8589", PLY: "#1f4d8a", CHR: "#7e1e1e" };
-      const mfrColor = mfrColors[r.manufacturer] || "#777";
+      // Manufacturer color uses the shared MFR_SWATCH palette (single
+      // source of truth, shared with the Mfr column on driver/owner views).
+      const mfrColor = mfrSwatchColor(r.manufacturer);
       return `<tr data-mfr-key="${escapeHTML(r.key)}">
         <td class="rank-cell">${r.currRank}${pcPill}</td>
         <td><span class="mfr-cell">
@@ -15927,6 +15938,11 @@ function renderStandings() {
           ${renderCoDriverBadge(r)}
         </a></td>
         <td class="col-mobile-hide">${teamPill}</td>
+        <td class="col-mobile-hide">${
+          r.manufacturer
+            ? `<span class="mfr-cell"><span class="mfr-swatch" style="background:${mfrSwatchColor(r.manufacturer)};"></span><span>${escapeHTML(r.manufacturer)}</span></span>`
+            : `<span class="muted">—</span>`
+        }</td>
         <td class="num total-col">${r.total}</td>
         <td class="num back-cell">${r.total === leaderTotal ? "—" : `-${leaderTotal - r.total}`}</td>
         <td class="num col-mobile-hide">${
@@ -15978,6 +15994,7 @@ function renderStandings() {
       ${th("rank", "Pos", true)}
       ${th("driver", driverColLabel, false)}
       ${th("team", "Team", false, true)}
+      ${th("manufacturer", "Mfr", false, true)}
       ${th("total", "Total", true)}
       <th class="num" title="Points back from current points leader (live)">Back</th>
       ${th("lastRacePts", "Last Pts", true, true)}
@@ -16152,6 +16169,7 @@ function pointsMapThroughRound(maxRound) {
           car_number: d.car_number, team: d.team, team_code: teamCode,
           total: 0, starts: 0, wins: 0, top5: 0, top10: 0,
           finishes: [],
+          mfrCounts: {},
           sumS1: 0, sumS2: 0, sumFin: 0, sumFL: 0,
         });
       }
@@ -16163,6 +16181,7 @@ function pointsMapThroughRound(maxRound) {
       if (teamCode) e.team_code = teamCode;
       e.car_number = d.car_number;
       e.total += ownerPts;
+      if (d.manufacturer) e.mfrCounts[d.manufacturer] = (e.mfrCounts[d.manufacturer] || 0) + 1;
       // Stage / finish / FL component breakdowns. For owner points of
       // ineligible drivers, sumFin is reconstructed from the finish
       // position curve (since d.finish_pts in the data is 0).
@@ -16205,7 +16224,11 @@ function rankingRowsFrom(map) {
     const displayLabel = coCount > 0
       ? `#${e.car_number} · ${primaryDriver} +${coCount}`
       : `#${e.car_number} · ${primaryDriver}`;
-    return { ...e, avgFinish, displayLabel, primaryDriver, coDrivers, driversByStarts, driver: displayLabel };
+    // Dominant manufacturer = the make this car ran most this season
+    // (cars almost always run one make; this handles rare mid-season swaps).
+    const mfrByCount = Object.entries(e.mfrCounts || {}).sort((a, b) => b[1] - a[1]);
+    const manufacturer = mfrByCount.length ? mfrByCount[0][0] : null;
+    return { ...e, avgFinish, displayLabel, primaryDriver, coDrivers, driversByStarts, driver: displayLabel, manufacturer };
   });
 
   // Apply canonical year-end standings overlay if present. For Chase years
@@ -16253,6 +16276,7 @@ function driverPointsMapThroughRound(maxRound) {
           carCounts: {},
           total: 0, starts: 0, wins: 0, top5: 0, top10: 0,
           finishes: [],
+          mfrCounts: {},
           sumS1: 0, sumS2: 0, sumFin: 0, sumFL: 0,
         });
       }
@@ -16266,6 +16290,7 @@ function driverPointsMapThroughRound(maxRound) {
       e.starts += 1;
       const cnum = String(d.car_number);
       e.carCounts[cnum] = (e.carCounts[cnum] || 0) + 1;
+      if (d.manufacturer) e.mfrCounts[d.manufacturer] = (e.mfrCounts[d.manufacturer] || 0) + 1;
       if (d.finish_pos != null) {
         e.finishes.push(d.finish_pos);
         if (d.finish_pos === 1) e.wins += 1;
@@ -16308,6 +16333,9 @@ function driverRankingRowsFrom(map) {
       ? e.finishes.reduce((s, x) => s + x, 0) / e.finishes.length
       : null;
     const carCount = Object.keys(e.carCounts || {}).length;
+    // Dominant manufacturer = the make this driver ran most this season.
+    const mfrByCount = Object.entries(e.mfrCounts || {}).sort((a, b) => b[1] - a[1]);
+    const manufacturer = mfrByCount.length ? mfrByCount[0][0] : null;
     // displayLabel is just the plain driver name (no HTML, no decoration)
     // so escapeHTML in the renderer doesn't double-encode anything. The
     // "ran N cars" hint is exposed as a separate field so the renderer
@@ -16317,6 +16345,7 @@ function driverRankingRowsFrom(map) {
       ...e,
       avgFinish,
       displayLabel,
+      manufacturer,
       carsHint: carCount > 1 ? carCount : null,
       primaryDriver: e.driver,
       coDrivers: [],
