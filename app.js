@@ -1735,23 +1735,30 @@ function syncMobileDropdowns() {
       sel = document.createElement("select");
       sel.className = "mobile-dd";
       sel.dataset.sig = currentSig;
-      buttons.forEach(b => {
+      // Option values are the button INDEX, not data-val. Several toggle
+      // groups label their buttons with data-srs (series filters) or no
+      // data attribute at all (the dynamically-built heatmap Finish/Points
+      // toggle). Keying off data-val gave every such option value="", so the
+      // change handler always resolved to the first button — the dropdown
+      // updated visually but the data never changed (mobile-only). Index is
+      // robust to any labeling scheme.
+      buttons.forEach((b, idx) => {
         const opt = document.createElement("option");
-        opt.value = b.dataset.val || "";
+        opt.value = String(idx);
         opt.textContent = b.textContent.trim();
         if (b.disabled) opt.disabled = true;
         sel.appendChild(opt);
       });
       sel.addEventListener("change", () => {
-        const btn = buttons.find(b => (b.dataset.val || "") === sel.value);
+        const btn = buttons[Number(sel.value)];
         if (btn && !btn.disabled) btn.click();
       });
       g.appendChild(sel);
     }
 
     // Sync selected state from which button is "on"
-    const onBtn = buttons.find(b => b.classList.contains("on"));
-    if (onBtn) sel.value = onBtn.dataset.val || "";
+    const onIdx = buttons.findIndex(b => b.classList.contains("on"));
+    if (onIdx >= 0) sel.value = String(onIdx);
   });
 
   // Team-filter pill strips: same pattern, but the pills are .tf-pill spans
