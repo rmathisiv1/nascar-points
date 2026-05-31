@@ -11780,3 +11780,52 @@ body.lightbox-open {
   white-space: nowrap;
   max-width: 120px;
 }
+
+/* ============================================================
+   Mobile collapsible tables (.m-collapse)
+   Wide stat tables (e.g. projection tables) overflow on phones,
+   pushing key columns like points off-screen. On mobile we hide
+   the secondary columns (.mc-hide, applied by enhanceCollapsibleTables)
+   and let the user tap a row to drop down a detail panel listing the
+   hidden fields. Desktop is unaffected — the hide/detail rules live
+   only inside the mobile media query, and detail rows are belt-and-
+   suspenders hidden everywhere outside it.
+   ============================================================ */
+.m-collapse tr.mc-detail-row { display: none; }   /* never shown on desktop */
+
+@media (max-width: 767.98px) {
+  .m-collapse .mc-hide { display: none; }
+
+  .m-collapse tbody tr.mc-row { cursor: pointer; }
+  .m-collapse tbody tr.mc-row > td:first-child::before {
+    content: "›";
+    display: inline-block;
+    margin-right: 6px;
+    color: var(--dim);
+    transition: transform 0.15s ease;
+  }
+  .m-collapse tbody tr.mc-row.mc-open > td:first-child::before {
+    transform: rotate(90deg);
+  }
+
+  .m-collapse tr.mc-detail-row { display: table-row; }
+  .m-collapse tr.mc-detail-row[hidden] { display: none; }
+  .m-collapse tr.mc-detail-row > td {
+    padding: 0;
+    border-top: none;
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .mc-detail {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 5px 14px;
+    padding: 9px 16px 12px;
+    font-size: 12px;
+  }
+  .mc-detail .mc-k { color: var(--dim); }
+  .mc-detail .mc-v {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+}

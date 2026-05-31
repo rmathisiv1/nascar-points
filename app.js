@@ -1167,6 +1167,7 @@ async function boot() {
   wireRaceLightbox();
   wireTabDropdowns();
   observeMobileDropdowns();   // self-heals mobile <select> mirrors on any render
+  wireCollapsibleRows();      // tap-to-expand for .m-collapse table rows
   await loadColors();
   loadDriverBios();  // async, not awaited — profile will use it whenever it arrives
   await discoverSeasons();
@@ -1823,22 +1824,24 @@ function scheduleMobileDropdownSync() {
   requestAnimationFrame(() => {
     _ddSyncScheduled = false;
     syncMobileDropdowns();
+    enhanceCollapsibleTables();
   });
 }
 function observeMobileDropdowns() {
   if (window._ddObserver) return;            // wire once
   const root = document.body;
   if (!root || typeof MutationObserver === "undefined") return;
+  const SEL = ".toggle-group, .team-filter, table.m-collapse";
   const obs = new MutationObserver(mutations => {
     for (const m of mutations) {
       for (const node of m.addedNodes) {
         if (node.nodeType !== 1) continue;   // elements only
-        // Ignore the <select> mirrors we inject ourselves — avoids feeding
-        // our own DOM writes back through the observer.
-        if (node.matches && node.matches("select.mobile-dd")) continue;
-        const isToggle = node.matches && node.matches(".toggle-group, .team-filter");
-        const hasToggle = node.querySelector && node.querySelector(".toggle-group, .team-filter");
-        if (isToggle || hasToggle) {
+        // Ignore the <select> mirrors and detail rows we inject ourselves —
+        // avoids feeding our own DOM writes back through the observer.
+        if (node.matches && node.matches("select.mobile-dd, tr.mc-detail-row")) continue;
+        const isMatch = node.matches && node.matches(SEL);
+        const hasMatch = node.querySelector && node.querySelector(SEL);
+        if (isMatch || hasMatch) {
           scheduleMobileDropdownSync();
           return;
         }
@@ -1847,6 +1850,80 @@ function observeMobileDropdowns() {
   });
   obs.observe(root, { childList: true, subtree: true });
   window._ddObserver = obs;
+}
+
+// Collapse wide stat tables on mobile. For each table tagged `.m-collapse`,
+// keep only the essentials visible — rank/identifier + the projected-points
+// column — and tuck every other column into a tap-to-expand detail panel.
+// Only opt-in tables whose rows are NOT independently clickable (projection
+// tables qualify; race-by-race etc. navigate on row click and need a
+// different affordance). Idempotent via data-mc-done; mobile-only.
+function enhanceCollapsibleTables() {
+  if (typeof isMobile === "function" && !isMobile()) return;
+  document.querySelectorAll("table.m-collapse:not([data-mc-done])").forEach(table => {
+    const headCells = Array.from(table.querySelectorAll("thead th"));
+    if (headCells.length < 3) { table.dataset.mcDone = "1"; return; }
+    const labels = headCells.map(th => th.textContent.trim());
+
+    // Which columns stay visible:
+    //  - column 0 (rank)
+    //  - first non-numeric column (the name/identifier)
+    //  - the headline points column: prefer projected/chase points, else
+    //    fall back to any pts/points/total column.
+    const keep = new Set([0]);
+    const nameIdx = headCells.findIndex(th => !th.classList.contains("num"));
+    if (nameIdx >= 0) keep.add(nameIdx);
+    let metricIdx = labels.findIndex(l => /proj.*pts|chase\s*pts|avg\s*proj\s*pts/i.test(l));
+    if (metricIdx < 0) metricIdx = labels.findIndex(l => /\bpts\b|points|total/i.test(l));
+    if (metricIdx >= 0) keep.add(metricIdx);
+
+    headCells.forEach((th, i) => { if (!keep.has(i)) th.classList.add("mc-hide"); });
+
+    const bodyRows = Array.from(table.querySelectorAll("tbody > tr"));
+    bodyRows.forEach(tr => {
+      if (tr.classList.contains("mc-detail-row")) return;
+      const cells = Array.from(tr.children);
+      if (cells.length !== headCells.length) return;   // skip irregular rows
+      const hidden = [];
+      cells.forEach((td, i) => {
+        if (!keep.has(i)) {
+          td.classList.add("mc-hide");
+          hidden.push({ k: labels[i] || "", v: td.textContent.trim() });
+        }
+      });
+      if (hidden.length === 0) return;
+      tr.classList.add("mc-row");
+      const dr = document.createElement("tr");
+      dr.className = "mc-detail-row";
+      dr.hidden = true;
+      const cell = document.createElement("td");
+      cell.colSpan = keep.size;
+      cell.innerHTML = `<div class="mc-detail">${
+        hidden.map(h => `<span class="mc-k">${escapeHTML(h.k)}</span><span class="mc-v">${escapeHTML(h.v)}</span>`).join("")
+      }</div>`;
+      dr.appendChild(cell);
+      tr.after(dr);
+    });
+    table.dataset.mcDone = "1";
+  });
+}
+
+// One delegated handler toggles a collapsible row's detail panel. Ignores
+// clicks on links/buttons inside the row so interactive cells still work.
+function wireCollapsibleRows() {
+  if (window._mcClickBound) return;
+  document.addEventListener("click", e => {
+    const row = e.target.closest("tr.mc-row");
+    if (!row) return;
+    if (e.target.closest("a, button, select, input")) return;
+    const detail = row.nextElementSibling;
+    if (detail && detail.classList.contains("mc-detail-row")) {
+      const show = detail.hidden;
+      detail.hidden = !show;
+      row.classList.toggle("mc-open", show);
+    }
+  });
+  window._mcClickBound = true;
 }
 
 function parseHash() {
@@ -3446,6 +3523,7 @@ function render() {
   // Mirror toggle-groups + team-filter pills into native <select>s for mobile.
   // Safe to call on every render — idempotent via data-sig deduplication.
   syncMobileDropdowns();
+  enhanceCollapsibleTables();   // collapse wide .m-collapse tables on mobile
 }
 
 // ============================================================
@@ -23106,7 +23184,7 @@ function _renderProjectionRegSeasonTable(proj) {
         <h2 class="ed-hero ed-hero-sm">Projected standings</h2>
       </div>
       <div class="proj-table-host">
-        <table class="data-table proj-table">
+        <table class="data-table proj-table m-collapse">
           <thead><tr>
             <th class="num">#</th>
             <th>Driver</th>
@@ -23308,7 +23386,7 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
         <div class="ed-byline">Points reset after regular season · top ${fieldSize} qualify · ${proj.rule.playoffRaces || 10} chase races</div>
       </div>
       <div class="proj-table-host">
-        <table class="data-table proj-table">
+        <table class="data-table proj-table m-collapse">
           <thead><tr>
             <th class="num">#</th>
             <th class="num">Seed</th>
@@ -23370,7 +23448,7 @@ function _renderProjectionOwnerTable(proj) {
         <h2 class="ed-hero ed-hero-sm">Projected owner standings</h2>
       </div>
       <div class="proj-table-host">
-        <table class="data-table proj-table">
+        <table class="data-table proj-table m-collapse">
           <thead><tr>
             <th class="num">#</th>
             <th>Car</th>
@@ -23481,7 +23559,7 @@ function _renderProjectionMfrTable(proj) {
         <h2 class="ed-hero ed-hero-sm">Projected manufacturer standings</h2>
       </div>
       <div class="proj-table-host">
-        <table class="data-table proj-table">
+        <table class="data-table proj-table m-collapse">
           <thead><tr>
             <th class="num">#</th>
             <th>Manufacturer</th>
