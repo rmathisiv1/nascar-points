@@ -5,11 +5,12 @@
 - **Brand: "Racecar Data"**
 - Dev mount: `/mnt/project/`, outputs at `/mnt/user-data/outputs/`
 - Vanilla JS + CSS + HTML on GitHub Pages
-- Files: `app.js` (~24,450 lines), `app.css` (~11,780 lines), `index.html` (~624 lines), `colors.json`, `scripts/scrape_points.py` (~1,754 lines), `scripts/team_codes.py` (~403 lines), `scripts/backfill_*.py`, `scripts/scrape_drivers.py`, `scripts/audit_tracks.py`, `update.ps1`, `data/points_YYYY.json` (NCS 1949-2026, NOS 1982-2026, NTS 1995-2026), `drivers.json` (static bios)
+- Files: `app.js` (~24,485 lines), `app.css` (~11,780 lines), `index.html` (~624 lines), `colors.json`, `scripts/scrape_points.py` (~1,754 lines), `scripts/team_codes.py` (~403 lines), `scripts/backfill_*.py`, `scripts/scrape_drivers.py`, `scripts/audit_tracks.py`, `update.ps1`, `data/points_YYYY.json` (NCS 1949-2026, NOS 1982-2026, NTS 1995-2026), `drivers.json` (static bios)
 
 ## Recent transcripts (check /mnt/transcripts/)
 - Prior sessions: PFC elimination, owner standings, year dropdown, team profiles, projection model, scraper fixes
-- 2026-05-26 (this session): manufacturer points, Season Data page, heatmap points toggle, track code audit, projection fixes, sidebar fix
+- 2026-05-26 (prior session): manufacturer points, Season Data page, heatmap points toggle, track code audit, projection fixes, sidebar fix
+- 2026-05-31 (this session): RAM manufacturer (NTS 2026), Mfr column on driver/owner standings, DOD/DDG display fix
 
 ## Working copies
 Always start from the outputs directory — these are the latest versions:
@@ -21,13 +22,36 @@ Always start from the outputs directory — these are the latest versions:
 
 ---
 
-## [COMPLETED THIS SESSION]
+## [COMPLETED 2026-05-31]
+
+### RAM Manufacturer (NTS 2026) — FIXED
+Root cause: Ram debuted as its own brand in the 2026 Truck Series, but `MFR_MAP` in `scrape_points.py` had no `"ram"` keyword, so `manufacturer_code()` returned `""`. Blank-manufacturer rows are then dropped in `manufacturerStandingsThroughRound` (`if (!m ...) return`), so RAM never appeared. RR labels the TRUCK column literally "RAM" (verified on race-results pages).
+- **Scraper**: added `("ram", "RAM")` to `MFR_MAP`. Sits with `("dodge", "DOD")` — RR uses "RAM" for 2026+ and "Dodge" for 1996–2012, so the keywords cleanly separate the eras (no overlap; RAM is 2026+ only).
+- **Frontend maps updated** (4): `MFR_DISPLAY`, `MFR_PRETTY_NAMES`, `MFR_NAMES` (projection table), and the swatch map — all now know `RAM` → "Ram".
+- Requires re-scrape: cached JSON had `manufacturer: ""` baked in; can't recover at load. Re-scraped NTS 2026, verified `RAM` present in `data/points_2026.json`, deployed. Live and matching.
+- Note: RAM in 2026 trucks is exclusively Kaulig Racing (#12 Queen, #14 Tyrrell, #10 LaJoie, plus #16 Haley / #25 Ferguson). Owner rollup was already correct (team_code resolves from owner string, independent of mfr). Confirmed no team→manufacturer inference anywhere, so Kaulig's Chevy (Cup/Xfinity) doesn't bleed onto its RAM trucks.
+
+### Mfr Column on Driver/Owner Standings — NEW
+- New "Mfr" column after Team on both Driver and Owner views: swatch + 3-letter code, `col-mobile-hide`, sortable.
+- `pointsMapThroughRound` (owner) and `driverPointsMapThroughRound` (driver) now accumulate `mfrCounts`; `rankingRowsFrom` / `driverRankingRowsFrom` resolve the dominant (most-run) make onto `r.manufacturer`. Null → "—".
+- Reuses existing `.mfr-cell` / `.mfr-swatch` CSS (no app.css change).
+- To switch codes → full names, use `manufacturerName(r.manufacturer)` in that cell.
+
+### MFR_SWATCH Hoisted (single source of truth)
+- The manufacturer-view swatch color map (was a local `mfrColors` literal inside the render) is now a module-level `MFR_SWATCH` + `mfrSwatchColor(code)` helper near `MFR_DISPLAY`. Manufacturer view and the new Mfr column share it so colors can't drift. RAM = `#7d8084` (gunmetal; placeholder, easy to rebrand).
+
+### DOD/DDG Display Fix (bonus)
+- `MFR_PRETTY_NAMES` keyed Dodge as `DDG`, but the scraper emits `DOD` — so Dodge rows in mfr standings rendered as raw "DOD". Added `DOD: "Dodge"` (kept `DDG` as legacy alias). Affects pre-2013 NTS/NCS mfr standings.
+
+---
+
+## [COMPLETED 2026-05-26]
 
 ### 1. Manufacturer Points — EXACT MATCH
 **Formula**: `mfrPositionPoints(best_finish_pos)` — standard NASCAR position scale (P1=55, P2=35, P3=34, ..., P36+=1). Best-finishing car per manufacturer per race. **Ineligible/crossover drivers ARE included** (they still represent their brand). No stage points, no bonuses.
 - Verified exact match to NASCAR.com for NCS (9 races), NOS (11 races), and NTS (10 races).
 - `manufacturerStandingsThroughRound()` rewritten to use this formula.
-- NTS shows 3 manufacturers (TYT, CHV, FRD) — RAM is missing from scraper data, needs investigation.
+- NTS shows 3 manufacturers (TYT, CHV, FRD) — RAM is missing from scraper data, needs investigation. *(→ fixed 2026-05-31, see top section)*
 
 ### 2. Season Data Page (formerly "Stage Points")
 - Tab renamed from "Stage Points" to "Season Data"
@@ -136,7 +160,7 @@ Built `audit_tracks.py` script that scans all historical JSON data for track cod
 
 ### Track Data
 1. **Re-scrape needed** — historical years need re-scrape with updated scraper for correct track codes. The frontend normalizer handles it at load time, but cleaner to have correct codes in JSON. User already ran backfill for 1949-2025 but with older scraper version for most years.
-2. **RAM manufacturer** — NTS manufacturer standings missing RAM. Need to check how RAM trucks are coded in scraper data.
+2. **RAM manufacturer** — RESOLVED 2026-05-31 (see completed section). Scraper keyword + 4 frontend maps + re-scrape. Live.
 3. **Pre-1972 scraper failures** — many old NCS seasons produce debug HTML files (0 races parsed). The scraper can't handle the old RR page format for those years.
 4. **Remaining audit flags** — 45 items remain but most are benign (same track renamed). See audit output for full list.
 
@@ -173,6 +197,10 @@ Runs at BOTH data load paths (initial fetch + cache). Order:
 
 ### Manufacturer Standings
 `mfrPositionPoints(pos)` — P1=55, P2=35, P3=34... Includes ineligible drivers. No stage/bonus pts.
+- Codes from scraper `MFR_MAP`: TYT/CHV/FRD/RAM (current), DOD/PON/etc. (historical). RAM = NTS 2026+ only.
+- Display via `MFR_DISPLAY` / `MFR_PRETTY_NAMES` (standings table uses PRETTY; both carry DOD + RAM).
+- Swatch colors: module-level `MFR_SWATCH` + `mfrSwatchColor(code)` — shared by the mfr view AND the Mfr column on driver/owner standings.
+- **Mfr column** on Driver/Owner views: `mfrCounts` accumulated in the points maps, dominant make resolved in the ranking-row builders → `r.manufacturer`. Sortable, mobile-hidden.
 
 ### Projection System
 - `PROJ_VERSION = 8` (cache key includes version)
