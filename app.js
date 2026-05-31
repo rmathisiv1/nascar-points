@@ -3625,6 +3625,7 @@ const MFR_DISPLAY = {
   CHR: "Chevrolet",
   FRD: "Ford",
   FOR: "Ford",
+  RAM: "Ram",       // NTS 2026+
   DOD: "Dodge",     // active in Cup through 2012
   PON: "Pontiac",   // active in Cup through 2003
   PNT: "Pontiac",
@@ -6053,6 +6054,8 @@ const MFR_PRETTY_NAMES = {
   CHV: "Chevy",
   FRD: "Ford",
   TYT: "Toyota",
+  RAM: "Ram",       // NTS 2026+
+  DOD: "Dodge",     // scraper emits DOD; DDG kept below as legacy alias
   DDG: "Dodge",
   PLY: "Plymouth",
   PNT: "Pontiac",
@@ -15846,7 +15849,7 @@ function renderStandings() {
       // Manufacturer color uses the team palette as a rough proxy (Chevy =
       // blue, Ford = blue, Toyota = red is the common public association).
       // Hardcoded so it's visually distinct across all years.
-      const mfrColors = { CHV: "#fdbb30", FRD: "#00407a", TYT: "#eb1a23", DOD: "#a31818", PNT: "#cf9800", BUI: "#700000", OLD: "#5b6770", MER: "#8b8589", PLY: "#1f4d8a", CHR: "#7e1e1e" };
+      const mfrColors = { CHV: "#fdbb30", FRD: "#00407a", TYT: "#eb1a23", RAM: "#7d8084", DOD: "#a31818", PNT: "#cf9800", BUI: "#700000", OLD: "#5b6770", MER: "#8b8589", PLY: "#1f4d8a", CHR: "#7e1e1e" };
       const mfrColor = mfrColors[r.manufacturer] || "#777";
       return `<tr data-mfr-key="${escapeHTML(r.key)}">
         <td class="rank-cell">${r.currRank}${pcPill}</td>
@@ -23335,7 +23338,7 @@ function _renderProjectionMfrTable(proj) {
   );
 
   const mfrs = new Map();
-  const MFR_NAMES = { CHV: "Chevrolet", FRD: "Ford", TYT: "Toyota", DOD: "Dodge" };
+  const MFR_NAMES = { CHV: "Chevrolet", FRD: "Ford", TYT: "Toyota", RAM: "Ram", DOD: "Dodge" };
 
   proj.drivers.forEach(d => {
     const code = d.manufacturer || "???";

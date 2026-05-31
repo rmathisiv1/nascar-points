@@ -106,6 +106,7 @@ def _new_scraper():
 # correctly tags drivers from older seasons. The frontend uses these codes to
 # colour pills, render manufacturer-win charts, etc.
 #   TYT/CHV/FRD     — current era (2014+)
+#   RAM             — Ram (NTS 2026+, debuted as its own brand)
 #   DOD             — Dodge (NCS/NOS through 2012, NTS through 2012)
 #   PON             — Pontiac (NCS/NOS through 2003)
 #   PLY             — Plymouth (NCS rare, ~2001 only)
@@ -118,6 +119,7 @@ MFR_MAP = [
     ("chevrolet",  "CHV"),
     ("chevy",      "CHV"),
     ("ford",       "FRD"),
+    ("ram",        "RAM"),   # NTS 2026+ — Ram debuted as its own brand
     ("dodge",      "DOD"),
     ("pontiac",    "PON"),
     ("plymouth",   "PLY"),
