@@ -1390,6 +1390,17 @@ async function resolveDriverRoute() {
   const slug = STATE.profile && STATE.profile.slug;
   if (!slug) return;
 
+  // Make sure the newest available season is in cache BEFORE resolving the
+  // driver's home. findDriverHomeContext only sees cached years, so without
+  // this a driver active in the current year (whose current-year series block
+  // happens not to be loaded yet) would resolve to an older cached season —
+  // the whole profile would then render a stale year (e.g. a full-time 2026
+  // driver shown framed in 2025, comparing against 2024). One fetch; cached.
+  const newestSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]) || STATE.season;
+  if (newestSeason && !SEASON_CACHE[newestSeason]) {
+    try { await loadSeasonIntoCache(newestSeason); } catch (_) { /* non-fatal */ }
+  }
+
   // First-pass home detection from already-cached seasons
   let home = findDriverHomeContext(slug);
 
@@ -2211,8 +2222,7 @@ function findDriverHomeContext(driverSlug, fallbackSeries, fallbackSeason) {
   };
   if (!driverSlug) return fallback;
 
-  // Scan SEASON_CACHE newest → oldest. Track best (any-appearance) and best
-  // (full-time) candidates separately.
+  // Scan SEASON_CACHE newest → oldest to find the driver's home season.
   const years = Object.keys(SEASON_CACHE).map(Number)
     .sort((a, b) => b - a);  // newest first
   if (!years.length) {
@@ -2235,41 +2245,41 @@ function findDriverHomeContext(driverSlug, fallbackSeries, fallbackSeason) {
     return fallback;
   }
 
-  let bestFullTime = null;
-  let bestAny = null;
-  const seriesPriority = ["NCS", "NOS", "NTS"];  // Cup wins ties
+  // Selection rule: the driver's "home" is the MOST RECENT year they have
+  // any starts, and within that year the series they STARTED MOST (ties broken
+  // by series prestige NCS > NOS > NTS). Most-started (not highest-prestige)
+  // is deliberate: it keeps a full-time Xfinity regular who runs a handful of
+  // Cup races framed as an Xfinity driver, and frames a part-time Truck driver
+  // (e.g. a former champion running a partial schedule) by their actual Truck
+  // program rather than a one-off cameo in a higher series.
+  const seriesPriority = ["NCS", "NOS", "NTS"];  // tiebreak only
 
   for (const year of years) {
     const seriesBlocks = SEASON_CACHE[year];
     if (!seriesBlocks) continue;
+
+    // Collect every series this driver started in, this year.
+    let best = null;  // { series, car_number, driver, starts }
     for (const sCode of seriesPriority) {
       const block = seriesBlocks[sCode];
       if (!block) continue;
       const hit = scanSeriesBlockForDriver(block, driverSlug);
-      if (!hit) continue;
-      // Determine full-time status: ≥90% of the season's run races.
-      const runRaces = (block.races || []).filter(r =>
-        (r.results || []).some(d => d.finish_pos != null)
-      ).length;
-      const ftThreshold = Math.max(1, Math.ceil(runRaces * 0.9));
-      const isFt = hit.starts >= ftThreshold;
+      if (!hit || !hit.starts) continue;
       const candidate = {
         series: sCode,
-        season: year,
         car_number: hit.car_number,
         driver: hit.driver,
         starts: hit.starts,
       };
-      if (isFt && !bestFullTime) bestFullTime = candidate;
-      if (!bestAny) bestAny = candidate;
-      if (bestFullTime) break;  // newest FT season wins
+      // Most starts wins; on a tie the earlier (higher-prestige) series in
+      // seriesPriority is kept because we only replace on strictly-greater.
+      if (!best || candidate.starts > best.starts) best = candidate;
     }
-    if (bestFullTime) break;
-  }
 
-  const winner = bestFullTime || bestAny;
-  if (winner) {
-    return { ...winner, found: true, fallback: false };
+    if (best) {
+      return { series: best.series, season: year, car_number: best.car_number,
+               driver: best.driver, found: true, fallback: false };
+    }
   }
   return fallback;
 }
