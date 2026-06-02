@@ -3630,6 +3630,15 @@ function entitiesFromRaces(races) {
       e.totalStarts += 1;    // always count, even if ineligible
       e.driversSet.add(d.driver);
       e.driverStarts[d.driver] = (e.driverStarts[d.driver] || 0) + 1;
+      // Track the most-recent round each driver ran this car, so we can resolve
+      // the car's CURRENT driver when the predominant one has gone inactive
+      // (mid-season driver change, e.g. a replacement taking over a chartered
+      // car for the rest of the year).
+      e.driverLastRound = e.driverLastRound || {};
+      if ((r.round || 0) >= (e.driverLastRound[d.driver] || 0)) {
+        e.driverLastRound[d.driver] = r.round || 0;
+      }
+      e.maxRound = Math.max(e.maxRound || 0, r.round || 0);
       e.driver = d.driver;
       e.team = d.team;
       if (teamCode) e.team_code = teamCode;
@@ -3677,15 +3686,33 @@ function entitiesFromRaces(races) {
     const driversByStarts = Object.entries(e.driverStarts)
       .sort((a, b) => b[1] - a[1])
       .map(([name, starts]) => ({ name, starts }));
-    const primaryDriver = driversByStarts[0] ? driversByStarts[0].name : e.driver;
-    const coDrivers = driversByStarts.slice(1);  // [{name, starts}, ...]
+    const predominant = driversByStarts[0] ? driversByStarts[0].name : e.driver;
+    // Representative driver for the car: normally the predominant (most starts),
+    // BUT if that driver has gone inactive — hasn't run in the last 3 rounds —
+    // use the car's most-recent driver instead. This surfaces the current
+    // driver of a chartered car after a mid-season change (e.g. a full-season
+    // replacement) without hardcoding names, while leaving every normal car on
+    // its regular driver.
+    const lastRound = e.driverLastRound || {};
+    const maxRound = e.maxRound || 0;
+    let primaryDriver = predominant;
+    if (maxRound > 0 && (maxRound - (lastRound[predominant] || 0)) >= 3) {
+      // predominant is stale — pick the driver with the most-recent start
+      let recent = predominant, recentRound = lastRound[predominant] || 0;
+      for (const [name, rnd] of Object.entries(lastRound)) {
+        if (rnd > recentRound) { recent = name; recentRound = rnd; }
+      }
+      primaryDriver = recent;
+    }
+    const coDrivers = driversByStarts.filter(d => d.name !== primaryDriver);
     return {
       ...e,
       drivers: driversByStarts.map(d => d.name),   // legacy field: ordered driver list
       driversByStarts,                              // [{name, starts}] ordered most → least
-      primaryDriver,                                // headline driver for this car
-      coDrivers,                                    // non-primary drivers, with their start counts
-      driver: primaryDriver,                        // the main "driver" label is now the primary
+      predominantDriver: predominant,               // most starts (regardless of activity)
+      primaryDriver,                                // current representative (active-aware)
+      coDrivers,                                    // non-representative drivers, with start counts
+      driver: primaryDriver,                        // the main "driver" label
     };
   });
 }
@@ -4022,6 +4049,7 @@ function getDriverRaceHistory(driverName, series) {
           track: race.track,
           finish_pos: d.finish_pos,
           start_pos: d.start_pos,
+          qual_pos: d.qual_pos != null ? d.qual_pos : null,
           race_pts: d.race_pts,
           stage1_pts: d.stage_1_pts || 0,
           stage2_pts: d.stage_2_pts || 0,
@@ -4210,6 +4238,226 @@ function getDriverSpeedMetrics(driverName, series) {
     : null;
   return { lapsLedPerRace, top15Rate, avgDriverRating, races: thisYear.length };
 }
+
+// ============================================================
+// LAP-TIME PACE SIGNALS  (lap-time pace pipeline, 2026-05-31)
+// ============================================================
+// Loads derived pace metrics from data/pace_{year}.json (produced by
+// scripts/scrape_lap_pace.py) and exposes windowed pace signals for the
+// prediction model. Pace = fastest-20% / green-median blend, stored per
+// driver per race as a field-relative delta% (0 = fastest car that race),
+// which is track-agnostic and safe to average across tracks.
+//
+// Lazy: pace files are only fetched on prediction/home views (see
+// ensurePaceLoaded). Cached in PACE_CACHE by year.
+
+const PACE_CACHE = {};            // year -> parsed pace_{year}.json
+let _paceLoadAttempted = {};      // year -> true once we've tried (avoid refetch storms)
+
+// The pace metric: f20/median 50-50 blend of the field-relative deltas.
+// (Consensus formula chosen by calibration against Nashville R18 eyeball.)
+function paceBlend(rec) {
+  if (!rec) return null;
+  const f20 = rec.fast20_avg_delta_pct;
+  const med = rec.green_median_delta_pct;
+  if (f20 == null && med == null) return null;
+  if (f20 == null) return med;
+  if (med == null) return f20;
+  return 0.5 * f20 + 0.5 * med;
+}
+
+async function ensurePaceLoaded(years) {
+  // years: array of calendar years to make sure are loaded. Safe to call
+  // repeatedly; only fetches once per year.
+  const todo = years.filter(y => !PACE_CACHE[y] && !_paceLoadAttempted[y]);
+  await Promise.all(todo.map(async (y) => {
+    _paceLoadAttempted[y] = true;
+    try {
+      const r = await fetch(`data/pace_${y}.json`);
+      if (r.ok) PACE_CACHE[y] = await r.json();
+    } catch (e) { /* no pace for this year — fine, signals fall back */ }
+  }));
+}
+
+// Normalize a track name to a comparison token set. The NASCAR feed uses
+// full names ("Nashville Superspeedway", "Daytona International Speedway")
+// while the app's TRACK_NAMES uses short names ("Nashville Superspeedway",
+// "Daytona"). We match on lowercased significant words, dropping generic
+// suffixes, so "Daytona" matches "Daytona International Speedway".
+const _PACE_TRACK_STOPWORDS = new Set([
+  "international", "speedway", "motor", "raceway", "superspeedway",
+  "the", "of", "at", "park", "circuit",
+]);
+function _trackTokens(name) {
+  return new Set(
+    String(name || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter(w => w && !_PACE_TRACK_STOPWORDS.has(w))
+  );
+}
+function _tracksMatch(nameA, nameB) {
+  const a = _trackTokens(nameA), b = _trackTokens(nameB);
+  if (!a.size || !b.size) return false;
+  for (const w of a) if (b.has(w)) return true;   // any significant word in common
+  return false;
+}
+
+// Gather a driver's pace records (newest first) across all loaded pace years,
+// optionally filtered to a track (by name match) or a track type.
+function _paceRecordsFor(driverName, series, { trackName = null, trackType = null } = {}) {
+  const out = [];
+  const years = Object.keys(PACE_CACHE).map(Number).sort((a, b) => b - a);
+  for (const y of years) {
+    const sBlock = PACE_CACHE[y] && PACE_CACHE[y].series && PACE_CACHE[y].series[series];
+    if (!sBlock || !sBlock.races) continue;
+    for (const race of sBlock.races) {
+      // races within a year aren't guaranteed sorted; capture round for sort
+      if (trackName && !_tracksMatch(race.track, trackName)) continue;
+      if (trackType && (typeof trackTypeFromName !== "function" ||
+                        trackTypeFromName(race.track) !== trackType)) continue;
+      const rec = race.drivers && race.drivers[driverName];
+      if (!rec) continue;
+      const blend = paceBlend(rec);
+      if (blend == null) continue;
+      out.push({ year: y, round: race.round || 0, track: race.track, blend });
+    }
+  }
+  out.sort((a, b) => (b.year - a.year) || (b.round - a.round));
+  return out;
+}
+
+// Average the pace blend over the last N records (newest first).
+function _avgPace(records, n) {
+  const slice = records.slice(0, n);
+  if (!slice.length) return null;
+  return slice.reduce((s, r) => s + r.blend, 0) / slice.length;
+}
+
+// Map a feed track NAME to a track type, reusing the app's TRACK_TYPES via
+// the app's track codes. We resolve name->code by matching TRACK_NAMES.
+function trackTypeFromName(trackName) {
+  if (typeof TRACK_NAMES === "undefined" || typeof TRACK_TYPES === "undefined") return null;
+  for (const [code, nm] of Object.entries(TRACK_NAMES)) {
+    if (_tracksMatch(nm, trackName)) {
+      const t = TRACK_TYPES[code];
+      if (t) return t;
+    }
+  }
+  return null;
+}
+
+// PRIMARY PACE SIGNAL: last 3 races at THIS track, with fallback chain:
+//   1. last 3 at this track
+//   2. else recent pace at this track TYPE (last 5)
+//   3. else recent overall pace (last 5)
+//   4. else null (weight redistributes in the model)
+// Returns { value, source } where value is the avg blend delta% (lower=faster)
+// and source tags which tier produced it (for debugging/breakdown).
+function getDriverTrackPace(driverName, series, trackCode) {
+  const trackName = (typeof TRACK_NAMES !== "undefined" && TRACK_NAMES[trackCode]) || null;
+  const ttype = (typeof trackType === "function") ? trackType(trackCode) : null;
+
+  if (trackName) {
+    const here = _paceRecordsFor(driverName, series, { trackName });
+    if (here.length) return { value: _avgPace(here, 3), source: "track", n: Math.min(here.length, 3) };
+  }
+  if (ttype) {
+    const atType = _paceRecordsFor(driverName, series, { trackType: ttype });
+    if (atType.length) return { value: _avgPace(atType, 5), source: "type", n: Math.min(atType.length, 5) };
+  }
+  const recent = _paceRecordsFor(driverName, series, {});
+  if (recent.length) return { value: _avgPace(recent, 5), source: "recent", n: Math.min(recent.length, 5) };
+  return { value: null, source: "none", n: 0 };
+}
+
+// SECONDARY PACE SIGNAL: recent pace at this track TYPE (last 5).
+function getDriverTypePace(driverName, series, trackCode) {
+  const ttype = (typeof trackType === "function") ? trackType(trackCode) : null;
+  if (!ttype) return null;
+  const atType = _paceRecordsFor(driverName, series, { trackType: ttype });
+  return _avgPace(atType, 5);
+}
+
+// ============================================================
+// ENTRY LIST  (definitive field for an upcoming race)
+// ============================================================
+// When NASCAR publishes an entry list for the upcoming race, it's the
+// authoritative answer to "who is in which car this weekend" — including
+// mid-season driver swaps and one-off part-timers. The prediction board
+// prefers it over the car-based full-time roster when available.
+//
+// Cache shape: ENTRY_LIST_CACHE[series][trackCode] = [
+//   { car_number, driver, team, ineligible }   // ineligible = not a points car
+// ]
+// Populated by loadEntryList() once the feed endpoint is wired (see below).
+const ENTRY_LIST_CACHE = {};
+
+function getEntryList(series, trackCode) {
+  const s = ENTRY_LIST_CACHE[series];
+  if (!s) return null;
+  return s[trackCode] || null;
+}
+
+// Lazily fetch an entry list for a race. The feed URL is not yet confirmed —
+// once located on cf.nascar.com (via DevTools on the entry-list page, the same
+// way lap-times was found), uncomment and fix the URL below. Until then this is
+// a no-op and the board falls back to the full-time car roster.
+let _entryListAttempted = {};
+async function loadEntryList(series, trackCode, year, raceId) {
+  const key = `${series}:${trackCode}`;
+  if ((ENTRY_LIST_CACHE[series] && ENTRY_LIST_CACHE[series][trackCode]) || _entryListAttempted[key]) return;
+  _entryListAttempted[key] = true;
+  // const SERIES_ID = { NCS: 1, NOS: 2, NTS: 3 }[series];
+  // const url = `https://cf.nascar.com/cacher/${year}/${SERIES_ID}/${raceId}/entry-list.json`;
+  // try {
+  //   const r = await fetch(url);
+  //   if (!r.ok) return;
+  //   const data = await r.json();
+  //   const list = (data.entries || data.Entries || []).map(en => ({
+  //     car_number: String(en.car_number != null ? en.car_number : (en.Number || "")).trim(),
+  //     driver: String(en.driver_name != null ? en.driver_name : (en.FullName || "")).trim(),
+  //     team: String(en.team_name != null ? en.team_name : (en.Team || "")).trim(),
+  //     ineligible: en.ineligible === true,
+  //   })).filter(e => e.car_number && e.driver);
+  //   if (list.length) {
+  //     (ENTRY_LIST_CACHE[series] = ENTRY_LIST_CACHE[series] || {})[trackCode] = list;
+  //   }
+  // } catch (e) { /* no entry list — fall back to full-time roster */ }
+}
+
+// QUAL-PACE SIGNALS. Use TRUE qualifying position (qual_pos), not start_pos —
+// start_pos is contaminated by post-qual penalties and backup-car drops, so a
+// fast qualifier sent to the rear would look slow. Fall back to start_pos only
+// when there was no time-trial qualifying (qual_pos null = random draw etc.).
+function _qualValue(row) {
+  if (row.qual_pos != null && row.qual_pos > 0) return row.qual_pos;
+  return null;  // no real qualifying — don't pollute the signal with start_pos drops
+}
+
+// Qual pace at THIS track — average true qual position over last 3 starts here.
+function getDriverTrackQual(driverName, series, trackCode) {
+  const history = getDriverRaceHistory(driverName, series);
+  const codes = (typeof trackCodesForLookup === "function")
+    ? trackCodesForLookup(trackCode) : [trackCode];
+  const here = history.filter(r => codes.includes(r.track_code));
+  const quals = here.map(_qualValue).filter(v => v != null).slice(0, 3);
+  if (!quals.length) return null;
+  return quals.reduce((a, b) => a + b, 0) / quals.length;
+}
+
+// Qual pace at this track TYPE — average true qual position over last 5 at type.
+function getDriverTypeQual(driverName, series, trackCode) {
+  const ttype = (typeof trackType === "function") ? trackType(trackCode) : null;
+  if (!ttype) return null;
+  const history = getDriverRaceHistory(driverName, series);
+  const atType = history.filter(r => trackType(r.track_code) === ttype);
+  const quals = atType.map(_qualValue).filter(v => v != null).slice(0, 5);
+  if (!quals.length) return null;
+  return quals.reduce((a, b) => a + b, 0) / quals.length;
+}
+
 
 // "Best active drivers at THIS track" composite score. Higher = better.
 // Weighted by recency: a 2026 result counts more than a 2020 result.
@@ -10755,6 +11003,18 @@ function renderHome() {
     return;
   }
 
+  // Lazily pull lap-time pace data (current + 2 prior years) so the
+  // prediction model's pace signals have data. Only fires on the home view,
+  // once; when it lands we re-render so predictions upgrade from the
+  // fallback (finish-based) to the full pace-driven model.
+  if (typeof ensurePaceLoaded === "function" && !STATE._paceKicked) {
+    STATE._paceKicked = true;
+    const yrs = [STATE.season, STATE.season - 1, STATE.season - 2];
+    ensurePaceLoaded(yrs).then(() => {
+      if (Object.keys(PACE_CACHE).length) renderHome();
+    });
+  }
+
   // ----- Section 1: hero row (next race + last race) -----
   const heroHTML = renderHomeHero(latestYear, series);
 
@@ -10848,21 +11108,51 @@ function _computeTrackPerformers(series, trackCode) {
   return scored;
 }
 
-// Run the full prediction model on every full-time driver for one race.
+// Run the full prediction model on the field for one race.
+// Population priority:
+//   1. ENTRY LIST for the upcoming race (definitive — every car entered, with
+//      its actual driver this weekend; part-timers flagged). Used when an
+//      entry list has been loaded for this track (see getEntryList).
+//   2. Fallback: all full-time CARS (90%-of-races), each represented by its
+//      current driver (predominant, or most-recent if predominant is inactive).
 // Returns sorted arrays for stage-points (DESC) and finish (ASC).
 function _computeRacePredictions(series, trackCode) {
-  const ents = allEntities().filter(isFullTime);
-  const predictions = ents.map(e => {
-    const driverName = e.primaryDriver || e.driver;
-    if (!driverName) return null;
-    const pred = predictDriverForRace(driverName, series, trackCode);
+  const entryList = (typeof getEntryList === "function")
+    ? getEntryList(series, trackCode) : null;
+
+  let roster;  // [{ driverName, entity|null, isPartTime, car_number }]
+  if (entryList && entryList.length) {
+    roster = entryList.map(en => {
+      const ent = allEntities().find(e => String(e.car_number) === String(en.car_number));
+      return {
+        driverName: en.driver,
+        entity: ent || null,
+        car_number: en.car_number,
+        // part-time if the car isn't a full-time charter OR the entry is flagged
+        isPartTime: en.ineligible === true || !(ent && isFullTime(ent)),
+      };
+    });
+  } else {
+    roster = allEntities().filter(isFullTime).map(e => ({
+      driverName: e.primaryDriver || e.driver,
+      entity: e,
+      car_number: e.car_number,
+      isPartTime: false,
+    }));
+  }
+
+  const predictions = roster.map(r => {
+    if (!r.driverName) return null;
+    const pred = predictDriverForRace(r.driverName, series, trackCode);
     if (!pred) return null;
-    return { entity: e, driverName, ...pred };
+    return { entity: r.entity, driverName: r.driverName,
+             car_number: r.car_number, is_part_time: r.isPartTime, ...pred };
   }).filter(Boolean);
   return {
     byFinish: [...predictions].sort((a, b) => a.predicted_finish - b.predicted_finish),
     byStage: [...predictions].sort((a, b) => b.predicted_stage_pts - a.predicted_stage_pts),
     total: predictions.length,
+    source: (entryList && entryList.length) ? "entry_list" : "full_time",
   };
 }
 
@@ -11728,13 +12018,14 @@ function renderRacePredictionSection(opts) {
         <span class="rps-explainer-cta">methodology →</span>
       </summary>
       <div class="rps-explainer-body">
-        <strong>Finish prediction</strong> blends five signals per driver, weighted:
-        their <em>last 4 starts at this track</em> (30%),
-        their <em>last 5 starts at this track type</em> (30%),
-        their <em>form across the last 8 races</em> this season (15%),
-        their <em>all-time average at this track</em> (15%),
-        and their <em>season YTD average</em> (10%).
-        When a signal is unavailable (e.g., debut at a new venue, fewer than 8 races run this year) its weight is redistributed proportionally to the others.
+        <strong>Finish prediction</strong> is pace-driven, blending six signals per driver, weighted:
+        their <em>lap-time pace over the last 3 races at this track</em> (40%),
+        their <em>recent pace at this track type</em> (18%),
+        their <em>all-time average finish at this track</em> (12%),
+        their <em>qualifying pace at this track type</em> (10%),
+        their <em>qualifying pace at this track</em> (10%),
+        and their <em>form across the last 8 races</em> (10%).
+        Pace is measured from real lap times — the average of each driver's fastest 20% of green-flag laps blended with their green-flag median, expressed relative to the fastest car that race — so it reflects how fast a car actually was, not where it finished after wrecks, penalties, or pit strategy. When track-specific pace is unavailable (new venue, debut) it falls back to track-type then recent pace; drivers with little history or few starts this season are regressed toward the back of the field until they've shown sustained pace, so a thin sample of strong runs can't overrate a part-timer or rookie. Any signal still missing has its weight redistributed proportionally.
         <br><br>
         <strong>Stage points</strong> blend three signals:
         <em>track-specific stage-points average</em> (40%),
@@ -11839,6 +12130,7 @@ function predictDriverForRace(driverName, series, trackCode) {
 
   // Season YTD average finish — read from current entity races
   let seasonAvg = null;
+  let seasonStarts = 0;
   const ent = allEntities().find(e =>
     (e.primaryDriver || e.driver || "").toLowerCase() === driverName.toLowerCase()
   );
@@ -11846,66 +12138,88 @@ function predictDriverForRace(driverName, series, trackCode) {
     const finishes = ent.races
       .map(rr => rr.result && rr.result.finish_pos)
       .filter(n => n != null);
+    seasonStarts = finishes.length;
     if (finishes.length > 0) {
       seasonAvg = finishes.reduce((a, b) => a + b, 0) / finishes.length;
     }
   }
 
-  // ----- Tier 1: Seven-signal weighted average (finish position) -----
+  // ----- Pace + qual signal extraction (lap-time pipeline) -----
+  // Pace signals are field-relative delta% (0 = fastest car that race,
+  // lower = faster). To blend with the finish-position signals (1..40 scale)
+  // we map a pace delta to an "expected finish" estimate: a car running at
+  // the front (≈0% off) projects near P1, and each 1% off the leader maps to
+  // roughly +6 positions. This keeps every signal in finishing-position units
+  // so the weighted average is coherent. (PACE_DELTA_TO_POS is the slope; it
+  // only affects scale, not ordering, and can be tuned.)
+  const PACE_DELTA_TO_POS = 6.0;
+  const paceToPos = (deltaPct) => deltaPct == null ? null : 1 + PACE_DELTA_TO_POS * deltaPct;
+
+  const trackPace = getDriverTrackPace(driverName, series, trackCode);      // {value, source, n}
+  const typePaceVal = getDriverTypePace(driverName, series, trackCode);
+  const trackQual = getDriverTrackQual(driverName, series, trackCode);      // qual position
+  const typeQual = getDriverTypeQual(driverName, series, trackCode);
+
+  // Thin-sample / low-confidence shrinkage toward a neutral anchor.
+  // Refined 2026-05-31 (both rules, per user): a deeper anchor and a
+  // season-starts confidence factor so unproven rookies (few starts AND no
+  // relevant history) regress toward the BACK of the field, not mid-pack —
+  // while an established full-timer who merely lacks history at this one
+  // track gets only a mild pull.
   //
-  // Finish-based signals (where they end up):
-  //   25% last 4 starts at THIS track
-  //   20% last 10 starts at this TRACK TYPE
-  //   15% all-time avg at THIS track
+  //   anchor: track-tier thin sample → P20 (mid-pack, just light regression)
+  //           type/recent fallback   → P28 (back third — "unproven here")
+  //   strength scales with BOTH the pace-sample thinness and how few starts
+  //   the driver has this season (rookie with <~10 starts → pulled harder).
+  const MIDPACK = 20, DEEP = 28;
+  let tracePacePos = paceToPos(trackPace.value);
+  if (tracePacePos != null) {
+    // base shrink fraction from pace-sample confidence (0 = full trust)
+    let shrink = 0, anchor = MIDPACK;
+    if (trackPace.source === "track") {
+      if (trackPace.n < 3) { shrink = 1 - trackPace.n / 3; anchor = MIDPACK; }   // n=1→.67, n=2→.33
+    } else if (trackPace.source === "type") {
+      shrink = trackPace.n >= 3 ? 0.25 : 0.5;  anchor = DEEP;   // type fallback: moderate, deeper anchor
+    } else if (trackPace.source === "recent") {
+      shrink = 0.5;  anchor = DEEP;                              // recent last-resort: half, deepest anchor
+    }
+    // season-starts confidence: few starts amplifies the shrink toward DEEP.
+    // full season (~18+ starts) → no amplification; rookie (≤4) → strong.
+    if (seasonStarts > 0 && seasonStarts < 12 && shrink < 1) {
+      const rookiePull = (12 - seasonStarts) / 12 * 0.4;        // up to +0.4 at 0 starts
+      shrink = Math.min(0.85, shrink + rookiePull);
+      if (anchor === MIDPACK) anchor = DEEP;                    // unproven driver → deeper anchor
+    }
+    if (shrink > 0) tracePacePos = (1 - shrink) * tracePacePos + shrink * anchor;
+  }
+
+  // ----- Pace-dominant six-signal model (finish position) -----
+  // Weights locked with the user (2026-05-31), calibrated to expert eyeball:
+  //   40% pace — last 3 races at THIS track (f20/median blend)
+  //   18% pace — recent pace at this TRACK TYPE
+  //   12% all-time avg finish at THIS track
+  //   10% qual pace at this track type (recent)
+  //   10% qual pace at this track (recent)
   //   10% recent form (last 8 finishes)
-  //    5% season YTD avg finish
-  //
-  // Speed signals (how fast they are, independent of finish):
-  //   10% avg qualifying position (last 8 races)
-  //   10% avg stage position (last 8 races)
-  //    5% season YTD avg finish
-  //
-  // Missing signals have their weight redistributed proportionally.
+  // The primary pace signal already carries its own fallback chain
+  // (track → type → recent) inside getDriverTrackPace. Any signal that's
+  // still null has its weight redistributed proportionally to the rest.
   const signals = [
-    { name: "track_last4",   label: "Last 4 here",          w: 0.25, val: trackStats?.last4_avg ?? null },
-    { name: "type_last10",   label: "Last 10 same type",    w: 0.20, val: typeStats?.last10_avg ?? typeStats?.last5_avg ?? null },
-    { name: "track_alltime", label: "All-time here",        w: 0.15, val: trackStats?.avg_finish ?? null },
-    { name: "qual_last8",    label: "Qualifying (last 8)",  w: 0.10, val: qualAvg },
-    { name: "stage_last8",   label: "Stage pos (last 8)",   w: 0.10, val: stageAvg },
+    { name: "pace_track3",   label: "Pace · last 3 here",   w: 0.40, val: tracePacePos },
+    { name: "pace_type",     label: "Pace · track type",    w: 0.18, val: paceToPos(typePaceVal) },
+    { name: "track_alltime", label: "All-time here",        w: 0.12, val: trackStats?.avg_finish ?? null },
+    { name: "qual_type",     label: "Qual · track type",    w: 0.10, val: typeQual },
+    { name: "qual_track",    label: "Qual · this track",    w: 0.10, val: trackQual },
     { name: "form_last8",    label: "Form (last 8)",        w: 0.10, val: form8?.avg_finish ?? null },
-    { name: "season_ytd",    label: "Season YTD",           w: 0.10, val: seasonAvg },
   ];
   const avail = signals.filter(s => s.val != null);
   if (avail.length === 0) return null;
   const wSum = avail.reduce((s, x) => s + x.w, 0);
   let predicted = avail.reduce((sum, x) => sum + (x.w / wSum) * x.val, 0);
-
-  // ----- Tier 2: Speed bonus (bounded adjustment) -----
-  // Nudges the prediction favorably for drivers whose speed metrics
-  // indicate they're faster than their finishes suggest. Captures
-  // "fast but unlucky" (Bell, Larson) vs "slow but finishes" (Ware).
-  //
-  // Each metric contributes a small negative adjustment (lower predicted
-  // finish = better). Total bounded to [-3.5, 0] so it nudges, not
-  // overrides.
-  if (speedMetrics && speedMetrics.races >= 3) {
-    let speedBonus = 0;
-    // Laps led: if above 5 per race on average, nudge up to -1.5
-    if (speedMetrics.lapsLedPerRace > 0) {
-      speedBonus += Math.min(1.5, speedMetrics.lapsLedPerRace / 15);
-    }
-    // Top 15 rate: if finishing top-15 > 75% of races, nudge up to -1.0
-    if (speedMetrics.top15Rate > 0.5) {
-      speedBonus += Math.min(1.0, (speedMetrics.top15Rate - 0.5) * 2);
-    }
-    // Driver rating: if above 80 (roughly field average), nudge up to -1.0
-    if (speedMetrics.avgDriverRating != null && speedMetrics.avgDriverRating > 80) {
-      speedBonus += Math.min(1.0, (speedMetrics.avgDriverRating - 80) / 30);
-    }
-    predicted -= Math.min(3.5, speedBonus);
-    // Floor at 1.0 — can't predict better than winning
-    predicted = Math.max(1.0, predicted);
-  }
+  // Floor at 1.0 — can't predict better than winning.
+  predicted = Math.max(1.0, predicted);
+  // Tag which pace tier fired, for the breakdown/debugging.
+  const paceSource = trackPace.source;
 
   // ----- Stage-points signals (separate model) -----
   // Stage points have lower variance than finish position so the simpler
@@ -11957,6 +12271,7 @@ function predictDriverForRace(driverName, series, trackCode) {
     })),
     has_track_history: trackStats != null,
     has_type_history: typeStats != null,
+    pace_source: paceSource,
   };
 }
 

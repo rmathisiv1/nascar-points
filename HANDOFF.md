@@ -10,7 +10,7 @@
 ## Recent transcripts (check /mnt/transcripts/)
 - Prior sessions: PFC elimination, owner standings, year dropdown, team profiles, projection model, scraper fixes
 - 2026-05-26 (prior session): manufacturer points, Season Data page, heatmap points toggle, track code audit, projection fixes, sidebar fix
-- 2026-05-31 (this session): RAM manufacturer (NTS 2026), Mfr column on driver/owner standings, DOD/DDG display fix
+- 2026-05-31 (this session): RAM manufacturer (NTS 2026), Mfr column on driver/owner standings, DOD/DDG display fix, mobile dropdown fixes (index-mapping + observer), collapsible projection tables, profile season-framing rework, NEW lap-time pace pipeline (scrape_lap_pace.py + prediction model rework — IN PROGRESS)
 
 ## Working copies
 Always start from the outputs directory — these are the latest versions:
@@ -23,6 +23,70 @@ Always start from the outputs directory — these are the latest versions:
 ---
 
 ## [COMPLETED 2026-05-31]
+
+### Mobile toggle dropdowns — FIXED (two bugs)
+On mobile, `.toggle-group` pill rows are mirrored into native `<select>`s by `syncMobileDropdowns()`.
+1. **Wrong data didn't switch.** The mirror keyed option values off `data-val`, but series filters use `data-srs` and the heatmap Finish/Points toggle has no data attr → all options got `value=""`, so every change resolved to the first button. Fix: option values are now the button **index**; change handler clicks `buttons[index]`. Labeling-scheme-agnostic.
+2. **Dropdown vanished after selecting.** Views that re-render without going through the global `render()` (heatmap Finish/Points, standings view-switcher) rebuilt the toggle bar with no `<select>` mirror; async profile renders dropped toggles in after `render()`'s one sync call. Fix: a `MutationObserver` (`observeMobileDropdowns`, rAF-debounced, idempotent via `data-sig`) re-mirrors whenever a `.toggle-group`/`.team-filter` enters the DOM, from any render path. Plus explicit `syncMobileDropdowns()` at the end of `renderHeatmap` (matches the `renderCompare` precedent).
+
+### Collapsible projection tables on mobile — NEW
+Wide stat tables overflowed on phones, pushing the points column off-screen. New reusable engine: tables tagged `.m-collapse` keep rank + identifier + points visible on mobile, hide the rest (`.mc-hide`), and tap-to-expand a row drops a detail panel (`enhanceCollapsibleTables` + `wireCollapsibleRows`, CSS block in app.css). Opted in: all 4 projection tables (driver/regular, chase, owner, manufacturer). Engine hooks the render pipeline + the dropdown observer (catches async `setTimeout` projection renders). NOT applied to tables with clickable rows (race-by-race navigates) — those need a caret affordance, deferred.
+
+### Profile season-framing — REWORKED
+`findDriverHomeContext` used "newest full-time season, Cup wins ties" + only saw cached years → active current-year drivers (Kvapil) framed in a stale 2025; part-timers (Heim) framed by an old full-time season. New rule: **most recent year with any starts, framed by the series the driver STARTED MOST that year** (prestige NCS>NOS>NTS as tiebreak only). Most-started (not highest-prestige) protects full-time Xfinity regulars who run a few Cup races, and frames part-time former champs by their real program. Also: `resolveDriverRoute` now loads the newest season into cache BEFORE the home scan (the real Kvapil fix). Championship badge is independent (scans all cached years) so it persists. `loadSeasonIntoCache(year)` loads all 3 series per year.
+
+---
+
+## [IN PROGRESS 2026-05-31] — Lap-time PACE pipeline + prediction rework
+
+### What & why
+The prediction model was "hot, not fast" — 6 of 7 finish-position signals, only ~20% speed. Finish position is luck-contaminated (wrecks, penalties, pit, fuel). Solution: real lap-time pace from NASCAR's public feeds.
+
+### Data source (NEW — not Racing Reference)
+NASCAR cacher feeds on `cf.nascar.com` (S3-backed; returns AccessDenied for missing keys = 404):
+- Race index: `https://cf.nascar.com/cacher/{year}/race_list_basic.json` → `{series_1, series_2, series_3}`, each an array with `race_id`, `track_name`, `race_date`, `has_qualifying`, `pole_winner_speed`, etc. **Series id: 1=NCS, 2=NOS, 3=NTS.**
+- Lap times: `https://cf.nascar.com/cacher/{year}/{series_id}/{race_id}/lap-times.json` → `{laps:[{Number, FullName, NASCARDriverID, Laps:[{Lap, LapTime(sec float), LapSpeed, RunningPos}]}]}`. Lap 0 = formation (null LapTime). Caution/pit laps are obvious slow outliers (60-90s vs ~28-30s green).
+- Drivers keyed by numeric `NASCARDriverID` in feeds, but `FullName` is present too → driver_id→name map is free. (Existing repo data is name-keyed, RR-sourced; names join cleanly.)
+- Coverage: confirmed 2026 (all 45 races, all 3 series, 596KB). Feed reliability thins for older years — believed ~mid-2000s floor for Cup, later for NOS/NTS; UNVERIFIED, probe with old race_ids later.
+
+### `scripts/scrape_lap_pace.py` (BUILT, validated on 2026)
+Walks the race index, pulls each race's lap-times, computes per-driver-per-race pace and writes compact `data/pace_{year}.json` (derived metrics only, not raw laps). Per driver per race:
+- Green laps = laps within 1.10× the driver's own best lap (`GREEN_LAP_MAX_RATIO`) — self-filters cautions/pits, needs no flag field, works on partial/wrecked races.
+- Metrics: `fast5_avg`, `fast10_avg`, `fast20_avg`, `green_median`, `best_lap`, `consistency` (pstdev of green laps); each also as `*_delta_pct` = field-relative % off the fastest car that race (track-agnostic). Plus `car_number`, `driver_id`, `final_running_pos`.
+- Output shape: `{season, generated, id_to_name:{}, series:{NCS:{races:[{race_id,track,round,drivers:{name:{...}}}]}}}`
+- CLI: `--season Y [--only NCS,NOS,NTS] [--race ID] [--dump] [--out path]`. Run: `python scripts\scrape_lap_pace.py --season 2025`
+
+### Metric chosen (calibrated vs expert eyeball of Nashville R18)
+Target: Bell #1 (hard), then fast cars in roughly-right order. Tested 16 formulas via `brainstorm_formulas.py` (throwaway, repo root). 11 collapsed to one **consensus order** (Bell, Larson, Reddick, Briscoe, Hamlin, Blaney) — robust to exact weights. **Chosen: f20 50 / green-median 50 blend** (any consensus-cluster formula is equivalent). best-lap too noisy (single hot lap); f5 too twitchy; median-only buries clean-air-fast cars.
+
+### Prediction rework (TO BUILD — weights LOCKED by user)
+Rework `predictDriverForRace`. Pace-dominant, 6 signals (drop old stage-position signal AND the Tier-2 speed bonus — pace replaces them):
+| Signal | Weight |
+|---|---|
+| Pace — last 3 races at THIS track (f20/median blend, field-rank) | 40% |
+| Pace — recent track type | 18% |
+| All-time finish here | 12% |
+| Qual pace — recent track type | 10% |
+| Qual pace — at this track | 10% |
+| Recent form (last 8 finishes) | 10% |
+- **Qual signals use true `qual_pos`/`qual_speed`, NOT `start_pos`** (start_pos contaminated by penalties/backups). Fall back to start_pos only for no-qualifying races (`has_qualifying:false`).
+- **Fallback chain** for the primary pace signal (track history thin with only 3 yrs): last-3-at-this-track → track-type pace → recent overall pace → redistribute weight to finish signals (existing mechanism).
+- Pace enters as a **field-relative rank** (1..field) so it blends with the existing 1-40 signals.
+- Reader `getDriverPaceMetrics()` loads pace_2024/2025/2026.json (lazy, prediction/home views only), assembles windows. Verify with the harness (extend `compare_pace_models.py`) before deploy.
+
+### STATUS (updated 2026-05-31, later)
+DONE: scraped 2024+2025+2026 pace (full coverage all 3 series). Built pace reader (track-name matching, last-3-at-track + fallback chain), qual readers (true qual_pos), reworked predictDriverForRace to the 6-signal table, lazy pace-load on home view. Metric = f20/median 50/50, fallback OPT3 (track→type→recent, type-first w/ deeper anchor). Thin-sample shrinkage REFINED: deeper anchor (P28) for fallback tiers + season-starts confidence scaling (rookies w/ few starts pulled harder; e.g. Zilisch ~P23, SVG ~P12-13). Verified via verify_new_model.py against Michigan.
+
+CAR-BASED FULL-TIME + ENTRY LIST (done 2026-05-31): NASCAR full-time is a property of the CHARTERED CAR, not the driver — current driver-based isFullTime missed the Kyle-Busch-passed/replacement-car case (car full-time, individual drivers partial). Entities already car-keyed (allEntities); added per-driver last-round tracking + active-aware representative driver: predominant by starts, BUT if predominant is inactive (no start in last 3 rounds) use most-recent driver — surfaces a full-season replacement without hardcoding names. _computeRacePredictions now prefers an ENTRY LIST when available (definitive field, flags part-timers via is_part_time), else falls back to full-time car roster. ENTRY_LIST_CACHE + getEntryList + loadEntryList stub added — **feed URL NOT yet wired** (loadEntryList body commented out).
+
+### NEXT STEPS
+1. **Entry-list feed recon (BLOCKING the entry-list feature):** find the entry-list JSON on cf.nascar.com via DevTools Network tab on a race's entry-list page (same method that found lap-times). Likely `cacher/{year}/{series_id}/{race_id}/entry-list.json` or similar. Once found, fill in loadEntryList() (body is commented, ready) + call it on the prediction view. Michigan 2026 entry list: 36 full-time cars + #44 Yeley (part-time); #8→replacement car is the driver-change case.
+2. Deploy: `git add app.js data\pace_*.json scripts\scrape_lap_pace.py HANDOFF.md` → commit → push → hard-refresh home.
+3. LATER: probe how far back lap-data feeds go; watch upcoming races live and tune weights / shrink anchor (P28) / rookie-pull strength — model only Nashville-calibrated so far.
+
+---
+
+## [COMPLETED 2026-05-31] — RAM (earlier this session)
 
 ### RAM Manufacturer (NTS 2026) — FIXED
 Root cause: Ram debuted as its own brand in the 2026 Truck Series, but `MFR_MAP` in `scrape_points.py` had no `"ram"` keyword, so `manufacturer_code()` returned `""`. Blank-manufacturer rows are then dropped in `manufacturerStandingsThroughRound` (`if (!m ...) return`), so RAM never appeared. RR labels the TRUCK column literally "RAM" (verified on race-results pages).
