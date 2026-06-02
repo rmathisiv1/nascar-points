@@ -9909,6 +9909,9 @@ body.lightbox-open {
   grid-template-columns: 1fr 1fr;
   gap: 24px;
 }
+.rps-cols.rps-cols-single {
+  grid-template-columns: 1fr;
+}
 .rps-col {
   display: flex;
   flex-direction: column;

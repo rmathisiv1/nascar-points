@@ -3391,7 +3391,7 @@ function render() {
       race: "Race Center",
       track: "Track",
       schedule: "Schedule",
-      form: "Trending",
+      form: "Power Rankings",
       arc: "Cumulative Season",
       breakdown: "Stage Points",
       trajectory: "Stage vs Finish",
@@ -7390,20 +7390,24 @@ function renderTeammates() {
       }
     });
 
-    // For each group, compute benchmark (best FT car) + each member's delta
+    // For each group, compute benchmark (best FT car) + each member's delta.
     Object.keys(groupAll).forEach(grp => {
       const ftArr = groupFt[grp] || [];
-      if (ftArr.length < 2) return;   // need ≥2 FT cars for a benchmark
       const finishes = ftArr.map(e => e.finish).filter(f => f != null);
-      if (finishes.length === 0) return;
-      const bestFinish = Math.min(...finishes);
-      const bestTotal  = Math.max(...ftArr.map(e => e.total));
+      // A teammate benchmark needs ≥2 FT cars in THIS race. If fewer ran (e.g.
+      // a one-off where a team fielded a single car, or a mid-season car-number
+      // transition), we still RECORD each car's race for its sparkline — just
+      // without a delta vs. teammate. Previously the whole round was dropped,
+      // which made cars like RCR's #3/#33 vanish from weeks a teammate missed.
+      const haveBenchmark = ftArr.length >= 2 && finishes.length > 0;
+      const bestFinish = haveBenchmark ? Math.min(...finishes) : null;
+      const bestTotal  = haveBenchmark ? Math.max(...ftArr.map(e => e.total)) : null;
 
       groupAll[grp].forEach(e => {
         const isFt = fullTimeCars.has(e.car);
-        const deltaFin = (e.finish != null) ? (bestFinish - e.finish) : null;
-        const deltaTot = e.total - bestTotal;
-        const tlFin = isFt && !e.ineligible && e.finish != null && e.finish === bestFinish;
+        const deltaFin = (haveBenchmark && e.finish != null) ? (bestFinish - e.finish) : null;
+        const deltaTot = haveBenchmark ? (e.total - bestTotal) : null;
+        const tlFin = haveBenchmark && isFt && !e.ineligible && e.finish != null && e.finish === bestFinish;
 
         let agg = carData.get(e.car);
         if (!agg) {
@@ -12526,12 +12530,10 @@ function renderRacePredictionSection(opts) {
   return `
     <div class="home-section-h">${sectionTitle}${ttypeLabel ? ` <span class="ed-byline" style="font-size:0.7em;">· ${escapeHTML(ttypeLabel)}</span>` : ""}</div>
     <div class="rps-card card">
-      <div class="rps-cols">
-        ${performersCol}
+      <div class="rps-cols rps-cols-single">
         ${finishCol}
       </div>
       ${finishDetails}
-      ${stageDetails}
       ${explainerDetails}
     </div>
   `;
