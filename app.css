@@ -1459,7 +1459,8 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-weight: 600;
   font-size: 13px;
 }
-#standings-table td.rank-cell {
+#standings-table td.rank-cell,
+.data-table td.rank-cell {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   font-size: 14px;

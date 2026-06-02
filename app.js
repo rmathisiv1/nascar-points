@@ -4034,29 +4034,46 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
 
   const roundsInWindow = new Set(use.map(r => r.round));
 
-  // Finish (clean): avg finish → negate so higher = better.
-  const fins = use.map(r => r.finish).filter(x => x != null);
-  const finish = fins.length ? -(fins.reduce((s, x) => s + x, 0) / fins.length) : null;
+  // Recency weighting: more recent races count slightly more. A gentle linear
+  // step — the newest race weighs 1.0 and each race further back drops by
+  // RECENCY_STEP, floored so even the oldest still contributes meaningfully.
+  // `use` is oldest→newest (driverRaces is chronological), so index 0 is oldest.
+  const RECENCY_STEP = 0.08;
+  const nUse = use.length;
+  const wAt = (idx) => Math.max(0.3, 1 - (nUse - 1 - idx) * RECENCY_STEP);
+  // Weighted average over a value-extractor, skipping rows where it's null.
+  const wAvg = (rows, getter) => {
+    let wsum = 0, acc = 0;
+    rows.forEach((r, i) => {
+      const v = getter(r);
+      if (v == null) return;
+      const w = wAt(i);
+      acc += v * w; wsum += w;
+    });
+    return wsum > 0 ? acc / wsum : null;
+  };
 
-  // Qualifying: avg start → negate so higher = better.
-  const starts = use.map(r => r.start).filter(x => x != null);
-  const qual = starts.length ? -(starts.reduce((s, x) => s + x, 0) / starts.length) : null;
+  // Finish (clean): recency-weighted avg finish → negate so higher = better.
+  const finAvg = wAvg(use, r => r.finish);
+  const finish = finAvg != null ? -finAvg : null;
 
-  // Top-15%: avg share of green-flag laps run in the top 15 (higher = better).
-  const t15 = use.map(r => r.pct_top15).filter(x => x != null);
-  const top15 = t15.length ? (t15.reduce((s, x) => s + x, 0) / t15.length) : null;
+  // Qualifying: recency-weighted avg start → negate so higher = better.
+  const qualAvg = wAvg(use, r => r.start);
+  const qual = qualAvg != null ? -qualAvg : null;
 
-  // Pace: avg lap-time blend delta over the window's CLEAN rounds (lower delta
-  // = faster), negated so higher = better. Drawn from the pace records, matched
-  // to the same rounds we're scoring on.
+  // Top-15%: recency-weighted avg share of green-flag laps in the top 15.
+  const top15 = wAvg(use, r => r.pct_top15);
+
+  // Pace: recency-weighted avg lap-time blend over the window's clean rounds
+  // (lower delta = faster), negated so higher = better. Pace records are newest
+  // -first, so we reverse to oldest→newest to align with the recency weights.
   let pace = null;
   try {
     const recs = _paceRecordsFor(driverName, series);
     const inWin = recs.filter(rec => roundsInWindow.has(rec.round));
-    const paceRecs = inWin.length ? inWin : recs.slice(0, windowN);
-    if (paceRecs.length) {
-      pace = -(paceRecs.reduce((s, rec) => s + rec.blend, 0) / paceRecs.length);
-    }
+    const paceRecs = (inWin.length ? inWin : recs.slice(0, windowN)).slice().reverse();
+    const paceAvg = wAvg(paceRecs, rec => rec.blend);
+    if (paceAvg != null) pace = -paceAvg;
   } catch (_) { /* pace stays null; weight redistributes */ }
 
   return { pace, finish, top15, qual, nClean: clean.length };
@@ -5235,17 +5252,19 @@ function renderFormTable() {
     const spark = sparkSVG(d.lastFinishes, carHex, 58, 18);
     const ratingCls = d.deltaR == null ? "" : d.deltaR > 6 ? "hot" : d.deltaR < -6 ? "cold" : "";
     const teamPill = renderTeamPill(d.team_code);
-    // Power-rank movement arrow vs last week (positive rankDelta = moved up).
-    let rankArrow = `<span class="pr-move pr-move-flat" title="No change">–</span>`;
-    if (d.rankDelta != null && d.rankDelta > 0) {
-      rankArrow = `<span class="pr-move pr-move-up" title="Up ${d.rankDelta} since last race">▲${d.rankDelta}</span>`;
-    } else if (d.rankDelta != null && d.rankDelta < 0) {
-      rankArrow = `<span class="pr-move pr-move-down" title="Down ${Math.abs(d.rankDelta)} since last race">▼${Math.abs(d.rankDelta)}</span>`;
-    } else if (d.rankDelta == null) {
-      rankArrow = `<span class="pr-move pr-move-new" title="New to rankings">•</span>`;
+    // Power-rank movement pill vs last week — same style as the standings page.
+    let rankArrow;
+    if (d.rankDelta == null) {
+      rankArrow = `<span class="pos-change new" title="New to rankings">NEW</span>`;
+    } else if (d.rankDelta === 0) {
+      rankArrow = `<span class="pos-change flat" title="No change">—</span>`;
+    } else if (d.rankDelta > 0) {
+      rankArrow = `<span class="pos-change up" title="Up ${d.rankDelta} since last race">▲${d.rankDelta}</span>`;
+    } else {
+      rankArrow = `<span class="pos-change down" title="Down ${Math.abs(d.rankDelta)} since last race">▼${Math.abs(d.rankDelta)}</span>`;
     }
     return `<tr data-car-key="${escapeHTML(entityKey(d))}">
-      <td class="num"><span class="pr-rank-cell"><span class="pr-rank-num">${d.powerRank != null ? d.powerRank : "—"}</span>${rankArrow}</span></td>
+      <td class="rank-cell num">${d.powerRank != null ? d.powerRank : "—"}${rankArrow}</td>
       <td><a class="driver-cell profile-link" href="${profileHref(d)}">
         <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
         <span>${escapeHTML(displayName(d))}</span>
