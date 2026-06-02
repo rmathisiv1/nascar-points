@@ -11401,16 +11401,13 @@ function _simulateOneRace(matrixEntry, drivers) {
     if (Math.random() < PROJ_CATASTROPHE_PCT) {
       return { slug: d.slug, score: 25 + Math.random() * 15 }; // P25-P40 range
     }
-    // Ceiling skew: a driver's demonstrated top-5 rate is front-running ability
-    // that raw pace can't see. A proven front-runner (high top-5 rate) gets a
-    // small forward nudge on their predicted finish; a fast-but-doesn't-convert
-    // driver doesn't. ~50% top-5 rate → ~2 positions of upside; this lets a
-    // proven winner edge out a same-pace younger driver over a long rollout
-    // without overriding the pace signal.
-    const ceiling = (d.top5Rate || 0) * 4.0;   // up to ~4 spots at a 100% top-5 rate
+    // Pure rollout: the per-race finish comes straight from our prediction
+    // model (predictDriverForRace, via the matrix), plus symmetric noise.
+    // No reputation/pedigree skew — the projection is exactly our race
+    // metric carried forward over the remaining schedule.
     return {
       slug: d.slug,
-      score: matrixEntry.predsByDriver.get(d.slug) - ceiling + _sampleNormal() * PROJ_NOISE_SIGMA,
+      score: matrixEntry.predsByDriver.get(d.slug) + _sampleNormal() * PROJ_NOISE_SIGMA,
     };
   });
   noisy.sort((a, b) => a.score - b.score);  // lower noisy-rank = better finish
@@ -11526,12 +11523,6 @@ function simulateSeasonRollout(series, year, opts = {}) {
     const seasonAvgFinish = finishes.length
       ? finishes.reduce((a, b) => a + b, 0) / finishes.length
       : null;
-    // Front-running ceiling: proven top-5 rate this season. Used by the sim to
-    // give established front-runners more upside than same-pace drivers who
-    // haven't converted (a pace model alone can't tell a proven winner from a
-    // fast driver who finishes worse than their speed).
-    const startsThisYear = (e.races || []).filter(r => r.finish != null).length;
-    const top5Rate = startsThisYear > 0 ? (currentTop5 / startsThisYear) : 0;
     return {
       slug: slugify(name),
       name,
@@ -11541,7 +11532,6 @@ function simulateSeasonRollout(series, year, opts = {}) {
       currentPts,
       currentWins,
       currentTop5,
-      top5Rate,
       seasonAvgFinish,
     };
   }).filter(Boolean);
