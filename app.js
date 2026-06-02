@@ -12179,14 +12179,13 @@ function renderRacePredictionSection(opts) {
         <span class="rps-explainer-cta">methodology →</span>
       </summary>
       <div class="rps-explainer-body">
-        <strong>Finish prediction</strong> is pace-driven, blending six signals per driver, weighted:
-        their <em>lap-time pace over the last 3 races at this track</em> (40%),
-        their <em>recent pace at this track type</em> (18%),
-        their <em>all-time average finish at this track</em> (12%),
-        their <em>qualifying pace at this track type</em> (10%),
+        <strong>Finish prediction</strong> is pace-driven, blending five signals per driver, weighted:
+        their <em>lap-time pace over the last 3 races at this track</em> (50%),
+        their <em>recent pace at this track type</em> (10%),
+        their <em>all-time average finish at this track</em> (15%, with wreck/DNF outliers trimmed),
         their <em>qualifying pace at this track</em> (10%),
-        and their <em>form across the last 8 races</em> (10%).
-        Pace is measured from real lap times — the average of each driver's fastest 20% of green-flag laps blended with their green-flag median, expressed relative to the fastest car that race — so it reflects how fast a car actually was, not where it finished after wrecks, penalties, or pit strategy. When track-specific pace is unavailable (new venue, debut) it falls back to track-type then recent pace; drivers with little history or few starts this season are regressed toward the back of the field until they've shown sustained pace, so a thin sample of strong runs can't overrate a part-timer or rookie. Any signal still missing has its weight redistributed proportionally.
+        and their <em>recent pace form over the last 5 races</em> (15%).
+        Pace is measured from real lap times — the average of each driver's fastest 20% of green-flag laps blended with their green-flag median, expressed relative to the fastest car that race — so it reflects how fast a car actually was, not where it finished after wrecks, penalties, or pit strategy. Even "recent form" is pace-based rather than finish-based, so a crash or penalty doesn't drag down a fast car. When track-specific pace is unavailable (new venue, debut) the model leans on track-type pace (≈75%) so the prediction stays a read on speed; confidence in a track-pace sample scales with how much of the race the driver ran cleanly (green laps relative to the field), so a wreck-shortened run is trusted less. Any signal still missing has its weight redistributed proportionally.
         <br><br>
         <strong>Stage points</strong> blend three signals:
         <em>track-specific stage-points average</em> (40%),
@@ -12404,39 +12403,59 @@ function predictDriverForRace(driverName, series, trackCode) {
     }
     allTimeTrimmed = keep.reduce((a, b) => a + b, 0) / keep.length;
   }
-  // Recent form: last 8 finishes, trimmed of best + worst when enough samples.
-  let formTrimmed = null;
+  // Recent form — PACE-BASED, not finish-based. Finish-form carried every
+  // wreck/penalty/DNF as if it were "how the driver is running", which on a
+  // new track (where it balloons to a huge effective weight) could tank a
+  // genuinely fast car off one crash. Pace-form uses the driver's recent
+  // green-flag pace (overall, last 5) → expected finish, so "form" means how
+  // fast they've actually been running, consistent with the rest of the model.
+  let paceForm = null;
   {
-    const hist = getDriverRaceHistory(driverName, series) || [];
-    const last8 = hist.slice(0, 8).map(r => r.finish_pos).filter(n => n != null);
-    if (last8.length) {
-      let keep = last8.slice();
-      if (keep.length >= 4) {
-        const s = [...keep].sort((a, b) => a - b);
-        keep = s.slice(1, -1);             // drop best (s[0]) and worst (last)
-      }
-      formTrimmed = keep.reduce((a, b) => a + b, 0) / keep.length;
+    const recentPace = _paceRecordsFor(driverName, series, {});  // overall, newest first
+    if (recentPace.length) {
+      paceForm = paceToPos(_avgPace(recentPace, 5));
     }
   }
 
   // ----- Pace-dominant model (finish position) -----
-  // Weights set by user (2026-06), pushed harder toward pace:
+  // Weights (2026-06, pace-form rework):
   //   50% pace — last 3 races at THIS track (f20/median blend)
   //   10% pace — recent pace at this TRACK TYPE
   //   15% all-time avg finish at THIS track (wreck/DNF outliers trimmed)
   //   10% qual pace at THIS track
-  //   15% recent form, last 8 (best + worst trimmed)
-  // (track-type qualifying signal removed.) Pace = 60% total. Any signal
-  // that's null has its weight redistributed proportionally to the rest.
+  //   15% recent PACE form (last 5 races' green-flag pace → expected finish)
+  // Every signal except all-time + qual is now pace-derived. On a NEW track
+  // (no track-pace, no all-time, no qual), only track-type pace + pace-form
+  // survive and renormalize to ~40/60... see below: we additionally cap form
+  // so pace leads. Any null signal's weight redistributes proportionally.
   const signals = [
     { name: "pace_track3",   label: "Pace · last 3 here",   w: 0.50, val: tracePacePos },
     { name: "pace_type",     label: "Pace · track type",    w: 0.10, val: paceToPos(typePaceVal) },
     { name: "track_alltime", label: "All-time here",        w: 0.15, val: allTimeTrimmed },
     { name: "qual_track",    label: "Qual · this track",    w: 0.10, val: trackQual },
-    { name: "form_last8",    label: "Form (last 8)",        w: 0.15, val: formTrimmed },
+    { name: "pace_form",     label: "Pace form (last 5)",   w: 0.15, val: paceForm },
   ];
   const avail = signals.filter(s => s.val != null);
   if (avail.length === 0) return null;
+
+  // NEW-TRACK handling: when we have no track-specific pace AND no all-time
+  // finish here (a brand-new venue like a first-time street course), don't let
+  // recent pace-form carry the prediction by default renormalization. Lean on
+  // track-TYPE pace — the best available read on how this car runs at similar
+  // tracks. Target ~75% type-pace / 25% pace-form so the prediction stays a
+  // speed read, not a recent-results read.
+  const hasTrackPace = signals.find(s => s.name === "pace_track3").val != null;
+  const hasAllTime   = signals.find(s => s.name === "track_alltime").val != null;
+  const isNewTrack   = !hasTrackPace && !hasAllTime;
+  if (isNewTrack) {
+    const typeSig = avail.find(s => s.name === "pace_type");
+    const formSig = avail.find(s => s.name === "pace_form");
+    if (typeSig) typeSig.w = 0.75;
+    if (formSig) formSig.w = 0.25;
+    // qual_track is absent on a new track by definition; if any stray signal
+    // remains it keeps its small base weight and renormalization handles it.
+  }
+
   const wSum = avail.reduce((s, x) => s + x.w, 0);
   let predicted = avail.reduce((sum, x) => sum + (x.w / wSum) * x.val, 0);
   // Floor at 1.0 — can't predict better than winning.
