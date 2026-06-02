@@ -4695,11 +4695,16 @@ function getDriverTrackPace(driverName, series, trackCode) {
     if (here.length) {
       // Use the record with the most green laps in the window and compare it
       // to that race's field-max (ref_green) → a race-length-agnostic measure
-      // of "ran most of the race".
-      const top = here.slice(0, 3).reduce((a, b) =>
+      // of "ran most of the race". Window is the last 5 races at the track
+      // (was 3): with only a few seasons of pace data, a 3-race window let a
+      // single strong run at a track dominate the prediction (e.g. one good
+      // Bristol pace day making a driver the predicted Bristol winner). Five
+      // races dilutes any one race's influence. Low-confidence pace records are
+      // already excluded upstream in _paceRecordsFor.
+      const top = here.slice(0, 5).reduce((a, b) =>
         (b.green_laps || 0) > (a.green_laps || 0) ? b : a, here[0]);
       const ratio = (top.ref_green > 0) ? (top.green_laps || 0) / top.ref_green : null;
-      return { value: _avgPace(here, 3), source: "track", n: Math.min(here.length, 3),
+      return { value: _avgPace(here, 5), source: "track", n: Math.min(here.length, 5),
                greenLaps: top.green_laps || 0, greenRatio: ratio };
     }
   }
@@ -11975,7 +11980,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 17;  // v17: bust stale caches; champ% derivation is deterministic
+  const PROJ_VERSION = 18;  // v18: widen track-pace window to 5, shift weight track-pace 40 / track-type 20
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -12726,8 +12731,8 @@ function renderRacePredictionSection(opts) {
       </summary>
       <div class="rps-explainer-body">
         <strong>Finish prediction</strong> is pace-driven, blending five signals per driver, weighted:
-        their <em>lap-time pace over the last 3 races at this track</em> (50%),
-        their <em>recent pace at this track type</em> (10%),
+        their <em>lap-time pace over the last 5 races at this track</em> (40%),
+        their <em>recent pace at this track type</em> (20%),
         their <em>all-time average finish at this track</em> (15%, with wreck/DNF outliers trimmed),
         their <em>qualifying pace at this track</em> (10%),
         and their <em>recent pace form over the last 5 races</em> (15%).
@@ -12967,19 +12972,24 @@ function predictDriverForRace(driverName, series, trackCode) {
   }
 
   // ----- Pace-dominant model (finish position) -----
-  // Weights (2026-06, pace-form rework):
-  //   50% pace — last 3 races at THIS track (f20/median blend)
-  //   10% pace — recent pace at this TRACK TYPE
+  // Weights (2026-06, thin-sample rebalance):
+  //   40% pace — last 5 races at THIS track (f20/median blend)
+  //   20% pace — recent pace at this TRACK TYPE
   //   15% all-time avg finish at THIS track (wreck/DNF outliers trimmed)
   //   10% qual pace at THIS track
   //   15% recent PACE form (last 5 races' green-flag pace → expected finish)
-  // Every signal except all-time + qual is now pace-derived. On a NEW track
-  // (no track-pace, no all-time, no qual), only track-type pace + pace-form
-  // survive and renormalize to ~40/60... see below: we additionally cap form
-  // so pace leads. Any null signal's weight redistributes proportionally.
+  // Lowered track-pace from 50→40 and raised track-TYPE from 10→20: with only
+  // a few seasons of pace data, the per-track sample is tiny, so leaning so
+  // hard on it let one strong race at a track (e.g. a driver's earlier Bristol
+  // win) make them the predicted winner there. Track-TYPE pace is a much larger,
+  // more stable sample, so weighting it more makes the read about how fast the
+  // car is on that KIND of track, not one lucky day at the exact venue.
+  // Every signal except all-time + qual is pace-derived. On a NEW track only
+  // track-type pace + pace-form survive and renormalize. Null signals
+  // redistribute proportionally.
   const signals = [
-    { name: "pace_track3",   label: "Pace · last 3 here",   w: 0.50, val: tracePacePos },
-    { name: "pace_type",     label: "Pace · track type",    w: 0.10, val: paceToPos(typePaceVal) },
+    { name: "pace_track3",   label: "Pace · last 5 here",   w: 0.40, val: tracePacePos },
+    { name: "pace_type",     label: "Pace · track type",    w: 0.20, val: paceToPos(typePaceVal) },
     { name: "track_alltime", label: "All-time here",        w: 0.15, val: allTimeTrimmed },
     { name: "qual_track",    label: "Qual · this track",    w: 0.10, val: trackQual },
     { name: "pace_form",     label: "Pace form (last 5)",   w: 0.15, val: paceForm },
