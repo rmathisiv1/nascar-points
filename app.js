@@ -11718,7 +11718,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 12;  // v12: chase winner = 55pts (+stage), win dots
+  const PROJ_VERSION = 13;  // v13: chase rollout win bonus +15 + stage pts (champion now matches chart)
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -11963,11 +11963,22 @@ function simulateSeasonRollout(series, year, opts = {}) {
         const finishes = _simulateOneRace(entry, drivers);
         playoffField.forEach(d => {
           const finish = finishes.get(d.slug);
-          const pts = _finishPtsScale(finish);
-          reseed.set(d.slug, reseed.get(d.slug) + pts);
-          // Track chase-race wins/top5 for full-season projections
-          if (finish === 1) simWins.set(d.slug, simWins.get(d.slug) + 1);
+          let pts = _finishPtsScale(finish);
+          // Stage points (same as reg-season rollout): a front-runner banks
+          // these every week and they matter for the title.
+          const predStage = entry.stageByDriver ? (entry.stageByDriver.get(d.slug) || 0) : 0;
+          if (predStage > 0) {
+            const stageFactor = Math.max(0, Math.min(1, (26 - finish) / 25));
+            pts += predStage * stageFactor;
+          }
+          // Win bonus — MUST match reg-season scoring (NCS +15), or the
+          // championship sim under-rewards wins vs the rest of the app.
+          if (finish === 1) {
+            if (series === "NCS") pts += 15;
+            simWins.set(d.slug, simWins.get(d.slug) + 1);
+          }
           if (finish <= 5) simTop5.set(d.slug, simTop5.get(d.slug) + 1);
+          reseed.set(d.slug, reseed.get(d.slug) + pts);
         });
       });
       // Champion = leader after chase
@@ -24275,13 +24286,13 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
   }).join("");
 
   // Visible dots at each data point (including reseed starting dot). Predicted
-  // wins highlight gold with a larger radius, matching the profile heatmap.
-  const WIN_GOLD = "#e6b800";
+  // wins keep the car color but get a white perimeter ring (radius 5, like the
+  // win-dots on the driver profile charts).
   const dots = traces.flatMap(d => {
     const carHex = colorFor(proj.series, d.car_number);
     return d.points.map(p =>
       p.isWin
-        ? `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="5" fill="${WIN_GOLD}" stroke="var(--card)" stroke-width="1.5" opacity="1" pointer-events="none"/>`
+        ? `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="5" fill="${carHex}" stroke="#fff" stroke-width="1.5" opacity="1" pointer-events="none"/>`
         : `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="${p.isReseed ? 4 : 3}" fill="${carHex}" stroke="var(--card)" stroke-width="1" opacity="0.9" pointer-events="none"/>`
     );
   }).join("");
