@@ -5180,6 +5180,18 @@ function renderFormTable() {
   const powerNow = buildPowerRankings(entities, STATE.series, POWER_N);
   const powerPrev = prevRound != null ? buildPowerRankings(entities, STATE.series, POWER_N, prevRound) : new Map();
 
+  // Power-RATING trend over the last 8 race-states — same as the right rail, so
+  // the "last 8" plot on this table matches the rail's line exactly. Compute
+  // the field rankings at each of the last 8 round cutoffs once, then read each
+  // driver's rating at each step.
+  const trendRounds = completedRounds.slice(-POWER_N);
+  const ratingByRound = trendRounds.map(rnd => ({
+    round: rnd,
+    map: buildPowerRankings(entities, STATE.series, POWER_N, rnd),
+  }));
+  const ratingHistoryFor = (key) =>
+    ratingByRound.map(rr => { const pr = rr.map.get(key); return pr ? pr.rating : null; });
+
   let decorated = entities.map(d => {
     const key = entityKey(d);
     const pr = powerNow.get(key);
@@ -5190,7 +5202,7 @@ function renderFormTable() {
     const rankDelta = (pr && prPrev) ? (prPrev.rank - pr.rank) : null;
     const seasonRating = seasonTotalRating(d.races);
     const deltaR = (formRating != null && seasonRating != null) ? formRating - seasonRating : null;
-    const lastFinishes = d.races.slice(-shownRaces.length).map(r => r.finish);
+    const ratingHistory = ratingHistoryFor(key);
     const totalPts = d.races.reduce((s, r) => s + r.total, 0);
     const windowPts = d.races
       .filter(r => shownRaces.some(sr => sr.round === r.round))
@@ -5204,7 +5216,7 @@ function renderFormTable() {
         windowPtsDelta = windowPts - expectedPts;
       }
     }
-    return { ...d, formRating, powerRank, rankDelta, seasonRating, deltaR, lastFinishes, totalPts, windowPts, windowPtsDelta, fullTime: isFullTime(d) };
+    return { ...d, formRating, powerRank, rankDelta, seasonRating, deltaR, ratingHistory, totalPts, windowPts, windowPtsDelta, fullTime: isFullTime(d) };
   });
 
   // Compute avg NASCAR Driver Rating across the form window for each
@@ -5254,7 +5266,7 @@ function renderFormTable() {
   const rows = decorated.map((d, i) => {
     const carHex = colorFor(STATE.series, d.car_number);
     const txtCol = contrastTextFor(carHex);
-    const spark = sparkSVG(d.lastFinishes, carHex, 58, 18);
+    const spark = ratingSparkSVG(d.ratingHistory || [], carHex, 58, 18);
     const ratingCls = d.deltaR == null ? "" : d.deltaR > 6 ? "hot" : d.deltaR < -6 ? "cold" : "";
     const teamPill = renderTeamPill(d.team_code);
     // Power-rank movement pill vs last week — same style as the standings page.
