@@ -11373,9 +11373,10 @@ const PROJ_CATASTROPHE_PCT = 0.08;
 // the driver-analytics cache multiple times); calling it once per
 // (driver, race) pair instead of once per iteration is ~Nsim× faster.
 function _buildProjectionMatrix(series, remainingRaces, drivers) {
-  const matrix = []; // [{ trackCode, round, predsByDriver: Map<slug, predicted_finish> }]
+  const matrix = []; // [{ trackCode, round, predsByDriver, stageByDriver }]
   remainingRaces.forEach(race => {
     const predsByDriver = new Map();
+    const stageByDriver = new Map();
     drivers.forEach(d => {
       const pred = predictDriverForRace(d.name, series, race.track_code);
       // Fall back to driver's season-YTD avg or 20 (mid-pack) when
@@ -11385,8 +11386,15 @@ function _buildProjectionMatrix(series, remainingRaces, drivers) {
         ? pred.predicted_finish
         : (d.seasonAvgFinish ?? 20);
       predsByDriver.set(d.slug, predFinish);
+      // Predicted stage points for this race — a fast, consistent front-runner
+      // banks meaningful stage points every week, which is a big part of their
+      // real points total. Awarding them (not just finish points) is what makes
+      // the projection reflect the full points a driver earns for their run.
+      const stagePts = (pred && Number.isFinite(pred.predicted_stage_pts))
+        ? pred.predicted_stage_pts : 0;
+      stageByDriver.set(d.slug, stagePts);
     });
-    matrix.push({ trackCode: race.track_code, round: race.round, predsByDriver });
+    matrix.push({ trackCode: race.track_code, round: race.round, predsByDriver, stageByDriver });
   });
   return matrix;
 }
@@ -11455,7 +11463,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 9;   // v9: ceiling skew (top-5 rate front-running upside)
+  const PROJ_VERSION = 10;  // v10: award predicted stage points in reg-season rollout
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -11601,13 +11609,21 @@ function simulateSeasonRollout(series, year, opts = {}) {
       drivers.forEach(d => {
         const finish = finishes.get(d.slug);
         const pts = _finishPtsScale(finish);
-        // Stage points: approximate from the matrix's predicted_total_pts
-        // signal, but matrix only stores predicted_finish for speed.
-        // Skip stage points in the sim — over a multi-race rollout the
-        // averaging effect makes them roughly cancel between drivers.
-        // Win bonus only applies if rule has stages + we treat the sampled
-        // P1 as a real win.
+        // Stage points: award the driver's PREDICTED stage points for the race
+        // (a front-runner banks stage points every week — a real and large part
+        // of their total). Scale slightly by how the simulated finish compares
+        // to their expected finish, so a sim where they ran badly also costs
+        // some stage points, and a strong run keeps them. Capped at the
+        // predicted value (can't exceed what the model expects them to score).
         let pointsThisRace = pts;
+        const predStage = entry.stageByDriver ? (entry.stageByDriver.get(d.slug) || 0) : 0;
+        if (predStage > 0) {
+          // Front-runners (good simulated finish) bank ~full predicted stage
+          // pts; a back-of-field sim that race earns little. Linear taper:
+          // full at P1, ~0 by ~P25.
+          const stageFactor = Math.max(0, Math.min(1, (26 - finish) / 25));
+          pointsThisRace += predStage * stageFactor;
+        }
         if (finish === 1) {
           // Win bonus for NCS only (15); for NOS/NTS the 5pt bonus is
           // already baked into the 40 base for P1 in the modern scoring.
