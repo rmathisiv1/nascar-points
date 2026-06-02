@@ -4397,34 +4397,59 @@ const ENTRY_LIST_CACHE = {};
 function getEntryList(series, trackCode) {
   const s = ENTRY_LIST_CACHE[series];
   if (!s) return null;
-  return s[trackCode] || null;
+  // Prefer an exact track-code match; fall back to the "_next" slot only if it
+  // matches the requested track (guards against a stale file for another race).
+  const hit = s[trackCode] || (s._next && s._next) || null;
+  if (!hit) return null;
+  if (trackCode && hit.track && _entryTrackToCode(hit.track) &&
+      _entryTrackToCode(hit.track) !== trackCode) {
+    return null;  // file is for a different race than the one being predicted
+  }
+  return hit.list || null;
 }
 
-// Lazily fetch an entry list for a race. The feed URL is not yet confirmed —
-// once located on cf.nascar.com (via DevTools on the entry-list page, the same
-// way lap-times was found), uncomment and fix the URL below. Until then this is
-// a no-op and the board falls back to the full-time car roster.
-let _entryListAttempted = {};
-async function loadEntryList(series, trackCode, year, raceId) {
-  const key = `${series}:${trackCode}`;
-  if ((ENTRY_LIST_CACHE[series] && ENTRY_LIST_CACHE[series][trackCode]) || _entryListAttempted[key]) return;
-  _entryListAttempted[key] = true;
-  // const SERIES_ID = { NCS: 1, NOS: 2, NTS: 3 }[series];
-  // const url = `https://cf.nascar.com/cacher/${year}/${SERIES_ID}/${raceId}/entry-list.json`;
-  // try {
-  //   const r = await fetch(url);
-  //   if (!r.ok) return;
-  //   const data = await r.json();
-  //   const list = (data.entries || data.Entries || []).map(en => ({
-  //     car_number: String(en.car_number != null ? en.car_number : (en.Number || "")).trim(),
-  //     driver: String(en.driver_name != null ? en.driver_name : (en.FullName || "")).trim(),
-  //     team: String(en.team_name != null ? en.team_name : (en.Team || "")).trim(),
-  //     ineligible: en.ineligible === true,
-  //   })).filter(e => e.car_number && e.driver);
-  //   if (list.length) {
-  //     (ENTRY_LIST_CACHE[series] = ENTRY_LIST_CACHE[series] || {})[trackCode] = list;
-  //   }
-  // } catch (e) { /* no entry list — fall back to full-time roster */ }
+// Lazily load the entry list for the upcoming race from the committed data
+// file (data/entry_list.json), produced weekly by scripts/scrape_entry_list.py
+// from NASCAR's odds feed. The file holds the next race per series, each with
+// the full field (driver, driver_id, win_prob). We match the requested
+// trackCode to the file's track to be sure it's the right race; if it doesn't
+// match (file is stale / different race), we return nothing and the board
+// falls back to the full-time car roster.
+let _entryListAttempted = false;
+async function loadEntryList() {
+  if (_entryListAttempted) return;
+  _entryListAttempted = true;
+  try {
+    const r = await fetch("data/entry_list.json");
+    if (!r.ok) return;
+    const data = await r.json();
+    const bySeries = (data && data.series) || {};
+    for (const [series, block] of Object.entries(bySeries)) {
+      if (!block || !Array.isArray(block.entries)) continue;
+      const list = block.entries
+        .map(e => ({
+          driver: (e.driver || "").trim(),
+          driver_id: e.driver_id != null ? e.driver_id : null,
+          win_prob: typeof e.win_prob === "number" ? e.win_prob : null,
+        }))
+        .filter(e => e.driver);
+      if (!list.length) continue;
+      // Key by the file's track for this race so getEntryList can confirm the
+      // match. We resolve the feed track name to the app's track code.
+      const code = _entryTrackToCode(block.track);
+      ENTRY_LIST_CACHE[series] = ENTRY_LIST_CACHE[series] || {};
+      ENTRY_LIST_CACHE[series][code || "_next"] = { list, track: block.track, race_id: block.race_id };
+    }
+  } catch (e) { /* no entry list — fall back to full-time roster */ }
+}
+
+// Resolve a feed track name to the app's track code via TRACK_NAMES token match.
+function _entryTrackToCode(trackName) {
+  if (typeof TRACK_NAMES === "undefined" || !trackName) return null;
+  for (const [code, nm] of Object.entries(TRACK_NAMES)) {
+    if (_tracksMatch(nm, trackName)) return code;
+  }
+  return null;
 }
 
 // QUAL-PACE SIGNALS. Use TRUE qualifying position (qual_pos), not start_pos —
@@ -11010,8 +11035,11 @@ function renderHome() {
   if (typeof ensurePaceLoaded === "function" && !STATE._paceKicked) {
     STATE._paceKicked = true;
     const yrs = [STATE.season, STATE.season - 1, STATE.season - 2];
-    ensurePaceLoaded(yrs).then(() => {
-      if (Object.keys(PACE_CACHE).length) renderHome();
+    Promise.all([
+      ensurePaceLoaded(yrs),
+      (typeof loadEntryList === "function") ? loadEntryList() : Promise.resolve(),
+    ]).then(() => {
+      if (Object.keys(PACE_CACHE).length || Object.keys(ENTRY_LIST_CACHE).length) renderHome();
     });
   }
 
@@ -11120,23 +11148,30 @@ function _computeRacePredictions(series, trackCode) {
   const entryList = (typeof getEntryList === "function")
     ? getEntryList(series, trackCode) : null;
 
-  let roster;  // [{ driverName, entity|null, isPartTime, car_number }]
+  let roster;  // [{ driverName, entity|null, isPartTime, win_prob }]
   if (entryList && entryList.length) {
     roster = entryList.map(en => {
-      const ent = allEntities().find(e => String(e.car_number) === String(en.car_number));
+      const nm = en.driver;
+      // Join the entered driver to their car/entity by name (entities are
+      // car-keyed; find the car this driver currently represents).
+      const ent = allEntities().find(e =>
+        (e.primaryDriver || e.driver || "").toLowerCase() === nm.toLowerCase() ||
+        (e.driversByStarts || []).some(d => d.name.toLowerCase() === nm.toLowerCase())
+      );
       return {
-        driverName: en.driver,
+        driverName: nm,
         entity: ent || null,
-        car_number: en.car_number,
-        // part-time if the car isn't a full-time charter OR the entry is flagged
-        isPartTime: en.ineligible === true || !(ent && isFullTime(ent)),
+        win_prob: en.win_prob != null ? en.win_prob : null,
+        // Part-time = the car isn't a full-time charter (single source of truth).
+        // A driver with no resolvable car/entity is treated part-time too.
+        isPartTime: !(ent && isFullTime(ent)),
       };
     });
   } else {
     roster = allEntities().filter(isFullTime).map(e => ({
       driverName: e.primaryDriver || e.driver,
       entity: e,
-      car_number: e.car_number,
+      win_prob: null,
       isPartTime: false,
     }));
   }
@@ -11146,7 +11181,7 @@ function _computeRacePredictions(series, trackCode) {
     const pred = predictDriverForRace(r.driverName, series, trackCode);
     if (!pred) return null;
     return { entity: r.entity, driverName: r.driverName,
-             car_number: r.car_number, is_part_time: r.isPartTime, ...pred };
+             win_prob: r.win_prob, is_part_time: r.isPartTime, ...pred };
   }).filter(Boolean);
   return {
     byFinish: [...predictions].sort((a, b) => a.predicted_finish - b.predicted_finish),
@@ -11820,15 +11855,17 @@ function _renderPerformerRow(row, i, series) {
 
 // Render a single stage-points-prediction row.
 function _renderStagePtsRow(p, i, series) {
-  const carHex = colorFor(series, p.entity.car_number);
+  const carNum = p.entity ? p.entity.car_number : null;
+  const carHex = carNum ? colorFor(series, carNum) : "#888";
   const carTxt = contrastTextFor(carHex);
   const slug = slugify(p.driverName);
   const sp = p.predicted_stage_pts;
   const tierCls = _stagePtsTierClass(sp);
+  const carLabel = carNum ? `#${carNum}` : "—";
   return `
     <a class="hp-row profile-link" href="#/driver/${slug}">
       <span class="hp-pos">${i + 1}</span>
-      <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
+      <span class="hp-car" style="background:${carHex};color:${carTxt}">${carLabel}</span>
       <span class="hp-name">${escapeHTML(p.driverName)}</span>
       <span class="hp-stat-cell hp-pred ${tierCls}">${sp.toFixed(1)}</span>
     </a>
@@ -11837,7 +11874,8 @@ function _renderStagePtsRow(p, i, series) {
 
 // Render a single predicted-finish row (used inside the full-field <details>).
 function _renderFinishRow(p, i, series) {
-  const carHex = colorFor(series, p.entity.car_number);
+  const carNum = p.entity ? p.entity.car_number : null;
+  const carHex = carNum ? colorFor(series, carNum) : "#888";
   const carTxt = contrastTextFor(carHex);
   const slug = slugify(p.driverName);
   const finishVal = p.predicted_finish;
@@ -11860,11 +11898,16 @@ function _renderFinishRow(p, i, series) {
   if (p.has_track_history && p.has_type_history) dots = "•••";
   else if (p.has_track_history || p.has_type_history) dots = "••○";
   else dots = "•○○";
+  // Part-timer flag: a driver entered in the race whose car is not a full-time
+  // charter (only set when ranking off an entry list).
+  const ptBadge = p.is_part_time
+    ? `<span class="hp-parttime" title="Part-time entry (not a full-time charter)">PT</span>` : "";
+  const carLabel = carNum ? `#${carNum}` : "—";
   return `
     <a class="hp-row hp-row-finish profile-link" href="#/driver/${slug}">
       <span class="hp-pos">${i + 1}</span>
-      <span class="hp-car" style="background:${carHex};color:${carTxt}">#${p.entity.car_number}</span>
-      <span class="hp-name">${escapeHTML(p.driverName)}</span>
+      <span class="hp-car" style="background:${carHex};color:${carTxt}">${carLabel}</span>
+      <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}</span>
       <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
       <span class="hp-row-extras">
         <span class="hp-extra-cell"><span class="hp-extra-label">stage</span><span class="hp-stat-cell ${stageCls}">${p.predicted_stage_pts.toFixed(1)}</span></span>

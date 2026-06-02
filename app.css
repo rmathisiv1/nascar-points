@@ -9952,6 +9952,20 @@ body.lightbox-open {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.hp-parttime {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  vertical-align: middle;
+  border-radius: 3px;
+  background: var(--surface-3, #2a2a2a);
+  color: var(--text-dim, #999);
+  border: 1px solid var(--border, #3a3a3a);
+}
 .hp-stat-cell {
   font-family: var(--mono);
   font-size: 12px;
