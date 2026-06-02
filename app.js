@@ -3190,6 +3190,21 @@ function wireUIControls() {
       if (entity) paintProfileTrackSplits(entity);
       return;
     }
+    // Top-5-tracks series filter (separate toggle, separate state)
+    const ttBtn = e.target.closest("#profile-toptracks-series-toggle button");
+    if (ttBtn) {
+      e.preventDefault();
+      const newSeries = ttBtn.dataset.srs;
+      if (!newSeries || newSeries === (STATE.profile.topTracksSeries || STATE.series)) return;
+      STATE.profile.topTracksSeries = newSeries;
+      ttBtn.parentElement.querySelectorAll("button").forEach(b =>
+        b.classList.toggle("on", b === ttBtn)
+      );
+      const ent = findEntityFromSlug();
+      const drv = ent ? (ent.primaryDriver || ent.driver) : null;
+      if (drv) paintProfileTopTracks(drv);
+      return;
+    }
     // Career-heatmap series filter (separate toggle, separate state)
     const heatBtn = e.target.closest("#profile-heatmap-series-toggle button");
     if (heatBtn) {
@@ -4054,6 +4069,8 @@ function getDriverRaceHistory(driverName, series) {
           stage1_pts: d.stage_1_pts || 0,
           stage2_pts: d.stage_2_pts || 0,
           stage_pts_total: (d.stage_1_pts || 0) + (d.stage_2_pts || 0),
+          laps_led: d.laps_led || 0,
+          status: d.status || null,
           car_number: d.car_number,
         });
         break; // one row per race per driver
@@ -4185,6 +4202,115 @@ function getDriverRecentForm(driverName, series, lastN = 5) {
       return pts.length ? pts.reduce((a, b) => a + b, 0) / pts.length : null;
     })(),
   };
+}
+
+// ============================================================
+// TOP TRACKS — a driver's best venues by a balanced 6-stat score
+// ============================================================
+// Ranks every track a driver has run (in `series`, across all loaded years)
+// by a blend of six equally-weighted components, each normalized 0..1 across
+// THIS driver's own tracks (so the score is "best relative to their tracks"):
+//   1. avg finish        (lower better; low-outlier wrecks/DNFs trimmed)
+//   2. avg race points   (higher better; low-outlier bad days trimmed)
+//   3. laps led / race   (higher better)
+//   4. top-15% rate      (finish within top ~15% of field, higher better)
+//   5. pace delta        (our lap-time metric; lower better; only races with
+//                         pace data — older years without pace skip this and
+//                         the other five still score)
+//   6. front-running     (win + top-5 rate, higher better)
+// Eligibility: a track needs >= minStarts (2 normally; 1 if the driver has
+// <2 starts at EVERY track — a newcomer — so they still get a list).
+function getDriverTopTracks(driverName, series, limit = 5) {
+  const history = getDriverRaceHistory(driverName, series);
+  if (!history.length) return [];
+
+  const byTrack = new Map();
+  for (const r of history) {
+    if (!r.track_code) continue;
+    if (!byTrack.has(r.track_code)) {
+      byTrack.set(r.track_code, { code: r.track_code, track: r.track, rows: [] });
+    }
+    byTrack.get(r.track_code).rows.push(r);
+  }
+
+  const maxStartsAnywhere = Math.max(...[...byTrack.values()].map(t => t.rows.length));
+  const minStarts = maxStartsAnywhere >= 2 ? 2 : 1;
+
+  const trimLowFinish = (vals) => {            // finishes: "low" = high number (bad)
+    if (vals.length < 4) return vals;
+    const s = [...vals].sort((a, b) => a - b);
+    const q = (p) => s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))];
+    const fence = q(0.75) + 1.5 * (q(0.75) - q(0.25));
+    const t = vals.filter(v => v <= fence);
+    return t.length ? t : vals;
+  };
+  const trimLowPoints = (vals) => {            // points: "low" = small number (bad)
+    if (vals.length < 4) return vals;
+    const s = [...vals].sort((a, b) => a - b);
+    const q = (p) => s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))];
+    const fence = q(0.25) - 1.5 * (q(0.75) - q(0.25));
+    const t = vals.filter(v => v >= fence);
+    return t.length ? t : vals;
+  };
+  const mean = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+
+  const tracks = [];
+  for (const t of byTrack.values()) {
+    const starts = t.rows.length;
+    if (starts < minStarts) continue;
+    const finishes = t.rows.map(r => r.finish_pos).filter(n => n != null);
+    const pts = t.rows.map(r => r.race_pts).filter(n => n != null);
+    if (!finishes.length) continue;
+
+    const avgFinish = mean(trimLowFinish(finishes));
+    const avgPts = mean(trimLowPoints(pts));
+    const lapsLedPerRace = mean(t.rows.map(r => r.laps_led || 0));
+    const top15 = finishes.filter(f => f <= 6).length / finishes.length;  // ~top 15% of 40
+    const wins = finishes.filter(f => f === 1).length;
+    const top5 = finishes.filter(f => f <= 5).length;
+    const frontRate = (wins / starts) * 0.5 + (top5 / starts) * 0.5;
+
+    let paceDelta = null;
+    if (typeof _paceRecordsFor === "function") {
+      const pr = _paceRecordsFor(driverName, series, { trackName: t.track });
+      if (pr.length) paceDelta = mean(pr.map(p => p.blend));
+    }
+
+    tracks.push({
+      code: t.code, track: t.track, starts,
+      avgFinish, avgPts, lapsLedPerRace, top15, frontRate, paceDelta, wins, top5,
+    });
+  }
+  if (!tracks.length) return [];
+
+  const norm = (vals, lowerIsBetter) => {
+    const present = vals.filter(v => v != null);
+    if (!present.length) return vals.map(() => null);
+    const lo = Math.min(...present), hi = Math.max(...present);
+    const span = hi - lo;
+    return vals.map(v => {
+      if (v == null) return null;
+      if (span === 0) return 0.5;
+      const t = (v - lo) / span;
+      return lowerIsBetter ? 1 - t : t;
+    });
+  };
+  const nFinish = norm(tracks.map(t => t.avgFinish), true);
+  const nPts    = norm(tracks.map(t => t.avgPts), false);
+  const nLaps   = norm(tracks.map(t => t.lapsLedPerRace), false);
+  const nTop15  = norm(tracks.map(t => t.top15), false);
+  const nFront  = norm(tracks.map(t => t.frontRate), false);
+  const nPace   = norm(tracks.map(t => t.paceDelta), true);
+
+  tracks.forEach((t, i) => {
+    const comps = [nFinish[i], nPts[i], nLaps[i], nTop15[i], nFront[i], nPace[i]]
+      .filter(v => v != null);
+    t.score = comps.length ? comps.reduce((a, b) => a + b, 0) / comps.length : 0;
+    t.hasPace = nPace[i] != null;
+  });
+
+  tracks.sort((a, b) => b.score - a.score);
+  return tracks.slice(0, limit);
 }
 
 // Speed signals — qualifying, stage position, laps led, top-15 rate.
@@ -8725,6 +8851,22 @@ function renderProfile() {
           <div id="profile-career-heatmap"></div>
         </div>
       </div>
+
+      <div class="profile-panel full">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">Top 5 Tracks</span>
+          <div class="profile-panel-head-right">
+            <div class="toggle-group mini" id="profile-toptracks-series-toggle">
+              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
+              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
+              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
+            </div>
+          </div>
+        </div>
+        <div class="profile-panel-body">
+          <div id="profile-top-tracks"></div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -8732,6 +8874,7 @@ function renderProfile() {
   paintProfileChart(entity, rows);
   paintProfileYearOverYear(primaryDrv);
   paintProfileHeatStrip(rows);
+  paintProfileTopTracks(primaryDrv);
   paintProfileTrackSplits(entity);
   paintProfileRaceTable(rows, kind);
   paintProfileCareerHeatmap();
@@ -9560,6 +9703,36 @@ function paintProfileYearOverYear(driverName) {
     ${priorPath}
     ${currentPath}
     ${priorLabel}
+  `;
+}
+
+// Renders the "Top 5 Tracks" list in the driver profile. Uses the profile's
+// top-tracks series toggle (defaults to the locked profile series). Each row
+// shows rank, track, avg points and avg finish, and links to the track page.
+function paintProfileTopTracks(driverName) {
+  const host = document.getElementById("profile-top-tracks");
+  if (!host) return;
+  const series = STATE.profile.topTracksSeries || STATE.series;
+  const top = (typeof getDriverTopTracks === "function")
+    ? getDriverTopTracks(driverName, series, 5) : [];
+  if (!top.length) {
+    host.innerHTML = `<div class="profile-empty-note">No ${series} track history with enough starts yet.</div>`;
+    return;
+  }
+  const fmt1 = (v) => v == null ? "—" : v.toFixed(1);
+  host.innerHTML = `
+    <div class="top-tracks-list">
+      ${top.map((t, i) => `
+        <a class="top-tracks-row" href="#/track/${encodeURIComponent(t.code)}">
+          <span class="tt-rank">${i + 1}</span>
+          <span class="tt-track">${escapeHTML(t.track)}</span>
+          <span class="tt-stat"><span class="tt-stat-label">avg pts</span><span class="tt-stat-val">${fmt1(t.avgPts)}</span></span>
+          <span class="tt-stat"><span class="tt-stat-label">avg fin</span><span class="tt-stat-val">${fmt1(t.avgFinish)}</span></span>
+          <span class="tt-starts">${t.starts} ${t.starts === 1 ? "start" : "starts"}</span>
+          <span class="tt-arrow">→</span>
+        </a>
+      `).join("")}
+    </div>
   `;
 }
 

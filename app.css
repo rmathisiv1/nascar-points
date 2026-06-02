@@ -2702,6 +2702,68 @@ td.neg { color: var(--neg); }
 }
 .profile-panel-body { padding: 14px; }
 
+/* Top 5 Tracks list (driver profile) */
+.top-tracks-list { display: flex; flex-direction: column; }
+.top-tracks-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.12s;
+}
+.top-tracks-row:last-child { border-bottom: none; }
+.top-tracks-row:hover { background: var(--border); }
+.top-tracks-row .tt-rank {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  width: 22px;
+  text-align: center;
+  opacity: 0.6;
+}
+.top-tracks-row .tt-track {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top-tracks-row .tt-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 52px;
+}
+.top-tracks-row .tt-stat-label {
+  font-family: var(--sans);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+}
+.top-tracks-row .tt-stat-val {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+}
+.top-tracks-row .tt-starts {
+  font-family: var(--sans);
+  font-size: 11px;
+  opacity: 0.6;
+  min-width: 56px;
+  text-align: right;
+}
+.top-tracks-row .tt-arrow { opacity: 0.4; font-size: 14px; }
+@media (max-width: 640px) {
+  .top-tracks-row .tt-starts { display: none; }
+}
+
 /* Heat strip */
 .profile-heat-strip {
   display: grid;
