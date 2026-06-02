@@ -11718,7 +11718,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 11;  // v11: model fixes (pace-form, draft tracks, regression) + chase chart hover
+  const PROJ_VERSION = 12;  // v12: chase winner = 55pts (+stage), win dots
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -24150,6 +24150,30 @@ function _computeChaseTraces(chaseDrivers, proj) {
   );
   const reseedTable = proj.rule.reseedTable || [2100];
 
+  // First pass: compute every chase driver's predicted finish (+ stage pts) at
+  // each chase race, so we can determine the per-race WINNER (lowest predicted
+  // finish in the field) and award real win points (P1 + winner bonus + stage),
+  // not just the raw finish-scale value.
+  const predByRace = new Map();   // round -> [{slug, predFinish, stagePts}]
+  byRegTotal.forEach(d => {
+    chaseRaces.forEach(race => {
+      if (!race.track_code) return;
+      const pred = predictDriverForRace(d.name, proj.series, race.track_code);
+      const predFinish = pred ? pred.predicted_finish : 20;
+      const stagePts = pred && Number.isFinite(pred.predicted_stage_pts)
+        ? pred.predicted_stage_pts : 0;
+      if (!predByRace.has(race.round)) predByRace.set(race.round, []);
+      predByRace.get(race.round).push({ slug: d.slug, predFinish, stagePts });
+    });
+  });
+  // Winner per race = lowest predicted finish.
+  const winnerByRace = new Map();
+  predByRace.forEach((arr, round) => {
+    let best = null;
+    for (const x of arr) if (!best || x.predFinish < best.predFinish) best = x;
+    if (best) winnerByRace.set(round, best.slug);
+  });
+
   const traces = byRegTotal.map((d, seedIdx) => {
     const startPts = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;
     const seed = seedIdx + 1;
@@ -24159,10 +24183,19 @@ function _computeChaseTraces(chaseDrivers, proj) {
       if (!race.track_code) return;
       const pred = predictDriverForRace(d.name, proj.series, race.track_code);
       const predFinish = pred ? pred.predicted_finish : 20;
-      const racePts = _finishPtsScale(Math.round(predFinish));
+      const stagePts = pred && Number.isFinite(pred.predicted_stage_pts)
+        ? pred.predicted_stage_pts : 0;
+      const isWin = winnerByRace.get(race.round) === d.slug;
+      // Real points: finish-position points + predicted stage points, plus the
+      // winner's bonus for the predicted race winner. NCS win bonus is +15
+      // (40 base + 15 = 55 for a win, before stage points), matching the
+      // regular-season rollout and the _finishPtsScale comment.
+      let racePts = _finishPtsScale(isWin ? 1 : Math.round(predFinish)) + stagePts;
+      if (isWin && proj.series === "NCS") racePts += 15;
       cum += racePts;
-      points.push({ round: race.round, cum, predFinish: Math.round(predFinish),
-                    racePts, isWin: Math.round(predFinish) === 1,
+      points.push({ round: race.round, cum,
+                    predFinish: isWin ? 1 : Math.round(predFinish),
+                    racePts: Math.round(racePts), isWin,
                     track: race.track || race.track_code || "" });
     });
     return {
