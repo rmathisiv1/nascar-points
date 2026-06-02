@@ -4471,6 +4471,12 @@ function _paceRecordsFor(driverName, series, { trackName = null, trackType = nul
       }
       const rec = race._paceByNorm[want];
       if (!rec) continue;
+      // Skip low-confidence records: a pace built on too few green laps (e.g.
+      // 1 lap → an absurd 80%+ delta from a slow out-lap/pit cycle) is not a
+      // usable measurement of how fast the car was, and would otherwise poison
+      // the driver's OWN pace average (it's already excluded from the field
+      // benchmark in the scraper). Treat it as missing.
+      if (rec.low_confidence) continue;
       const blend = paceBlend(rec);
       if (blend == null) continue;
       out.push({ year: y, round: race.round || 0, track: race.track, blend,
@@ -12486,7 +12492,12 @@ function predictDriverForRace(driverName, series, trackCode) {
   // so the weighted average is coherent. (PACE_DELTA_TO_POS is the slope; it
   // only affects scale, not ordering, and can be tuned.)
   const PACE_DELTA_TO_POS = 6.0;
-  const paceToPos = (deltaPct) => deltaPct == null ? null : 1 + PACE_DELTA_TO_POS * deltaPct;
+  // Map pace delta → expected finish. Clamp the delta at 6% (a real green-flag
+  // pace can't be much worse than ~5-6% off the leader; anything beyond is bad
+  // data) so a stray corrupt record can never produce an absurd finish like
+  // P99. Defense-in-depth alongside the low-confidence skip in _paceRecordsFor.
+  const paceToPos = (deltaPct) =>
+    deltaPct == null ? null : 1 + PACE_DELTA_TO_POS * Math.min(deltaPct, 6.0);
 
   const trackPace = getDriverTrackPace(driverName, series, trackCode);      // {value, source, n}
   const typePaceVal = getDriverTypePace(driverName, series, trackCode);
