@@ -11267,6 +11267,13 @@ body.lightbox-open {
   margin-bottom: 4px;
   color: var(--text);
 }
+.pc-tip-win {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 700;
+  color: #e6b800;
+  letter-spacing: 0.03em;
+}
 .pc-tip-row {
   display: flex;
   justify-content: space-between;

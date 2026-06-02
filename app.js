@@ -11718,7 +11718,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 10;  // v10: award predicted stage points in reg-season rollout
+  const PROJ_VERSION = 11;  // v11: model fixes (pace-form, draft tracks, regression) + chase chart hover
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -24145,7 +24145,7 @@ function _computeChaseTraces(chaseDrivers, proj) {
   );
   const reseedTable = proj.rule.reseedTable || [2100];
 
-  return byRegTotal.map((d, seedIdx) => {
+  const traces = byRegTotal.map((d, seedIdx) => {
     const startPts = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;
     const seed = seedIdx + 1;
     const points = [{ round: regEnd, cum: startPts, seed, isReseed: true, track: "Reseed" }];
@@ -24156,7 +24156,9 @@ function _computeChaseTraces(chaseDrivers, proj) {
       const predFinish = pred ? pred.predicted_finish : 20;
       const racePts = _finishPtsScale(Math.round(predFinish));
       cum += racePts;
-      points.push({ round: race.round, cum, predFinish: Math.round(predFinish), track: race.track || race.track_code || "" });
+      points.push({ round: race.round, cum, predFinish: Math.round(predFinish),
+                    racePts, isWin: Math.round(predFinish) === 1,
+                    track: race.track || race.track_code || "" });
     });
     return {
       slug: d.slug, name: d.name, car_number: d.car_number,
@@ -24164,6 +24166,19 @@ function _computeChaseTraces(chaseDrivers, proj) {
       projected_wins: d.projected_wins, projected_top5: d.projected_top5,
     };
   });
+
+  // Standings position at each round: rank every driver's cum pts per round
+  // so the tooltip can show where they sit at that point in the season.
+  const rounds = new Set();
+  traces.forEach(t => t.points.forEach(p => rounds.add(p.round)));
+  rounds.forEach(rnd => {
+    const atRound = traces
+      .map(t => ({ t, pt: t.points.find(p => p.round === rnd) }))
+      .filter(x => x.pt);
+    atRound.sort((a, b) => b.pt.cum - a.pt.cum);
+    atRound.forEach((x, i) => { x.pt.pos = i + 1; });
+  });
+  return traces;
 }
 
 // Uses pre-computed traces from _computeChaseTraces.
@@ -24221,18 +24236,22 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     <path class="pc-line-hover" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-car="${d.car_number}" d="${pathD}" fill="none" stroke="transparent" stroke-width="12" stroke-linejoin="round" pointer-events="stroke"/>`;
   }).join("");
 
-  // Visible dots at each data point (including reseed starting dot)
+  // Visible dots at each data point (including reseed starting dot). Predicted
+  // wins highlight gold with a larger radius, matching the profile heatmap.
+  const WIN_GOLD = "#e6b800";
   const dots = traces.flatMap(d => {
     const carHex = colorFor(proj.series, d.car_number);
     return d.points.map(p =>
-      `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="${p.isReseed ? 4 : 3}" fill="${carHex}" stroke="var(--card)" stroke-width="1" opacity="0.9" pointer-events="none"/>`
+      p.isWin
+        ? `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="5" fill="${WIN_GOLD}" stroke="var(--card)" stroke-width="1.5" opacity="1" pointer-events="none"/>`
+        : `<circle cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="${p.isReseed ? 4 : 3}" fill="${carHex}" stroke="var(--card)" stroke-width="1" opacity="0.9" pointer-events="none"/>`
     );
   }).join("");
 
   // Hit circles (invisible, larger for hover)
   const hits = traces.flatMap(d =>
     d.points.map(p =>
-      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="12" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}" data-finish="${p.predFinish || ''}" data-track="${escapeHTML(p.track || '')}" data-seed="${p.seed || ''}"/>`
+      `<circle class="pc-hit" cx="${xScale(p.round).toFixed(1)}" cy="${yScale(p.cum).toFixed(1)}" r="12" fill="transparent" data-slug="${d.slug}" data-driver="${escapeHTML(d.name)}" data-round="${p.round}" data-cum="${Math.round(p.cum)}" data-car="${d.car_number}" data-finish="${p.predFinish || ''}" data-track="${escapeHTML(p.track || '')}" data-seed="${p.seed || ''}" data-racepts="${p.racePts ?? ''}" data-pos="${p.pos ?? ''}" data-win="${p.isWin ? 1 : ''}"/>`
     )
   ).join("");
 
@@ -25102,13 +25121,21 @@ function _pointsCalcWireTooltips() {
     const slug = target.dataset.slug || "";
 
     if (hit) {
-      // Precise data-point hover: show exact round + cum pts
+      // Precise data-point hover: track, predicted points earned, and the
+      // driver's predicted standings position at that point in the chase.
       const round = hit.dataset.round || "?";
       const cum = hit.dataset.cum || "?";
+      const track = hit.dataset.track || "";
+      const racepts = hit.dataset.racepts;
+      const pos = hit.dataset.pos;
+      const isWin = hit.dataset.win === "1";
+      const posOrd = pos ? `P${pos}` : "—";
       tip.innerHTML = `
-        <div class="pc-tip-driver">${driver}</div>
-        <div class="pc-tip-row"><span>Round</span><span>R${round}</span></div>
-        <div class="pc-tip-row"><span>Cum. pts</span><span>${cum}</span></div>
+        <div class="pc-tip-driver">${driver}${isWin ? ' <span class="pc-tip-win">★ WIN</span>' : ''}</div>
+        <div class="pc-tip-row"><span>${track ? escapeHTML(track) : "R" + round}</span><span></span></div>
+        ${racepts !== "" && racepts != null ? `<div class="pc-tip-row"><span>Pred. pts</span><span>+${racepts}</span></div>` : ""}
+        <div class="pc-tip-row"><span>Cum. pts</span><span>${Number(cum).toLocaleString()}</span></div>
+        <div class="pc-tip-row"><span>Position</span><span>${posOrd}</span></div>
       `;
     } else {
       // Line-overlay hover: no exact data point. Just show driver
