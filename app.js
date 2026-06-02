@@ -7584,7 +7584,15 @@ function renderTeammates() {
       const sparkHex = safeContrastColor(carHex);
       const avg = d[avgKey];
       const avgCls = tmDeltaClass(metric, avg);
-      const sparkPts = d.series.map(s => ({ v: s[deltaField], tl: s.tl_fin, round: s.round }));
+      // A week with no full-time teammate has no delta to plot (this view IS
+      // teammate-delta). Rather than drop the dot — which made cars look like
+      // they stopped racing (e.g. RCR's #3 in weeks the sister car wasn't FT) —
+      // mark it noBench and render it muted at the zero line so the car's
+      // participation still shows.
+      const sparkPts = d.series.map(s => {
+        const dv = s[deltaField];
+        return { v: dv == null ? 0 : dv, tl: s.tl_fin, round: s.round, noBench: dv == null };
+      });
       const svg = tmSparkline(sparkPts, sparkHex, metric, d.car_number, roundMin, roundMax);
       const isShared = (d.all_driver_count || d.drivers.length) > 1;
       const showWbrTag = (d.team !== d.group);
@@ -7866,10 +7874,20 @@ function tmPaintSparklines(root) {
 
     const zeroY = yScale(0);
     const zero = `<line class="tm-spk-zero" x1="${pad.l}" x2="${W - pad.r}" y1="${zeroY}" y2="${zeroY}"/>`;
-    const pathD = seriesPts.map((p, i) => `${xScale(i)},${yScale(p.v)}`).join(" ");
-    const line = `<polyline class="tm-spk-line" points="${pathD}" stroke="${color}"/>`;
+    // Line connects only weeks that HAVE a teammate-delta — noBench weeks would
+    // yank the line to zero and read as "tied", which is misleading.
+    const linePts = seriesPts.filter(p => !p.noBench);
+    const pathD = linePts.map(p => `${xScale(seriesPts.indexOf(p))},${yScale(p.v)}`).join(" ");
+    const line = linePts.length >= 2 ? `<polyline class="tm-spk-line" points="${pathD}" stroke="${color}"/>` : "";
     const dots = seriesPts.map((p, i) => {
       const x = xScale(i), y = yScale(p.v);
+      if (p.noBench) {
+        // Ran, but no full-time teammate that week → muted hollow dot at zero.
+        return `<g class="tm-dot-hit" data-round="${p.round}" data-car="${carLabel}" data-nobench="1">
+        <circle cx="${x}" cy="${y}" r="7" fill="transparent"/>
+        <circle cx="${x}" cy="${y}" r="2.2" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.4"/>
+      </g>`;
+      }
       const r = p.tl ? 3 : 2.4;
       const fill = p.tl ? "transparent" : color;
       const stroke = p.tl ? color : "none";
