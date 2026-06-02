@@ -3994,8 +3994,8 @@ function mean(xs) {
 // Returns higher-is-better raw values per component (or null when no data);
 // the field-relative 0-100 blend is assembled in renderFormTable where the
 // whole field is available for normalization. Components & weights:
-//   pace 40 / finish 25 / top-15% 10 / qualifying 15  (renormalized to 100).
-const POWER_WEIGHTS = { pace: 40, finish: 25, top15: 10, qual: 15 };
+//   finish 35 / pace 30 / qualifying 20 / top-15% 15  (renormalized to 100).
+const POWER_WEIGHTS = { pace: 30, finish: 35, top15: 15, qual: 20 };
 
 // Decide if a race is a "clean" race for form purposes — i.e. NOT a wreck/DNF.
 // We exclude when the status indicates a DNF (accident/mechanical) OR when the
@@ -5348,7 +5348,7 @@ function renderFormTable() {
   const sub = document.getElementById("form-sub");
   if (sub) {
     const ftNote = STATE.form.ftOnly ? "full-time only" : "all entrants";
-    sub.textContent = `${decorated.length} cars · ${ftNote} · pace 40 / finish 25 / top-15% 10 / qualifying 15 · last 8 races, wrecks excluded`;
+    sub.textContent = `${decorated.length} cars · ${ftNote} · finish 35 / pace 30 / qual 20 / top-15% 15 · last 8 races, wrecks excluded`;
   }
 }
 
@@ -5379,6 +5379,34 @@ function deltaPill(d) {
   const cls = d > 0.5 ? "up" : d < -0.5 ? "down" : "zero";
   const s = d > 0 ? "+" : "";
   return `<span class="delta-pill ${cls}">${s}${d.toFixed(1)}</span>`;
+}
+
+// Sparkline for a 0-100 power RATING series (higher = up, unlike sparkSVG which
+// is for finishes). Auto-scales to the series' own range so small week-to-week
+// moves are visible, with a little padding so a flat line sits mid-height.
+function ratingSparkSVG(ratings, color, w, h) {
+  const valid = ratings.filter(v => v != null);
+  if (valid.length < 2) {
+    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"></svg>`;
+  }
+  let lo = Math.min(...valid), hi = Math.max(...valid);
+  if (hi - lo < 4) { const mid = (hi + lo) / 2; lo = mid - 2; hi = mid + 2; }  // avoid flat-line zero range
+  const span = hi - lo;
+  const yFor = (v) => (1 - (v - lo) / span) * (h - 4) + 2;   // higher rating = higher on chart
+  const pts = ratings.map((v, i) => {
+    if (v == null) return null;
+    const x = (i / (ratings.length - 1 || 1)) * (w - 2) + 1;
+    return `${x.toFixed(1)},${yFor(v).toFixed(1)}`;
+  }).filter(Boolean).join(" ");
+  const dots = ratings.map((v, i) => {
+    if (v == null) return "";
+    const x = (i / (ratings.length - 1 || 1)) * (w - 2) + 1;
+    return `<circle cx="${x.toFixed(1)}" cy="${yFor(v).toFixed(1)}" r="1.6" fill="${color}"/>`;
+  }).join("");
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linejoin="round"/>
+    ${dots}
+  </svg>`;
 }
 
 function sparkSVG(finishes, color, w, h) {
@@ -18812,6 +18840,19 @@ function renderFormMini() {
   const roundsDone = racesNow.map(r => r.round).filter(n => n != null).sort((a, b) => a - b);
   const prevRound = roundsDone.length > 1 ? roundsDone[roundsDone.length - 2] : null;
   const powerPrev = prevRound != null ? buildPowerRankings(entities, STATE.series, 8, prevRound) : new Map();
+
+  // Power-RATING trend: compute the field rankings at each of the last 8
+  // completed round-states (rolling cutoff), then read each driver's rating at
+  // each step. This makes the rail's line show how the power RATING itself has
+  // moved week to week — matching the metric, not raw finishes.
+  const trendRounds = roundsDone.slice(-8);
+  const ratingByRound = trendRounds.map(rnd => ({
+    round: rnd,
+    map: buildPowerRankings(entities, STATE.series, 8, rnd),
+  }));
+  const ratingHistoryFor = (key) =>
+    ratingByRound.map(rr => { const pr = rr.map.get(key); return pr ? pr.rating : null; });
+
   const rows = entities.map(d => {
     const key = entityKey(d);
     const pr = power.get(key);
@@ -18820,7 +18861,7 @@ function renderFormMini() {
     const s = formRatingFor(d.races, "season");
     const delta = (f != null && s != null) ? f - s : null;
     const rankDelta = (pr && prPrev) ? (prPrev.rank - pr.rank) : null;
-    return { ...d, f, s, delta, powerRank: pr ? pr.rank : null, rankDelta };
+    return { ...d, f, s, delta, powerRank: pr ? pr.rank : null, rankDelta, ratingHistory: ratingHistoryFor(key) };
   }).filter(d => d.f != null)
     .sort((a, b) => a.powerRank - b.powerRank);   // Sort by Power Ranking
 
@@ -18833,9 +18874,9 @@ function renderFormMini() {
     const cls = r.delta > 1 ? "hot" : r.delta < -1 ? "cold" : "flat";
     const sign = r.delta > 0 ? "+" : "";
     const trendWord = r.delta > 1 ? "trending up" : r.delta < -1 ? "trending down" : "steady";
-    const deltaTip = `Last 5 vs season: ${sign}${r.delta.toFixed(1)} — ${trendWord} (L5 rating ${r.f.toFixed(1)} vs season ${r.s.toFixed(1)})`;
-    const lastFinishes = r.races.slice(-5).map(rc => rc.finish).filter(x => x != null);
-    const spark = sparkSVG(lastFinishes, carHex, 58, 14);
+    const deltaTip = `Power rating ${r.f.toFixed(1)} · ${trendWord} (vs season ${r.s.toFixed(1)})`;
+    // Line = power-RATING trend over the last 8 race-states (matches the metric).
+    const spark = ratingSparkSVG(r.ratingHistory || [], carHex, 58, 14);
     // Movement pill vs last week — same style as the standings page.
     let movePill;
     if (r.rankDelta == null) movePill = `<span class="pos-change new" title="New">NEW</span>`;
@@ -18845,13 +18886,13 @@ function renderFormMini() {
     return `<a class="form-mini-row profile-link" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)} — open profile">
       <div class="form-mini-top">
         <span class="form-mini-rank">${r.powerRank}</span>
+        <span class="form-mini-move">${movePill}</span>
         <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span class="form-mini-name">${escapeHTML(lastName)}</span>
-        <span class="form-mini-rating" title="Power Ranking rating — pace/finish/top-15%/qualifying blend over the last 8 races (higher is better)">${r.f.toFixed(1)}</span>
+        <span class="form-mini-rating" title="Power Ranking rating — finish/pace/qualifying/top-15% blend over the last 8 races (higher is better)">${r.f.toFixed(1)}</span>
       </div>
       <div class="form-mini-bottom">
-        ${movePill}
-        <span class="form-mini-spark">${spark}</span>
+        <span class="form-mini-spark" title="${escapeHTML(deltaTip)} — power-rating trend, last 8 race-states">${spark}</span>
       </div>
     </a>`;
   }).join("");
