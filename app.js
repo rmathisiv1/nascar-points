@@ -4450,19 +4450,30 @@ const CHARTER_CONTINUATIONS = {
   NCS: { "8": "33" },
 };
 
+// Known cross-source name aliases: cases where the odds feed and the points
+// data disagree in ways normalization can't safely bridge (abbreviated vs full
+// middle names, nicknames). Maps a NORMALIZED odds-feed name → the normalized
+// name as it appears in our data, so the entry-list→car join resolves. Add
+// entries here when a full-time driver shows up flagged PT with a "—" car.
+const DRIVER_NAME_ALIASES = {
+  "john hunter nemechek": "john h nemechek",
+};
+
 // Normalize a driver name for matching across data sources. The odds feed and
 // the points data disagree on punctuation/suffixes ("AJ Allmendinger" vs
 // "A.J. Allmendinger", "Ricky Stenhouse Jr." vs "Ricky Stenhouse Jr"), which
 // otherwise breaks the entry-list→car join and mislabels full-timers as PT.
-// Strips periods, commas, accents, common suffixes, and collapses whitespace.
+// Strips periods, commas, accents, common suffixes, and collapses whitespace,
+// then applies any explicit alias.
 function normalizeDriverName(name) {
-  return String(name || "")
+  const base = String(name || "")
     .toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")   // strip accents
     .replace(/[.,'']/g, "")                              // drop periods/commas/apostrophes
     .replace(/\b(jr|sr|ii|iii|iv)\b/g, "")               // drop generational suffixes
     .replace(/\s+/g, " ")
     .trim();
+  return DRIVER_NAME_ALIASES[base] || base;
 }
 
 function getEntryList(series, trackCode) {

@@ -96,6 +96,7 @@ Residual model-vs-odds gaps after calibration are all the legitimate finish-vs-w
 Throwaway diag scripts (repo root, not committed): diag_model_vs_odds.py, diag_darlington.py, diag_svg_michigan.py, diag_driver_pace.py, probe_missing_pace.py, check_ref_green.py, check_michigan_ref.py, verify_new_model.py.
 
 ### LATER / WATCH
+- **Name-alias map** (`DRIVER_NAME_ALIASES` in app.js): for cross-source spelling diffs normalization can't bridge (odds feed "John Hunter Nemechek" vs data "John H. Nemechek"). If a full-time driver shows PT with a "—" car on the board, add their normalized odds-name → normalized data-name here.
 - Win probability stored in entry_list.json but not yet displayed on the board.
 - Model calibrated only on Michigan/Nashville/Darlington — watch upcoming races, re-check weekly with the diag harnesses, tune relief/ratio threshold/weights only with multi-race evidence.
 - Probe how far back lap-data feeds go (have 2024-2026).
