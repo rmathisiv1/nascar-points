@@ -24327,9 +24327,10 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     .sort((a, b) => (a.round || 0) - (b.round || 0));
   if (chaseRaces.length === 0) return "";
 
-  // Chart dimensions (match PFC). Extra bottom padding for diagonal track names.
-  const W = 800, H = 372;
-  const pad = { t: 16, r: 80, b: 68, l: 56 };
+  // Chart dimensions (match PFC). Extra bottom padding for diagonal track
+  // names; extra left padding so the leftmost rotated label doesn't clip.
+  const W = 820, H = 384;
+  const pad = { t: 16, r: 80, b: 80, l: 64 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
   const lastRound = chaseRaces.length > 0 ? chaseRaces[chaseRaces.length - 1].round : regEnd + 10;
@@ -24356,9 +24357,14 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
   for (let i = 0; i < chaseRaces.length; i++) {
     const r = chaseRaces[i];
     const x = xScale(r.round);
-    const tname = (r.track || r.track_code || "").replace(/ (Motor )?Speedway| International| Raceway| Superspeedway$/i, "").trim();
-    xLabels.push(`<text class="axis-label" x="${x}" y="${H - 24}" text-anchor="middle">R${r.round}</text>`);
-    xLabels.push(`<text class="axis-label pc-track-label" x="${x}" y="${H - 14}" text-anchor="end" transform="rotate(-35 ${x} ${H - 14})">${escapeHTML(tname)}</text>`);
+    // Short track name: strip common suffixes, then cap length so a long name
+    // (e.g. "World Wide Technology Raceway") can't run off the chart.
+    let tname = (r.track || r.track_code || "")
+      .replace(/ (Motor )?Speedway| International| Raceway| Superspeedway| Road Course$/ig, "").trim();
+    if (tname.length > 12) tname = tname.slice(0, 11) + "…";
+    const ly = H - 20;
+    xLabels.push(`<text class="axis-label" x="${x}" y="${H - 32}" text-anchor="middle">R${r.round}</text>`);
+    xLabels.push(`<text class="axis-label pc-track-label" x="${x}" y="${ly}" text-anchor="end" transform="rotate(-30 ${x} ${ly})">${escapeHTML(tname)}</text>`);
   }
 
   // Lines — draw lowest champ % first, highest last (on top)
@@ -24416,9 +24422,14 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
 
 function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
   if (!traces || traces.length === 0) return "";
-  // Sort by deterministic final chase points (same as chart), descending
-  const sorted = traces.slice().sort((a, b) => b.finalPts - a.finalPts);
-  const leaderPts = sorted[0].finalPts;
+  // Sort by CHAMPIONSHIP % (the Monte Carlo title odds) — this is the real
+  // "who's most likely to be champion" answer and the table's whole point.
+  // We deliberately do NOT sort by the deterministic finalPts, which is a
+  // single-run estimate that can disagree with the variance-aware champ %
+  // (e.g. a driver can lead one deterministic run but win the title less often
+  // across 500 sims). finalPts stays as an informational "Chase Pts" column.
+  const sorted = traces.slice().sort((a, b) => (b.champPct || 0) - (a.champPct || 0));
+  const leaderPts = Math.max(...sorted.map(d => d.finalPts));
   const fieldSize = proj.rule.field || 16;
   return `
     <section class="proj-section">
@@ -24447,7 +24458,7 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
               const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
               const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
               const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
-              const fromLeader = i === 0 ? "—" : `−${Math.abs(leaderPts - d.finalPts).toLocaleString()}`;
+              const fromLeader = d.finalPts >= leaderPts ? "—" : `−${Math.abs(leaderPts - d.finalPts).toLocaleString()}`;
               return `<tr>
                 <td class="num">${i + 1}</td>
                 <td class="num">${d.seed}</td>
