@@ -11718,7 +11718,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 13;  // v13: chase rollout win bonus +15 + stage pts (champion now matches chart)
+  const PROJ_VERSION = 14;  // v14: total pts derived from finish; chase track labels
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -12819,17 +12819,14 @@ function predictDriverForRace(driverName, series, trackCode) {
   // sidesteps having to apply NASCAR's finish-position curve to our
   // predicted_finish; instead we blend track/type/form averages of
   // the all-in number itself. Same 3-signal structure as stage points.
-  const totalPtsSignals = [
-    { w: 0.40, val: trackStats?.last4_race_pts_avg ?? trackStats?.avg_race_pts ?? null },
-    { w: 0.30, val: typeStats?.last5_race_pts_avg ?? null },
-    { w: 0.30, val: form8?.avg_race_pts ?? null },
-  ];
-  const tpAvail = totalPtsSignals.filter(s => s.val != null);
-  let predictedTotalPts = 0;
-  if (tpAvail.length > 0) {
-    const tpw = tpAvail.reduce((s, x) => s + x.w, 0);
-    predictedTotalPts = tpAvail.reduce((sum, x) => sum + (x.w / tpw) * x.val, 0);
-  }
+  // Predicted total points: DERIVE from the predicted finish so it's
+  // internally consistent (a P5 finish must equal ~31 finish pts, not a
+  // separate historical-average guess that can disagree with the finish).
+  // total = finish-position points + predicted stage points (+ win bonus if
+  // we're predicting this driver to win, i.e. predicted finish rounds to P1).
+  const _finPos = Math.max(1, Math.round(predicted));
+  let predictedTotalPts = _finishPtsScale(_finPos) + (predictedStagePts || 0);
+  if (_finPos === 1 && series === "NCS") predictedTotalPts += 15;
 
   return {
     predicted_finish: predicted,
@@ -24241,9 +24238,9 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     .sort((a, b) => (a.round || 0) - (b.round || 0));
   if (chaseRaces.length === 0) return "";
 
-  // Chart dimensions (match PFC)
-  const W = 800, H = 340;
-  const pad = { t: 16, r: 80, b: 36, l: 56 };
+  // Chart dimensions (match PFC). Extra bottom padding for diagonal track names.
+  const W = 800, H = 372;
+  const pad = { t: 16, r: 80, b: 68, l: 56 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
   const lastRound = chaseRaces.length > 0 ? chaseRaces[chaseRaces.length - 1].round : regEnd + 10;
@@ -24265,11 +24262,14 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     gridLines.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
     gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
   }
-  // X labels
+  // X labels: round number + a diagonal (rotated) track name beneath it.
   const xLabels = [];
   for (let i = 0; i < chaseRaces.length; i++) {
     const r = chaseRaces[i];
-    xLabels.push(`<text class="axis-label" x="${xScale(r.round)}" y="${H - 10}" text-anchor="middle">R${r.round}</text>`);
+    const x = xScale(r.round);
+    const tname = (r.track || r.track_code || "").replace(/ (Motor )?Speedway| International| Raceway| Superspeedway$/i, "").trim();
+    xLabels.push(`<text class="axis-label" x="${x}" y="${H - 24}" text-anchor="middle">R${r.round}</text>`);
+    xLabels.push(`<text class="axis-label pc-track-label" x="${x}" y="${H - 14}" text-anchor="end" transform="rotate(-35 ${x} ${H - 14})">${escapeHTML(tname)}</text>`);
   }
 
   // Lines — draw lowest champ % first, highest last (on top)

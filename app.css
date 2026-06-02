@@ -3067,6 +3067,11 @@ td.neg { color: var(--neg); }
   font-family: var(--mono);
   font-size: 10px;
 }
+.pc-track-label {
+  font-size: 8.5px;
+  fill: var(--muted);
+  opacity: 0.7;
+}
 
 /* Profile links — these wrap driver names everywhere on the site */
 a.profile-link {
