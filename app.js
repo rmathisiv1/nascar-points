@@ -4394,6 +4394,32 @@ function getDriverTypePace(driverName, series, trackCode) {
 // Populated by loadEntryList() once the feed endpoint is wired (see below).
 const ENTRY_LIST_CACHE = {};
 
+// Mid-season charter continuations: when a car number is retired and its
+// charter continues under a NEW number (e.g. a driver leaves/retires mid-year
+// and the team fields a different number for the rest of the season). Keyed
+// series -> { oldCarNumber: newCarNumber }. In prediction fallback rosters the
+// old car is dropped and the new car is surfaced even if its own start count
+// is still below the full-time threshold. 2026: the #8 (Kyle Busch) charter
+// continued as the #33 after Charlotte.
+const CHARTER_CONTINUATIONS = {
+  NCS: { "8": "33" },
+};
+
+// Normalize a driver name for matching across data sources. The odds feed and
+// the points data disagree on punctuation/suffixes ("AJ Allmendinger" vs
+// "A.J. Allmendinger", "Ricky Stenhouse Jr." vs "Ricky Stenhouse Jr"), which
+// otherwise breaks the entry-list→car join and mislabels full-timers as PT.
+// Strips periods, commas, accents, common suffixes, and collapses whitespace.
+function normalizeDriverName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")   // strip accents
+    .replace(/[.,'']/g, "")                              // drop periods/commas/apostrophes
+    .replace(/\b(jr|sr|ii|iii|iv)\b/g, "")               // drop generational suffixes
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getEntryList(series, trackCode) {
   const s = ENTRY_LIST_CACHE[series];
   if (!s) return null;
@@ -11152,14 +11178,15 @@ function _computeRacePredictions(series, trackCode) {
   if (entryList && entryList.length) {
     roster = entryList.map(en => {
       const nm = en.driver;
-      // Join the entered driver to their car/entity by name (entities are
-      // car-keyed; find the car this driver currently represents).
+      const nmNorm = normalizeDriverName(nm);
+      // Join the entered driver to their car/entity by normalized name
+      // (entities are car-keyed; find the car this driver currently represents).
       const ent = allEntities().find(e =>
-        (e.primaryDriver || e.driver || "").toLowerCase() === nm.toLowerCase() ||
-        (e.driversByStarts || []).some(d => d.name.toLowerCase() === nm.toLowerCase())
+        normalizeDriverName(e.primaryDriver || e.driver || "") === nmNorm ||
+        (e.driversByStarts || []).some(d => normalizeDriverName(d.name) === nmNorm)
       );
       return {
-        driverName: nm,
+        driverName: ent ? (ent.primaryDriver || ent.driver) : nm,
         entity: ent || null,
         win_prob: en.win_prob != null ? en.win_prob : null,
         // Part-time = the car isn't a full-time charter (single source of truth).
@@ -11168,12 +11195,27 @@ function _computeRacePredictions(series, trackCode) {
       };
     });
   } else {
-    roster = allEntities().filter(isFullTime).map(e => ({
-      driverName: e.primaryDriver || e.driver,
-      entity: e,
-      win_prob: null,
-      isPartTime: false,
-    }));
+    // Fallback (no entry list): full-time car roster, with charter-continuation
+    // overrides applied — a car whose number changed mid-season (a charter
+    // taken over by a new number after a driver left/retired) is handled so the
+    // retired car drops out and its continuation is surfaced even if its own
+    // start count hasn't yet crossed the full-time threshold.
+    const cont = CHARTER_CONTINUATIONS[series] || {};
+    const retiredCars = new Set(Object.keys(cont));            // e.g. "8"
+    const promotedCars = new Set(Object.values(cont));         // e.g. "33"
+    roster = allEntities()
+      .filter(e => {
+        const car = String(e.car_number);
+        if (retiredCars.has(car)) return false;                // drop the retired car
+        if (promotedCars.has(car)) return true;                // always include the continuation
+        return isFullTime(e);
+      })
+      .map(e => ({
+        driverName: e.primaryDriver || e.driver,
+        entity: e,
+        win_prob: null,
+        isPartTime: false,
+      }));
   }
 
   const predictions = roster.map(r => {
