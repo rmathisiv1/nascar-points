@@ -7591,9 +7591,20 @@ function renderTeammates() {
     // Fallback for primary_driver: if every week was ineligible (rare, but
     // happens with a one-off entry like a Trucks regular making a single
     // Cup start), fall back to the most-frequent name in the raw series.
-    const primaryDriver = driversRanked.length
-      ? driversRanked[0][0]
-      : (agg.series[0]?.driver || "?");
+    // Primary driver: the one with the most ELIGIBLE starts. If the car had no
+    // eligible weeks at all (e.g. a shared sub car like RCR's #33 where every
+    // start was points-ineligible), fall back to the driver with the most
+    // starts overall — not whoever happened to run first — so the row is
+    // labeled by the regular wheelman (Austin Hill ran the majority of #33).
+    let primaryDriver;
+    if (driversRanked.length) {
+      primaryDriver = driversRanked[0][0];
+    } else {
+      const allCounts = new Map();
+      agg.series.forEach(s => { if (s.driver) allCounts.set(s.driver, (allCounts.get(s.driver) || 0) + 1); });
+      const rankedAll = [...allCounts.entries()].sort((a, b) => b[1] - a[1]);
+      primaryDriver = rankedAll.length ? rankedAll[0][0] : (agg.series[0]?.driver || "?");
+    }
     // Build a complete per-driver count including ineligible substitutes,
     // so the shared-car popover lists everyone who actually drove the
     // car this year. Eligible drivers come first (primary at top), then
@@ -7818,8 +7829,9 @@ function renderTeammates() {
     const s = seriesLookup.get(`${car}|${round}`);
     if (!s) return;
     const v = metric === "fin" ? s.delta_fin : s.delta_tot;
-    const cls = v >= 0 ? "pos" : "neg";
-    const vStr = v >= 0 ? `+${v}` : `${v}`;
+    const hasV = v != null;
+    const cls = !hasV ? "" : v >= 0 ? "pos" : "neg";
+    const vStr = !hasV ? "no FT teammate" : (v >= 0 ? `+${v}` : `${v}`);
     const trackLabel = prettyTrack(s.track_code, s.track_name);
     const driverLine = s.driver !== s.primary_driver
       ? `<div class="tm-tt-driver">Driver: ${escapeHTML(s.driver)}</div>`
@@ -7829,7 +7841,7 @@ function renderTeammates() {
       ${driverLine}
       <div class="tm-tt-row"><span class="lbl">Finish</span><span class="val">P${s.finish ?? "—"}</span></div>
       <div class="tm-tt-row"><span class="lbl">Race pts</span><span class="val">${s.total}</span></div>
-      <div class="tm-tt-row ${cls}"><span class="lbl">vs best FT teammate</span><span class="val">${vStr}${s.tl_fin ? " ★" : ""}</span></div>
+      <div class="tm-tt-row ${cls}"><span class="lbl">vs best FT teammate</span><span class="val">${vStr}${hasV && s.tl_fin ? " ★" : ""}</span></div>
     `;
     showTip(html, ev, "tm-tip");
   }
@@ -11913,7 +11925,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 15;  // v15: seeded RNG (stable until next race) + chart 45deg labels, 2000 floor
+  const PROJ_VERSION = 16;  // v16: deterministic driver sort (fixes sim varying per refresh)
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -12016,7 +12028,13 @@ function simulateSeasonRollout(series, year, opts = {}) {
   });
   const dedupedDrivers = Array.from(byName.values());
   if (dedupedDrivers.length === 0) return null;
-  drivers = dedupedDrivers;
+  // Sort deterministically by slug. CRITICAL for reproducibility: the seeded
+  // RNG produces a fixed SEQUENCE, but each driver consumes draws in array
+  // order — so if the driver order varied between loads (allEntities() order
+  // isn't guaranteed stable), the same seed would map different draws to
+  // different drivers and the projection would change on every refresh. A
+  // stable sort locks the draw→driver mapping, making the sim fully repeatable.
+  drivers = dedupedDrivers.sort((a, b) => a.slug.localeCompare(b.slug));
 
   // Build the matrix once — predictDriverForRace × every (driver, race).
   const matrix = _buildProjectionMatrix(series, remainingRaces, drivers);
@@ -24033,6 +24051,7 @@ function renderProjection() {
       // Wire chart hover tooltips (same interaction as PFC chart)
       _wireProjectionChartTooltips(host);
       _wireProjectionTooltips();
+      _wireProjectionChartZoom(host);
       // Wire driver/owner/mfr toggle
       host.querySelectorAll("[data-proj-view]").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -24127,6 +24146,32 @@ function _wireProjectionTooltips() {
       if (tip) tip.hidden = true;
       delete wrap.dataset.hoverSlug;
       wrap.querySelectorAll(".pc-line.is-hovered").forEach(el => el.classList.remove("is-hovered"));
+    });
+  });
+}
+
+// Zoom controls for the chase chart. Scales the SVG's rendered width inside a
+// horizontally-scrollable container; +/− step the zoom, reset returns to fit.
+function _wireProjectionChartZoom(host) {
+  host.querySelectorAll(".pc-chart-toolbar").forEach(bar => {
+    const wrap = bar.nextElementSibling;
+    if (!wrap || !wrap.classList.contains("pc-chart-scroll")) return;
+    const svg = wrap.querySelector(".pc-chart-svg");
+    if (!svg) return;
+    let zoom = 1;
+    const MIN = 1, MAX = 4, STEP = 0.5;
+    const apply = () => {
+      svg.style.width = `${zoom * 100}%`;
+      wrap.classList.toggle("pc-zoomed", zoom > 1);
+    };
+    bar.querySelectorAll("[data-pc-zoom]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const act = btn.dataset.pcZoom;
+        if (act === "in") zoom = Math.min(MAX, zoom + STEP);
+        else if (act === "out") zoom = Math.max(MIN, zoom - STEP);
+        else zoom = 1;
+        apply();
+      });
     });
   });
 }
@@ -24549,8 +24594,8 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
   if (chaseRaces.length === 0) return "";
 
   // Chart dimensions. Bottom padding holds 45°-angled track names.
-  const W = 820, H = 388;
-  const pad = { t: 16, r: 80, b: 76, l: 64 };
+  const W = 820, H = 360;
+  const pad = { t: 14, r: 80, b: 64, l: 64 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
   const lastRound = chaseRaces.length > 0 ? chaseRaces[chaseRaces.length - 1].round : regEnd + 10;
@@ -24558,15 +24603,15 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
   const allCums = traces.flatMap(t => t.points.map(p => p.cum));
   const minPts = Math.min(...allCums);
   const maxPts = Math.max(...allCums);
-  // Y-axis floor: never drop below the chase reset base (the lowest a chase
-  // driver starts at, ~2000) — there's no data down there, so showing it is
-  // dead space. Floor at the lower of [data min rounded down, reset base].
+  // Y-axis floor at the chase reset base (~2000) — no data below, so it'd just
+  // be dead space.
   const resetBase = (proj.rule && proj.rule.resetBase) ? Math.floor(proj.rule.resetBase / 50) * 50 : 2000;
   const dataFloor = Math.floor(minPts / 50) * 50;
   const yMin = Math.max(resetBase, Math.min(dataFloor, resetBase));
   const yMax = Math.ceil((maxPts + (maxPts - minPts) * 0.06) / 50) * 50;
   const xScale = r => pad.l + ((r - regEnd) / Math.max(1, lastRound - regEnd)) * innerW;
   const yScale = v => pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+  const axisBottomY = pad.t + innerH;   // y of the plot's bottom edge
 
   // Grid lines + labels at every 50 points (e.g. 2000, 2050, 2100 ...).
   const gridLines = [];
@@ -24575,7 +24620,8 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     gridLines.push(`<line class="pc-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`);
     gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end">${v}</text>`);
   }
-  // X labels: round number + a 45°-angled track name beneath it.
+  // X labels: round number sits just below the axis (clear of the 2000 line),
+  // with a 45°-angled track name beneath it.
   const xLabels = [];
   for (let i = 0; i < chaseRaces.length; i++) {
     const r = chaseRaces[i];
@@ -24583,8 +24629,9 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     let tname = (r.track || r.track_code || "")
       .replace(/ (Motor )?Speedway| International| Raceway| Superspeedway| Road Course$/ig, "").trim();
     if (tname.length > 14) tname = tname.slice(0, 13) + "…";
-    const ty = H - pad.b + 16;
-    xLabels.push(`<text class="axis-label" x="${x}" y="${(H - pad.b + 4).toFixed(1)}" text-anchor="middle">R${r.round}</text>`);
+    const rLabelY = axisBottomY + 15;     // round number, clearly below the axis
+    const ty = axisBottomY + 26;          // track name anchor, below the round #
+    xLabels.push(`<text class="axis-label" x="${x}" y="${rLabelY.toFixed(1)}" text-anchor="middle">R${r.round}</text>`);
     xLabels.push(`<text class="axis-label pc-track-label" x="${x}" y="${ty.toFixed(1)}" text-anchor="end" transform="rotate(-45 ${x} ${ty.toFixed(1)})">${escapeHTML(tname)}</text>`);
   }
 
@@ -24627,8 +24674,14 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
         <h2 class="ed-hero ed-hero-sm">Projected chase points</h2>
         <div class="ed-byline">Deterministic prediction per track · hover to see driver + projected finish</div>
       </div>
-      <div class="pc-chart-wrap">
-        <svg viewBox="-20 0 ${W + 24} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+      <div class="pc-chart-toolbar">
+        <button class="pc-zoom-btn" data-pc-zoom="out" title="Zoom out">−</button>
+        <button class="pc-zoom-btn" data-pc-zoom="reset" title="Reset zoom">⤢</button>
+        <button class="pc-zoom-btn" data-pc-zoom="in" title="Zoom in">+</button>
+        <span class="pc-zoom-hint">scroll to pan when zoomed</span>
+      </div>
+      <div class="pc-chart-wrap pc-chart-scroll">
+        <svg class="pc-chart-svg" viewBox="-20 0 ${W + 24} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
           ${gridLines.join("")}
           ${xLabels.join("")}
           ${lines}
