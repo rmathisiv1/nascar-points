@@ -4234,10 +4234,26 @@ function getDriverRecentForm(driverName, series, lastN = 5) {
 // Eligibility: a track needs >= minStarts (2 normally; 1 if the driver has
 // <2 starts at EVERY track — a newcomer — so they still get a list).
 // `series` may be a specific series ("NCS"/"NOS"/"NTS") or "all" to combine
-// the driver's record across every series.
+// the driver's record across every series. Only tracks ON THE CURRENT-SEASON
+// SCHEDULE are ranked, so the list reflects where the driver is good among
+// venues they'll actually race this year.
 function getDriverTopTracks(driverName, series, limit = 5) {
   const allSeries = series === "all";
   const seriesList = allSeries ? ["NCS", "NOS", "NTS"] : [series];
+
+  // Track codes on THIS season's schedule (across the relevant series). The
+  // season block's races include upcoming/scheduled events, so this is the
+  // full year's venue list.
+  const scheduledCodes = new Set();
+  for (const s of seriesList) {
+    const block = SEASON_CACHE[STATE.season] && SEASON_CACHE[STATE.season][s];
+    if (block && block.races) {
+      for (const race of block.races) {
+        if (race.track_code) scheduledCodes.add(race.track_code);
+      }
+    }
+  }
+
   const history = [];
   for (const s of seriesList) {
     const h = getDriverRaceHistory(driverName, s);
@@ -4248,12 +4264,17 @@ function getDriverTopTracks(driverName, series, limit = 5) {
   const byTrack = new Map();
   for (const r of history) {
     if (!r.track_code) continue;
+    // Only rank tracks on this season's schedule. If we somehow have no
+    // schedule data (cache not loaded), fall back to allowing all tracks so
+    // the panel isn't empty.
+    if (scheduledCodes.size > 0 && !scheduledCodes.has(r.track_code)) continue;
     if (!byTrack.has(r.track_code)) {
       byTrack.set(r.track_code, { code: r.track_code, track: r.track, rows: [] });
     }
     byTrack.get(r.track_code).rows.push(r);
   }
 
+  if (byTrack.size === 0) return [];  // no history at any scheduled track
   const maxStartsAnywhere = Math.max(...[...byTrack.values()].map(t => t.rows.length));
   const minStarts = maxStartsAnywhere >= 2 ? 2 : 1;
 
@@ -8820,7 +8841,7 @@ function renderProfile() {
         </div>
       </div>
 
-      <div class="profile-panel full">
+      <div class="profile-panel">
         <div class="profile-panel-head">
           <span class="profile-panel-title">Top 5 Tracks</span>
           <div class="profile-panel-head-right">
