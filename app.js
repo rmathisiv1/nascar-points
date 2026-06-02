@@ -23851,6 +23851,10 @@ function _wireProjectionChartTooltips(host) {
     const round = target.dataset.round;
     const cum = target.dataset.cum;
     const finish = target.dataset.finish;
+    const track = target.dataset.track || "";
+    const racepts = target.dataset.racepts;
+    const pos = target.dataset.pos;
+    const isWin = target.dataset.win === "1";
 
     // Highlight the hovered line
     wrap.dataset.hoverSlug = slug;
@@ -23859,10 +23863,11 @@ function _wireProjectionChartTooltips(host) {
     if (matchLine) matchLine.classList.add("is-hovered");
 
     tip.hidden = false;
-    tip.innerHTML = `<strong>${escapeHTML(driver)}</strong>` +
-      (round ? `<br>Round: <strong>R${round}</strong>` : "") +
+    tip.innerHTML = `<strong>${escapeHTML(driver)}${isWin ? ' <span class="pc-tip-win">★ WIN</span>' : ''}</strong>` +
+      (track ? `<br>${escapeHTML(track)}` : (round ? `<br>R${round}` : "")) +
+      (racepts != null && racepts !== "" ? `<br>Pred. pts: <strong>+${racepts}</strong>` : "") +
       (cum ? `<br>Cum. pts: <strong>${Number(cum).toLocaleString()}</strong>` : "") +
-      (finish ? `<br>Pred. finish: <strong>P${finish}</strong>` : "");
+      (pos ? `<br>Position: <strong>P${pos}</strong>` : "");
 
     const wrapRect = wrap.getBoundingClientRect();
     const x = e.clientX - wrapRect.left + 12;
