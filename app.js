@@ -7340,8 +7340,22 @@ function renderTeammates() {
       carRaceCount[d.car_number] = (carRaceCount[d.car_number] || 0) + 1;
     });
   });
+  // Charter continuation: when a charter changes car number mid-season (e.g.
+  // RCR's #8 → #33 after Kyle Busch passed), the two car numbers are really one
+  // continuous full-time entry. Merge the predecessor's race count into the
+  // successor so the combined car clears the full-time bar (otherwise neither
+  // half does, and the whole team can vanish from this view).
+  const _cont = (CHARTER_CONTINUATIONS[STATE.series] || {});
+  Object.entries(_cont).forEach(([fromCar, toCar]) => {
+    if (carRaceCount[fromCar] != null) {
+      carRaceCount[toCar] = (carRaceCount[toCar] || 0) + carRaceCount[fromCar];
+    }
+  });
+  // Full-time = ran ≥90% of the season's races (not literally every one — a
+  // single missed/substitute week shouldn't disqualify a full-time car).
+  const _ftThreshold = Math.max(1, Math.floor(totalRacesInSeason * 0.9));
   const fullTimeCars = new Set(
-    Object.keys(carRaceCount).filter(c => carRaceCount[c] >= totalRacesInSeason)
+    Object.keys(carRaceCount).filter(c => carRaceCount[c] >= _ftThreshold)
   );
 
   // Walk each race, compute per-car deltas vs. the best FULL-TIME teammate in the same group
