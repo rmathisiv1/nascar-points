@@ -24451,7 +24451,7 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
         <div class="ed-byline">Deterministic prediction per track · hover to see driver + projected finish</div>
       </div>
       <div class="pc-chart-wrap">
-        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+        <svg viewBox="-30 0 ${W + 50} ${H + 8}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
           ${gridLines.join("")}
           ${xLabels.join("")}
           ${lines}
