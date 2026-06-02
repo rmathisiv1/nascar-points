@@ -315,3 +315,6 @@ Runs at BOTH data load paths (initial fetch + cache). Order:
 - 2×3 grid: Points, Stage Points, Laps Led, Top 5's, Race Wins, Poles
 - `renderSDChart(containerId, metricKey)` generic renderer
 - Top 15 initial display with expand/collapse buttons
+
+### TOP 5 TRACKS: removed avg points (2026-06-02)
+Dropped avg-points from both the SCORE (now a 5-metric blend: finish, laps led, top-15%, pace, front-running) and the displayed rows. Reason: NASCAR's points scale changed across eras (pre-2017 win ≈ 195 vs modern 55), so a multi-year avg-points mixes incomparable scales and skews rankings. Rows now show avg finish only (+ starts); expanded detail unchanged (laps led, top-15%, pace, wins·top5).

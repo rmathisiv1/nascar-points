@@ -4342,14 +4342,17 @@ function getDriverTopTracks(driverName, series, limit = 5) {
     });
   };
   const nFinish = norm(tracks.map(t => t.avgFinish), true);
-  const nPts    = norm(tracks.map(t => t.avgPts), false);
   const nLaps   = norm(tracks.map(t => t.lapsLedPerRace), false);
   const nTop15  = norm(tracks.map(t => t.top15), false);
   const nFront  = norm(tracks.map(t => t.frontRate), false);
   const nPace   = norm(tracks.map(t => t.paceDelta), true);
 
   tracks.forEach((t, i) => {
-    const comps = [nFinish[i], nPts[i], nLaps[i], nTop15[i], nFront[i], nPace[i]]
+    // Avg points is intentionally NOT scored: NASCAR's points scale changed
+    // across eras (pre-2017 win ≈ 195, modern win = 55), so a multi-year
+    // average mixes incomparable scales and skews the ranking. The remaining
+    // five metrics capture "good track" cleanly.
+    const comps = [nFinish[i], nLaps[i], nTop15[i], nFront[i], nPace[i]]
       .filter(v => v != null);
     t.score = comps.length ? comps.reduce((a, b) => a + b, 0) / comps.length : 0;
     t.hasPace = nPace[i] != null;
@@ -9799,7 +9802,6 @@ function paintProfileTopTracks(driverName) {
         <div class="top-tracks-row" data-tt-row data-code="${escapeHTML(t.code)}" role="button" tabindex="0" aria-expanded="false">
           <span class="tt-rank">${i + 1}</span>
           <span class="tt-track">${escapeHTML(t.track)}</span>
-          <span class="tt-stat"><span class="tt-stat-label">avg pts</span><span class="tt-stat-val">${fmt1(t.avgPts)}</span></span>
           <span class="tt-stat"><span class="tt-stat-label">avg fin</span><span class="tt-stat-val">${fmt1(t.avgFinish)}</span></span>
           <span class="tt-starts">${t.starts} ${t.starts === 1 ? "start" : "starts"}</span>
           <span class="tt-chev">▸</span>
