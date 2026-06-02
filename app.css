@@ -2712,9 +2712,10 @@ td.neg { color: var(--neg); }
   border-bottom: 1px solid var(--border);
   text-decoration: none;
   color: inherit;
+  cursor: pointer;
   transition: background 0.12s;
+  user-select: none;
 }
-.top-tracks-row:last-child { border-bottom: none; }
 .top-tracks-row:hover { background: var(--border); }
 .top-tracks-row .tt-rank {
   font-family: var(--mono);
@@ -2759,9 +2760,47 @@ td.neg { color: var(--neg); }
   min-width: 56px;
   text-align: right;
 }
-.top-tracks-row .tt-arrow { opacity: 0.4; font-size: 14px; }
+.top-tracks-row .tt-chev {
+  opacity: 0.45;
+  font-size: 12px;
+  width: 14px;
+  text-align: center;
+  transition: transform 0.15s;
+}
+.top-tracks-row.open .tt-chev { transform: rotate(90deg); }
+.top-tracks-detail {
+  padding: 12px 10px 14px 28px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--border) 35%, transparent);
+}
+.tt-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 18px;
+  margin-bottom: 10px;
+}
+.tt-d { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tt-d-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  opacity: 0.65;
+}
+.tt-d-val {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tt-track-link {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent, #c0392b);
+  text-decoration: none;
+}
+.tt-track-link:hover { text-decoration: underline; }
 @media (max-width: 640px) {
   .top-tracks-row .tt-starts { display: none; }
+  .tt-detail-grid { grid-template-columns: 1fr; }
 }
 
 /* Heat strip */

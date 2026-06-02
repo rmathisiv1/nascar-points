@@ -3190,6 +3190,19 @@ function wireUIControls() {
       if (entity) paintProfileTrackSplits(entity);
       return;
     }
+    // Top-5-tracks row expand/collapse (inline detail, not navigation)
+    const ttRow = e.target.closest("[data-tt-row]");
+    if (ttRow && !e.target.closest(".tt-track-link")) {
+      e.preventDefault();
+      const detail = ttRow.nextElementSibling;
+      if (detail && detail.hasAttribute("data-tt-detail")) {
+        const open = !detail.hidden;
+        detail.hidden = open;
+        ttRow.setAttribute("aria-expanded", String(!open));
+        ttRow.classList.toggle("open", !open);
+      }
+      return;
+    }
     // Top-5-tracks series filter (separate toggle, separate state)
     const ttBtn = e.target.closest("#profile-toptracks-series-toggle button");
     if (ttBtn) {
@@ -4220,8 +4233,16 @@ function getDriverRecentForm(driverName, series, lastN = 5) {
 //   6. front-running     (win + top-5 rate, higher better)
 // Eligibility: a track needs >= minStarts (2 normally; 1 if the driver has
 // <2 starts at EVERY track — a newcomer — so they still get a list).
+// `series` may be a specific series ("NCS"/"NOS"/"NTS") or "all" to combine
+// the driver's record across every series.
 function getDriverTopTracks(driverName, series, limit = 5) {
-  const history = getDriverRaceHistory(driverName, series);
+  const allSeries = series === "all";
+  const seriesList = allSeries ? ["NCS", "NOS", "NTS"] : [series];
+  const history = [];
+  for (const s of seriesList) {
+    const h = getDriverRaceHistory(driverName, s);
+    for (const r of h) history.push({ ...r, _series: s });
+  }
   if (!history.length) return [];
 
   const byTrack = new Map();
@@ -4272,7 +4293,11 @@ function getDriverTopTracks(driverName, series, limit = 5) {
 
     let paceDelta = null;
     if (typeof _paceRecordsFor === "function") {
-      const pr = _paceRecordsFor(driverName, series, { trackName: t.track });
+      const pr = [];
+      for (const s of seriesList) {
+        const recs = _paceRecordsFor(driverName, s, { trackName: t.track });
+        for (const x of recs) pr.push(x);
+      }
       if (pr.length) paceDelta = mean(pr.map(p => p.blend));
     }
 
@@ -6712,6 +6737,21 @@ const MFR_PRETTY_NAMES = {
 
 // Categories: super (drafting/plate), short (<1 mile), inter (1.5mi ovals + drafting-style),
 // road (twisty circuits + street courses).
+
+// Drafting / pack-racing tracks where LAP-TIME PACE is NOT predictive of
+// finish — everyone runs flat-out in the draft at nearly identical speed, so
+// "fast laps" don't separate cars; finish is about drafting, wreck-avoidance,
+// and timing. The prediction model skips its pace signals at these tracks and
+// leans on finish-based history instead. Covers the `super` type (Daytona,
+// Talladega) PLUS Atlanta, which since its 2022 repave races as a
+// superspeedway despite being classified `inter` by length.
+const DRAFTING_TRACK_CODES = new Set(["DAY", "TAL", "ATL", "ONT"]);
+function isDraftingTrack(trackCode) {
+  if (!trackCode) return false;
+  if (DRAFTING_TRACK_CODES.has(trackCode)) return true;
+  return (typeof TRACK_TYPES !== "undefined" && TRACK_TYPES[trackCode] === "super");
+}
+
 const TRACK_TYPES = {
   // Superspeedways — pack drafting, plates/tapered spacers
   DAY: "super",
@@ -8780,6 +8820,23 @@ function renderProfile() {
         </div>
       </div>
 
+      <div class="profile-panel full">
+        <div class="profile-panel-head">
+          <span class="profile-panel-title">Top 5 Tracks</span>
+          <div class="profile-panel-head-right">
+            <div class="toggle-group mini" id="profile-toptracks-series-toggle">
+              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "all" ? "on" : ""}" data-srs="all">All</button>
+              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
+              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
+              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
+            </div>
+          </div>
+        </div>
+        <div class="profile-panel-body">
+          <div id="profile-top-tracks"></div>
+        </div>
+      </div>
+
       <div class="profile-panel full" id="profile-tt-panel" style="display:none;">
         <div class="profile-panel-head">
           <span class="profile-panel-title">Track-Type Performance</span>
@@ -8855,22 +8912,6 @@ function renderProfile() {
         </div>
         <div class="profile-panel-body">
           <div id="profile-career-heatmap"></div>
-        </div>
-      </div>
-
-      <div class="profile-panel full">
-        <div class="profile-panel-head">
-          <span class="profile-panel-title">Top 5 Tracks</span>
-          <div class="profile-panel-head-right">
-            <div class="toggle-group mini" id="profile-toptracks-series-toggle">
-              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
-              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
-              <button class="${(STATE.profile.topTracksSeries || STATE.series) === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
-            </div>
-          </div>
-        </div>
-        <div class="profile-panel-body">
-          <div id="profile-top-tracks"></div>
         </div>
       </div>
     </div>
@@ -9714,7 +9755,9 @@ function paintProfileYearOverYear(driverName) {
 
 // Renders the "Top 5 Tracks" list in the driver profile. Uses the profile's
 // top-tracks series toggle (defaults to the locked profile series). Each row
-// shows rank, track, avg points and avg finish, and links to the track page.
+// shows rank, track, avg points and avg finish; clicking expands the row to
+// show the full stat breakdown (laps led, top-15%, pace, front-running) and a
+// link through to the track page.
 function paintProfileTopTracks(driverName) {
   const host = document.getElementById("profile-top-tracks");
   if (!host) return;
@@ -9722,21 +9765,33 @@ function paintProfileTopTracks(driverName) {
   const top = (typeof getDriverTopTracks === "function")
     ? getDriverTopTracks(driverName, series, 5) : [];
   if (!top.length) {
-    host.innerHTML = `<div class="profile-empty-note">No ${series} track history with enough starts yet.</div>`;
+    const lbl = series === "all" ? "" : series + " ";
+    host.innerHTML = `<div class="profile-empty-note">No ${lbl}track history with enough starts yet.</div>`;
     return;
   }
   const fmt1 = (v) => v == null ? "—" : v.toFixed(1);
+  const pct = (v) => v == null ? "—" : (v * 100).toFixed(0) + "%";
+  const pace = (v) => v == null ? "n/a" : v.toFixed(2) + "%";
   host.innerHTML = `
     <div class="top-tracks-list">
       ${top.map((t, i) => `
-        <a class="top-tracks-row" href="#/track/${encodeURIComponent(t.code)}">
+        <div class="top-tracks-row" data-tt-row data-code="${escapeHTML(t.code)}" role="button" tabindex="0" aria-expanded="false">
           <span class="tt-rank">${i + 1}</span>
           <span class="tt-track">${escapeHTML(t.track)}</span>
           <span class="tt-stat"><span class="tt-stat-label">avg pts</span><span class="tt-stat-val">${fmt1(t.avgPts)}</span></span>
           <span class="tt-stat"><span class="tt-stat-label">avg fin</span><span class="tt-stat-val">${fmt1(t.avgFinish)}</span></span>
           <span class="tt-starts">${t.starts} ${t.starts === 1 ? "start" : "starts"}</span>
-          <span class="tt-arrow">→</span>
-        </a>
+          <span class="tt-chev">▸</span>
+        </div>
+        <div class="top-tracks-detail" data-tt-detail hidden>
+          <div class="tt-detail-grid">
+            <div class="tt-d"><span class="tt-d-label">Laps led / race</span><span class="tt-d-val">${fmt1(t.lapsLedPerRace)}</span></div>
+            <div class="tt-d"><span class="tt-d-label">Top-15% rate</span><span class="tt-d-val">${pct(t.top15)}</span></div>
+            <div class="tt-d"><span class="tt-d-label">Pace vs leader</span><span class="tt-d-val">${pace(t.paceDelta)}</span></div>
+            <div class="tt-d"><span class="tt-d-label">Wins · Top 5</span><span class="tt-d-val">${t.wins} · ${t.top5}</span></div>
+          </div>
+          <a class="tt-track-link" href="#/track/${encodeURIComponent(t.code)}">View ${escapeHTML(t.track)} page →</a>
+        </div>
       `).join("")}
     </div>
   `;
@@ -12622,6 +12677,40 @@ function predictDriverForRace(driverName, series, trackCode) {
   const avail = signals.filter(s => s.val != null);
   if (avail.length === 0) return null;
 
+  // DRAFTING-TRACK handling (Daytona, Talladega, Atlanta): lap-time PACE is
+  // not predictive of finish — pack racing means everyone runs flat-out at
+  // nearly identical speed, so "fast laps" don't separate cars. Finish here is
+  // about drafting, wreck-avoidance, and timing. So we DROP all pace signals
+  // (track, type, and pace-form) and predict purely from finish history at the
+  // track + qualifying. All-time finish here (drafting skill persists) carries
+  // most of the weight. NOTE: this returns early-ish via a separate weight set.
+  if (isDraftingTrack(trackCode)) {
+    const draftSignals = [
+      { name: "track_alltime", label: "All-time here", w: 0.65, val: allTimeTrimmed },
+      { name: "qual_track",    label: "Qual · this track", w: 0.15, val: trackQual },
+      // recent FINISH form (not pace) as a small reactive signal — at draft
+      // tracks finishes are what matter. Recompute a trimmed finish form here.
+      { name: "finish_form",   label: "Recent finish form", w: 0.20, val: (() => {
+          const hist = getDriverRaceHistory(driverName, series) || [];
+          const last8 = hist.slice(0, 8).map(r => r.finish_pos).filter(n => n != null);
+          if (!last8.length) return null;
+          let keep = last8.slice();
+          if (keep.length >= 4) { const s = [...keep].sort((a, b) => a - b); keep = s.slice(1, -1); }
+          return keep.reduce((a, b) => a + b, 0) / keep.length;
+        })() },
+    ];
+    const dAvail = draftSignals.filter(s => s.val != null);
+    if (dAvail.length) {
+      const dSum = dAvail.reduce((s, x) => s + x.w, 0);
+      let dPred = dAvail.reduce((sum, x) => sum + (x.w / dSum) * x.val, 0);
+      var _draftPredicted = Math.max(1.0, dPred);
+    } else {
+      // No finish history at this draft track (e.g. a rookie's first one) —
+      // pace is meaningless here, so use season-avg finish, else mid-pack.
+      var _draftPredicted = (seasonAvg != null) ? seasonAvg : 20;
+    }
+  }
+
   // NEW-TRACK handling: when we have no track-specific pace AND no all-time
   // finish here (a brand-new venue like a first-time street course), don't let
   // recent pace-form carry the prediction by default renormalization. Lean on
@@ -12644,8 +12733,14 @@ function predictDriverForRace(driverName, series, trackCode) {
   let predicted = avail.reduce((sum, x) => sum + (x.w / wSum) * x.val, 0);
   // Floor at 1.0 — can't predict better than winning.
   predicted = Math.max(1.0, predicted);
+  // At drafting tracks, override with the finish-history-based prediction
+  // (pace was dropped). Falls back to the pace blend only if the driver has no
+  // finish history at the track at all.
+  if (typeof _draftPredicted !== "undefined" && _draftPredicted != null) {
+    predicted = _draftPredicted;
+  }
   // Tag which pace tier fired, for the breakdown/debugging.
-  const paceSource = trackPace.source;
+  const paceSource = isDraftingTrack(trackCode) ? "draft" : trackPace.source;
 
   // ----- Stage-points signals (separate model) -----
   // Stage points have lower variance than finish position so the simpler
