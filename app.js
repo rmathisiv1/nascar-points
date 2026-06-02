@@ -11634,10 +11634,27 @@ function resetProjectionCache() {
 // noise around each driver's predicted_finish. Two indep. normals
 // per call but we only return one; the other is discarded (fine for
 // our throughput).
+// Seeded RNG for the projection so results are STABLE between renders — the
+// simulation only changes when the season state changes (a race completes),
+// not on every page load. mulberry32 is a small, fast, well-distributed PRNG.
+// `_rng` is the active generator; the sim seeds it at the start of each run
+// (keyed on the completed-race count) and all sim randomness draws from it.
+let _rng = Math.random;
+function _mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function _seedRng(seed) { _rng = _mulberry32(seed); }
+
 function _sampleNormal() {
   let u = 0, v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
+  while (u === 0) u = _rng();
+  while (v === 0) v = _rng();
   return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
 }
 
@@ -11707,8 +11724,8 @@ function _simulateOneRace(matrixEntry, drivers) {
   const noisy = drivers.map(d => {
     // Catastrophic event: ~5% chance of a mechanical failure / wreck
     // that drops the driver to the back regardless of underlying speed.
-    if (Math.random() < PROJ_CATASTROPHE_PCT) {
-      return { slug: d.slug, score: 25 + Math.random() * 15 }; // P25-P40 range
+    if (_rng() < PROJ_CATASTROPHE_PCT) {
+      return { slug: d.slug, score: 25 + _rng() * 15 }; // P25-P40 range
     }
     // Pure rollout: the per-race finish comes straight from our prediction
     // model (predictDriverForRace, via the matrix), plus symmetric noise.
@@ -11734,7 +11751,7 @@ function _simulateOneRace(matrixEntry, drivers) {
 function _sampleStagePts(meanStagePts) {
   if (meanStagePts == null || meanStagePts <= 0) return 0;
   // Triangular-ish: random in [0.4×mean, 1.6×mean], clamped to [0, 20].
-  const sample = meanStagePts * (0.4 + Math.random() * 1.2);
+  const sample = meanStagePts * (0.4 + _rng() * 1.2);
   return Math.max(0, Math.min(20, sample));
 }
 
@@ -11764,7 +11781,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 14;  // v14: total pts derived from finish; chase track labels
+  const PROJ_VERSION = 15;  // v15: seeded RNG (stable until next race) + chart 45deg labels, 2000 floor
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -11788,6 +11805,16 @@ function simulateSeasonRollout(series, year, opts = {}) {
 
   const rule = resolvePlayoffRules(series, year);
   if (!rule) return null;
+
+  // Seed the RNG so this run is REPRODUCIBLE: the same season state (same
+  // completed-race count) always produces the same projection, no matter how
+  // many times the page is loaded. When the next race completes, completedCount
+  // changes, the seed changes, and the projection is re-rolled fresh.
+  let _seed = (completedCount + 1) * 2654435761;
+  for (const ch of `${series}|${year}|${nSims}|v${PROJ_VERSION}`) {
+    _seed = (Math.imul(_seed ^ ch.charCodeAt(0), 16777619)) >>> 0;
+  }
+  _seedRng(_seed);
 
   // Collect remaining races: schedule entries that have NO results yet
   // (upcoming races). Sorted by round to keep things deterministic.
@@ -24387,11 +24414,9 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     .sort((a, b) => (a.round || 0) - (b.round || 0));
   if (chaseRaces.length === 0) return "";
 
-  // Chart dimensions. Bottom padding holds vertical (90°-rotated) track names,
-  // which take a fixed footprint regardless of name length — so "Martinsville"
-  // and "Bristol" both fit without any per-name tuning.
-  const W = 820, H = 430;
-  const pad = { t: 16, r: 80, b: 118, l: 64 };
+  // Chart dimensions. Bottom padding holds 45°-angled track names.
+  const W = 820, H = 388;
+  const pad = { t: 16, r: 80, b: 76, l: 64 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
   const lastRound = chaseRaces.length > 0 ? chaseRaces[chaseRaces.length - 1].round : regEnd + 10;
@@ -24399,10 +24424,13 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
   const allCums = traces.flatMap(t => t.points.map(p => p.cum));
   const minPts = Math.min(...allCums);
   const maxPts = Math.max(...allCums);
-  const padPts = (maxPts - minPts) * 0.08 || 50;
-  // Y-axis: round to 50-pt boundaries so labels land on clean values.
-  const yMin = Math.floor((minPts - padPts) / 50) * 50;
-  const yMax = Math.ceil((maxPts + padPts) / 50) * 50;
+  // Y-axis floor: never drop below the chase reset base (the lowest a chase
+  // driver starts at, ~2000) — there's no data down there, so showing it is
+  // dead space. Floor at the lower of [data min rounded down, reset base].
+  const resetBase = (proj.rule && proj.rule.resetBase) ? Math.floor(proj.rule.resetBase / 50) * 50 : 2000;
+  const dataFloor = Math.floor(minPts / 50) * 50;
+  const yMin = Math.max(resetBase, Math.min(dataFloor, resetBase));
+  const yMax = Math.ceil((maxPts + (maxPts - minPts) * 0.06) / 50) * 50;
   const xScale = r => pad.l + ((r - regEnd) / Math.max(1, lastRound - regEnd)) * innerW;
   const yScale = v => pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
 
@@ -24413,19 +24441,17 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     gridLines.push(`<line class="pc-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`);
     gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end">${v}</text>`);
   }
-  // X labels: round number + a VERTICAL track name beneath it. Rotating the
-  // name to 90° gives it a fixed (tiny) horizontal footprint, so labels of any
-  // length fit in their column without clipping — no per-name length tuning.
+  // X labels: round number + a 45°-angled track name beneath it.
   const xLabels = [];
   for (let i = 0; i < chaseRaces.length; i++) {
     const r = chaseRaces[i];
     const x = xScale(r.round);
     let tname = (r.track || r.track_code || "")
       .replace(/ (Motor )?Speedway| International| Raceway| Superspeedway| Road Course$/ig, "").trim();
-    if (tname.length > 16) tname = tname.slice(0, 15) + "…";
-    const ty = H - pad.b + 14;
+    if (tname.length > 14) tname = tname.slice(0, 13) + "…";
+    const ty = H - pad.b + 16;
     xLabels.push(`<text class="axis-label" x="${x}" y="${(H - pad.b + 4).toFixed(1)}" text-anchor="middle">R${r.round}</text>`);
-    xLabels.push(`<text class="axis-label pc-track-label" x="${x}" y="${ty.toFixed(1)}" text-anchor="end" transform="rotate(-90 ${x} ${ty.toFixed(1)})">${escapeHTML(tname)}</text>`);
+    xLabels.push(`<text class="axis-label pc-track-label" x="${x}" y="${ty.toFixed(1)}" text-anchor="end" transform="rotate(-45 ${x} ${ty.toFixed(1)})">${escapeHTML(tname)}</text>`);
   }
 
   // Lines — draw lowest champ % first, highest last (on top)
@@ -24468,7 +24494,7 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
         <div class="ed-byline">Deterministic prediction per track · hover to see driver + projected finish</div>
       </div>
       <div class="pc-chart-wrap">
-        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+        <svg viewBox="-20 0 ${W + 24} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
           ${gridLines.join("")}
           ${xLabels.join("")}
           ${lines}
