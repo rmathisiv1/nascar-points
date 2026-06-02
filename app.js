@@ -11999,7 +11999,8 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 19;  // v19: clone chaseDrivers so render cannot mutate cached proj
+  const PROJ_VERSION = 20;  // v20: freeze chase-race predictions in proj so render-time
+                            // chase traces/champ% are deterministic (no live predictDriverForRace)
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -12470,6 +12471,19 @@ function simulateSeasonRollout(series, year, opts = {}) {
     rule,
     format: rule.format,
     reg_end_round: regEndRound,
+    // Frozen chase-race predictions, taken from the SAME matrix the simulation
+    // used. _computeChaseTraces reads these instead of re-calling
+    // predictDriverForRace at render time — that live call was the projection's
+    // last source of drift: its output shifts with async pace-data load and
+    // session state, so the chase chart + champ% changed between refreshes even
+    // though the cached sim was stable. Maps don't serialize to JSON, so store
+    // plain objects keyed by driver slug.
+    chase_preds: playoffMatrix.map(m => ({
+      round: m.round,
+      track_code: m.trackCode,
+      preds: Object.fromEntries(m.predsByDriver),
+      stage: Object.fromEntries(m.stageByDriver),
+    })),
   };
   PROJECTION_CACHE.set(cacheKey, result);
   // Persist to localStorage so the simulation survives page refreshes.
@@ -24690,6 +24704,22 @@ function _computeChaseTraces(chaseDrivers, proj) {
   );
   const reseedTable = proj.rule.reseedTable || [2100];
 
+  // Frozen predictions from the sim (v20+). Reading these instead of calling
+  // predictDriverForRace live at render time is what makes this deterministic:
+  // the live call drifts with async pace-data load + session state, which made
+  // the chase chart and champ% change between refreshes. Fall back to the live
+  // call only for a stale pre-v20 cached proj (no chase_preds) so nothing breaks
+  // before the new sim is computed.
+  const predByRound = new Map();   // round -> { preds:{slug:finish}, stage:{slug:pts} }
+  (proj.chase_preds || []).forEach(cp => predByRound.set(cp.round, cp));
+  const predFor = (driver, race) => {
+    const cp = predByRound.get(race.round);
+    if (cp && cp.preds[driver.slug] != null) {
+      return { predicted_finish: cp.preds[driver.slug], predicted_stage_pts: cp.stage[driver.slug] || 0 };
+    }
+    return predictDriverForRace(driver.name, proj.series, race.track_code); // pre-v20 fallback
+  };
+
   // First pass: compute every chase driver's predicted finish (+ stage pts) at
   // each chase race, so we can determine the per-race WINNER (lowest predicted
   // finish in the field) and award real win points (P1 + winner bonus + stage),
@@ -24698,7 +24728,7 @@ function _computeChaseTraces(chaseDrivers, proj) {
   byRegTotal.forEach(d => {
     chaseRaces.forEach(race => {
       if (!race.track_code) return;
-      const pred = predictDriverForRace(d.name, proj.series, race.track_code);
+      const pred = predFor(d, race);
       const predFinish = pred ? pred.predicted_finish : 20;
       const stagePts = pred && Number.isFinite(pred.predicted_stage_pts)
         ? pred.predicted_stage_pts : 0;
@@ -24721,7 +24751,7 @@ function _computeChaseTraces(chaseDrivers, proj) {
     let cum = startPts;
     chaseRaces.forEach(race => {
       if (!race.track_code) return;
-      const pred = predictDriverForRace(d.name, proj.series, race.track_code);
+      const pred = predFor(d, race);
       const predFinish = pred ? pred.predicted_finish : 20;
       const stagePts = pred && Number.isFinite(pred.predicted_stage_pts)
         ? pred.predicted_stage_pts : 0;
