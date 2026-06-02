@@ -24001,13 +24001,16 @@ function _buildProjectionHTML(proj) {
   );
   const fieldSize = proj.rule.field || 16;
 
-  // Chase drivers = top fieldSize from the projected standings, then
-  // re-sorted by championship % for the chase table/chart.
-  const chaseDrivers = allSorted.slice(0, fieldSize)
-    .slice()
-    .sort((a, b) => b.championship_pct - a.championship_pct);
+  // Chase drivers = top fieldSize from the projected standings (by points).
+  const chaseDrivers = allSorted.slice(0, fieldSize).slice();
 
-  // Top 5 contenders by championship probability
+  // Compute chase traces FIRST — this derives each driver's champ% from their
+  // deterministic chase points and writes it back onto the driver objects, so
+  // the contender cards, chart, and table all use the same consistent number.
+  const chaseTraces = chaseDrivers.length > 0 ? _computeChaseTraces(chaseDrivers, proj) : [];
+
+  // Now sort by the (points-derived) championship % and pick top contenders.
+  chaseDrivers.sort((a, b) => (b.championship_pct || 0) - (a.championship_pct || 0));
   const topContenders = chaseDrivers.slice(0, 5);
 
   return `
@@ -24031,11 +24034,10 @@ function _buildProjectionHTML(proj) {
 
       ${_renderProjectionRegSeasonTable(proj)}
 
-      ${chaseDrivers.length > 0 ? (() => {
-        const chaseTraces = _computeChaseTraces(chaseDrivers, proj);
-        return _renderProjectionChaseChart(chaseDrivers, proj, chaseTraces)
-             + _renderProjectionChaseTable(chaseDrivers, proj, chaseTraces);
-      })() : ""}
+      ${chaseTraces.length > 0
+        ? _renderProjectionChaseChart(chaseDrivers, proj, chaseTraces)
+          + _renderProjectionChaseTable(chaseDrivers, proj, chaseTraces)
+        : ""}
     </div>
 
     <div class="proj-view proj-view-owner" hidden>
@@ -24302,6 +24304,22 @@ function _computeChaseTraces(chaseDrivers, proj) {
     };
   });
 
+  // Championship % DERIVED from deterministic final chase points (softmax over
+  // the points gaps), so the chart, points, and % all agree across every view
+  // (top-contender cards, chart, table). Replaces the separate Monte-Carlo
+  // championship_pct that could disagree with the points the chart shows.
+  const TEMP = 55;  // softmax temperature in points
+  const maxPts = Math.max(...traces.map(t => t.finalPts));
+  const exps = traces.map(t => Math.exp((t.finalPts - maxPts) / TEMP));
+  const expSum = exps.reduce((a, b) => a + b, 0) || 1;
+  traces.forEach((t, i) => {
+    t.champPct = exps[i] / expSum;
+    // Write back onto the source driver object so the top-contender cards and
+    // chaseDrivers sort (which read championship_pct) use the same number.
+    const src = chaseDrivers.find(d => d.slug === t.slug);
+    if (src) src.championship_pct = t.champPct;
+  });
+
   // Standings position at each round: rank every driver's cum pts per round
   // so the tooltip can show where they sit at that point in the season.
   const rounds = new Set();
@@ -24330,7 +24348,7 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
   // Chart dimensions (match PFC). Extra bottom padding for diagonal track
   // names; extra left padding so the leftmost rotated label doesn't clip.
   const W = 820, H = 384;
-  const pad = { t: 16, r: 80, b: 80, l: 64 };
+  const pad = { t: 16, r: 80, b: 80, l: 78 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
   const lastRound = chaseRaces.length > 0 ? chaseRaces[chaseRaces.length - 1].round : regEnd + 10;
@@ -24422,14 +24440,10 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
 
 function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
   if (!traces || traces.length === 0) return "";
-  // Sort by CHAMPIONSHIP % (the Monte Carlo title odds) — this is the real
-  // "who's most likely to be champion" answer and the table's whole point.
-  // We deliberately do NOT sort by the deterministic finalPts, which is a
-  // single-run estimate that can disagree with the variance-aware champ %
-  // (e.g. a driver can lead one deterministic run but win the title less often
-  // across 500 sims). finalPts stays as an informational "Chase Pts" column.
-  const sorted = traces.slice().sort((a, b) => (b.champPct || 0) - (a.champPct || 0));
-  const leaderPts = Math.max(...sorted.map(d => d.finalPts));
+  // Sort by chase points (descending). champPct is already derived from these
+  // same points in _computeChaseTraces, so order, points, and % all agree.
+  const sorted = traces.slice().sort((a, b) => b.finalPts - a.finalPts);
+  const leaderPts = sorted[0].finalPts;
   const fieldSize = proj.rule.field || 16;
   return `
     <section class="proj-section">
