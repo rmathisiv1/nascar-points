@@ -24686,46 +24686,26 @@ function _computeChaseTraces(chaseDrivers, proj) {
     return predictDriverForRace(driver.name, proj.series, race.track_code); // pre-v20 fallback
   };
 
-  // First pass: compute every chase driver's predicted finish (+ stage pts) at
-  // each chase race, so we can determine the per-race WINNER (lowest predicted
-  // finish in the field) and award real win points (P1 + winner bonus + stage),
-  // not just the raw finish-scale value.
-  const predByRace = new Map();   // round -> [{slug, predFinish, stagePts}]
-  byRegTotal.forEach(d => {
-    chaseRaces.forEach(race => {
-      if (!race.track_code) return;
-      const pred = predFor(d, race);
-      const predFinish = pred ? pred.predicted_finish : 20;
-      const stagePts = pred && Number.isFinite(pred.predicted_stage_pts)
-        ? pred.predicted_stage_pts : 0;
-      if (!predByRace.has(race.round)) predByRace.set(race.round, []);
-      predByRace.get(race.round).push({ slug: d.slug, predFinish, stagePts });
-    });
+  // Full-field finishing ORDER per chase race. Rank EVERY sim driver (chase +
+  // non-chase — the whole ~36-car field held in chase_preds) by predicted finish
+  // and assign UNIQUE positions 1..N. Chase drivers then score points for their
+  // ACTUAL position in that order. This fixes two things: (1) the chart was
+  // scoring each chase driver off their own independent predicted finish, so two
+  // drivers could land the same position (Logano and Byron both "P6") and every
+  // playoff driver scored like a top-16 car as if they only raced each other;
+  // (2) non-chase drivers now occupy real finishing spots, pushing playoff
+  // drivers down to their true expected position in the full field. The race
+  // WINNER is simply position 1. Pre-v20 projections (no chase_preds) fall back
+  // to each driver's rounded independent estimate.
+  const posByRound = new Map();   // round -> Map<slug, finishPos>
+  (proj.chase_preds || []).forEach(cp => {
+    const order = Object.keys(cp.preds)
+      .filter(s => cp.preds[s] != null)
+      .sort((a, b) => cp.preds[a] - cp.preds[b]);
+    const m = new Map();
+    order.forEach((slug, i) => m.set(slug, i + 1));
+    posByRound.set(cp.round, m);
   });
-  // Winner per race = lowest predicted finish across the WHOLE field, not just
-  // the 16 chase drivers. chase_preds (v20+) holds every sim driver's predicted
-  // finish, so a chase driver is credited with the win only when the model
-  // actually has them beating the entire field. Previously the winner was forced
-  // to be the best of the 16, which made the chart look like the playoff drivers
-  // were only racing each other and over-awarded the leader a win every week.
-  // Pre-v20 projections (no chase_preds) fall back to best-of-the-16.
-  const winnerByRace = new Map();
-  if (proj.chase_preds && proj.chase_preds.length) {
-    proj.chase_preds.forEach(cp => {
-      let bestSlug = null, bestFin = Infinity;
-      for (const slug in cp.preds) {
-        const f = cp.preds[slug];
-        if (f != null && f < bestFin) { bestFin = f; bestSlug = slug; }
-      }
-      if (bestSlug) winnerByRace.set(cp.round, bestSlug);
-    });
-  } else {
-    predByRace.forEach((arr, round) => {
-      let best = null;
-      for (const x of arr) if (!best || x.predFinish < best.predFinish) best = x;
-      if (best) winnerByRace.set(round, best.slug);
-    });
-  }
 
   const traces = byRegTotal.map((d, seedIdx) => {
     const startPts = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;
@@ -24738,17 +24718,21 @@ function _computeChaseTraces(chaseDrivers, proj) {
       const predFinish = pred ? pred.predicted_finish : 20;
       const stagePts = pred && Number.isFinite(pred.predicted_stage_pts)
         ? pred.predicted_stage_pts : 0;
-      const isWin = winnerByRace.get(race.round) === d.slug;
-      // Real points: finish-position points + predicted stage points, plus the
-      // winner's bonus for the predicted race winner. NCS win bonus is +15
-      // (40 base + 15 = 55 for a win, before stage points), matching the
-      // regular-season rollout and the _finishPtsScale comment.
-      let racePts = _finishPtsScale(isWin ? 1 : Math.round(predFinish)) + stagePts;
+      // Position in the full-field finishing order (unique 1..N). Falls back to
+      // the rounded independent estimate only when there is no field order
+      // (pre-v20 cached proj).
+      const fieldOrder = posByRound.get(race.round);
+      const pos = (fieldOrder && fieldOrder.get(d.slug) != null)
+        ? fieldOrder.get(d.slug)
+        : Math.max(1, Math.round(predFinish));
+      const isWin = pos === 1;
+      // Finish-position points for the driver's ACTUAL full-field position, plus
+      // predicted stage points, plus the NCS win bonus (+15) for the winner only.
+      let racePts = _finishPtsScale(pos) + stagePts;
       if (isWin && proj.series === "NCS") racePts += 15;
       cum += racePts;
       points.push({ round: race.round, cum,
-                    predFinish: isWin ? 1 : Math.round(predFinish),
-                    racePts: Math.round(racePts), isWin,
+                    predFinish: pos, racePts: Math.round(racePts), isWin,
                     track: race.track || race.track_code || "" });
     });
     return {
