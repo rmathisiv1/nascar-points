@@ -3702,6 +3702,7 @@ function entitiesFromRaces(races) {
         fl: d.fastest_lap_pt || 0,
         total: d.race_pts || 0,
         lapsLed: d.laps_led || 0,
+        pct_top15: d.loop_pct_top15_laps,
         status: d.status,
         driver: d.driver,
         track_code: r.track_code,
@@ -3988,19 +3989,123 @@ function mean(xs) {
   return a.reduce((s, x) => s + x, 0) / a.length;
 }
 
+// Power Rankings metric — raw components over the last N races (default 8),
+// EXCLUDING wreck/DNF races so a fast car that got crashed isn't punished.
+// Returns higher-is-better raw values per component (or null when no data);
+// the field-relative 0-100 blend is assembled in renderFormTable where the
+// whole field is available for normalization. Components & weights:
+//   pace 40 / finish 25 / top-15% 10 / qualifying 15  (renormalized to 100).
+const POWER_WEIGHTS = { pace: 40, finish: 25, top15: 10, qual: 15 };
+
+// Decide if a race is a "clean" race for form purposes — i.e. NOT a wreck/DNF.
+// We exclude when the status indicates a DNF (accident/mechanical) OR when the
+// finish is far worse than where the car ran (deep finish despite a strong
+// top-15% share — the signature of getting collected late while fast).
+function _isCleanFormRace(r) {
+  const st = (r.status || "").toString().toLowerCase();
+  if (st && /(accident|crash|dnf|engine|suspension|brakes|overheating|rear gear|transmission|electrical|fire|did not finish|retired|parked)/.test(st)) {
+    return false;
+  }
+  // Ran up front but finished deep → almost certainly a late incident, not pace.
+  if (r.pct_top15 != null && r.pct_top15 >= 40 && r.finish != null && r.finish >= 30) return false;
+  return true;
+}
+
 function formRatingFor(driverRaces, windowType) {
-  let slice;
-  if (windowType === "5") slice = driverRaces.slice(-5);
-  else if (windowType === "10") slice = driverRaces.slice(-10);
-  else slice = driverRaces;
-  const finishes = slice.map(r => r.finish).filter(x => x != null);
+  // Back-compat shim: some callers still ask for a quick finish-based number
+  // (e.g. the season-vs-form delta). Keep a simple clean-finish rating here.
+  const n = windowType === "5" ? 5 : windowType === "10" ? 10 : 8;
+  const slice = (driverRaces || []).slice(-n);
+  const clean = slice.filter(_isCleanFormRace);
+  const finishes = (clean.length ? clean : slice).map(r => r.finish).filter(x => x != null);
   if (finishes.length === 0) return null;
   const avg = finishes.reduce((s, x) => s + x, 0) / finishes.length;
   return Math.max(0, Math.min(100, 100 - (avg - 1) * 2));
 }
 
+// Raw per-component values for the blend (higher = better), over the last N
+// CLEAN races. Pace is pulled from the lap-time records (lower delta = faster,
+// so we negate). Returns null components where there's no usable data.
+function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
+  const recent = (driverRaces || []).slice(-windowN);
+  const clean = recent.filter(_isCleanFormRace);
+  const use = clean.length >= 3 ? clean : recent;   // keep ≥3 races of signal
+  if (!use.length) return { pace: null, finish: null, top15: null, qual: null, nClean: 0 };
+
+  const roundsInWindow = new Set(use.map(r => r.round));
+
+  // Finish (clean): avg finish → negate so higher = better.
+  const fins = use.map(r => r.finish).filter(x => x != null);
+  const finish = fins.length ? -(fins.reduce((s, x) => s + x, 0) / fins.length) : null;
+
+  // Qualifying: avg start → negate so higher = better.
+  const starts = use.map(r => r.start).filter(x => x != null);
+  const qual = starts.length ? -(starts.reduce((s, x) => s + x, 0) / starts.length) : null;
+
+  // Top-15%: avg share of green-flag laps run in the top 15 (higher = better).
+  const t15 = use.map(r => r.pct_top15).filter(x => x != null);
+  const top15 = t15.length ? (t15.reduce((s, x) => s + x, 0) / t15.length) : null;
+
+  // Pace: avg lap-time blend delta over the window's CLEAN rounds (lower delta
+  // = faster), negated so higher = better. Drawn from the pace records, matched
+  // to the same rounds we're scoring on.
+  let pace = null;
+  try {
+    const recs = _paceRecordsFor(driverName, series);
+    const inWin = recs.filter(rec => roundsInWindow.has(rec.round));
+    const paceRecs = inWin.length ? inWin : recs.slice(0, windowN);
+    if (paceRecs.length) {
+      pace = -(paceRecs.reduce((s, rec) => s + rec.blend, 0) / paceRecs.length);
+    }
+  } catch (_) { /* pace stays null; weight redistributes */ }
+
+  return { pace, finish, top15, qual, nClean: clean.length };
+}
+
 function seasonTotalRating(driverRaces) {
   return formRatingFor(driverRaces, "season");
+}
+
+// Build field-relative Power Rankings for a set of entities. Each driver's raw
+// components are normalized to 0-100 across the field (min→0, max→100), then
+// blended by POWER_WEIGHTS (renormalized over whichever components the driver
+// has). Returns a Map entityKey → { rating, rank } plus the sorted order.
+// `cutoffRound` (optional) restricts each driver's races to round ≤ cutoff, so
+// we can reproduce "last week's" ranking for the up/down arrows.
+function buildPowerRankings(entities, series, windowN = 8, cutoffRound = null) {
+  // Gather raw components per entity.
+  const rows = entities.map(d => {
+    let races = d.races || [];
+    if (cutoffRound != null) races = races.filter(r => (r.round || 0) <= cutoffRound);
+    const comp = powerComponentsFor(d.primary_driver || d.driver, series, races, windowN);
+    return { key: entityKey(d), comp, hasAny: comp.pace != null || comp.finish != null || comp.top15 != null || comp.qual != null };
+  }).filter(r => r.hasAny);
+
+  // Field min/max per component for normalization.
+  const keys = ["pace", "finish", "top15", "qual"];
+  const range = {};
+  keys.forEach(k => {
+    const vals = rows.map(r => r.comp[k]).filter(v => v != null);
+    range[k] = vals.length ? { min: Math.min(...vals), max: Math.max(...vals) } : null;
+  });
+
+  rows.forEach(r => {
+    let wSum = 0, acc = 0;
+    keys.forEach(k => {
+      const v = r.comp[k];
+      const rg = range[k];
+      if (v == null || !rg || rg.max === rg.min) return;
+      const norm = ((v - rg.min) / (rg.max - rg.min)) * 100;  // 0..100, higher=better
+      acc += norm * POWER_WEIGHTS[k];
+      wSum += POWER_WEIGHTS[k];
+    });
+    r.rating = wSum > 0 ? acc / wSum : null;
+  });
+
+  const ranked = rows.filter(r => r.rating != null).sort((a, b) => b.rating - a.rating);
+  const out = new Map();
+  ranked.forEach((r, i) => out.set(r.key, { rating: r.rating, rank: i + 1 }));
+  return out;
 }
 
 function isFullTime(entity) {
@@ -5041,30 +5146,35 @@ function renderFormTable() {
 
   const entities = allEntities();
   const races = racesSorted();
-  // Race columns + sparkline length follow the active window
-  let windowSize;
-  if (STATE.form.window === "5") windowSize = 5;
-  else if (STATE.form.window === "10") windowSize = 10;
-  else windowSize = races.length;        // full season
+  const POWER_N = 8;                 // fixed last-8-races window (no toggle)
+  const windowSize = POWER_N;
   const shownRaces = races.slice(-Math.min(windowSize, races.length));
 
+  // Field-relative Power Rankings now, and "last week" (through the previous
+  // completed round) so we can show up/down arrows like the standings page.
+  const completedRounds = races.map(r => r.round).filter(n => n != null).sort((a, b) => a - b);
+  const latestRound = completedRounds.length ? completedRounds[completedRounds.length - 1] : null;
+  const prevRound = completedRounds.length > 1 ? completedRounds[completedRounds.length - 2] : null;
+  const powerNow = buildPowerRankings(entities, STATE.series, POWER_N);
+  const powerPrev = prevRound != null ? buildPowerRankings(entities, STATE.series, POWER_N, prevRound) : new Map();
+
   let decorated = entities.map(d => {
-    const formRating = formRatingFor(d.races, STATE.form.window);
+    const key = entityKey(d);
+    const pr = powerNow.get(key);
+    const prPrev = powerPrev.get(key);
+    const formRating = pr ? pr.rating : null;     // field-relative 0-100 blend
+    const powerRank = pr ? pr.rank : null;        // headline rank (1-N)
+    // Ranking change vs last week (positive = moved UP, i.e. lower rank number).
+    const rankDelta = (pr && prPrev) ? (prPrev.rank - pr.rank) : null;
     const seasonRating = seasonTotalRating(d.races);
     const deltaR = (formRating != null && seasonRating != null) ? formRating - seasonRating : null;
     const lastFinishes = d.races.slice(-shownRaces.length).map(r => r.finish);
     const totalPts = d.races.reduce((s, r) => s + r.total, 0);
-    // Points scored in just the displayed window (matches "L5"/"L10"
-    // toggle, or full season). Useful for spotting hot streaks at a glance.
     const windowPts = d.races
       .filter(r => shownRaces.some(sr => sr.round === r.round))
       .reduce((s, r) => s + (r.total || 0), 0);
-    // Delta vs season pace — what they "should have" scored in the window
-    // if they raced at their season-average pace. Positive = hot streak,
-    // negative = slump. Skip when window is the full season (delta would
-    // always be 0 by definition) and when driver has zero races.
     let windowPtsDelta = null;
-    if (STATE.form.window !== "season" && d.races.length > 0 && shownRaces.length > 0) {
+    if (d.races.length > 0 && shownRaces.length > 0) {
       const seasonAvgPerRace = totalPts / d.races.length;
       const racesInWindow = d.races.filter(r => shownRaces.some(sr => sr.round === r.round)).length;
       if (racesInWindow > 0) {
@@ -5072,7 +5182,7 @@ function renderFormTable() {
         windowPtsDelta = windowPts - expectedPts;
       }
     }
-    return { ...d, formRating, seasonRating, deltaR, lastFinishes, totalPts, windowPts, windowPtsDelta, fullTime: isFullTime(d) };
+    return { ...d, formRating, powerRank, rankDelta, seasonRating, deltaR, lastFinishes, totalPts, windowPts, windowPtsDelta, fullTime: isFullTime(d) };
   });
 
   // Compute avg NASCAR Driver Rating across the form window for each
@@ -5111,8 +5221,8 @@ function renderFormTable() {
     );
   }
 
-  const sortKey = STATE.form.sortKey || "formRating";
-  const sortDir = STATE.form.sortKey ? STATE.form.sortDir : "desc";
+  const sortKey = STATE.form.sortKey || "powerRank";
+  const sortDir = STATE.form.sortKey ? STATE.form.sortDir : "asc";
   decorated = sortRows(decorated, sortKey, sortDir);
 
   const headerCols = shownRaces.map(r =>
@@ -5123,22 +5233,30 @@ function renderFormTable() {
     const carHex = colorFor(STATE.series, d.car_number);
     const txtCol = contrastTextFor(carHex);
     const spark = sparkSVG(d.lastFinishes, carHex, 58, 18);
-    const trend = trendArrow(d.deltaR);
     const ratingCls = d.deltaR == null ? "" : d.deltaR > 6 ? "hot" : d.deltaR < -6 ? "cold" : "";
     const teamPill = renderTeamPill(d.team_code);
+    // Power-rank movement arrow vs last week (positive rankDelta = moved up).
+    let rankArrow = `<span class="pr-move pr-move-flat" title="No change">–</span>`;
+    if (d.rankDelta != null && d.rankDelta > 0) {
+      rankArrow = `<span class="pr-move pr-move-up" title="Up ${d.rankDelta} since last race">▲${d.rankDelta}</span>`;
+    } else if (d.rankDelta != null && d.rankDelta < 0) {
+      rankArrow = `<span class="pr-move pr-move-down" title="Down ${Math.abs(d.rankDelta)} since last race">▼${Math.abs(d.rankDelta)}</span>`;
+    } else if (d.rankDelta == null) {
+      rankArrow = `<span class="pr-move pr-move-new" title="New to rankings">•</span>`;
+    }
     return `<tr data-car-key="${escapeHTML(entityKey(d))}">
-      <td class="num" style="color: var(--dim)">${d.rank}</td>
+      <td class="num"><span class="pr-rank-cell"><span class="pr-rank-num">${d.powerRank != null ? d.powerRank : "—"}</span>${rankArrow}</span></td>
       <td><a class="driver-cell profile-link" href="${profileHref(d)}">
         <span class="car-tag" style="background:${carHex};color:${txtCol}">${d.car_number}</span>
         <span>${escapeHTML(displayName(d))}</span>
         ${renderCoDriverBadge(d)}
       </a></td>
       <td>${teamPill}</td>
-      <td><span class="form-wrap">${spark}<span class="trend ${trend.cls}">${trend.a}</span></span></td>
+      <td><span class="form-wrap">${spark}</span></td>
       <td class="num">
         <span class="rating-stack">
           <span class="rating-big ${ratingCls}">${d.formRating != null ? d.formRating.toFixed(1) : "—"}</span>
-          <span class="rating-small">season ${d.seasonRating != null ? d.seasonRating.toFixed(1) : "—"}</span>
+          <span class="rating-small">rating</span>
         </span>
       </td>
       <td class="num">${deltaPill(d.deltaR)}</td>
@@ -5163,17 +5281,15 @@ function renderFormTable() {
     return `<th class="${cls}" data-sort="${key}">${label}<span class="sort-arrow">${arrow}</span></th>`;
   };
 
-  const formColLabel = STATE.form.window === "season"
-    ? `Form (Season)`
-    : `Form (L${STATE.form.window})`;
+  const formColLabel = `Last 8`;
 
-  const windowPtsLabel = STATE.form.window === "season" ? "Season Pts" : `L${STATE.form.window} Pts`;
+  const windowPtsLabel = `L8 Pts`;
   card.innerHTML = `
     <div class="table-scroll">
     <table class="data-table">
       <thead>
         <tr>
-          ${th("rank", "Pos", true)}
+          ${th("powerRank", "Rank", true)}
           ${th("driver", "Driver", false)}
           ${th("team", "Team", false)}
           <th>${formColLabel}</th>
@@ -5196,7 +5312,7 @@ function renderFormTable() {
         STATE.form.sortDir = STATE.form.sortDir === "asc" ? "desc" : "asc";
       } else {
         STATE.form.sortKey = key;
-        STATE.form.sortDir = (key === "driver" || key === "team" || key === "rank") ? "asc" : "desc";
+        STATE.form.sortDir = (key === "driver" || key === "team" || key === "powerRank") ? "asc" : "desc";
       }
       renderFormTable();
     });
@@ -5204,9 +5320,7 @@ function renderFormTable() {
 
   wireCoDriverBadges(card);
 
-  // Mobile collapse: keep # (0), Driver (1), Rating (4).
-  // Hide Team, Form sparkline, vs Season, Pts — visible via tap-expand.
-  // Column indices: 0=#, 1=Driver, 2=Team, 3=Form, 4=Rating, 5=vs Season, 6=Pts
+  // Mobile collapse: keep Rank (0), Driver (1), Rating (4).
   const mobTable = card.querySelector("table.data-table");
   if (mobTable) {
     applyMobileTableCollapse(mobTable, [0, 1, 4]);
@@ -5215,7 +5329,7 @@ function renderFormTable() {
   const sub = document.getElementById("form-sub");
   if (sub) {
     const ftNote = STATE.form.ftOnly ? "full-time only" : "all entrants";
-    sub.textContent = `${decorated.length} cars · ${ftNote} · window: ${STATE.form.window === "season" ? "full season" : `last ${STATE.form.window} races`}`;
+    sub.textContent = `${decorated.length} cars · ${ftNote} · pace 40 / finish 25 / top-15% 10 / qualifying 15 · last 8 races, wrecks excluded`;
   }
 }
 
@@ -18647,13 +18761,15 @@ function renderFormMini() {
   if (!STATE.data) { host.innerHTML = ""; restoreCtx(); return; }
 
   const entities = allEntities().filter(isFullTime);
+  const power = buildPowerRankings(entities, STATE.series, 8);
   const rows = entities.map(d => {
-    const f = formRatingFor(d.races, "5");
+    const pr = power.get(entityKey(d));
+    const f = pr ? pr.rating : null;          // L8 blend rating (matches main page)
     const s = formRatingFor(d.races, "season");
     const delta = (f != null && s != null) ? f - s : null;
-    return { ...d, f, s, delta };
-  }).filter(d => d.delta != null)
-    .sort((a, b) => b.f - a.f);     // Sort by current form rating, not vs-season delta
+    return { ...d, f, s, delta, powerRank: pr ? pr.rank : null };
+  }).filter(d => d.f != null)
+    .sort((a, b) => a.powerRank - b.powerRank);   // Sort by Power Ranking
 
   // Build a tiny SVG sparkline of the last 5 finish positions (inverted: low
   // finish = high line) so hot recent form shows as an upward-trending line.
@@ -18672,7 +18788,7 @@ function renderFormMini() {
       <div class="form-mini-top">
         <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span class="form-mini-name">${escapeHTML(lastName)}</span>
-        <span class="form-mini-rating" title="Form rating across last 5 races (higher is better)">${r.f.toFixed(1)}</span>
+        <span class="form-mini-rating" title="Power Ranking rating — pace/finish/top-15%/qualifying blend over the last 8 races (higher is better)">${r.f.toFixed(1)}</span>
       </div>
       <div class="form-mini-bottom">
         <span class="form-mini-delta ${cls}" title="${escapeHTML(deltaTip)}">${sign}${r.delta.toFixed(1)}</span>

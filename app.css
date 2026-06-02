@@ -1576,6 +1576,25 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   font-family: var(--mono);
   font-size: 9px; color: var(--muted);
 }
+/* Power Rankings: rank number + up/down movement arrow vs last week. */
+.pr-rank-cell {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  justify-content: flex-end;
+}
+.pr-rank-num {
+  font-family: var(--mono);
+  font-weight: 700; font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.pr-move {
+  font-family: var(--mono);
+  font-size: 9px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pr-move-up   { color: var(--pos); }
+.pr-move-down { color: var(--neg); }
+.pr-move-flat { color: var(--dim); }
+.pr-move-new  { color: var(--accent); }
 
 /* Points-with-delta stack — used in Trending L5 Pts and Standings Last
    columns. Big number on top is the actual points; small delta below
