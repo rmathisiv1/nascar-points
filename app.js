@@ -7515,12 +7515,15 @@ function renderTeammates() {
         ineligible: !!d.ineligible,
       };
       (groupAll[grp] ||= []).push(rec);
-      // Benchmark pool: ANY eligible teammate in the group (full-time or not).
-      // We compare each car against the best of whoever its teammates were that
-      // week — a non-full-time teammate (e.g. Corey Heim's part-time entry) is
-      // still a valid comparison. We only exclude points-ineligible substitute
-      // weeks, since that car's result isn't representative of a real entry.
-      if (!d.ineligible) {
+      // Benchmark pool: ANY teammate in the group that actually ran the race
+      // (full-time or not, points-eligible or not). We compare each car against
+      // the best of whoever its teammates were that week. Including
+      // points-ineligible cars matters for charter transitions like RCR's #33
+      // (Austin Hill) — it's a real entry and a valid teammate comparison even
+      // though its points don't count toward the championship. We only require
+      // an actual finish position (a car that didn't take the green can't be a
+      // benchmark).
+      if (rec.finish != null) {
         (groupFt[grp] ||= []).push(rec);
       }
     });
@@ -12091,6 +12094,11 @@ function simulateSeasonRollout(series, year, opts = {}) {
     fullTop5Samples.set(d.slug, []);
     roundSurvival.set(d.slug, new Map());
   });
+
+  // Re-seed immediately before the iteration loop. Belt-and-suspenders: even if
+  // some setup step above were to consume an rng draw, the loop always starts
+  // from the SAME rng state, guaranteeing identical iterations across loads.
+  _seedRng(_seed);
 
   for (let sim = 0; sim < nSims; sim++) {
     const simPts = new Map();
