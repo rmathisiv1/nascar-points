@@ -12706,24 +12706,42 @@ function predictDriverForRace(driverName, series, trackCode) {
   // track + qualifying. All-time finish here (drafting skill persists) carries
   // most of the weight. NOTE: this returns early-ish via a separate weight set.
   if (isDraftingTrack(trackCode)) {
+    // UNTRIMMED all-time finish here. At normal tracks we trim wreck/DNF
+    // finishes as flukes — but at a superspeedway, wrecks are NOT outliers,
+    // they're the defining outcome (The Big One collects cars every race). A
+    // driver who keeps getting wrecked out of plate races genuinely IS a poor
+    // superspeedway bet, and the model must see that. Trimming those finishes
+    // (as allTimeTrimmed does) flatters thin-sample drivers like Zane Smith
+    // into looking like Daytona aces. So use the raw average here.
+    const draftAllTime = _trackFinishes.length
+      ? _trackFinishes.reduce((a, b) => a + b, 0) / _trackFinishes.length
+      : null;
     const draftSignals = [
-      { name: "track_alltime", label: "All-time here", w: 0.65, val: allTimeTrimmed },
+      { name: "track_alltime", label: "All-time here (untrimmed)", w: 0.65, val: draftAllTime },
       { name: "qual_track",    label: "Qual · this track", w: 0.15, val: trackQual },
       // recent FINISH form (not pace) as a small reactive signal — at draft
-      // tracks finishes are what matter. Recompute a trimmed finish form here.
+      // tracks finishes are what matter. Untrimmed too, for the same reason:
+      // a recent plate wreck is real information about plate outcomes.
       { name: "finish_form",   label: "Recent finish form", w: 0.20, val: (() => {
           const hist = getDriverRaceHistory(driverName, series) || [];
           const last8 = hist.slice(0, 8).map(r => r.finish_pos).filter(n => n != null);
           if (!last8.length) return null;
-          let keep = last8.slice();
-          if (keep.length >= 4) { const s = [...keep].sort((a, b) => a - b); keep = s.slice(1, -1); }
-          return keep.reduce((a, b) => a + b, 0) / keep.length;
+          return last8.reduce((a, b) => a + b, 0) / last8.length;
         })() },
     ];
     const dAvail = draftSignals.filter(s => s.val != null);
     if (dAvail.length) {
       const dSum = dAvail.reduce((s, x) => s + x.w, 0);
       let dPred = dAvail.reduce((sum, x) => sum + (x.w / dSum) * x.val, 0);
+      // Thin-sample regression: plate racing is high-variance, so a driver with
+      // only a couple starts here can look great (or terrible) on luck alone.
+      // Regress toward mid-pack (P20) until ~6 starts of evidence. A 2-start
+      // sample is pulled ~67% toward the field; a 6+ start sample is trusted.
+      const nHere = _trackFinishes.length;
+      if (nHere < 6) {
+        const trust = nHere / 6;            // 0..1
+        dPred = trust * dPred + (1 - trust) * 20;
+      }
       var _draftPredicted = Math.max(1.0, dPred);
     } else {
       // No finish history at this draft track (e.g. a rookie's first one) —
