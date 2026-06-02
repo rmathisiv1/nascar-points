@@ -24178,7 +24178,6 @@ function renderProjection() {
       // Wire chart hover tooltips (same interaction as PFC chart)
       _wireProjectionChartTooltips(host);
       _wireProjectionTooltips();
-      _wireProjectionChartZoom(host);
       // Wire driver/owner/mfr toggle
       host.querySelectorAll("[data-proj-view]").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -24280,103 +24279,9 @@ function _wireProjectionTooltips() {
 // Zoom for the chase chart: mouse wheel (desktop) and two-finger pinch
 // (mobile) scale the SVG's viewBox around the pointer, so the user zooms into
 // the part of the chart they're looking at. Dragging pans when zoomed in.
-function _wireProjectionChartZoom(host) {
-  host.querySelectorAll(".pc-chart-svg").forEach(svg => {
-    // Parse the base viewBox; we mutate a working copy and never zoom out past
-    // it (that's the 100% fit-to-width view).
-    const base = (svg.getAttribute("viewBox") || "0 0 800 360").split(/\s+/).map(Number);
-    const [bx, by, bw, bh] = base;
-    let vb = { x: bx, y: by, w: bw, h: bh };
-    const MIN_W = bw / 5;   // max 5× zoom
-    const apply = () => svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
-
-    // Convert a client point to SVG-space using the current viewBox.
-    const toSvg = (clientX, clientY) => {
-      const rect = svg.getBoundingClientRect();
-      const px = (clientX - rect.left) / rect.width;
-      const py = (clientY - rect.top) / rect.height;
-      return { x: vb.x + px * vb.w, y: vb.y + py * vb.h };
-    };
-
-    const zoomAt = (clientX, clientY, factor) => {
-      const focal = toSvg(clientX, clientY);
-      let newW = vb.w * factor;
-      let newH = vb.h * factor;
-      // Clamp: never wider than base (fit), never narrower than MIN_W.
-      if (newW > bw) { newW = bw; newH = bh; }
-      if (newW < MIN_W) { newW = MIN_W; newH = bh * (MIN_W / bw); }
-      // Keep the focal point under the cursor fixed.
-      const px = (focal.x - vb.x) / vb.w;
-      const py = (focal.y - vb.y) / vb.h;
-      vb.w = newW; vb.h = newH;
-      vb.x = focal.x - px * newW;
-      vb.y = focal.y - py * newH;
-      // Clamp within base bounds.
-      vb.x = Math.max(bx, Math.min(vb.x, bx + bw - vb.w));
-      vb.y = Math.max(by, Math.min(vb.y, by + bh - vb.h));
-      apply();
-    };
-
-    svg.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      const factor = e.deltaY > 0 ? 1.12 : 0.89;   // down = zoom out, up = in
-      zoomAt(e.clientX, e.clientY, factor);
-    }, { passive: false });
-
-    // Touch pinch + drag-pan.
-    let pinchDist = null, panLast = null;
-    svg.addEventListener("touchstart", (e) => {
-      if (e.touches.length === 2) {
-        pinchDist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY);
-      } else if (e.touches.length === 1 && vb.w < bw) {
-        panLast = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      }
-    }, { passive: true });
-    svg.addEventListener("touchmove", (e) => {
-      if (e.touches.length === 2 && pinchDist != null) {
-        e.preventDefault();
-        const d = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY);
-        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        zoomAt(cx, cy, pinchDist / d);
-        pinchDist = d;
-      } else if (e.touches.length === 1 && panLast && vb.w < bw) {
-        e.preventDefault();
-        const rect = svg.getBoundingClientRect();
-        const dx = (e.touches[0].clientX - panLast.x) / rect.width * vb.w;
-        const dy = (e.touches[0].clientY - panLast.y) / rect.height * vb.h;
-        vb.x = Math.max(bx, Math.min(vb.x - dx, bx + bw - vb.w));
-        vb.y = Math.max(by, Math.min(vb.y - dy, by + bh - vb.h));
-        panLast = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        apply();
-      }
-    }, { passive: false });
-    svg.addEventListener("touchend", (e) => {
-      if (e.touches.length < 2) pinchDist = null;
-      if (e.touches.length === 0) panLast = null;
-    }, { passive: true });
-
-    // Desktop drag-pan when zoomed in.
-    let dragLast = null;
-    svg.addEventListener("mousedown", (e) => { if (vb.w < bw) dragLast = { x: e.clientX, y: e.clientY }; });
-    window.addEventListener("mousemove", (e) => {
-      if (!dragLast) return;
-      const rect = svg.getBoundingClientRect();
-      const dx = (e.clientX - dragLast.x) / rect.width * vb.w;
-      const dy = (e.clientY - dragLast.y) / rect.height * vb.h;
-      vb.x = Math.max(bx, Math.min(vb.x - dx, bx + bw - vb.w));
-      vb.y = Math.max(by, Math.min(vb.y - dy, by + bh - vb.h));
-      dragLast = { x: e.clientX, y: e.clientY };
-      apply();
-    });
-    window.addEventListener("mouseup", () => { dragLast = null; });
-    svg.style.cursor = "grab";
-  });
-}
+// Chase-points chart zoom (wheel/pinch/drag-pan) was removed: the viewBox
+// mutation broke hover hit-testing on the data circles. The chart is now
+// a static fit-to-width SVG with working tooltips.
 
 function _wireProjectionChartTooltips(host) {
   if (!host || host._projTooltipWired) return;
@@ -24736,13 +24641,30 @@ function _computeChaseTraces(chaseDrivers, proj) {
       predByRace.get(race.round).push({ slug: d.slug, predFinish, stagePts });
     });
   });
-  // Winner per race = lowest predicted finish.
+  // Winner per race = lowest predicted finish across the WHOLE field, not just
+  // the 16 chase drivers. chase_preds (v20+) holds every sim driver's predicted
+  // finish, so a chase driver is credited with the win only when the model
+  // actually has them beating the entire field. Previously the winner was forced
+  // to be the best of the 16, which made the chart look like the playoff drivers
+  // were only racing each other and over-awarded the leader a win every week.
+  // Pre-v20 projections (no chase_preds) fall back to best-of-the-16.
   const winnerByRace = new Map();
-  predByRace.forEach((arr, round) => {
-    let best = null;
-    for (const x of arr) if (!best || x.predFinish < best.predFinish) best = x;
-    if (best) winnerByRace.set(round, best.slug);
-  });
+  if (proj.chase_preds && proj.chase_preds.length) {
+    proj.chase_preds.forEach(cp => {
+      let bestSlug = null, bestFin = Infinity;
+      for (const slug in cp.preds) {
+        const f = cp.preds[slug];
+        if (f != null && f < bestFin) { bestFin = f; bestSlug = slug; }
+      }
+      if (bestSlug) winnerByRace.set(cp.round, bestSlug);
+    });
+  } else {
+    predByRace.forEach((arr, round) => {
+      let best = null;
+      for (const x of arr) if (!best || x.predFinish < best.predFinish) best = x;
+      if (best) winnerByRace.set(round, best.slug);
+    });
+  }
 
   const traces = byRegTotal.map((d, seedIdx) => {
     const startPts = reseedTable[Math.min(seedIdx, reseedTable.length - 1)] || 2000;

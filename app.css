@@ -11264,7 +11264,7 @@ body.lightbox-open {
 .pc-chart-wrap {
   position: relative;
 }
-.pc-chart-svg { touch-action: none; }   /* let pinch/drag drive zoom, not page scroll */
+.pc-chart-svg { touch-action: pan-y; }   /* zoom removed — allow normal page scroll */
 .pc-hit {
   cursor: crosshair;
   pointer-events: all;
