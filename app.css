@@ -10763,6 +10763,12 @@ body.lightbox-open {
   stroke-width: 1;
   stroke-opacity: 0.5;
 }
+.cmp-spider-ring-label {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 7.5px;
+  opacity: 0.55;
+}
 /* The outermost ring (100%) should be slightly bolder so the chart
    has a clear outer boundary. Specificity wise, this is just a
    last-child or nth-last-of-type style. */

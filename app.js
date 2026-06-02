@@ -15453,8 +15453,64 @@ const COMPARE_SPIDER_AXES = [
   },
 ];
 
+// Map a driver's RANK within the full-time field to a radar radius (0..1),
+// so the rings mean something concrete: rank 1 (best in field) = 1.0 (outer
+// ring), top-5 = 0.75, top-10 = 0.5, top-20 = 0.25, linear between and beyond.
+// This makes every axis read the same way — "how do you stack up in the field."
+function _spiderRankToRadius(rank, fieldSize) {
+  if (rank == null) return 0;
+  // Anchor points: [rank, radius]
+  const anchors = [[1, 1.0], [5, 0.75], [10, 0.5], [20, 0.25], [Math.max(20, fieldSize), 0.0]];
+  if (rank <= 1) return 1.0;
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const [r0, v0] = anchors[i], [r1, v1] = anchors[i + 1];
+    if (rank >= r0 && rank <= r1) {
+      const t = (rank - r0) / (r1 - r0);
+      return Math.max(0, v0 + t * (v1 - v0));
+    }
+  }
+  return 0;
+}
+
+// Compute the full-time field's raw value for every spider axis, so a single
+// driver's value can be ranked against the field. Cached per (series, season).
+const _SPIDER_FIELD_CACHE = new Map();
+function _spiderFieldMetrics(series) {
+  const key = `${series}|${STATE.season}`;
+  if (_SPIDER_FIELD_CACHE.has(key)) return _SPIDER_FIELD_CACHE.get(key);
+  // Field = current-season full-time drivers in this series. Build the driver
+  // list directly from this season's races (not allEntities(), which is scoped
+  // to the top-bar series and would be wrong when the profile shows another).
+  const field = [];
+  try {
+    const block = (typeof SEASON_CACHE !== "undefined") && SEASON_CACHE[STATE.season] && SEASON_CACHE[STATE.season][series];
+    if (block && block.races) {
+      // Count starts per driver to approximate full-time (≥60% of races run).
+      const startsBy = new Map();
+      const totalRaces = block.races.filter(r => (r.results || []).length > 0).length;
+      block.races.forEach(race => {
+        (race.results || []).forEach(d => {
+          if (d.ineligible || !d.driver) return;
+          startsBy.set(d.driver, (startsBy.get(d.driver) || 0) + 1);
+        });
+      });
+      const threshold = Math.max(1, Math.floor(totalRaces * 0.6));
+      startsBy.forEach((n, name) => {
+        if (n < threshold) return;   // full-time-ish only
+        const m = _compareSpiderMetricsFor({ name, series,
+          bio: (STATE.driverBios && STATE.driverBios[slugify(name)]) || {} }, series);
+        field.push({ name, raw: m.rawNum });
+      });
+    }
+  } catch (_) { /* fall through with whatever we collected */ }
+  _SPIDER_FIELD_CACHE.set(key, field);
+  return field;
+}
+
 function _compareSpiderMetricsFor(driver, series) {
-  const result = { values: {}, raw: {} };
+  // rawNum: numeric per-axis values where HIGHER = BETTER, used for field
+  // ranking (e.g. finish stored as 40-avgFinish so a better finish is bigger).
+  const result = { values: {}, raw: {}, rawNum: {} };
 
   // Finish: avg finish this season — normalized so 1=P1, 0=P40. We invert
   // so smaller (better) numbers map to higher (better) radar values.
@@ -15462,9 +15518,11 @@ function _compareSpiderMetricsFor(driver, series) {
   if (form && form.avg_finish != null) {
     result.values.finish = Math.max(0, Math.min(1, (40 - form.avg_finish) / 39));
     result.raw.finish = form.avg_finish.toFixed(1);
+    result.rawNum.finish = 40 - form.avg_finish;   // higher = better
   } else {
     result.values.finish = 0;
     result.raw.finish = "—";
+    result.rawNum.finish = null;
   }
 
   // Qualifying: avg start this season. Same inverted normalization.
@@ -15488,9 +15546,11 @@ function _compareSpiderMetricsFor(driver, series) {
       const avgStart = starts.reduce((a, b) => a + b, 0) / starts.length;
       result.values.qual = Math.max(0, Math.min(1, (40 - avgStart) / 39));
       result.raw.qual = avgStart.toFixed(1);
+      result.rawNum.qual = 40 - avgStart;
     } else {
       result.values.qual = 0;
       result.raw.qual = "—";
+      result.rawNum.qual = null;
     }
   }
 
@@ -15527,9 +15587,11 @@ function _compareSpiderMetricsFor(driver, series) {
     const rate = careerData.wins / careerData.starts;
     result.values.winRate = Math.min(1, Math.sqrt(rate / 0.25));  // 25% wins = perfect
     result.raw.winRate = `${(rate * 100).toFixed(1)}%`;
+    result.rawNum.winRate = rate;
   } else {
     result.values.winRate = 0;
     result.raw.winRate = "—";
+    result.rawNum.winRate = null;
   }
 
   // Top-5 rate: 50%+ = 1.0 (any T5 rate above half a driver's starts
@@ -15538,9 +15600,11 @@ function _compareSpiderMetricsFor(driver, series) {
     const rate = careerData.top5 / careerData.starts;
     result.values.top5Rate = Math.min(1, rate / 0.5);
     result.raw.top5Rate = `${(rate * 100).toFixed(1)}%`;
+    result.rawNum.top5Rate = rate;
   } else {
     result.values.top5Rate = 0;
     result.raw.top5Rate = "—";
+    result.rawNum.top5Rate = null;
   }
 
   // % Laps in Top 15: career loop-data metric. Fraction of all racing
@@ -15574,9 +15638,11 @@ function _compareSpiderMetricsFor(driver, series) {
     const avgPct = (topPctSum / topPctCount) / 100;
     result.values.top15Pct = Math.max(0, Math.min(1, avgPct));
     result.raw.top15Pct = `${(avgPct * 100).toFixed(1)}%`;
+    result.rawNum.top15Pct = avgPct;
   } else {
     result.values.top15Pct = 0;
     result.raw.top15Pct = "—";
+    result.rawNum.top15Pct = null;
   }
 
   // Stage Points Consistency: how RELIABLE the driver is at scoring
@@ -15609,9 +15675,11 @@ function _compareSpiderMetricsFor(driver, series) {
     // Invert: σ=0 → 1.0; σ=10 → 0
     result.values.stageConsistency = Math.max(0, Math.min(1, (10 - stddev) / 10));
     result.raw.stageConsistency = `σ ${stddev.toFixed(2)} (avg ${mean.toFixed(1)})`;
+    result.rawNum.stageConsistency = -stddev;   // higher (less negative) = better
   } else {
     result.values.stageConsistency = 0.5;
     result.raw.stageConsistency = "—";
+    result.rawNum.stageConsistency = null;
   }
 
   return result;
@@ -15843,13 +15911,17 @@ function renderProfileSpiderChart(driverName, series, entity) {
       return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
     }).join(" ");
 
+  // Rings now mean field rank: 0.25=top-20, 0.5=top-10, 0.75=top-5, 1.0=1st.
+  const ringLabels = { 0.25: "T20", 0.5: "T10", 0.75: "T5", 1.0: "1st" };
   const gridRings = [0.25, 0.5, 0.75, 1.0].map(ratio => {
     const points = Array.from({ length: numAxes }, (_, i) => {
       const angle = (Math.PI * 2 * i / numAxes) - Math.PI / 2;
       const r = R * ratio;
       return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
     }).join(" ");
-    return `<polygon class="cmp-spider-grid" points="${points}"/>`;
+    const ly = cy - R * ratio;
+    return `<polygon class="cmp-spider-grid" points="${points}"/>
+      <text class="cmp-spider-ring-label" x="${cx + 4}" y="${(ly + 3).toFixed(1)}">${ringLabels[ratio]}</text>`;
   }).join("");
 
   const spokes = axes.map((_, i) => {
@@ -15880,7 +15952,22 @@ function renderProfileSpiderChart(driverName, series, entity) {
     `;
   }).join("");
 
-  const vals = axes.map(a => m.values[a.key] || 0);
+  // Field-rank radii: for each axis, rank this driver among the full-time
+  // field on the raw metric, then map rank→radius so the rings mean 1st /
+  // top-5 / top-10 / top-20 in the field. Falls back to the metric's own 0-1
+  // value if the field can't be built (e.g. data not loaded).
+  const field = _spiderFieldMetrics(series);
+  const rankRadius = (axisKey) => {
+    const mine = m.rawNum ? m.rawNum[axisKey] : null;
+    if (mine == null || !field.length) return m.values[axisKey] || 0;
+    const fieldVals = field.map(f => f.raw && f.raw[axisKey]).filter(v => v != null);
+    if (!fieldVals.length) return m.values[axisKey] || 0;
+    // rank = 1 + (how many drivers are strictly better, i.e. higher rawNum)
+    const better = fieldVals.filter(v => v > mine).length;
+    const rank = better + 1;
+    return _spiderRankToRadius(rank, fieldVals.length);
+  };
+  const vals = axes.map(a => rankRadius(a.key));
   const driverPoly = `
     <polygon class="cmp-spider-driver"
              points="${polyPoints(vals)}"
