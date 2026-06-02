@@ -129,6 +129,28 @@ def fetch_json(url: str, max_attempts: int = 3) -> Optional[dict]:
     return None
 
 
+import re as _re
+
+def _clean_driver_name(raw: str) -> str:
+    """Strip status annotations that some feeds bake into the driver name, so
+    a driver's pace history isn't fragmented across variants like
+    'Corey Heim', 'Corey Heim(i)', '* Corey Heim(i)', 'Connor Zilisch #'.
+
+    Removes:
+      - leading '* ' (stage/flag marker)
+      - '(i)' ineligible, '(P)' playoff, and similar parenthetical flags
+      - trailing ' #' rookie marker
+    Keeps the real name intact, including legitimate suffixes (Jr., Sr., III)
+    which the reader normalizes separately for matching.
+    """
+    s = str(raw or "").strip()
+    s = _re.sub(r"^\*\s*", "", s)               # leading "* "
+    s = _re.sub(r"\s*\([^)]*\)", "", s)          # any "(...)" flag e.g. (i), (P)
+    s = _re.sub(r"\s*#\s*$", "", s)              # trailing rookie "#"
+    s = _re.sub(r"\s+", " ", s).strip()
+    return s
+
+
 def pct_average(sorted_vals: list, pct: float) -> Optional[float]:
     """Average of the fastest `pct` fraction of an ascending-sorted list.
 
@@ -230,6 +252,15 @@ def normalize_race(driver_stats: dict) -> dict:
     if not driver_stats:
         return driver_stats
 
+    # Reference green-lap count for the race = the most any car ran clean
+    # (≈ full race distance). Used so "did this driver run most of the race"
+    # is judged RELATIVE to race length (works for road courses, short tracks,
+    # and ovals alike, which have very different lap counts).
+    green_counts = [s.get("green_laps", 0) for s in driver_stats.values()]
+    ref_green = max(green_counts) if green_counts else 0
+    for s in driver_stats.values():
+        s["race_ref_green"] = ref_green
+
     for metric in ("best_lap", "fast5_avg", "fast10_avg", "fast20_avg", "green_median"):
         # Benchmark (field best) is drawn ONLY from confidence-worthy drivers —
         # those with enough green laps. This prevents a corrupt single-lap or
@@ -267,7 +298,7 @@ def scrape_race(year: int, series_id: int, race_id: int, track: str = "",
     drivers = {}
     id_to_name = {}
     for entry in data.get("laps", []):
-        name = (entry.get("FullName") or "").strip()
+        name = _clean_driver_name(entry.get("FullName") or "")
         if not name:
             continue
         did = entry.get("NASCARDriverID")
@@ -279,6 +310,10 @@ def scrape_race(year: int, series_id: int, race_id: int, track: str = "",
         pace["car_number"] = str(entry.get("Number") or "").strip()
         pace["driver_id"] = did
         pace["final_running_pos"] = entry.get("RunningPos")
+        # If the same cleaned name appears twice in a race (shouldn't, but guard),
+        # keep the entry with more green laps.
+        if name in drivers and drivers[name].get("green_laps", 0) >= pace.get("green_laps", 0):
+            continue
         drivers[name] = pace
 
     if not drivers:

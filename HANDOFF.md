@@ -79,10 +79,26 @@ DONE: scraped 2024+2025+2026 pace (full coverage all 3 series). Built pace reade
 
 CAR-BASED FULL-TIME + ENTRY LIST (done 2026-05-31): NASCAR full-time is a property of the CHARTERED CAR, not the driver — current driver-based isFullTime missed the Kyle-Busch-passed/replacement-car case (car full-time, individual drivers partial). Entities already car-keyed (allEntities); added per-driver last-round tracking + active-aware representative driver: predominant by starts, BUT if predominant is inactive (no start in last 3 rounds) use most-recent driver — surfaces a full-season replacement without hardcoding names. _computeRacePredictions now prefers an ENTRY LIST when available (definitive field, flags part-timers via is_part_time), else falls back to full-time car roster. ENTRY_LIST_CACHE + getEntryList + loadEntryList stub added — **feed URL NOT yet wired** (loadEntryList body commented out).
 
-### NEXT STEPS
-1. **Entry-list feature — DONE (2026-05-31).** No clean entry-list JSON exists on the cacher (entry-list.json 404s even with real race_id; entries are rendered by a widget). Source found: the **odds feed** `https://fantasygames.nascar.com/api/v1/live/odds/race/{race_id}.json` — Race Winner market lists the full field (name, driver_id, win probability), keyed by race_id. Built `scrape_entry_list.py` (next race per series → `data/entry_list.json`, run weekly alongside results scrape). App: `loadEntryList` reads the committed file, `getEntryList` (track-match guarded against stale files), `_computeRacePredictions` prefers entry list (joins driver→car by NAME, flags part-timers via car charter status `isFullTime`), falls back to full-time roster. Render: PT badge + null-entity guards in `_renderFinishRow`/`_renderStagePtsRow`; win_prob carried through (not yet displayed). Validated odds parsing against real Michigan feed (37 entries incl. Yeley + Austin Hill).
-2. Deploy: `git add app.js data\pace_*.json scripts\scrape_lap_pace.py HANDOFF.md` → commit → push → hard-refresh home.
-3. LATER: probe how far back lap-data feeds go; watch upcoming races live and tune weights / shrink anchor (P28) / rookie-pull strength — model only Nashville-calibrated so far.
+### MODEL CALIBRATION (done 2026-06-02, against betting odds)
+Built `diag_model_vs_odds.py` (ranks entered field by predicted finish vs market win-prob from the odds feed, flags biggest gaps). Key principle held throughout: stay a FINISH predictor, do NOT chase win-prob-only gaps (steady cars like Suarez/Gilliland rank high on finish but low on win odds; boom/bust cars like Bell/Logano the opposite — both expected, left alone). Changes made:
+- **Corrupt-lap benchmark fix** (scrape_lap_pace.py): one bad lap (Justin Haley 18.87s @ 2025 R11 Darlington, 1 green lap) became field benchmark → whole field read +22-66% slow. Fix: per-driver SANITY_FLOOR (drop laps <0.80× the driver's fast-half median) + MIN_GREEN_FOR_BENCHMARK=5 (low_confidence flag) + normalize_race excludes low_confidence from the benchmark. REQUIRES RE-SCRAPE.
+- **Annotated-name fix** (scraper + reader): pace keys had status markers (`* Corey Heim(i)`, `Connor Zilisch #`, `SVG # (P)`) fragmenting history across variants → Heim/Hill showed `none`. `_clean_driver_name` (scraper) strips `* `, `(...)`, trailing ` #`; reader-side `_cleanPaceName` + `normalizeDriverName` + per-race `_paceByNorm` map merges variants. Reader fix works on CURRENT data; scraper fix consolidates on RE-SCRAPE.
+- **Reweighted model** (user-set): pace last-3-here 50%, pace track-type 10%, all-time-here 15% (wreck/DNF outliers trimmed via IQR upper fence), qual-at-track 10%, recent form 15% (best+worst trimmed). Track-type-qual signal REMOVED. Pace = 60% total.
+- **Clean-run confidence** (user's principle: "if they ran most of the race without damage, go off their pace as-is"): track-tier shrink now keys on green-lap RATIO (driver green / race field-max `race_ref_green`) not race count — race-length-agnostic (works for road courses ~60 laps, short tracks 400+, ovals). <0.65 ratio → proportional shrink; ≥0.65 → full trust. REQUIRES RE-SCRAPE for `race_ref_green`.
+- **Pace-aware fallback relief**: fast fallback (type/recent) pace shrunk less (up to 85% relief), anchor SOFT=22; so known-fast no-history drivers (Heim/Zilisch) aren't buried, genuine backmarkers still pulled back.
+Residual model-vs-odds gaps after calibration are all the legitimate finish-vs-win distinction (SVG/Heim/Bell/Logano market-higher on win upside; Gilliland/Suarez/Nemechek model-higher on steady finish). Decided NOT to chase further — calibrated against one week/one track; WATCH REAL RACES and re-check with the two diag harnesses each week before tuning more.
+
+### DEPLOY SEQUENCE (final, this session's whole batch)
+1. Sync `scripts\scrape_lap_pace.py` (must contain `race_ref_green`), re-scrape all 3 pace years.
+2. `python check_ref_green.py` → must be True all 3 years.
+3. `python scripts\scrape_entry_list.py --season 2026` (refresh entry list).
+4. `git add app.js app.css scripts\scrape_lap_pace.py scripts\scrape_entry_list.py data\pace_2024.json data\pace_2025.json data\pace_2026.json data\entry_list.json HANDOFF.md` → commit → push → hard-refresh.
+Throwaway diag scripts (repo root, not committed): diag_model_vs_odds.py, diag_darlington.py, diag_svg_michigan.py, diag_driver_pace.py, probe_missing_pace.py, check_ref_green.py, check_michigan_ref.py, verify_new_model.py.
+
+### LATER / WATCH
+- Win probability stored in entry_list.json but not yet displayed on the board.
+- Model calibrated only on Michigan/Nashville/Darlington — watch upcoming races, re-check weekly with the diag harnesses, tune relief/ratio threshold/weights only with multi-race evidence.
+- Probe how far back lap-data feeds go (have 2024-2026).
 
 ---
 

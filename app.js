@@ -4306,22 +4306,50 @@ function _tracksMatch(nameA, nameB) {
 
 // Gather a driver's pace records (newest first) across all loaded pace years,
 // optionally filtered to a track (by name match) or a track type.
+// Strip status annotations some feeds bake into pace-data driver keys
+// ("* Corey Heim(i)", "Connor Zilisch #", "Shane Van Gisbergen (P)") so a
+// driver's history isn't fragmented across variants. Then normalize for match.
+function _cleanPaceName(raw) {
+  let s = String(raw || "").trim();
+  s = s.replace(/^\*\s*/, "");          // leading "* "
+  s = s.replace(/\s*\([^)]*\)/g, "");    // "(i)", "(P)", etc.
+  s = s.replace(/\s*#\s*$/, "");         // trailing rookie "#"
+  return s.replace(/\s+/g, " ").trim();
+}
+
 function _paceRecordsFor(driverName, series, { trackName = null, trackType = null } = {}) {
   const out = [];
+  const want = (typeof normalizeDriverName === "function")
+    ? normalizeDriverName(_cleanPaceName(driverName))
+    : _cleanPaceName(driverName).toLowerCase();
   const years = Object.keys(PACE_CACHE).map(Number).sort((a, b) => b - a);
   for (const y of years) {
     const sBlock = PACE_CACHE[y] && PACE_CACHE[y].series && PACE_CACHE[y].series[series];
     if (!sBlock || !sBlock.races) continue;
     for (const race of sBlock.races) {
-      // races within a year aren't guaranteed sorted; capture round for sort
       if (trackName && !_tracksMatch(race.track, trackName)) continue;
       if (trackType && (typeof trackTypeFromName !== "function" ||
                         trackTypeFromName(race.track) !== trackType)) continue;
-      const rec = race.drivers && race.drivers[driverName];
+      if (!race.drivers) continue;
+      // Build (once per race) a normalized-name → record map, merging any
+      // annotated variants of the same driver (keep the one with more laps).
+      if (!race._paceByNorm) {
+        const m = {};
+        for (const [k, rec] of Object.entries(race.drivers)) {
+          const nk = (typeof normalizeDriverName === "function")
+            ? normalizeDriverName(_cleanPaceName(k))
+            : _cleanPaceName(k).toLowerCase();
+          if (!m[nk] || (rec.green_laps || 0) > (m[nk].green_laps || 0)) m[nk] = rec;
+        }
+        Object.defineProperty(race, "_paceByNorm", { value: m, enumerable: false });
+      }
+      const rec = race._paceByNorm[want];
       if (!rec) continue;
       const blend = paceBlend(rec);
       if (blend == null) continue;
-      out.push({ year: y, round: race.round || 0, track: race.track, blend });
+      out.push({ year: y, round: race.round || 0, track: race.track, blend,
+                 green_laps: rec.green_laps || 0,
+                 ref_green: rec.race_ref_green || 0 });
     }
   }
   out.sort((a, b) => (b.year - a.year) || (b.round - a.round));
@@ -4361,15 +4389,32 @@ function getDriverTrackPace(driverName, series, trackCode) {
 
   if (trackName) {
     const here = _paceRecordsFor(driverName, series, { trackName });
-    if (here.length) return { value: _avgPace(here, 3), source: "track", n: Math.min(here.length, 3) };
+    if (here.length) {
+      // Use the record with the most green laps in the window and compare it
+      // to that race's field-max (ref_green) → a race-length-agnostic measure
+      // of "ran most of the race".
+      const top = here.slice(0, 3).reduce((a, b) =>
+        (b.green_laps || 0) > (a.green_laps || 0) ? b : a, here[0]);
+      const ratio = (top.ref_green > 0) ? (top.green_laps || 0) / top.ref_green : null;
+      return { value: _avgPace(here, 3), source: "track", n: Math.min(here.length, 3),
+               greenLaps: top.green_laps || 0, greenRatio: ratio };
+    }
   }
   if (ttype) {
     const atType = _paceRecordsFor(driverName, series, { trackType: ttype });
-    if (atType.length) return { value: _avgPace(atType, 5), source: "type", n: Math.min(atType.length, 5) };
+    if (atType.length) {
+      const maxGreen = Math.max(...atType.slice(0, 5).map(r => r.green_laps || 0));
+      return { value: _avgPace(atType, 5), source: "type", n: Math.min(atType.length, 5),
+               greenLaps: maxGreen, greenRatio: null };
+    }
   }
   const recent = _paceRecordsFor(driverName, series, {});
-  if (recent.length) return { value: _avgPace(recent, 5), source: "recent", n: Math.min(recent.length, 5) };
-  return { value: null, source: "none", n: 0 };
+  if (recent.length) {
+    const maxGreen = Math.max(...recent.slice(0, 5).map(r => r.green_laps || 0));
+    return { value: _avgPace(recent, 5), source: "recent", n: Math.min(recent.length, 5),
+             greenLaps: maxGreen, greenRatio: null };
+  }
+  return { value: null, source: "none", n: 0, greenLaps: 0, greenRatio: null };
 }
 
 // SECONDARY PACE SIGNAL: recent pace at this track TYPE (last 5).
@@ -12246,56 +12291,118 @@ function predictDriverForRace(driverName, series, trackCode) {
   const typeQual = getDriverTypeQual(driverName, series, trackCode);
 
   // Thin-sample / low-confidence shrinkage toward a neutral anchor.
-  // Refined 2026-05-31 (both rules, per user): a deeper anchor and a
-  // season-starts confidence factor so unproven rookies (few starts AND no
-  // relevant history) regress toward the BACK of the field, not mid-pack —
-  // while an established full-timer who merely lacks history at this one
-  // track gets only a mild pull.
+  // Refined 2026-06 (pace-aware, per user): the goal is to not bury KNOWN-FAST
+  // drivers who simply lack track-specific history (e.g. a talented driver in
+  // good equipment with few Cup starts), while still keeping genuine
+  // backmarkers and fluky thin samples down. The key idea: when we fall back to
+  // track-type or recent pace, scale the regression by HOW FAST that pace
+  // actually is. Quick pace (low delta) is real speed even if it's not
+  // track-specific, so it gets shrunk less; slow pace still gets pulled back.
   //
-  //   anchor: track-tier thin sample → P20 (mid-pack, just light regression)
-  //           type/recent fallback   → P28 (back third — "unproven here")
-  //   strength scales with BOTH the pace-sample thinness and how few starts
-  //   the driver has this season (rookie with <~10 starts → pulled harder).
-  const MIDPACK = 20, DEEP = 28;
+  //   anchor: track-tier thin sample → P20 (mid-pack, light regression)
+  //           type/recent fallback   → P22 (uncertainty, not "back of field")
+  //   base shrink by tier, then:
+  //     - REDUCED when the driver's fallback pace is genuinely fast
+  //       (a top-tier pace delta cuts the shrink substantially)
+  //     - increased a little for very few season starts (still some rookie
+  //       caution, but milder than before)
+  const MIDPACK = 20, SOFT = 22;
   let tracePacePos = paceToPos(trackPace.value);
   if (tracePacePos != null) {
-    // base shrink fraction from pace-sample confidence (0 = full trust)
     let shrink = 0, anchor = MIDPACK;
     if (trackPace.source === "track") {
-      if (trackPace.n < 3) { shrink = 1 - trackPace.n / 3; anchor = MIDPACK; }   // n=1→.67, n=2→.33
+      // Confidence is about CLEAN RUNNING relative to RACE LENGTH: judge the
+      // driver's green laps against the most any car ran clean that race
+      // (race_ref_green ≈ full distance). This works for road courses (~60
+      // laps), short tracks (400+), and ovals alike. Ran ≥~65% of the leader's
+      // clean laps → full trust; below that, shrink proportionally. (A ~90-lap
+      // half-race at 200-lap Michigan ≈ 0.45 ratio → meaningful shrink.)
+      const ratio = trackPace.greenRatio;   // driver green / race field-max, in [0,1] or null
+      if (ratio != null && ratio < 0.65) {
+        shrink = Math.min(0.5, (0.65 - ratio) / 0.65 * 0.6);
+        anchor = MIDPACK;
+      }
     } else if (trackPace.source === "type") {
-      shrink = trackPace.n >= 3 ? 0.25 : 0.5;  anchor = DEEP;   // type fallback: moderate, deeper anchor
+      shrink = trackPace.n >= 3 ? 0.20 : 0.40;  anchor = SOFT;   // type fallback
     } else if (trackPace.source === "recent") {
-      shrink = 0.5;  anchor = DEEP;                              // recent last-resort: half, deepest anchor
+      shrink = 0.40;  anchor = SOFT;                             // recent last-resort
     }
-    // season-starts confidence: few starts amplifies the shrink toward DEEP.
-    // full season (~18+ starts) → no amplification; rookie (≤4) → strong.
+    // Pace-aware relief: if the fallback pace itself is fast, trust it more.
+    // tracePacePos is an expected finish from pace; ≤P8-ish pace = clearly
+    // quick, so cut the shrink hard; ~P15 = neutral; slower = no relief.
+    if (shrink > 0 && trackPace.source !== "track") {
+      // relief in [0,1]: 1.0 when pace projects P5 or better, 0 at P20+
+      const relief = Math.max(0, Math.min(1, (20 - tracePacePos) / 15));
+      shrink *= (1 - 0.85 * relief);   // fast pace removes up to 85% of the shrink
+    }
+    // season-starts caution: few starts adds a little shrink, but milder than
+    // before (0.25 max) and never enough to bury a genuinely fast driver.
     if (seasonStarts > 0 && seasonStarts < 12 && shrink < 1) {
-      const rookiePull = (12 - seasonStarts) / 12 * 0.4;        // up to +0.4 at 0 starts
-      shrink = Math.min(0.85, shrink + rookiePull);
-      if (anchor === MIDPACK) anchor = DEEP;                    // unproven driver → deeper anchor
+      const rookiePull = (12 - seasonStarts) / 12 * 0.25;
+      shrink = Math.min(0.80, shrink + rookiePull);
     }
     if (shrink > 0) tracePacePos = (1 - shrink) * tracePacePos + shrink * anchor;
   }
 
-  // ----- Pace-dominant six-signal model (finish position) -----
-  // Weights locked with the user (2026-05-31), calibrated to expert eyeball:
-  //   40% pace — last 3 races at THIS track (f20/median blend)
-  //   18% pace — recent pace at this TRACK TYPE
-  //   12% all-time avg finish at THIS track
-  //   10% qual pace at this track type (recent)
-  //   10% qual pace at this track (recent)
-  //   10% recent form (last 8 finishes)
-  // The primary pace signal already carries its own fallback chain
-  // (track → type → recent) inside getDriverTrackPace. Any signal that's
-  // still null has its weight redistributed proportionally to the rest.
+  // ----- Outlier-trimmed finish signals -----
+  // The two finish-based signals are partly luck-contaminated (wrecks, DNFs,
+  // a fluke win). Per the pace philosophy, trim the outliers so a couple of
+  // unrepresentative results don't swing the prediction:
+  //   - All-time at track: drop "super low" finishes (bad wrecks/DNFs) — a
+  //     one-sided trim of statistical outliers on the slow end.
+  //   - Recent form: drop the single best AND single worst of the last 8
+  //     (two-sided trim) so neither a fluke win nor a fluke crash dominates.
+  const _trackFinishes = (() => {
+    const hist = getDriverRaceHistory(driverName, series) || [];
+    const codes = (typeof trackCodesForLookup === "function")
+      ? trackCodesForLookup(trackCode) : [trackCode];
+    return hist.filter(r => codes.includes(r.track_code))
+               .map(r => r.finish_pos).filter(n => n != null);
+  })();
+  // All-time at track, excluding super-low (bad) outliers via IQR upper fence.
+  let allTimeTrimmed = null;
+  if (_trackFinishes.length) {
+    let keep = _trackFinishes.slice();
+    if (keep.length >= 4) {
+      const s = [...keep].sort((a, b) => a - b);
+      const q = (p) => s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))];
+      const q1 = q(0.25), q3 = q(0.75), iqr = q3 - q1;
+      const fence = q3 + 1.5 * iqr;        // anything worse than this = outlier
+      const trimmed = keep.filter(v => v <= fence);
+      if (trimmed.length) keep = trimmed;
+    }
+    allTimeTrimmed = keep.reduce((a, b) => a + b, 0) / keep.length;
+  }
+  // Recent form: last 8 finishes, trimmed of best + worst when enough samples.
+  let formTrimmed = null;
+  {
+    const hist = getDriverRaceHistory(driverName, series) || [];
+    const last8 = hist.slice(0, 8).map(r => r.finish_pos).filter(n => n != null);
+    if (last8.length) {
+      let keep = last8.slice();
+      if (keep.length >= 4) {
+        const s = [...keep].sort((a, b) => a - b);
+        keep = s.slice(1, -1);             // drop best (s[0]) and worst (last)
+      }
+      formTrimmed = keep.reduce((a, b) => a + b, 0) / keep.length;
+    }
+  }
+
+  // ----- Pace-dominant model (finish position) -----
+  // Weights set by user (2026-06), pushed harder toward pace:
+  //   50% pace — last 3 races at THIS track (f20/median blend)
+  //   10% pace — recent pace at this TRACK TYPE
+  //   15% all-time avg finish at THIS track (wreck/DNF outliers trimmed)
+  //   10% qual pace at THIS track
+  //   15% recent form, last 8 (best + worst trimmed)
+  // (track-type qualifying signal removed.) Pace = 60% total. Any signal
+  // that's null has its weight redistributed proportionally to the rest.
   const signals = [
-    { name: "pace_track3",   label: "Pace · last 3 here",   w: 0.40, val: tracePacePos },
-    { name: "pace_type",     label: "Pace · track type",    w: 0.18, val: paceToPos(typePaceVal) },
-    { name: "track_alltime", label: "All-time here",        w: 0.12, val: trackStats?.avg_finish ?? null },
-    { name: "qual_type",     label: "Qual · track type",    w: 0.10, val: typeQual },
+    { name: "pace_track3",   label: "Pace · last 3 here",   w: 0.50, val: tracePacePos },
+    { name: "pace_type",     label: "Pace · track type",    w: 0.10, val: paceToPos(typePaceVal) },
+    { name: "track_alltime", label: "All-time here",        w: 0.15, val: allTimeTrimmed },
     { name: "qual_track",    label: "Qual · this track",    w: 0.10, val: trackQual },
-    { name: "form_last8",    label: "Form (last 8)",        w: 0.10, val: form8?.avg_finish ?? null },
+    { name: "form_last8",    label: "Form (last 8)",        w: 0.15, val: formTrimmed },
   ];
   const avail = signals.filter(s => s.val != null);
   if (avail.length === 0) return null;
