@@ -18799,12 +18799,20 @@ function renderFormMini() {
 
   const entities = allEntities().filter(isFullTime);
   const power = buildPowerRankings(entities, STATE.series, 8);
+  // "Last week" ranking (through the previous completed round) for arrows.
+  const racesNow = racesSorted();
+  const roundsDone = racesNow.map(r => r.round).filter(n => n != null).sort((a, b) => a - b);
+  const prevRound = roundsDone.length > 1 ? roundsDone[roundsDone.length - 2] : null;
+  const powerPrev = prevRound != null ? buildPowerRankings(entities, STATE.series, 8, prevRound) : new Map();
   const rows = entities.map(d => {
-    const pr = power.get(entityKey(d));
+    const key = entityKey(d);
+    const pr = power.get(key);
+    const prPrev = powerPrev.get(key);
     const f = pr ? pr.rating : null;          // L8 blend rating (matches main page)
     const s = formRatingFor(d.races, "season");
     const delta = (f != null && s != null) ? f - s : null;
-    return { ...d, f, s, delta, powerRank: pr ? pr.rank : null };
+    const rankDelta = (pr && prPrev) ? (prPrev.rank - pr.rank) : null;
+    return { ...d, f, s, delta, powerRank: pr ? pr.rank : null, rankDelta };
   }).filter(d => d.f != null)
     .sort((a, b) => a.powerRank - b.powerRank);   // Sort by Power Ranking
 
@@ -18819,16 +18827,22 @@ function renderFormMini() {
     const trendWord = r.delta > 1 ? "trending up" : r.delta < -1 ? "trending down" : "steady";
     const deltaTip = `Last 5 vs season: ${sign}${r.delta.toFixed(1)} — ${trendWord} (L5 rating ${r.f.toFixed(1)} vs season ${r.s.toFixed(1)})`;
     const lastFinishes = r.races.slice(-5).map(rc => rc.finish).filter(x => x != null);
-    // Same sparkline helper as Trending table
     const spark = sparkSVG(lastFinishes, carHex, 58, 14);
+    // Movement pill vs last week — same style as the standings page.
+    let movePill;
+    if (r.rankDelta == null) movePill = `<span class="pos-change new" title="New">NEW</span>`;
+    else if (r.rankDelta === 0) movePill = `<span class="pos-change flat" title="No change">—</span>`;
+    else if (r.rankDelta > 0) movePill = `<span class="pos-change up" title="Up ${r.rankDelta} since last race">▲${r.rankDelta}</span>`;
+    else movePill = `<span class="pos-change down" title="Down ${Math.abs(r.rankDelta)} since last race">▼${Math.abs(r.rankDelta)}</span>`;
     return `<a class="form-mini-row profile-link" href="#/car/${r.car_number}" title="${escapeHTML(r.displayLabel)} — open profile">
       <div class="form-mini-top">
+        <span class="form-mini-rank">${r.powerRank}</span>
         <span class="form-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span class="form-mini-name">${escapeHTML(lastName)}</span>
         <span class="form-mini-rating" title="Power Ranking rating — pace/finish/top-15%/qualifying blend over the last 8 races (higher is better)">${r.f.toFixed(1)}</span>
       </div>
       <div class="form-mini-bottom">
-        <span class="form-mini-delta ${cls}" title="${escapeHTML(deltaTip)}">${sign}${r.delta.toFixed(1)}</span>
+        ${movePill}
         <span class="form-mini-spark">${spark}</span>
       </div>
     </a>`;
