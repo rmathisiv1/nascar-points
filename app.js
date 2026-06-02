@@ -11975,7 +11975,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 16;  // v16: deterministic driver sort (fixes sim varying per refresh)
+  const PROJ_VERSION = 17;  // v17: bust stale caches; champ% derivation is deterministic
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -12449,15 +12449,17 @@ function simulateSeasonRollout(series, year, opts = {}) {
   };
   PROJECTION_CACHE.set(cacheKey, result);
   // Persist to localStorage so the simulation survives page refreshes.
-  // Clear any stale projections for different race counts first.
   try {
-    // Remove old entries for this series/year with different race counts
+    // Remove ALL old projection entries except the one we're about to write —
+    // collect keys FIRST (removing inside a length-indexed loop shifts indices
+    // and skips entries, which previously left stale projections behind that
+    // could be read on a later load and make the page disagree with the sim).
+    const toRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && k.startsWith(`proj_`) && k !== lsKey) {
-        localStorage.removeItem(k);
-      }
+      if (k && k.startsWith("proj_") && k !== lsKey) toRemove.push(k);
     }
+    toRemove.forEach(k => localStorage.removeItem(k));
     localStorage.setItem(lsKey, JSON.stringify(result));
   } catch (_) { /* quota exceeded or unavailable — in-memory cache still works */ }
   return result;
