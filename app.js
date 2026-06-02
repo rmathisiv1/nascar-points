@@ -7549,6 +7549,15 @@ function renderTeammates() {
     const ftCount = members.filter(m => m.car_full_time).length;
     const ptCount = members.length - ftCount;
 
+    // Round range across ALL members of the team, so every row's sparkline
+    // scales its x-axis by ROUND (not by index in its own race list). This
+    // makes a part-timer's dot sit under the round it actually ran — e.g. a
+    // driver whose only start was the Daytona 500 (R1) appears at the far left,
+    // aligned with the full-timers' R1 dots, instead of centered in its lane.
+    const _allRounds = members.flatMap(m => (m.series || []).map(s => s.round)).filter(n => n != null);
+    const roundMin = _allRounds.length ? Math.min(..._allRounds) : 1;
+    const roundMax = _allRounds.length ? Math.max(..._allRounds) : 1;
+
     const rows = members.map(d => {
       const carHex = colorFor(STATE.series, d.car_number);
       const carTxt = contrastTextFor(carHex);
@@ -7558,7 +7567,7 @@ function renderTeammates() {
       const avg = d[avgKey];
       const avgCls = tmDeltaClass(metric, avg);
       const sparkPts = d.series.map(s => ({ v: s[deltaField], tl: s.tl_fin, round: s.round }));
-      const svg = tmSparkline(sparkPts, sparkHex, metric, d.car_number);
+      const svg = tmSparkline(sparkPts, sparkHex, metric, d.car_number, roundMin, roundMax);
       const isShared = (d.all_driver_count || d.drivers.length) > 1;
       const showWbrTag = (d.team !== d.group);
       const ptTag = d.car_full_time ? "" : ` <span class="tm-pt-tag">PT</span>`;
@@ -7779,14 +7788,18 @@ function closeTeammateZoom() {
   requestAnimationFrame(() => tmPaintSparklines(host));
 }
 
-// Build the sparkline SVG for a teammate row
-function tmSparkline(seriesPts, color, metric, carLabel) {
+// Build the sparkline SVG for a teammate row. roundMin/roundMax define the
+// team-wide round axis so each dot is placed by the round it ran (aligning
+// part-timers under the correct round across teammate rows).
+function tmSparkline(seriesPts, color, metric, carLabel, roundMin, roundMax) {
   // Emit a placeholder SVG with the data encoded. After the DOM is inserted,
   // tmPaintSparklines() measures each SVG's actual rendered width and draws
   // using viewBox = pixel dimensions (so circles stay truly round).
   if (seriesPts.length === 0) return "";
   const data = encodeURIComponent(JSON.stringify(seriesPts));
-  return `<svg class="tm-spk" data-series="${data}" data-color="${color}" data-metric="${metric}" data-car="${carLabel}" style="width:100%;height:42px;display:block;"></svg>`;
+  const rmin = roundMin != null ? roundMin : "";
+  const rmax = roundMax != null ? roundMax : "";
+  return `<svg class="tm-spk" data-series="${data}" data-color="${color}" data-metric="${metric}" data-car="${carLabel}" data-rmin="${rmin}" data-rmax="${rmax}" style="width:100%;height:42px;display:block;"></svg>`;
 }
 
 // Measure every .tm-spk SVG and draw it at its real pixel dimensions so circles stay round.
@@ -7809,9 +7822,22 @@ function tmPaintSparklines(root) {
     const color = svg.getAttribute("data-color") || "#9ca3af";
     const metric = svg.getAttribute("data-metric") || "fin";
     const carLabel = svg.getAttribute("data-car") || "";
+    const rmin = parseInt(svg.getAttribute("data-rmin"), 10);
+    const rmax = parseInt(svg.getAttribute("data-rmax"), 10);
     const clipCap = metric === "fin" ? 40 : 50;
 
-    const xScale = i => pad.l + (seriesPts.length === 1 ? innerW / 2 : (i / (seriesPts.length - 1)) * innerW);
+    // Scale x by ROUND across the team-wide [rmin, rmax] range when available,
+    // so a dot sits under the round it actually ran (part-timers align with the
+    // matching round on full-timer rows). Falls back to index-based spacing if
+    // the round range is missing or degenerate.
+    const haveRounds = Number.isFinite(rmin) && Number.isFinite(rmax) && rmax > rmin;
+    const xScale = (i) => {
+      if (haveRounds) {
+        const rnd = seriesPts[i] && seriesPts[i].round;
+        if (rnd != null) return pad.l + ((rnd - rmin) / (rmax - rmin)) * innerW;
+      }
+      return pad.l + (seriesPts.length === 1 ? innerW / 2 : (i / (seriesPts.length - 1)) * innerW);
+    };
     const yScale = v => {
       const clipped = Math.max(-clipCap, Math.min(0, v));
       return pad.t + ((0 - clipped) / clipCap) * innerH;
@@ -10547,25 +10573,25 @@ function paintProfileTeammates(entity) {
     <div class="profile-tm-header">
       <span></span><span>Teammate</span><span>Per-race Δ</span><span style="text-align:right;">Avg ΔFin</span><span style="text-align:right;">Beat</span>
     </div>
-    ${mates.map(m => {
-      const c = colorFor(STATE.series, m.car);
-      const t = contrastTextFor(c);
-      const cls = m.avgDelta > 0.5 ? "beat" : m.avgDelta < -0.5 ? "lost" : "tied";
-      const sign = m.avgDelta > 0 ? "+" : "";
-      // tmSparkline expects series formatted for the Teammate Delta tab. The
-      // convention there is: negative v drawn below zero (worse than teammate).
-      // profileTeammates stores v = myFinish - theirFinish (negative = I beat them).
-      // Flip sign so the sparkline reads "above zero = I beat them" visually.
-      const sparkSeries = m.series.map(s => ({ v: -s.v, round: s.round, tl: s.tl }));
-      const spark = tmSparkline(sparkSeries, c, "fin", m.car);
-      return `<div class="profile-tm-row">
+    ${(() => {
+      const _r = mates.flatMap(m => (m.series || []).map(s => s.round)).filter(n => n != null);
+      const _rmin = _r.length ? Math.min(..._r) : 1, _rmax = _r.length ? Math.max(..._r) : 1;
+      return mates.map(m => {
+        const c = colorFor(STATE.series, m.car);
+        const t = contrastTextFor(c);
+        const cls = m.avgDelta > 0.5 ? "beat" : m.avgDelta < -0.5 ? "lost" : "tied";
+        const sign = m.avgDelta > 0 ? "+" : "";
+        const sparkSeries = m.series.map(s => ({ v: -s.v, round: s.round, tl: s.tl }));
+        const spark = tmSparkline(sparkSeries, c, "fin", m.car, _rmin, _rmax);
+        return `<div class="profile-tm-row">
         <span class="tm-car" style="background:${c};color:${t}">${m.car}</span>
         <span class="tm-name"><a class="profile-link" href="#/driver/${slugify(m.driver)}">${escapeHTML(m.driver)}</a></span>
         <span class="profile-tm-spark">${spark}</span>
         <span class="profile-tm-delta ${cls}">${sign}${m.avgDelta.toFixed(1)}</span>
         <span class="profile-tm-record">${m.beat}-${m.lost}${m.tied > 0 ? "-" + m.tied : ""}</span>
       </div>`;
-    }).join("")}
+      }).join("");
+    })()}
   `;
   // Paint the sparkline SVGs after they're inserted into the DOM
   tmPaintSparklines(host);
