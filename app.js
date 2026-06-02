@@ -11800,6 +11800,12 @@ function _computeRacePredictions(series, trackCode) {
     return { entity: r.entity, driverName: r.driverName,
              win_prob: r.win_prob, is_part_time: r.isPartTime, ...pred };
   }).filter(Boolean);
+  // Market rank by implied win probability (1 = shortest odds). Used to flag
+  // model "value" picks — drivers the model's predicted finish ranks well ahead
+  // of where the market ranks their win odds. Drivers without odds get no rank.
+  predictions.filter(p => p.win_prob != null)
+    .sort((a, b) => b.win_prob - a.win_prob)
+    .forEach((p, idx) => { p.odds_rank = idx + 1; });
   return {
     byFinish: [...predictions].sort((a, b) => a.predicted_finish - b.predicted_finish),
     byStage: [...predictions].sort((a, b) => b.predicted_stage_pts - a.predicted_stage_pts),
@@ -12574,6 +12580,23 @@ function _renderStagePtsRow(p, i, series) {
   `;
 }
 
+// Convert an implied win probability to American moneyline odds for display.
+// Accepts either a fraction (0.18) or a percent (18) — auto-detected — since
+// the odds feed's scale isn't guaranteed. p≥50% → negative (favorite), else
+// positive (underdog). Returns null when there's no probability.
+function _winProbToAmericanOdds(p) {
+  if (p == null || !isFinite(p)) return null;
+  let prob = p > 1 ? p / 100 : p;                 // 0-100 → 0-1
+  prob = Math.max(0.0001, Math.min(0.9999, prob));
+  return prob >= 0.5
+    ? -Math.round((100 * prob) / (1 - prob))
+    :  Math.round((100 * (1 - prob)) / prob);
+}
+function _formatAmericanOdds(odds) {
+  if (odds == null) return "—";
+  return odds > 0 ? `+${odds}` : `${odds}`;
+}
+
 // Render a single predicted-finish row (used inside the full-field <details>).
 function _renderFinishRow(p, i, series) {
   const carNum = p.entity ? p.entity.car_number : null;
@@ -12604,14 +12627,24 @@ function _renderFinishRow(p, i, series) {
   // charter (only set when ranking off an entry list).
   const ptBadge = p.is_part_time
     ? `<span class="hp-parttime" title="Part-time entry (not a full-time charter)">PT</span>` : "";
+  // Betting odds (American) from the upcoming-race odds feed, plus a "value"
+  // flag when the model ranks this driver's finish well ahead of where the
+  // market ranks their win odds (the model likes them more than Vegas does).
+  const oddsStr = _formatAmericanOdds(_winProbToAmericanOdds(p.win_prob));
+  const modelRank = i + 1;
+  const isValue = p.win_prob != null && p.odds_rank != null &&
+                  modelRank <= 20 && (p.odds_rank - modelRank) >= 5;
+  const valueBadge = isValue
+    ? `<span class="hp-value" title="Model value: predicted to finish ahead of the market's win odds (market #${p.odds_rank} by odds)">▲ VALUE</span>` : "";
   const carLabel = carNum ? `#${carNum}` : "—";
   return `
     <a class="hp-row hp-row-finish profile-link" href="#/driver/${slug}">
       <span class="hp-pos">${i + 1}</span>
       <span class="hp-car" style="background:${carHex};color:${carTxt}">${carLabel}</span>
-      <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}</span>
+      <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}${valueBadge}</span>
       <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
       <span class="hp-row-extras">
+        <span class="hp-extra-cell"><span class="hp-extra-label">odds</span><span class="hp-stat-cell hp-odds ${isValue ? "hp-odds-value" : ""}">${oddsStr}</span></span>
         <span class="hp-extra-cell"><span class="hp-extra-label">stage</span><span class="hp-stat-cell ${stageCls}">${p.predicted_stage_pts.toFixed(1)}</span></span>
         <span class="hp-extra-cell"><span class="hp-extra-label">total</span><span class="hp-stat-cell ${totalCls}">${p.predicted_total_pts.toFixed(1)}</span></span>
         <span class="hp-extra-cell"><span class="hp-extra-label">evd</span><span class="hp-evidence-dots" title="Evidence: ${p.has_track_history ? "track ✓ " : ""}${p.has_type_history ? "track-type ✓ " : ""}form ✓ season ✓">${dots}</span></span>
@@ -12699,6 +12732,7 @@ function renderRacePredictionSection(opts) {
       <div class="rps-col-table-head">
         <span></span><span></span><span></span>
         <span class="rps-col-label">PRED FIN</span>
+        <span class="rps-col-label">ODDS</span>
         <span class="rps-col-label">STAGE</span>
         <span class="rps-col-label">TOTAL</span>
         <span class="rps-col-label">EVD</span>
@@ -12721,6 +12755,7 @@ function renderRacePredictionSection(opts) {
         <div class="rps-col-table-head rps-full-table-head">
           <span></span><span></span><span></span>
           <span class="rps-col-label">PRED FIN</span>
+          <span class="rps-col-label">ODDS</span>
           <span class="rps-col-label">STAGE</span>
           <span class="rps-col-label">TOTAL</span>
           <span class="rps-col-label">EVD</span>

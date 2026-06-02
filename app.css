@@ -9978,7 +9978,7 @@ body.lightbox-open {
 /* Right column (Top 10 predicted finish): 7-col grid including the 3
    prediction columns (finish, stage, total) and the evidence dots. */
 .rps-col-finish .rps-col-table-head {
-  grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px;
+  grid-template-columns: 24px 42px 1fr 50px 54px 44px 48px 36px;
 }
 /* Stage points details — 4 cols (no evidence dots column) */
 .rps-stage-table-head {
@@ -9987,7 +9987,7 @@ body.lightbox-open {
 /* Finish rows inside the right column inherit the same template as the
    full-field finish rows below. */
 .rps-col-finish .hp-row-finish {
-  grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px;
+  grid-template-columns: 24px 42px 1fr 50px 54px 44px 48px 36px;
 }
 /* Desktop: .hp-row-extras is transparent — its three inner cells flow
    directly into the parent grid as columns 5/6/7. The "stage / total /
@@ -10110,6 +10110,33 @@ body.lightbox-open {
   color: var(--text-dim, #999);
   border: 1px solid var(--border, #3a3a3a);
 }
+/* Betting odds cell — monospace, muted (it's reference info, not a model
+   output). The "value" variant tints it when the model rates the driver
+   ahead of the market. */
+.hp-odds {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.hp-odds-value {
+  color: var(--pos, #3fb950);
+  font-weight: 700;
+}
+/* Model value-pick badge next to the driver name — model's predicted finish
+   ranks them well ahead of the market's win odds. */
+.hp-value {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  vertical-align: middle;
+  border-radius: 3px;
+  background: var(--pos-bg-hi);
+  color: var(--pos, #3fb950);
+  border: 1px solid color-mix(in srgb, var(--pos, #3fb950) 40%, transparent);
+}
 .hp-stat-cell {
   font-family: var(--mono);
   font-size: 12px;
@@ -10187,10 +10214,10 @@ body.lightbox-open {
 }
 /* Inside the full prediction list, rows have stage + total + evidence cols */
 .rps-full-table-head {
-  grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px !important;
+  grid-template-columns: 24px 42px 1fr 50px 54px 44px 48px 36px !important;
 }
 .hp-row-finish {
-  grid-template-columns: 24px 42px 1fr 50px 44px 48px 36px;
+  grid-template-columns: 24px 42px 1fr 50px 54px 44px 48px 36px;
 }
 .hp-evidence-dots {
   font-family: var(--mono);
