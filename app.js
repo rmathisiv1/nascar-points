@@ -7515,23 +7515,23 @@ function renderTeammates() {
         ineligible: !!d.ineligible,
       };
       (groupAll[grp] ||= []).push(rec);
-      // Benchmark pool: FT car + driver eligible for points. Ineligible
-      // substitute weeks don't count as benchmark candidates because the
-      // car's points/finish isn't representative of the regular driver.
-      if (fullTimeCars.has(d.car_number) && !d.ineligible) {
+      // Benchmark pool: ANY eligible teammate in the group (full-time or not).
+      // We compare each car against the best of whoever its teammates were that
+      // week — a non-full-time teammate (e.g. Corey Heim's part-time entry) is
+      // still a valid comparison. We only exclude points-ineligible substitute
+      // weeks, since that car's result isn't representative of a real entry.
+      if (!d.ineligible) {
         (groupFt[grp] ||= []).push(rec);
       }
     });
 
-    // For each group, compute benchmark (best FT car) + each member's delta.
+    // For each group, compute benchmark (best teammate) + each member's delta.
     Object.keys(groupAll).forEach(grp => {
       const ftArr = groupFt[grp] || [];
       const finishes = ftArr.map(e => e.finish).filter(f => f != null);
-      // A teammate benchmark needs ≥2 FT cars in THIS race. If fewer ran (e.g.
-      // a one-off where a team fielded a single car, or a mid-season car-number
-      // transition), we still RECORD each car's race for its sparkline — just
-      // without a delta vs. teammate. Previously the whole round was dropped,
-      // which made cars like RCR's #3/#33 vanish from weeks a teammate missed.
+      // Need ≥2 eligible cars in THIS race for a teammate comparison. If only
+      // one ran, we still record each car's race (no delta) so the sparkline
+      // shows participation.
       const haveBenchmark = ftArr.length >= 2 && finishes.length > 0;
       const bestFinish = haveBenchmark ? Math.min(...finishes) : null;
       const bestTotal  = haveBenchmark ? Math.max(...ftArr.map(e => e.total)) : null;
@@ -7540,7 +7540,7 @@ function renderTeammates() {
         const isFt = fullTimeCars.has(e.car);
         const deltaFin = (haveBenchmark && e.finish != null) ? (bestFinish - e.finish) : null;
         const deltaTot = haveBenchmark ? (e.total - bestTotal) : null;
-        const tlFin = haveBenchmark && isFt && !e.ineligible && e.finish != null && e.finish === bestFinish;
+        const tlFin = haveBenchmark && !e.ineligible && e.finish != null && e.finish === bestFinish;
 
         let agg = carData.get(e.car);
         if (!agg) {
@@ -7850,7 +7850,7 @@ function renderTeammates() {
     const v = metric === "fin" ? s.delta_fin : s.delta_tot;
     const hasV = v != null;
     const cls = !hasV ? "" : v >= 0 ? "pos" : "neg";
-    const vStr = !hasV ? "no FT teammate" : (v >= 0 ? `+${v}` : `${v}`);
+    const vStr = !hasV ? "no teammate ran" : (v >= 0 ? `+${v}` : `${v}`);
     const trackLabel = prettyTrack(s.track_code, s.track_name);
     const driverLine = s.driver !== s.primary_driver
       ? `<div class="tm-tt-driver">Driver: ${escapeHTML(s.driver)}</div>`
@@ -7860,7 +7860,7 @@ function renderTeammates() {
       ${driverLine}
       <div class="tm-tt-row"><span class="lbl">Finish</span><span class="val">P${s.finish ?? "—"}</span></div>
       <div class="tm-tt-row"><span class="lbl">Race pts</span><span class="val">${s.total}</span></div>
-      <div class="tm-tt-row ${cls}"><span class="lbl">vs best FT teammate</span><span class="val">${vStr}${hasV && s.tl_fin ? " ★" : ""}</span></div>
+      <div class="tm-tt-row ${cls}"><span class="lbl">vs best teammate</span><span class="val">${vStr}${hasV && s.tl_fin ? " ★" : ""}</span></div>
     `;
     showTip(html, ev, "tm-tip");
   }
@@ -24169,29 +24169,104 @@ function _wireProjectionTooltips() {
   });
 }
 
-// Zoom controls for the chase chart. Scales the SVG's rendered width inside a
-// horizontally-scrollable container; +/− step the zoom, reset returns to fit.
+// Zoom for the chase chart: mouse wheel (desktop) and two-finger pinch
+// (mobile) scale the SVG's viewBox around the pointer, so the user zooms into
+// the part of the chart they're looking at. Dragging pans when zoomed in.
 function _wireProjectionChartZoom(host) {
-  host.querySelectorAll(".pc-chart-toolbar").forEach(bar => {
-    const wrap = bar.nextElementSibling;
-    if (!wrap || !wrap.classList.contains("pc-chart-scroll")) return;
-    const svg = wrap.querySelector(".pc-chart-svg");
-    if (!svg) return;
-    let zoom = 1;
-    const MIN = 1, MAX = 4, STEP = 0.5;
-    const apply = () => {
-      svg.style.width = `${zoom * 100}%`;
-      wrap.classList.toggle("pc-zoomed", zoom > 1);
+  host.querySelectorAll(".pc-chart-svg").forEach(svg => {
+    // Parse the base viewBox; we mutate a working copy and never zoom out past
+    // it (that's the 100% fit-to-width view).
+    const base = (svg.getAttribute("viewBox") || "0 0 800 360").split(/\s+/).map(Number);
+    const [bx, by, bw, bh] = base;
+    let vb = { x: bx, y: by, w: bw, h: bh };
+    const MIN_W = bw / 5;   // max 5× zoom
+    const apply = () => svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+
+    // Convert a client point to SVG-space using the current viewBox.
+    const toSvg = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect();
+      const px = (clientX - rect.left) / rect.width;
+      const py = (clientY - rect.top) / rect.height;
+      return { x: vb.x + px * vb.w, y: vb.y + py * vb.h };
     };
-    bar.querySelectorAll("[data-pc-zoom]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const act = btn.dataset.pcZoom;
-        if (act === "in") zoom = Math.min(MAX, zoom + STEP);
-        else if (act === "out") zoom = Math.max(MIN, zoom - STEP);
-        else zoom = 1;
+
+    const zoomAt = (clientX, clientY, factor) => {
+      const focal = toSvg(clientX, clientY);
+      let newW = vb.w * factor;
+      let newH = vb.h * factor;
+      // Clamp: never wider than base (fit), never narrower than MIN_W.
+      if (newW > bw) { newW = bw; newH = bh; }
+      if (newW < MIN_W) { newW = MIN_W; newH = bh * (MIN_W / bw); }
+      // Keep the focal point under the cursor fixed.
+      const px = (focal.x - vb.x) / vb.w;
+      const py = (focal.y - vb.y) / vb.h;
+      vb.w = newW; vb.h = newH;
+      vb.x = focal.x - px * newW;
+      vb.y = focal.y - py * newH;
+      // Clamp within base bounds.
+      vb.x = Math.max(bx, Math.min(vb.x, bx + bw - vb.w));
+      vb.y = Math.max(by, Math.min(vb.y, by + bh - vb.h));
+      apply();
+    };
+
+    svg.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 1.12 : 0.89;   // down = zoom out, up = in
+      zoomAt(e.clientX, e.clientY, factor);
+    }, { passive: false });
+
+    // Touch pinch + drag-pan.
+    let pinchDist = null, panLast = null;
+    svg.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 2) {
+        pinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY);
+      } else if (e.touches.length === 1 && vb.w < bw) {
+        panLast = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    }, { passive: true });
+    svg.addEventListener("touchmove", (e) => {
+      if (e.touches.length === 2 && pinchDist != null) {
+        e.preventDefault();
+        const d = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY);
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        zoomAt(cx, cy, pinchDist / d);
+        pinchDist = d;
+      } else if (e.touches.length === 1 && panLast && vb.w < bw) {
+        e.preventDefault();
+        const rect = svg.getBoundingClientRect();
+        const dx = (e.touches[0].clientX - panLast.x) / rect.width * vb.w;
+        const dy = (e.touches[0].clientY - panLast.y) / rect.height * vb.h;
+        vb.x = Math.max(bx, Math.min(vb.x - dx, bx + bw - vb.w));
+        vb.y = Math.max(by, Math.min(vb.y - dy, by + bh - vb.h));
+        panLast = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         apply();
-      });
+      }
+    }, { passive: false });
+    svg.addEventListener("touchend", (e) => {
+      if (e.touches.length < 2) pinchDist = null;
+      if (e.touches.length === 0) panLast = null;
+    }, { passive: true });
+
+    // Desktop drag-pan when zoomed in.
+    let dragLast = null;
+    svg.addEventListener("mousedown", (e) => { if (vb.w < bw) dragLast = { x: e.clientX, y: e.clientY }; });
+    window.addEventListener("mousemove", (e) => {
+      if (!dragLast) return;
+      const rect = svg.getBoundingClientRect();
+      const dx = (e.clientX - dragLast.x) / rect.width * vb.w;
+      const dy = (e.clientY - dragLast.y) / rect.height * vb.h;
+      vb.x = Math.max(bx, Math.min(vb.x - dx, bx + bw - vb.w));
+      vb.y = Math.max(by, Math.min(vb.y - dy, by + bh - vb.h));
+      dragLast = { x: e.clientX, y: e.clientY };
+      apply();
     });
+    window.addEventListener("mouseup", () => { dragLast = null; });
+    svg.style.cursor = "grab";
   });
 }
 
@@ -24693,14 +24768,8 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
         <h2 class="ed-hero ed-hero-sm">Projected chase points</h2>
         <div class="ed-byline">Deterministic prediction per track · hover to see driver + projected finish</div>
       </div>
-      <div class="pc-chart-toolbar">
-        <button class="pc-zoom-btn" data-pc-zoom="out" title="Zoom out">−</button>
-        <button class="pc-zoom-btn" data-pc-zoom="reset" title="Reset zoom">⤢</button>
-        <button class="pc-zoom-btn" data-pc-zoom="in" title="Zoom in">+</button>
-        <span class="pc-zoom-hint">scroll to pan when zoomed</span>
-      </div>
       <div class="pc-chart-wrap pc-chart-scroll">
-        <svg class="pc-chart-svg" viewBox="-20 0 ${W + 24} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+        <svg class="pc-chart-svg" viewBox="-20 0 ${W + 44} ${H + 16}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
           ${gridLines.join("")}
           ${xLabels.join("")}
           ${lines}

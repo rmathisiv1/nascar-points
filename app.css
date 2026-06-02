@@ -11255,28 +11255,7 @@ body.lightbox-open {
 .pc-chart-wrap {
   position: relative;
 }
-.pc-chart-scroll.pc-zoomed {
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-.pc-chart-toolbar {
-  display: flex; align-items: center; gap: 6px;
-  margin-bottom: 6px;
-}
-.pc-zoom-btn {
-  font-family: var(--mono);
-  font-size: 13px; line-height: 1;
-  width: 26px; height: 24px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--tint-1); color: var(--text);
-  border: 1px solid var(--border); border-radius: 5px;
-  cursor: pointer;
-}
-.pc-zoom-btn:hover { background: var(--tint-2); }
-.pc-zoom-hint {
-  font-family: var(--mono); font-size: 10px; color: var(--muted);
-  margin-left: 4px;
-}
+.pc-chart-svg { touch-action: none; }   /* let pinch/drag drive zoom, not page scroll */
 .pc-hit {
   cursor: crosshair;
   pointer-events: all;
