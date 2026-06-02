@@ -5177,8 +5177,15 @@ function renderFormTable() {
   const completedRounds = races.map(r => r.round).filter(n => n != null).sort((a, b) => a - b);
   const latestRound = completedRounds.length ? completedRounds[completedRounds.length - 1] : null;
   const prevRound = completedRounds.length > 1 ? completedRounds[completedRounds.length - 2] : null;
-  const powerNow = buildPowerRankings(entities, STATE.series, POWER_N);
-  const powerPrev = prevRound != null ? buildPowerRankings(entities, STATE.series, POWER_N, prevRound) : new Map();
+  // Rank over the field that's actually shown. When the Full-time toggle is on,
+  // exclude part-timers from the RANKING itself (not just the display) so the
+  // rank numbers stay consecutive. Previously the full field was ranked and the
+  // part-timers were merely filtered out of the table, leaving gaps (e.g. 35 →
+  // 38, where #8/#67 held 26/27 and #33/#84 held 36/37). This mirrors the rail
+  // (renderFormMini), which already ranks allEntities().filter(isFullTime).
+  const fieldEntities = STATE.form.ftOnly ? entities.filter(isFullTime) : entities;
+  const powerNow = buildPowerRankings(fieldEntities, STATE.series, POWER_N);
+  const powerPrev = prevRound != null ? buildPowerRankings(fieldEntities, STATE.series, POWER_N, prevRound) : new Map();
 
   // Power-RATING trend over the last 8 race-states — same as the right rail, so
   // the "last 8" plot on this table matches the rail's line exactly. Compute
@@ -5187,7 +5194,7 @@ function renderFormTable() {
   const trendRounds = completedRounds.slice(-POWER_N);
   const ratingByRound = trendRounds.map(rnd => ({
     round: rnd,
-    map: buildPowerRankings(entities, STATE.series, POWER_N, rnd),
+    map: buildPowerRankings(fieldEntities, STATE.series, POWER_N, rnd),
   }));
   const ratingHistoryFor = (key) =>
     ratingByRound.map(rr => { const pr = rr.map.get(key); return pr ? pr.rating : null; });
