@@ -11980,7 +11980,7 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 18;  // v18: widen track-pace window to 5, shift weight track-pace 40 / track-type 20
+  const PROJ_VERSION = 19;  // v19: clone chaseDrivers so render cannot mutate cached proj
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -24419,7 +24419,12 @@ function _buildProjectionHTML(proj) {
   const fieldSize = proj.rule.field || 16;
 
   // Chase drivers = top fieldSize from the projected standings (by points).
-  const chaseDrivers = allSorted.slice(0, fieldSize).slice();
+  // DEEP-CLONE each driver object: _computeChaseTraces writes the derived
+  // champ% onto these, and proj is cached (in memory + localStorage). Sharing
+  // references would let one render mutate the cache and make the NEXT render
+  // derive from already-mutated data — a likely cause of the projection
+  // appearing to change between refreshes. Cloning keeps every render pure.
+  const chaseDrivers = allSorted.slice(0, fieldSize).map(d => ({ ...d }));
 
   // Compute chase traces FIRST — this derives each driver's champ% from their
   // deterministic chase points and writes it back onto the driver objects, so
@@ -24731,8 +24736,11 @@ function _computeChaseTraces(chaseDrivers, proj) {
   const expSum = exps.reduce((a, b) => a + b, 0) || 1;
   traces.forEach((t, i) => {
     t.champPct = exps[i] / expSum;
-    // Write back onto the source driver object so the top-contender cards and
-    // chaseDrivers sort (which read championship_pct) use the same number.
+    // Write the derived champ% onto the passed-in chaseDrivers entry so the
+    // caller's contender cards/sort can read it. We intentionally do NOT mutate
+    // proj.drivers (the cached objects) — chaseDrivers is given to us as a
+    // fresh-cloned array by the caller, so this stays render-local and can't
+    // corrupt the cached projection across repeated renders.
     const src = chaseDrivers.find(d => d.slug === t.slug);
     if (src) src.championship_pct = t.champPct;
   });
