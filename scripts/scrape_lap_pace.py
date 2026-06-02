@@ -169,15 +169,46 @@ def driver_pace_from_laps(laps: list) -> Optional[dict]:
     if not times:
         return None
 
+    # Guard against corrupt/partial timing: a single absurdly-fast lap (timing
+    # glitch, partial record) would otherwise become the driver's "best" and,
+    # via field normalization, poison the whole race's benchmark. Require the
+    # best lap to be self-consistent — within reason of the driver's own median
+    # green lap. If the apparent best is wildly faster than the median (e.g. an
+    # 18s lap among 30s laps), it's bad data; drop it and re-evaluate.
+    times_sorted = sorted(times)
+    med_all = statistics.median(times_sorted)
+    # A real green lap can't be more than ~25% faster than the driver's own
+    # median of all (incl. some caution) laps is too loose, so compare to the
+    # median of the plausibly-green half (fastest 50%).
+    fast_half = times_sorted[: max(1, len(times_sorted) // 2)]
+    green_ref = statistics.median(fast_half)
+    SANITY_FLOOR = 0.80  # laps faster than 80% of the green reference are bogus
+    clean = [t for t in times_sorted if t >= green_ref * SANITY_FLOOR]
+    if not clean:
+        clean = times_sorted
+    times = clean
+
+    if not times:
+        return None
+
     best = min(times)
     # Keep only green laps: within GREEN_LAP_MAX_RATIO of this driver's best.
     green = sorted(t for t in times if t <= best * GREEN_LAP_MAX_RATIO)
     if not green:
         green = [best]
 
+    # Minimum-sample guard: a driver with too few green laps (ran only a
+    # handful before crashing/parking, or has a sparse record) doesn't have a
+    # reliable pace and must NOT be allowed to set the field benchmark. We mark
+    # such entries low-confidence; normalize_race excludes them from the
+    # benchmark calc (but still reports their delta).
+    MIN_GREEN_FOR_BENCHMARK = 5
+    low_confidence = len(green) < MIN_GREEN_FOR_BENCHMARK
+
     return {
         "green_laps": len(green),
         "total_laps": len(times),
+        "low_confidence": low_confidence,
         "best_lap": round(best, 3),
         "fast5_avg": round(pct_average(green, 0.05), 3),
         "fast10_avg": round(pct_average(green, 0.10), 3),
@@ -200,10 +231,19 @@ def normalize_race(driver_stats: dict) -> dict:
         return driver_stats
 
     for metric in ("best_lap", "fast5_avg", "fast10_avg", "fast20_avg", "green_median"):
-        vals = [s[metric] for s in driver_stats.values() if s.get(metric) is not None]
-        if not vals:
+        # Benchmark (field best) is drawn ONLY from confidence-worthy drivers —
+        # those with enough green laps. This prevents a corrupt single-lap or
+        # tiny-sample entry from defining "fastest car" and making the whole
+        # field look absurdly slow. Low-confidence drivers still get a delta
+        # computed against that clean benchmark.
+        bench_vals = [s[metric] for s in driver_stats.values()
+                      if s.get(metric) is not None and not s.get("low_confidence")]
+        if not bench_vals:
+            # fall back to all drivers if everyone is low-confidence
+            bench_vals = [s[metric] for s in driver_stats.values() if s.get(metric) is not None]
+        if not bench_vals:
             continue
-        field_best = min(vals)
+        field_best = min(bench_vals)
         if field_best <= 0:
             continue
         for s in driver_stats.values():
