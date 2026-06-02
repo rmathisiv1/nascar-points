@@ -12005,7 +12005,8 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 20;  // v20: freeze chase-race predictions in proj so render-time
+  const PROJ_VERSION = 21;  // v21: predictor thin-venue/plate-sample regression (re-freeze chase_preds)
+                            // v20: freeze chase-race predictions in proj so render-time
                             // chase traces/champ% are deterministic (no live predictDriverForRace)
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
@@ -13039,6 +13040,27 @@ function predictDriverForRace(driverName, series, trackCode) {
     }
   }
 
+  // Thin-VENUE-sample regression (non-drafting tracks). With only 1-3 races at a
+  // venue, the track-specific signals (last-5-here pace and all-time-here finish)
+  // are dominated by a single result — one win crowns a driver as the predicted
+  // winner of the REMATCH (e.g. Ty Gibbs after winning the season's first
+  // Bristol). Regress those two signals toward the driver's TRACK-TYPE pace — a
+  // much larger, stabler read of how fast they run that KIND of track — until
+  // ~4 races of venue evidence accumulate. A driver who is ALSO fast at the type
+  // keeps their strong read (the type anchor is fast too); only a venue-specific
+  // spike off one or two races gets pulled back. Drafting tracks run their own
+  // (stronger) regression below, so they're skipped here. Tunable: VENUE_TRUST_N.
+  {
+    const VENUE_TRUST_N = 4;
+    const nHere = _trackFinishes.length;
+    const typeAnchor = paceToPos(typePaceVal);
+    if (!isDraftingTrack(trackCode) && nHere > 0 && nHere < VENUE_TRUST_N && typeAnchor != null) {
+      const tHere = nHere / VENUE_TRUST_N;       // 0.25 @1, 0.50 @2, 0.75 @3 race(s)
+      if (tracePacePos != null)   tracePacePos   = tHere * tracePacePos   + (1 - tHere) * typeAnchor;
+      if (allTimeTrimmed != null) allTimeTrimmed = tHere * allTimeTrimmed + (1 - tHere) * typeAnchor;
+    }
+  }
+
   // ----- Pace-dominant model (finish position) -----
   // Weights (2026-06, thin-sample rebalance):
   //   40% pace — last 5 races at THIS track (f20/median blend)
@@ -13101,12 +13123,15 @@ function predictDriverForRace(driverName, series, trackCode) {
       const dSum = dAvail.reduce((s, x) => s + x.w, 0);
       let dPred = dAvail.reduce((sum, x) => sum + (x.w / dSum) * x.val, 0);
       // Thin-sample regression: plate racing is high-variance, so a driver with
-      // only a couple starts here can look great (or terrible) on luck alone.
-      // Regress toward mid-pack (P20) until ~6 starts of evidence. A 2-start
-      // sample is pulled ~67% toward the field; a 6+ start sample is trusted.
+      // only a couple starts here can look great (or terrible) on luck alone — a
+      // single plate win shouldn't project them to win the rematch (Hocevar after
+      // one Talladega win). Regress toward mid-pack (P20) until ~8 starts of
+      // evidence; a 3-start sample is pulled ~60% toward the field. Plate variance
+      // warrants a higher bar than normal tracks. Tunable: PLATE_TRUST_N.
+      const PLATE_TRUST_N = 8;
       const nHere = _trackFinishes.length;
-      if (nHere < 6) {
-        const trust = nHere / 6;            // 0..1
+      if (nHere < PLATE_TRUST_N) {
+        const trust = nHere / PLATE_TRUST_N;   // 0..1
         dPred = trust * dPred + (1 - trust) * 20;
       }
       var _draftPredicted = Math.max(1.0, dPred);
@@ -24352,6 +24377,7 @@ function _wireProjectionChartTooltips(host) {
     tip.hidden = false;
     tip.innerHTML = `<strong>${escapeHTML(driver)}${isWin ? ' <span class="pc-tip-win">★ WIN</span>' : ''}</strong>` +
       (track ? `<br>${escapeHTML(track)}` : (round ? `<br>R${round}` : "")) +
+      (finish != null && finish !== "" ? `<br>Pred. finish: <strong>P${finish}</strong>` : "") +
       (racepts != null && racepts !== "" ? `<br>Pred. pts: <strong>+${racepts}</strong>` : "") +
       (cum ? `<br>Cum. pts: <strong>${Number(cum).toLocaleString()}</strong>` : "") +
       (pos ? `<br>Position: <strong>P${pos}</strong>` : "");
