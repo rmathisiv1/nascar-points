@@ -24385,10 +24385,11 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
     .sort((a, b) => (a.round || 0) - (b.round || 0));
   if (chaseRaces.length === 0) return "";
 
-  // Chart dimensions (match PFC). Extra bottom padding for diagonal track
-  // names; extra left padding so the leftmost rotated label doesn't clip.
-  const W = 820, H = 384;
-  const pad = { t: 16, r: 80, b: 80, l: 78 };
+  // Chart dimensions. Bottom padding holds vertical (90°-rotated) track names,
+  // which take a fixed footprint regardless of name length — so "Martinsville"
+  // and "Bristol" both fit without any per-name tuning.
+  const W = 820, H = 430;
+  const pad = { t: 16, r: 80, b: 118, l: 64 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
   const lastRound = chaseRaces.length > 0 ? chaseRaces[chaseRaces.length - 1].round : regEnd + 10;
@@ -24397,32 +24398,32 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
   const minPts = Math.min(...allCums);
   const maxPts = Math.max(...allCums);
   const padPts = (maxPts - minPts) * 0.08 || 50;
+  // Y-axis: round to 50-pt boundaries so labels land on clean values.
   const yMin = Math.floor((minPts - padPts) / 50) * 50;
   const yMax = Math.ceil((maxPts + padPts) / 50) * 50;
   const xScale = r => pad.l + ((r - regEnd) / Math.max(1, lastRound - regEnd)) * innerW;
   const yScale = v => pad.t + (1 - (v - yMin) / (yMax - yMin)) * innerH;
 
-  // Grid lines
+  // Grid lines + labels at every 50 points (e.g. 2000, 2050, 2100 ...).
   const gridLines = [];
-  for (let i = 0; i <= 5; i++) {
-    const y = pad.t + (i / 5) * innerH;
-    const v = Math.round(yMax - (i / 5) * (yMax - yMin));
-    gridLines.push(`<line class="chart-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`);
-    gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${y + 3}" text-anchor="end">${v}</text>`);
+  for (let v = yMin; v <= yMax; v += 50) {
+    const y = yScale(v);
+    gridLines.push(`<line class="pc-gridline" x1="${pad.l}" x2="${W - pad.r}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`);
+    gridLines.push(`<text class="axis-label" x="${pad.l - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end">${v}</text>`);
   }
-  // X labels: round number + a diagonal (rotated) track name beneath it.
+  // X labels: round number + a VERTICAL track name beneath it. Rotating the
+  // name to 90° gives it a fixed (tiny) horizontal footprint, so labels of any
+  // length fit in their column without clipping — no per-name length tuning.
   const xLabels = [];
   for (let i = 0; i < chaseRaces.length; i++) {
     const r = chaseRaces[i];
     const x = xScale(r.round);
-    // Short track name: strip common suffixes, then cap length so a long name
-    // (e.g. "World Wide Technology Raceway") can't run off the chart.
     let tname = (r.track || r.track_code || "")
       .replace(/ (Motor )?Speedway| International| Raceway| Superspeedway| Road Course$/ig, "").trim();
-    if (tname.length > 12) tname = tname.slice(0, 11) + "…";
-    const ly = H - 20;
-    xLabels.push(`<text class="axis-label" x="${x}" y="${H - 32}" text-anchor="middle">R${r.round}</text>`);
-    xLabels.push(`<text class="axis-label pc-track-label" x="${x}" y="${ly}" text-anchor="end" transform="rotate(-30 ${x} ${ly})">${escapeHTML(tname)}</text>`);
+    if (tname.length > 16) tname = tname.slice(0, 15) + "…";
+    const ty = H - pad.b + 14;
+    xLabels.push(`<text class="axis-label" x="${x}" y="${(H - pad.b + 4).toFixed(1)}" text-anchor="middle">R${r.round}</text>`);
+    xLabels.push(`<text class="axis-label pc-track-label" x="${x}" y="${ty.toFixed(1)}" text-anchor="end" transform="rotate(-90 ${x} ${ty.toFixed(1)})">${escapeHTML(tname)}</text>`);
   }
 
   // Lines — draw lowest champ % first, highest last (on top)
@@ -24465,7 +24466,7 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
         <div class="ed-byline">Deterministic prediction per track · hover to see driver + projected finish</div>
       </div>
       <div class="pc-chart-wrap">
-        <svg viewBox="-30 0 ${W + 50} ${H + 8}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
           ${gridLines.join("")}
           ${xLabels.join("")}
           ${lines}
