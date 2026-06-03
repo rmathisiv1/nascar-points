@@ -231,13 +231,15 @@ html, body {
 /* ── Per-page series toggle ─────────────────────────────────────────────
    Replaces the old global #series-sw. Sits just under the dash-tabs nav at
    the top of the center column. Each series-scoped page remembers its own
-   NCS/NOS/NTS choice. Same gold/green/red palette as .series-sw and the
-   .series-tag chips. Hidden on Home and entity/all-time views. */
+   NCS/NOS/NTS choice. Sized to match the .toggle-group pills (Driver/Owner,
+   etc.) and inset to align with the page content (10px, same as .tab-body /
+   takeover padding). Same gold/green/red palette as the .series-tag chips.
+   Hidden on Home and entity/all-time views. */
 .page-series-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 10px 0 8px;
+  padding: 10px 10px 4px;
 }
 .page-series-bar[hidden] { display: none; }
 .page-series-bar::before {
@@ -245,23 +247,24 @@ html, body {
   font-family: var(--mono);
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   color: var(--muted);
 }
 .pgs-track {
   display: inline-flex;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 5px;
   padding: 2px;
 }
 .pgs-btn {
-  padding: 6px 16px;
+  padding: 5px 11px;
   background: none; border: none; cursor: pointer;
   color: var(--muted);
-  font-family: var(--mono); font-size: 11px; font-weight: 600;
-  letter-spacing: 0.06em;
-  border-radius: 4px;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 3px;
   transition: color 0.12s ease, background 0.12s ease;
 }
 .pgs-btn:not(.on):hover { color: var(--text); }

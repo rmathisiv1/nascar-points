@@ -2967,14 +2967,15 @@ function wireUIControls() {
     applyPageSeries(b.dataset.pgs);
   });
 
-  // Home trio "next race" links carry their column's series. Set the race
-  // page's remembered series BEFORE the anchor navigates (no preventDefault —
-  // we let the href change the hash) so the race page opens in that series.
+  // Links that carry a series into their destination page (e.g. the home
+  // trio's "next race" track links). Set the target page's remembered series
+  // BEFORE the anchor navigates (no preventDefault — the href changes the
+  // hash and ensurePageSeries picks it up on the way in).
   document.addEventListener("click", (e) => {
-    const a = e.target.closest("a[data-race-series]");
+    const a = e.target.closest("a[data-series-page][data-series-set]");
     if (!a) return;
     STATE.pageSeries = STATE.pageSeries || {};
-    STATE.pageSeries["race"] = a.dataset.raceSeries;
+    STATE.pageSeries[a.dataset.seriesPage] = a.dataset.seriesSet;
   });
 
   // Brand link — clicking "datacarracing" is the global escape hatch.
@@ -13143,18 +13144,16 @@ function renderHomePredictionTrio(year) {
         <div class="muted" style="font-size:12px;padding:12px 4px;">No upcoming race or data loaded.</div>
       </div>`;
     }
-    // Header link goes to the Race Center for THIS race, in THIS column's
-    // series. data-race-series is read by the delegated handler in
-    // wireUIControls, which sets STATE.pageSeries["race"] before navigation
-    // so the race page opens in the matching series (not whatever the race
-    // page last remembered). The round is series-specific (computed inside
-    // _withSeriesContext above), so it resolves correctly once the series
-    // is set.
-    const raceHref = `#/race/${computed.round}`;
+    // Header link goes to the Track page for THIS race's venue (it shows the
+    // full Top-10 predicted finish), in THIS column's series. The delegated
+    // handler in wireUIControls reads data-series-page + data-series-set and
+    // sets STATE.pageSeries[that view] before navigation, so the track page
+    // opens in the matching series rather than whatever it last remembered.
+    const trackHref = `#/track/${encodeURIComponent(computed.trackCode)}`;
     return `<div class="home-card hpt-col">
       <div class="hpt-head">
         <span class="hpt-series">${series}</span>
-        <a class="hpt-race profile-link" href="${raceHref}" data-race-series="${series}">R${computed.round} · ${escapeHTML(computed.trackName)} →</a>
+        <a class="hpt-race profile-link" href="${trackHref}" data-series-page="track" data-series-set="${series}">R${computed.round} · ${escapeHTML(computed.trackName)} →</a>
       </div>
       <div class="hpt-table-head">
         <span></span><span></span><span></span>
