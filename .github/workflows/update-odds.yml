@@ -20,6 +20,10 @@ on:
         description: 'Series to refresh (NCS,NOS,NTS or subset)'
         required: false
         default: 'NCS,NOS,NTS'
+      jayski:
+        description: 'Entry-list fallback URLs when odds arent posted: SERIES=URL,SERIES=URL (e.g. NTS=https://www.jayski.com/truck-series/2026-ncts-michigan-entry-list/)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -50,11 +54,11 @@ jobs:
         env:
           SEASON: ${{ github.event.inputs.season || '2026' }}
           ONLY:   ${{ github.event.inputs.only   || 'NCS,NOS,NTS' }}
+          JAYSKI: ${{ github.event.inputs.jayski  || '' }}
         run: |
-          python scripts/scrape_entry_list.py \
-            --season "$SEASON" \
-            --only "$ONLY" \
-            --out "data/entry_list.json"
+          ARGS="--season \"$SEASON\" --only \"$ONLY\" --out \"data/entry_list.json\""
+          if [ -n "$JAYSKI" ]; then ARGS="$ARGS --jayski \"$JAYSKI\""; fi
+          eval python scripts/scrape_entry_list.py $ARGS
 
       - name: Commit & push if changed
         run: |

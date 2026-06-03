@@ -66,6 +66,13 @@ try:
 except Exception:
     cloudscraper = None
 
+# Optional Jayski fallback (entries from the PDF when the odds market isn't
+# posted yet). Lives alongside this file in scripts/.
+try:
+    from scrape_jayski_entry import fetch_entries as _jayski_fetch
+except Exception:
+    _jayski_fetch = None
+
 CACHER = "https://cf.nascar.com/cacher"
 ODDS = "https://fantasygames.nascar.com/api/v1/live/odds/race/{race_id}.json"
 SERIES_ID_TO_CODE = {1: "NCS", 2: "NOS", 3: "NTS"}
@@ -264,11 +271,22 @@ def main():
     ap.add_argument("--dump", action="store_true")
     ap.add_argument("--list-markets", action="store_true",
                     help="print the markets each race exposes (debug the top-5 matcher)")
+    ap.add_argument("--jayski", default=None,
+                    help="entry-list fallback per series when the odds market isn't posted: "
+                         "comma-separated SERIES=URL "
+                         "(e.g. NTS=https://www.jayski.com/truck-series/2026-ncts-michigan-entry-list/)")
     args = ap.parse_args()
 
     only = None
     if args.only:
         only = {c.strip().upper() for c in args.only.split(",") if c.strip()}
+
+    jayski_urls = {}
+    if args.jayski:
+        for pair in args.jayski.split(","):
+            if "=" in pair:
+                s, u = pair.split("=", 1)
+                jayski_urls[s.strip().upper()] = u.strip()
 
     index = fetch_json(f"{CACHER}/{args.season}/race_list_basic.json")
     if not index:
@@ -289,6 +307,22 @@ def main():
         track = race.get("track_name", "")
         print(f"  {code}: race_id={rid}  {track}", file=sys.stderr)
         entries = entries_from_odds(rid, list_markets=args.list_markets)
+        source = "odds"
+        if not entries and code in jayski_urls and _jayski_fetch:
+            print(f"    no odds market — falling back to Jayski entry list", file=sys.stderr)
+            try:
+                je = _jayski_fetch(jayski_urls[code])
+            except Exception as ex:
+                je = None
+                print(f"    Jayski fallback failed: {ex}", file=sys.stderr)
+            if je:
+                entries = [{
+                    "driver": e["driver"],
+                    "driver_id": None,
+                    "win_prob": None,
+                    "car": e.get("car"),
+                } for e in je]
+                source = "jayski"
         if not entries:
             print(f"    (no odds/entry data yet — skipping)", file=sys.stderr)
             continue
@@ -298,9 +332,10 @@ def main():
             "race_id": rid,
             "track": track,
             "race_date": race.get("race_date") or race.get("date_scheduled"),
+            "source": source,
             "entries": entries,
         }
-        print(f"    {len(entries)} entries ({n_top5} with top-5 odds)", file=sys.stderr)
+        print(f"    {len(entries)} entries ({n_top5} top-5 odds, source={source})", file=sys.stderr)
         time.sleep(0.4)
 
     payload = {

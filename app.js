@@ -4831,6 +4831,10 @@ async function loadEntryList() {
           // Raw American top-5 odds (e.g. +450, -160), shown exactly as posted
           // when present (preferred over the implied-prob round-trip).
           top5_odds: typeof e.top5_odds === "number" ? e.top5_odds : null,
+          // Car number from the entry source (the Jayski fallback supplies this;
+          // the odds feed does not). When present, used for display so a one-off
+          // sub shows in the car they're actually entered in.
+          car: e.car != null ? String(e.car) : null,
         }))
         .filter(e => e.driver);
       if (!list.length) continue;
@@ -11776,6 +11780,7 @@ function _computeRacePredictions(series, trackCode) {
         win_prob: en.win_prob != null ? en.win_prob : null,
         top5_prob: en.top5_prob != null ? en.top5_prob : null,
         top5_odds: en.top5_odds != null ? en.top5_odds : null,
+        car: en.car != null ? String(en.car) : null,
         // Part-time = the car isn't a full-time charter (single source of truth).
         // A driver with no resolvable car/entity is treated part-time too.
         isPartTime: !(ent && isFullTime(ent)),
@@ -11811,7 +11816,7 @@ function _computeRacePredictions(series, trackCode) {
     if (!pred) return null;
     return { entity: r.entity, driverName: r.driverName,
              win_prob: r.win_prob, top5_prob: r.top5_prob, top5_odds: r.top5_odds,
-             is_part_time: r.isPartTime, ...pred };
+             car: r.car, is_part_time: r.isPartTime, ...pred };
   }).filter(Boolean);
   // Market rank by the odds shown (raw top-5 odds → top-5 prob → win prob;
   // 1 = shortest odds). Used to flag model "value" picks. Drivers without any
@@ -12577,7 +12582,7 @@ function _renderPerformerRow(row, i, series) {
 
 // Render a single stage-points-prediction row.
 function _renderStagePtsRow(p, i, series) {
-  const carNum = p.entity ? p.entity.car_number : null;
+  const carNum = (p.car != null ? p.car : (p.entity ? p.entity.car_number : null));
   const carHex = carNum ? colorFor(series, carNum) : "#888";
   const carTxt = contrastTextFor(carHex);
   const slug = slugify(p.driverName);
@@ -12647,7 +12652,7 @@ function _oddsColLabel(preds) {
 
 // Render a single predicted-finish row (used inside the full-field <details>).
 function _renderFinishRow(p, i, series) {
-  const carNum = p.entity ? p.entity.car_number : null;
+  const carNum = (p.car != null ? p.car : (p.entity ? p.entity.car_number : null));
   const carHex = carNum ? colorFor(series, carNum) : "#888";
   const carTxt = contrastTextFor(carHex);
   const slug = slugify(p.driverName);
@@ -12946,7 +12951,7 @@ function _withSeriesContext(year, series, fn) {
 // Summary shows FIN + ODDS (fits a ~1/3-width column); expanding reveals pred
 // pts, stage pts, and the evidence dots. Native <details> — no JS wiring.
 function _renderMiniPredRow(p, i, series) {
-  const carNum = p.entity ? p.entity.car_number : null;
+  const carNum = (p.car != null ? p.car : (p.entity ? p.entity.car_number : null));
   const carHex = carNum ? colorFor(series, carNum) : "#888";
   const carTxt = contrastTextFor(carHex);
   const slug = slugify(p.driverName);
