@@ -73,9 +73,15 @@ _PDF_RE = re.compile(
 # all, so discovery still works even if a guess here is wrong. Validate with
 #     python scrape_jayski_entry.py --discover NCS=Michigan --year 2026
 SERIES_JAYSKI = {
-    "NCS": {"sections": ["cup-series"],     "abbrs": ["nccs", "ncs"]},
-    "NOS": {"sections": ["xfinity-series"], "abbrs": ["nxs"]},
-    "NTS": {"sections": ["truck-series"],   "abbrs": ["ncts"]},
+    # Confirmed from live discovery:
+    #   Cup    -> nascar-cup-series, official PREENTNUM sheet
+    #   Xfinity-> oreilly-auto-parts-series ("noaps"), a different sheet layout
+    #   Truck  -> truck-series, official PREENTNUM sheet
+    # The on-site search is the primary finder; sections here scope the picker
+    # and feed the index-scrape / construct fallbacks.
+    "NCS": {"sections": ["nascar-cup-series", "cup-series"],            "abbrs": ["nccs", "ncs"]},
+    "NOS": {"sections": ["oreilly-auto-parts-series", "xfinity-series"], "abbrs": ["noaps", "nxs"]},
+    "NTS": {"sections": ["truck-series"],                               "abbrs": ["ncts"]},
 }
 
 # NASCAR's track_name -> the token Jayski uses in its entry-list slug. Most are
@@ -156,56 +162,132 @@ def find_pdf_url(page_url):
     return m.group(0) if m else None
 
 
+def _parse_ruled_tables(pdf):
+    """Parse the official NASCAR PREENTNUM sheet (Cup + Truck): a ruled table
+    with columns Entry | Veh# | Driver | Organization | Crew Chief | Veh Mfg |
+    Sponsor. Returns entries (withdrawn '*' rows dropped)."""
+    out = []
+    for page in pdf.pages:
+        for table in (page.extract_tables() or []):
+            if not table or len(table) < 2:
+                continue
+            header = [(c or "").strip().lower() for c in table[0]]
+
+            def col(key):
+                for i, h in enumerate(header):
+                    if key in h:
+                        return i
+                return None
+
+            ci_veh, ci_drv = col("veh"), col("driver")
+            ci_org, ci_cc, ci_mfg = col("organization"), col("crew"), col("mfg")
+            if ci_veh is None or ci_drv is None:
+                continue
+            for row in table[1:]:
+                if not row or len(row) <= max(ci_veh, ci_drv):
+                    continue
+                veh_raw = (row[ci_veh] or "").strip()
+                drv_raw = (row[ci_drv] or "").strip()
+                if not drv_raw:
+                    continue
+                if "*" in veh_raw:                 # withdrawn — not racing
+                    continue
+                car = re.sub(r"\D", "", veh_raw) or None
+                ineligible = "(i)" in drv_raw.lower()
+                driver = re.sub(r"\(i\)", "", drv_raw, flags=re.I)
+                driver = re.sub(r"\s+", " ", driver).strip()
+
+                def cell(i):
+                    return (row[i] or "").strip() if (i is not None and i < len(row)) else None
+
+                out.append({
+                    "driver": driver,
+                    "car": car,
+                    "team": cell(ci_org),
+                    "crew_chief": cell(ci_cc),
+                    "mfg": cell(ci_mfg),
+                    "ineligible": ineligible,
+                })
+    return out
+
+
+# Manufacturer is a fixed enum and sits right after the driver name on the
+# O'Reilly/Xfinity "Entry List - Numerical" sheet — a reliable anchor to split
+# "<row> <car> <driver>" from the trailing sponsor/owner/crew-chief text (which
+# the PDF flattens together, sometimes without spaces). The entry pipeline only
+# needs driver + car, so that's what we extract reliably here.
+_ENTRY_LINE_RE = re.compile(
+    r"^\d+\s+(\d{1,3})\s+(.+?)\s+(Chevrolet|Toyota|Ford)\b", re.I)
+
+
+def _parse_text_entry_list(pdf):
+    """Fallback for the O'Reilly/Xfinity sheet, which has no ruled lines — just
+    positionally-aligned text. Anchors on the manufacturer to pull car + driver."""
+    out = []
+    for page in pdf.pages:
+        for line in (page.extract_text() or "").splitlines():
+            m = _ENTRY_LINE_RE.match(line.strip())
+            if not m:
+                continue
+            car = m.group(1)
+            driver = m.group(2).strip()
+            driver = re.sub(r"\s*#\s*$", "", driver)            # rookie '#'
+            ineligible = "(i)" in driver.lower()
+            driver = re.sub(r"\(i\)", "", driver, flags=re.I).strip()
+            if not driver or not re.search(r"[A-Za-z]", driver):
+                continue
+            out.append({
+                "driver": driver,
+                "car": car or None,
+                "team": None,          # sponsor/owner/crew merge in this layout;
+                "crew_chief": None,    # driver + car is what the pipeline uses.
+                "mfg": m.group(3).title(),
+                "ineligible": ineligible,
+            })
+    return out
+
+
 def parse_entry_pdf(source):
     """source: path str or PDF bytes. Returns a list of
-    {driver, car, team, crew_chief, mfg, ineligible}, withdrawn entries dropped."""
+    {driver, car, team, crew_chief, mfg, ineligible}, withdrawn entries dropped.
+    Tries the ruled PREENTNUM table first, then the text-based O'Reilly sheet."""
     if pdfplumber is None:
         raise RuntimeError("pdfplumber not installed (pip install pdfplumber)")
     opener = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
-    out = []
     with pdfplumber.open(opener) as pdf:
-        for page in pdf.pages:
-            for table in (page.extract_tables() or []):
-                if not table or len(table) < 2:
-                    continue
-                header = [(c or "").strip().lower() for c in table[0]]
-
-                def col(key):
-                    for i, h in enumerate(header):
-                        if key in h:
-                            return i
-                    return None
-
-                ci_veh, ci_drv = col("veh"), col("driver")
-                ci_org, ci_cc, ci_mfg = col("organization"), col("crew"), col("mfg")
-                if ci_veh is None or ci_drv is None:
-                    continue
-                for row in table[1:]:
-                    if not row or len(row) <= max(ci_veh, ci_drv):
-                        continue
-                    veh_raw = (row[ci_veh] or "").strip()
-                    drv_raw = (row[ci_drv] or "").strip()
-                    if not drv_raw:
-                        continue
-                    if "*" in veh_raw:                 # withdrawn — not racing
-                        continue
-                    car = re.sub(r"\D", "", veh_raw) or None
-                    ineligible = "(i)" in drv_raw.lower()
-                    driver = re.sub(r"\(i\)", "", drv_raw, flags=re.I)
-                    driver = re.sub(r"\s+", " ", driver).strip()
-
-                    def cell(i):
-                        return (row[i] or "").strip() if (i is not None and i < len(row)) else None
-
-                    out.append({
-                        "driver": driver,
-                        "car": car,
-                        "team": cell(ci_org),
-                        "crew_chief": cell(ci_cc),
-                        "mfg": cell(ci_mfg),
-                        "ineligible": ineligible,
-                    })
+        out = _parse_ruled_tables(pdf)
+        if not out:
+            out = _parse_text_entry_list(pdf)
     return out
+
+
+def inspect_pdf(source):
+    """Diagnostic: print a PDF's structure (page count, tables under both the
+    default line-based and a text-based strategy, plus a raw-text sample) so a
+    parser can be written for an unfamiliar layout. source: path or bytes."""
+    if pdfplumber is None:
+        raise RuntimeError("pdfplumber not installed (pip install pdfplumber)")
+    opener = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
+    text_settings = {"vertical_strategy": "text", "horizontal_strategy": "text"}
+    with pdfplumber.open(opener) as pdf:
+        print(f"PAGES: {len(pdf.pages)}")
+        for pi, page in enumerate(pdf.pages[:2]):
+            print(f"\n===== PAGE {pi + 1} =====")
+            for label, kw in (("line-based", None), ("text-based", text_settings)):
+                try:
+                    tables = page.extract_tables(kw) if kw else page.extract_tables()
+                except Exception as ex:
+                    print(f"  [{label}] extract_tables error: {ex}")
+                    continue
+                print(f"  [{label}] {len(tables or [])} table(s)")
+                for ti, t in enumerate(tables or []):
+                    cols = max((len(r) for r in t), default=0)
+                    print(f"    table {ti}: {len(t)} rows x {cols} cols")
+                    for r in t[:4]:
+                        print(f"      {r}")
+            txt = page.extract_text() or ""
+            print("  --- raw text (first 1200 chars) ---")
+            print("\n".join("  " + ln for ln in txt[:1200].splitlines()))
 
 
 def fetch_entries(page_url):
@@ -260,6 +342,46 @@ def _url_matches(u, year, track_tokens, sections=None):
     return any(tok in u for tok in track_tokens if len(tok) >= 3)
 
 
+def _html_search(query):
+    """Scrape Jayski's on-site WordPress search results page (/?s=...) for post
+    links. Works even when the JSON REST API is disabled or Cloudflare-blocked
+    (which it appears to be on Jayski). Returns a de-duped list of jayski URLs."""
+    try:
+        from urllib.parse import quote_plus
+        url = f"https://www.jayski.com/?s={quote_plus(query)}"
+    except Exception:
+        return []
+    html = _get(url)
+    if not html:
+        return []
+    seen, out = set(), []
+    for m in re.finditer(r'href="(https?://(?:www\.)?jayski\.com/[^"#?]+)"', html, re.I):
+        u = m.group(1)
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+def _pick_entry_url(urls, year, track_tokens, sections):
+    """From a set of candidate URLs (already relevance-filtered by a search
+    query), pick the best entry-list URL. Jayski sometimes slugs Cup pages by
+    RACE NAME ('...firekeepers-casino-400-entry-list') rather than the track,
+    so we don't hard-require a track token here: section + year + 'entry-list'
+    plus the search relevance is enough. A track-token match is preferred when
+    present."""
+    yr = str(year)
+    cands = [u for u in urls if "entry-list" in u.lower() and yr in u.lower()]
+    if not cands:
+        return None
+    in_section = [u for u in cands if any(s in u.lower() for s in sections)] if sections else []
+    pool = in_section or cands
+    for u in pool:                       # prefer an explicit track-token hit
+        if any(t in u.lower() for t in track_tokens if len(t) >= 3):
+            return u
+    return pool[0]                       # else trust search relevance + section
+
+
 def discover_entry_url(series, year, track_name, verbose=True):
     """Find the Jayski entry-list page URL for (series, year, track) with no
     manual input. Tries REST search, then the section index page, then a
@@ -280,37 +402,37 @@ def discover_entry_url(series, year, track_name, verbose=True):
 
     log(f"track='{track_name}' -> slug='{slug}', tokens={sorted(track_tokens)}")
 
-    # --- Strategy 1: WordPress REST search (no slug/abbr knowledge needed) ---
-    queries = [f"{slug.replace('-', ' ')} entry list"]
-    if track_name and track_name.lower() not in queries[0]:
-        queries.append(f"{track_name} entry list")
-    for q in queries:
-        results = _rest_search(q)
-        # First pass: require the series section in the URL (most precise).
-        for r in results:
-            if _url_matches(r["url"], yr, track_tokens, sections):
-                log(f"REST hit (section-scoped): {r['url']}")
-                return r["url"]
-        # Second pass: drop the section constraint (handles section-slug drift).
-        for r in results:
-            if _url_matches(r["url"], yr, track_tokens, None):
-                log(f"REST hit: {r['url']}")
-                return r["url"]
+    search_queries = [f"{slug.replace('-', ' ')} {yr} entry list"]
+    if track_name and track_name.lower() not in search_queries[0]:
+        search_queries.append(f"{track_name} {yr} entry list")
 
-    # --- Strategy 2: scrape the series section index page ---
+    # --- Strategy 1: Jayski on-site search (most reliable; REST is blocked) ---
+    for q in search_queries:
+        hit = _pick_entry_url(_html_search(q), yr, track_tokens, sections)
+        if hit:
+            log(f"site-search hit ('{q}'): {hit}")
+            return hit
+
+    # --- Strategy 2: WordPress REST search (if the JSON API happens to work) ---
+    for q in search_queries:
+        urls = [r["url"] for r in _rest_search(q)]
+        hit = _pick_entry_url(urls, yr, track_tokens, sections)
+        if hit:
+            log(f"REST hit ('{q}'): {hit}")
+            return hit
+
+    # --- Strategy 3: scrape the series section index page ---
     for sec in sections:
         html = _get(f"https://www.jayski.com/{sec}/")
         if not html:
             continue
-        # Capture every link, then filter — handles slugs longer than a bare
-        # "...-entry-list/" (e.g. a sponsor suffix), which a tight regex misses.
-        for m in re.finditer(r'href="(https?://[^"]+)"', html, re.I):
-            cand = m.group(1)
-            if _url_matches(cand, yr, track_tokens, None):
-                log(f"index-scrape hit ({sec}/): {cand}")
-                return cand
+        urls = re.findall(r'href="(https?://[^"]+)"', html, re.I)
+        hit = _pick_entry_url(urls, yr, track_tokens, [sec])
+        if hit:
+            log(f"index-scrape hit ({sec}/): {hit}")
+            return hit
 
-    # --- Strategy 3: construct from the known pattern, verify PDF present ---
+    # --- Strategy 4: construct from the known pattern, verify PDF present ---
     for sec in sections:
         for ab in abbrs:
             cand = f"https://www.jayski.com/{sec}/{yr}-{ab}-{slug}-entry-list/"
@@ -337,11 +459,30 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--url", help="Jayski entry-list page URL")
     g.add_argument("--pdf", help="local PREENTNUM .pdf path (offline test)")
+    g.add_argument("--pdf-url", dest="pdf_url",
+                   help="direct PDF URL to fetch + parse (tests the parser on a "
+                        "specific sheet, e.g. the Xfinity '...-entry.pdf')")
     g.add_argument("--discover", metavar="SERIES=TRACK",
                    help="auto-discover the entry-list URL, e.g. NCS=Michigan")
     ap.add_argument("--year", type=int, default=2026, help="season for --discover")
     ap.add_argument("--dump", action="store_true", help="print parsed entries as JSON")
+    ap.add_argument("--inspect", action="store_true",
+                    help="with --pdf/--pdf-url: print the PDF's table/text structure "
+                         "instead of parsing (for adapting the parser to a new layout)")
     args = ap.parse_args()
+
+    if args.inspect:
+        if args.pdf_url:
+            print(f"  PDF: {args.pdf_url}", file=sys.stderr)
+            data = _get(args.pdf_url, binary=True)
+            if not data:
+                raise SystemExit("Could not fetch the PDF.")
+            inspect_pdf(data)
+        elif args.pdf:
+            inspect_pdf(args.pdf)
+        else:
+            raise SystemExit("--inspect needs --pdf or --pdf-url")
+        return
 
     if args.discover:
         series, _, track = args.discover.partition("=")
@@ -350,6 +491,12 @@ def main():
             raise SystemExit("No entry-list URL discovered.")
         print(f"DISCOVERED: {url}", file=sys.stderr)
         entries = fetch_entries(url)
+    elif args.pdf_url:
+        print(f"  PDF: {args.pdf_url}", file=sys.stderr)
+        pdf_bytes = _get(args.pdf_url, binary=True)
+        if not pdf_bytes:
+            raise SystemExit("Could not fetch the PDF.")
+        entries = parse_entry_pdf(pdf_bytes)
     else:
         entries = parse_entry_pdf(args.pdf) if args.pdf else fetch_entries(args.url)
 
