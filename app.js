@@ -11772,15 +11772,21 @@ function _computeRacePredictions(series, trackCode) {
     roster = entryList.map(en => {
       const nm = en.driver;
       const nmNorm = normalizeDriverName(nm);
-      // Join the entered driver to their car/entity by normalized name
-      // (entities are car-keyed; find the car this driver currently represents).
-      const ent = allEntities().find(e =>
-        normalizeDriverName(e.primaryDriver || e.driver || "") === nmNorm ||
-        (e.driversByStarts || []).some(d => normalizeDriverName(d.name) === nmNorm)
-      );
+      // Resolve the car/entity (for part-time status + color fallback). Prefer
+      // the ENTERED car number — it's authoritative for this weekend, including
+      // one-off subs — then fall back to a driver-name match.
+      const ent =
+        (en.car != null && allEntities().find(e => String(e.car_number) === String(en.car))) ||
+        allEntities().find(e =>
+          normalizeDriverName(e.primaryDriver || e.driver || "") === nmNorm ||
+          (e.driversByStarts || []).some(d => normalizeDriverName(d.name) === nmNorm)
+        ) || null;
       return {
-        driverName: ent ? (ent.primaryDriver || ent.driver) : nm,
-        entity: ent || null,
+        // The driver ENTERED this weekend is who races — never the car's season
+        // regular. A sub (Heim in the #1) must show and be predicted as Heim,
+        // not the car's usual driver (Sawalich).
+        driverName: nm,
+        entity: ent,
         win_prob: en.win_prob != null ? en.win_prob : null,
         top5_prob: en.top5_prob != null ? en.top5_prob : null,
         top5_odds: en.top5_odds != null ? en.top5_odds : null,
