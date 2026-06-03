@@ -1,0 +1,70 @@
+name: Update NASCAR Odds / Entry List
+
+# Refreshes data/entry_list.json (entries + win/top-5 odds) a few times a day so
+# the site's prediction odds stay current through race week. Separate from
+# update-points.yml because odds move daily; points only change on race weekends.
+# Source is NASCAR's own public odds feed — no API key required.
+
+on:
+  schedule:
+    # Every 6 hours (00:15, 06:15, 12:15, 18:15 UTC). The :15 offset dodges the
+    # top-of-hour scheduler congestion that delays GitHub cron runs.
+    - cron: '15 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season to refresh'
+        required: false
+        default: '2026'
+      only:
+        description: 'Series to refresh (NCS,NOS,NTS or subset)'
+        required: false
+        default: 'NCS,NOS,NTS'
+
+permissions:
+  contents: write
+
+# Don't stack runs if a previous one is still going.
+concurrency:
+  group: update-odds
+  cancel-in-progress: false
+
+jobs:
+  odds:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      # Pull the upcoming-race entry list + win/top-5 odds from NASCAR's feed.
+      # Writes data/entry_list.json. Skips a series cleanly if no odds are posted
+      # yet (between races), leaving the prior file intact.
+      - name: Scrape entry list + odds
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+          ONLY:   ${{ github.event.inputs.only   || 'NCS,NOS,NTS' }}
+        run: |
+          python scripts/scrape_entry_list.py \
+            --season "$SEASON" \
+            --only "$ONLY" \
+            --out "data/entry_list.json"
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/entry_list.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No odds changes."
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "chore(odds): scheduled entry-list/odds refresh [skip ci]"
+          git push

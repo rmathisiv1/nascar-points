@@ -2,32 +2,34 @@
 """
 scrape_entry_list.py — capture the entry list (the field) for the UPCOMING race
 in each series, so the prediction board can rank everyone actually entered and
-flag part-timers.
+flag part-timers — now with WIN and TOP-5 odds.
 
 Data source
 -----------
-NASCAR has no clean entry-list JSON on the cacher (cf.nascar.com/.../entry-list.json
-404s). But the betting-odds feed is a complete, machine-readable list of every
-driver entered, keyed by race_id:
+NASCAR's betting-odds feed is a complete, machine-readable list of every driver
+entered, keyed by race_id, and it carries multiple markets (race winner, top-5
+finish, etc.):
 
     https://fantasygames.nascar.com/api/v1/live/odds/race/{race_id}.json
-      -> { "markets": [ { "market_type":"winner", "race_id":N,
+      -> { "markets": [ { "market_type":"winner", ...
                           "options":[ {"name","driver_id",
-                                       "odds":{"probability":..}}, ... ] }, ... ] }
+                                       "odds":{"probability":..}}, ... ] },
+                        { "market_type":"top_5"/"top5"/..., "options":[...] },
+                        ... ] }
 
-We take the "Race Winner" market's options as the entry list. It includes the
-full field — charter regulars, the current driver of each car (so mid-season
-driver changes are reflected), and one-off part-timers (deep longshots).
+We take the Race Winner market's options as the entry list (the full field —
+charter regulars, the current driver of each car, and one-off longshots) and
+store each driver's win probability. We ALSO look for the Top-5 Finish market
+and, when present, attach each driver's top-5 probability (and the raw American
+line if the feed exposes one) so the app can show top-5 odds instead of win.
 
-We DON'T flag part-timers here — that's done in the app by joining each driver
-to their car and checking the car's full-time (charter) status, which is the
-single source of truth already used everywhere else. We just store name +
-driver_id + win probability.
+The exact market_type string for top-5 isn't documented, so _is_top5() matches
+defensively across several fields ("top 5" / "top_5" / "top5", excluding
+top-3/10/etc.). Run with --list-markets to print the markets a race actually
+exposes and confirm/adjust the matcher.
 
-Which race is "upcoming"
-------------------------
-From race_list_basic.json, the next race per series = the earliest race whose
-date is today or later. (Override with --race-id to force a specific race.)
+We DON'T flag part-timers here — the app joins each driver to their car and
+checks the car's full-time (charter) status, the single source of truth.
 
 Output
 ------
@@ -36,7 +38,8 @@ data/entry_list.json (overwritten each run):
     "generated": "...",
     "series": {
       "NCS": { "race_id":5612, "track":"Michigan...", "race_date":"...",
-               "entries":[ {"driver","driver_id","win_prob"}, ... ] },
+               "entries":[ {"driver","driver_id","win_prob",
+                            "top5_prob"?, "top5_odds"?}, ... ] },
       "NOS": {...}, "NTS": {...}
     }
   }
@@ -46,11 +49,13 @@ Usage
   python scrape_entry_list.py --season 2026
   python scrape_entry_list.py --season 2026 --only NCS
   python scrape_entry_list.py --season 2026 --race-id 5612 --series NCS
+  python scrape_entry_list.py --season 2026 --only NCS --list-markets   # debug
 """
 
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -72,6 +77,15 @@ HEADERS = {
     "Accept": "application/json,text/plain,*/*",
     "Referer": "https://www.nascar.com/",
 }
+
+# Matches "top 5", "top_5", "top5", "top-5"; refuses top-3/10/15/20/50 etc.
+_TOP5_RE = re.compile(r"top[\s_\-]*5(?!\d)", re.I)
+_OTHER_TOP_RE = re.compile(r"top[\s_\-]*(?:3|10|15|20|50)\b", re.I)
+# Possible field names that carry an American moneyline on an option's odds obj.
+_AMERICAN_KEYS = ("american", "american_odds", "us", "us_odds", "moneyline", "ml")
+# Fields a market might use to identify itself.
+_MARKET_NAME_KEYS = ("market_type", "market_type_name", "name", "title",
+                     "label", "display_name", "description")
 
 
 def fetch_json(url):
@@ -121,27 +135,104 @@ def next_race_for_series(index, series_id, force_id=None):
     upcoming = sorted([(d, r) for d, r in dated if d and d >= today], key=lambda x: x[0])
     if upcoming:
         return upcoming[0][1]
-    # all in the past — return the latest race so the file isn't empty
     past = sorted([(d, r) for d, r in dated if d], key=lambda x: x[0])
     return past[-1][1] if past else races[-1]
 
 
-def entries_from_odds(race_id):
-    """Fetch the odds feed and return [{driver, driver_id, win_prob}] from the
-    Race Winner market, or None if unavailable."""
+def _market_label(m):
+    """Best human-readable identifier for a market (for --list-markets)."""
+    for k in _MARKET_NAME_KEYS:
+        v = m.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return f"(market_type_index={m.get('market_type_index')})"
+
+
+def _is_winner(m):
+    return m.get("market_type") == "winner" or m.get("market_type_index") == 1
+
+
+def _is_top5(m):
+    """True if any identifying field reads as a Top-5 Finish market."""
+    for k in _MARKET_NAME_KEYS:
+        v = m.get(k)
+        if isinstance(v, str) and _TOP5_RE.search(v) and not _OTHER_TOP_RE.search(v):
+            return True
+    return False
+
+
+def _find_market(markets, predicate):
+    for m in markets:
+        try:
+            if predicate(m):
+                return m
+        except Exception:
+            continue
+    return None
+
+
+def _extract_odds(opt):
+    """(probability, american) from an option's odds object; None where absent."""
+    odds = opt.get("odds") or {}
+    prob = odds.get("probability")
+    prob = round(prob, 4) if isinstance(prob, (int, float)) else None
+    american = None
+    for k in _AMERICAN_KEYS:
+        v = odds.get(k)
+        if isinstance(v, (int, float)):
+            american = int(round(v))
+            break
+        if isinstance(v, str) and v.strip():
+            try:
+                american = int(v.replace("+", "").strip())
+                break
+            except Exception:
+                pass
+    return prob, american
+
+
+def entries_from_odds(race_id, list_markets=False):
+    """Fetch the odds feed and return [{driver, driver_id, win_prob,
+    top5_prob?, top5_odds?}] from the Race Winner market joined with the Top-5
+    market, or None if unavailable."""
     data = fetch_json(ODDS.format(race_id=race_id))
     if not data:
         return None
     markets = data.get("markets", [])
-    winner = None
-    for m in markets:
-        if m.get("market_type") == "winner" or m.get("market_type_index") == 1:
-            winner = m
-            break
-    if not winner:
-        winner = markets[0] if markets else None
+    if list_markets:
+        print(f"    markets for race {race_id}:", file=sys.stderr)
+        for m in markets:
+            n = len(m.get("options", []))
+            tag = " <-- TOP5?" if _is_top5(m) else (" <-- WINNER" if _is_winner(m) else "")
+            print(f"      • {_market_label(m)}  ({n} options){tag}", file=sys.stderr)
+
+    winner = _find_market(markets, _is_winner) or (markets[0] if markets else None)
     if not winner:
         return None
+
+    # Top-5 market (optional — not every race/feed posts it). Build lookups by
+    # driver_id and by lowercased name so we can join onto the winner entries.
+    top5 = _find_market(markets, _is_top5)
+    t5_by_id, t5_by_name = {}, {}
+    if top5:
+        for opt in top5.get("options", []):
+            prob, american = _extract_odds(opt)
+            if prob is None and american is None:
+                continue
+            rec = {}
+            if prob is not None:
+                rec["top5_prob"] = prob
+            if american is not None:
+                rec["top5_odds"] = american
+            if not rec:
+                continue
+            did = opt.get("driver_id")
+            nm = (opt.get("name") or "").strip().lower()
+            if did is not None:
+                t5_by_id[did] = rec
+            if nm:
+                t5_by_name[nm] = rec
+
     out = []
     seen = set()
     for opt in winner.get("options", []):
@@ -149,26 +240,30 @@ def entries_from_odds(race_id):
         if not name or name.lower() in seen:
             continue
         seen.add(name.lower())
-        prob = None
-        odds = opt.get("odds") or {}
-        if isinstance(odds.get("probability"), (int, float)):
-            prob = round(odds["probability"], 4)
-        out.append({
+        prob, _ = _extract_odds(opt)
+        entry = {
             "driver": name,
             "driver_id": opt.get("driver_id"),
             "win_prob": prob,
-        })
+        }
+        did = opt.get("driver_id")
+        t5 = t5_by_id.get(did) or t5_by_name.get(name.lower())
+        if t5:
+            entry.update(t5)
+        out.append(entry)
     return out or None
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Scrape upcoming-race entry lists from the odds feed.")
+    ap = argparse.ArgumentParser(description="Scrape upcoming-race entry lists + win/top-5 odds.")
     ap.add_argument("--season", type=int, required=True)
     ap.add_argument("--only", default=None, help="comma-separated series codes (NCS,NOS,NTS)")
     ap.add_argument("--race-id", type=int, default=None, help="force a specific race_id")
     ap.add_argument("--series", default=None, help="series code for --race-id")
     ap.add_argument("--out", default="data/entry_list.json")
     ap.add_argument("--dump", action="store_true")
+    ap.add_argument("--list-markets", action="store_true",
+                    help="print the markets each race exposes (debug the top-5 matcher)")
     args = ap.parse_args()
 
     only = None
@@ -180,6 +275,7 @@ def main():
         raise SystemExit(f"Could not load race index for {args.season}")
 
     out_series = {}
+    top5_seen = 0
     for series_id, code in SERIES_ID_TO_CODE.items():
         if only and code not in only:
             continue
@@ -192,17 +288,19 @@ def main():
         rid = race.get("race_id")
         track = race.get("track_name", "")
         print(f"  {code}: race_id={rid}  {track}", file=sys.stderr)
-        entries = entries_from_odds(rid)
+        entries = entries_from_odds(rid, list_markets=args.list_markets)
         if not entries:
             print(f"    (no odds/entry data yet — skipping)", file=sys.stderr)
             continue
+        n_top5 = sum(1 for e in entries if "top5_prob" in e or "top5_odds" in e)
+        top5_seen += n_top5
         out_series[code] = {
             "race_id": rid,
             "track": track,
             "race_date": race.get("race_date") or race.get("date_scheduled"),
             "entries": entries,
         }
-        print(f"    {len(entries)} entries", file=sys.stderr)
+        print(f"    {len(entries)} entries ({n_top5} with top-5 odds)", file=sys.stderr)
         time.sleep(0.4)
 
     payload = {
@@ -213,11 +311,17 @@ def main():
     if args.dump:
         print(json.dumps(payload, indent=2))
         return
+    if args.list_markets and not out_series:
+        return
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(payload, f, separators=(",", ":"))
-    print(f"Wrote {args.out} ({sum(len(s['entries']) for s in out_series.values())} total entries)",
+    total = sum(len(s['entries']) for s in out_series.values())
+    print(f"Wrote {args.out} ({total} total entries, {top5_seen} with top-5 odds)",
           file=sys.stderr)
+    if top5_seen == 0:
+        print("  NOTE: no top-5 odds matched. Run with --list-markets to see the "
+              "feed's market names and tighten _is_top5() if needed.", file=sys.stderr)
 
 
 if __name__ == "__main__":
