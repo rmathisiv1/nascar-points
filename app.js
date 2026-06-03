@@ -24913,7 +24913,7 @@ function _renderProjectionRegSeasonTable(proj) {
               const projPts = Math.round(d.projected_reg_total || d.current_pts || 0);
               const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
               const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
-              const fromLeader = i === 0 ? "—" : `−${(leaderPts - projPts).toLocaleString()}`;
+              const fromLeader = i === 0 ? "—" : `−${(Math.round(leaderPts) - projPts).toLocaleString()}`;
               const fromCutline = i < fieldSize
                 ? (projPts === cutlinePts ? "CUTLINE" : `+${(projPts - cutlinePts).toLocaleString()}`)
                 : `−${Math.abs(cutlinePts - projPts).toLocaleString()}`;
@@ -25213,7 +25213,7 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
               const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
               const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
               const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
-              const fromLeader = d.finalPts >= leaderPts ? "—" : `−${Math.abs(leaderPts - d.finalPts).toLocaleString()}`;
+              const _lg = Math.round(leaderPts) - Math.round(d.finalPts); const fromLeader = _lg <= 0 ? "—" : `−${_lg.toLocaleString()}`;
               return `<tr>
                 <td class="num">${i + 1}</td>
                 <td class="num">${d.seed}</td>
@@ -25277,7 +25277,7 @@ function _renderProjectionOwnerTable(proj) {
               const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : 0;
               const playoffPct = d.playoff_pct * 100;
               const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
-              const fromLeader = i === 0 ? "—" : `−${(leaderPts - projPts).toLocaleString()}`;
+              const fromLeader = i === 0 ? "—" : `−${(Math.round(leaderPts) - projPts).toLocaleString()}`;
               const fromCutline = i < fieldSize
                 ? (projPts === cutlinePts ? "CUTLINE" : `+${(projPts - cutlinePts).toLocaleString()}`)
                 : `−${Math.abs(cutlinePts - projPts).toLocaleString()}`;

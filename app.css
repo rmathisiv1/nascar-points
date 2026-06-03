@@ -4731,9 +4731,12 @@ a.driver-cell.profile-link:hover .car-tag {
   font-size: 10px;
   color: var(--dim);
   font-style: italic;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Wrap long official race names (e.g. "DuraMax Texas Grand Prix Presented
+     by RelaDyne") instead of clipping them with an ellipsis at the column's
+     right edge. The track column has min-width:0 so this wraps cleanly. */
+  white-space: normal;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 /* Race name as a clickable link (completed races only). Keeps the
    italic dim styling but adds an underline-on-hover affordance so the
