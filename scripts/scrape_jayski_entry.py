@@ -52,9 +52,14 @@ HEADERS = {
     "Referer": "https://www.jayski.com/",
 }
 
-# Matches the pre-entry PDF link in the page, e.g.
-# https://www.jayski.com/wp-content/uploads/sites/31/2026/6/1/32612_PREENTNUM.pdf
-_PDF_RE = re.compile(r'https?://[^\s"\'<>]+?PREENTNUM\.pdf', re.I)
+# Matches the entry-list PDF link in the page. NASCAR's official pre-entry
+# sheet is "<id>_PREENTNUM.pdf" (Cup + Truck, e.g. 12615_PREENTNUM.pdf), but
+# Xfinity entry lists on Jayski use a different name, e.g.
+# "16-noaps-2026-entry.pdf". Match all of: *PREENTNUM.pdf, *-entry.pdf, and
+# *entry-list*.pdf.
+_PDF_RE = re.compile(
+    r'https?://[^\s"\'<>]+?(?:PREENTNUM\.pdf|[-_]entry\.pdf|entry-?list[^"\'<>]*\.pdf)',
+    re.I)
 
 # ---------------------------------------------------------------------------
 # AUTO-DISCOVERY CONFIG
@@ -297,7 +302,9 @@ def discover_entry_url(series, year, track_name, verbose=True):
         html = _get(f"https://www.jayski.com/{sec}/")
         if not html:
             continue
-        for m in re.finditer(r'href="(https?://[^"]*?entry-list/?)"', html, re.I):
+        # Capture every link, then filter — handles slugs longer than a bare
+        # "...-entry-list/" (e.g. a sponsor suffix), which a tight regex misses.
+        for m in re.finditer(r'href="(https?://[^"]+)"', html, re.I):
             cand = m.group(1)
             if _url_matches(cand, yr, track_tokens, None):
                 log(f"index-scrape hit ({sec}/): {cand}")
