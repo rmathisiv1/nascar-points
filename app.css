@@ -7781,6 +7781,73 @@ body.lightbox-open {
 @media (max-width: 900px) {
   .home-standings-trio { grid-template-columns: 1fr; }
 }
+
+/* Home 3-series predicted-finish side-by-side */
+.home-pred-trio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .home-pred-trio { grid-template-columns: 1fr; }
+}
+.hpt-col { padding: 12px 14px; }
+.hpt-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.hpt-series { font-weight: 800; letter-spacing: 0.04em; font-size: 13px; }
+.hpt-race {
+  font-size: 11px;
+  color: var(--accent-2, var(--accent));
+  text-decoration: none;
+  font-family: var(--mono);
+}
+.hpt-race:hover { text-decoration: underline; }
+.hpt-table-head {
+  display: grid;
+  grid-template-columns: 20px 34px 1fr 40px 48px;
+  gap: 6px;
+  align-items: center;
+  padding: 0 4px 4px;
+  border-bottom: 1px solid var(--border);
+}
+/* Compact expandable row */
+.hpt-row-wrap { border-bottom: 1px solid var(--border-soft, rgba(255,255,255,0.05)); }
+.hpt-row-wrap[open] { background: var(--surface-2, rgba(255,255,255,0.02)); }
+.hpt-row {
+  display: grid;
+  grid-template-columns: 20px 34px 1fr 40px 48px;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 4px;
+  cursor: pointer;
+  list-style: none;
+}
+.hpt-row::-webkit-details-marker { display: none; }
+.hpt-row .hp-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hpt-row .hp-pos { font-size: 11px; color: var(--muted); }
+.hpt-row .hp-car { font-size: 10px; padding: 1px 3px; border-radius: 3px; text-align: center; }
+.hpt-row-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 8px 10px 30px;
+  font-size: 11px;
+}
+.hpt-detail-stat { display: inline-flex; flex-direction: column; line-height: 1.2; }
+.hpt-detail-stat label {
+  font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+}
+.hpt-detail-stat span { font-family: var(--mono); font-weight: 600; }
+.hpt-detail-link { font-size: 10px; color: var(--accent-2, var(--accent)); text-decoration: none; }
+.hpt-detail-link:hover { text-decoration: underline; }
+.hpt-row .hp-value { margin-left: 3px; padding: 0 2px; font-size: 8px; }
 .home-standings-card { padding: 14px 18px; }
 .home-standings-head {
   display: flex;
@@ -9978,7 +10045,7 @@ body.lightbox-open {
 /* Right column (Top 10 predicted finish): 7-col grid including the 3
    prediction columns (finish, stage, total) and the evidence dots. */
 .rps-col-finish .rps-col-table-head {
-  grid-template-columns: 24px 42px 1fr 50px 54px 44px 48px 36px;
+  grid-template-columns: 24px 42px 1fr 50px 48px 36px 54px;
 }
 /* Stage points details — 4 cols (no evidence dots column) */
 .rps-stage-table-head {
@@ -9987,7 +10054,7 @@ body.lightbox-open {
 /* Finish rows inside the right column inherit the same template as the
    full-field finish rows below. */
 .rps-col-finish .hp-row-finish {
-  grid-template-columns: 24px 42px 1fr 50px 54px 44px 48px 36px;
+  grid-template-columns: 24px 42px 1fr 50px 48px 36px 54px;
 }
 /* Desktop: .hp-row-extras is transparent — its three inner cells flow
    directly into the parent grid as columns 5/6/7. The "stage / total /
@@ -10214,10 +10281,10 @@ body.lightbox-open {
 }
 /* Inside the full prediction list, rows have stage + total + evidence cols */
 .rps-full-table-head {
-  grid-template-columns: 24px 42px 1fr 50px 54px 44px 48px 36px !important;
+  grid-template-columns: 24px 42px 1fr 50px 48px 36px 54px !important;
 }
 .hp-row-finish {
-  grid-template-columns: 24px 42px 1fr 50px 54px 44px 48px 36px;
+  grid-template-columns: 24px 42px 1fr 50px 48px 36px 54px;
 }
 .hp-evidence-dots {
   font-family: var(--mono);

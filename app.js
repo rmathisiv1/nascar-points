@@ -4821,6 +4821,11 @@ async function loadEntryList() {
           driver: (e.driver || "").trim(),
           driver_id: e.driver_id != null ? e.driver_id : null,
           win_prob: typeof e.win_prob === "number" ? e.win_prob : null,
+          // Top-5 finish probability, if the odds feed provides it. Optional —
+          // the odds column prefers this over win_prob when present, so adding
+          // a `top5_prob` field per entry to the scrape switches the column to
+          // top-5 odds with no further code change.
+          top5_prob: typeof e.top5_prob === "number" ? e.top5_prob : null,
         }))
         .filter(e => e.driver);
       if (!list.length) continue;
@@ -11656,10 +11661,9 @@ function renderHome() {
   // race is found (e.g., end of season).
   const bestAtTrackHTML = renderHomeBestAtUpcoming(latestYear, series);
 
-  // ----- Section 2c: race prediction card -----
-  // Composite prediction model — ranks the full field for the upcoming race
-  // by predicted finish position, with stage point predictions broken out.
-  const predictionHTML = renderHomePrediction(latestYear, series);
+  // ----- Section 2c: race prediction trio (NCS | NOS | NTS) -----
+  // Side-by-side predicted-finish top-10 for each series' upcoming race.
+  const predictionTrioHTML = renderHomePredictionTrio(latestYear);
 
   // ----- Section 3: stat cards + storylines -----
   const statsHTML = renderHomeStatCards(latestYear, series);
@@ -11671,7 +11675,8 @@ function renderHome() {
       <div class="home-section-h">Standings · Top 5 each series</div>
       <div class="home-standings-trio">${standingsHTML}</div>
       ${bestAtTrackHTML}
-      ${predictionHTML}
+      <div class="home-section-h">Next race · predicted finish · each series</div>
+      <div class="home-pred-trio">${predictionTrioHTML}</div>
       <div class="home-section-h">Season at a glance · ${series}</div>
       <div class="home-stat-row">${statsHTML}</div>
       ${storylinesHTML ? `
@@ -11764,6 +11769,7 @@ function _computeRacePredictions(series, trackCode) {
         driverName: ent ? (ent.primaryDriver || ent.driver) : nm,
         entity: ent || null,
         win_prob: en.win_prob != null ? en.win_prob : null,
+        top5_prob: en.top5_prob != null ? en.top5_prob : null,
         // Part-time = the car isn't a full-time charter (single source of truth).
         // A driver with no resolvable car/entity is treated part-time too.
         isPartTime: !(ent && isFullTime(ent)),
@@ -11798,13 +11804,16 @@ function _computeRacePredictions(series, trackCode) {
     const pred = predictDriverForRace(r.driverName, series, trackCode);
     if (!pred) return null;
     return { entity: r.entity, driverName: r.driverName,
-             win_prob: r.win_prob, is_part_time: r.isPartTime, ...pred };
+             win_prob: r.win_prob, top5_prob: r.top5_prob,
+             is_part_time: r.isPartTime, ...pred };
   }).filter(Boolean);
-  // Market rank by implied win probability (1 = shortest odds). Used to flag
-  // model "value" picks — drivers the model's predicted finish ranks well ahead
-  // of where the market ranks their win odds. Drivers without odds get no rank.
-  predictions.filter(p => p.win_prob != null)
-    .sort((a, b) => b.win_prob - a.win_prob)
+  // Market rank by the odds shown (top-5 prob if the feed has it, else win prob;
+  // 1 = shortest odds). Used to flag model "value" picks — drivers the model's
+  // predicted finish ranks well ahead of where the market ranks them. Drivers
+  // without odds get no rank.
+  const oddsProbOf = p => (p.top5_prob != null ? p.top5_prob : p.win_prob);
+  predictions.filter(p => oddsProbOf(p) != null)
+    .sort((a, b) => oddsProbOf(b) - oddsProbOf(a))
     .forEach((p, idx) => { p.odds_rank = idx + 1; });
   return {
     byFinish: [...predictions].sort((a, b) => a.predicted_finish - b.predicted_finish),
@@ -12627,15 +12636,17 @@ function _renderFinishRow(p, i, series) {
   // charter (only set when ranking off an entry list).
   const ptBadge = p.is_part_time
     ? `<span class="hp-parttime" title="Part-time entry (not a full-time charter)">PT</span>` : "";
-  // Betting odds (American) from the upcoming-race odds feed, plus a "value"
-  // flag when the model ranks this driver's finish well ahead of where the
-  // market ranks their win odds (the model likes them more than Vegas does).
-  const oddsStr = _formatAmericanOdds(_winProbToAmericanOdds(p.win_prob));
+  // Betting odds (American) from the upcoming-race odds feed. Prefers a top-5
+  // finish probability (top5_prob) when the feed provides one; otherwise falls
+  // back to win probability. The "value" flag fires when the model ranks this
+  // driver's finish well ahead of where the market ranks their odds.
+  const oddsProb = p.top5_prob != null ? p.top5_prob : p.win_prob;
+  const oddsStr = _formatAmericanOdds(_winProbToAmericanOdds(oddsProb));
   const modelRank = i + 1;
-  const isValue = p.win_prob != null && p.odds_rank != null &&
+  const isValue = oddsProb != null && p.odds_rank != null &&
                   modelRank <= 20 && (p.odds_rank - modelRank) >= 5;
   const valueBadge = isValue
-    ? `<span class="hp-value" title="Model value: predicted to finish ahead of the market's win odds (market #${p.odds_rank} by odds)">▲ VALUE</span>` : "";
+    ? `<span class="hp-value" title="Model value: predicted to finish ahead of the market's odds (market #${p.odds_rank})">▲ VALUE</span>` : "";
   const carLabel = carNum ? `#${carNum}` : "—";
   return `
     <a class="hp-row hp-row-finish profile-link" href="#/driver/${slug}">
@@ -12644,10 +12655,9 @@ function _renderFinishRow(p, i, series) {
       <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}${valueBadge}</span>
       <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
       <span class="hp-row-extras">
-        <span class="hp-extra-cell"><span class="hp-extra-label">odds</span><span class="hp-stat-cell hp-odds ${isValue ? "hp-odds-value" : ""}">${oddsStr}</span></span>
-        <span class="hp-extra-cell"><span class="hp-extra-label">stage</span><span class="hp-stat-cell ${stageCls}">${p.predicted_stage_pts.toFixed(1)}</span></span>
-        <span class="hp-extra-cell"><span class="hp-extra-label">total</span><span class="hp-stat-cell ${totalCls}">${p.predicted_total_pts.toFixed(1)}</span></span>
+        <span class="hp-extra-cell"><span class="hp-extra-label">pred pts</span><span class="hp-stat-cell ${totalCls}">${p.predicted_total_pts.toFixed(1)}</span></span>
         <span class="hp-extra-cell"><span class="hp-extra-label">evd</span><span class="hp-evidence-dots" title="Evidence: ${p.has_track_history ? "track ✓ " : ""}${p.has_type_history ? "track-type ✓ " : ""}form ✓ season ✓">${dots}</span></span>
+        <span class="hp-extra-cell"><span class="hp-extra-label">odds</span><span class="hp-stat-cell hp-odds ${isValue ? "hp-odds-value" : ""}">${oddsStr}</span></span>
       </span>
     </a>
   `;
@@ -12727,15 +12737,14 @@ function renderRacePredictionSection(opts) {
     <div class="rps-col rps-col-finish">
       <div class="rps-col-head">
         <div class="rps-col-title">Top 10 predicted finish</div>
-        <div class="ed-byline">With stage + total points predictions</div>
+        <div class="ed-byline">With predicted points + odds</div>
       </div>
       <div class="rps-col-table-head">
         <span></span><span></span><span></span>
         <span class="rps-col-label">PRED FIN</span>
-        <span class="rps-col-label">ODDS</span>
-        <span class="rps-col-label">STAGE</span>
-        <span class="rps-col-label">TOTAL</span>
+        <span class="rps-col-label">PRED PTS</span>
         <span class="rps-col-label">EVD</span>
+        <span class="rps-col-label">ODDS</span>
       </div>
       <div class="rps-list">
         ${finishTop10HTML}
@@ -12755,10 +12764,9 @@ function renderRacePredictionSection(opts) {
         <div class="rps-col-table-head rps-full-table-head">
           <span></span><span></span><span></span>
           <span class="rps-col-label">PRED FIN</span>
-          <span class="rps-col-label">ODDS</span>
-          <span class="rps-col-label">STAGE</span>
-          <span class="rps-col-label">TOTAL</span>
+          <span class="rps-col-label">PRED PTS</span>
           <span class="rps-col-label">EVD</span>
+          <span class="rps-col-label">ODDS</span>
         </div>
         <div class="rps-list">
           ${finishFullHTML}
@@ -12868,6 +12876,119 @@ function renderHomePrediction(year, series) {
     roundNum: nextRace.round,
     headerStyle: "home",
   });
+}
+
+// Run fn() as if `series` (in `year`) were the active series, then restore.
+// The prediction/entity pipeline (allEntities → racesSorted → STATE.data) is
+// bound to the active series; this lets the home page compute another series'
+// predictions for the side-by-side without a full route switch. Mirrors the
+// save/restore the storylines builder + side panels already use. Returns fn()'s
+// value, or null if that series' data isn't loaded.
+function _withSeriesContext(year, series, fn) {
+  const block = SEASON_CACHE[year] && SEASON_CACHE[year][series];
+  if (!block || !block.races) return null;
+  const prev = { data: STATE.data, season: STATE.season, series: STATE.series };
+  const prevCache = { races: RENDER_CACHE.races, allRaces: RENDER_CACHE.allRaces,
+                      entities: RENDER_CACHE.entities, totals: RENDER_CACHE.totals };
+  RENDER_CACHE.races = null; RENDER_CACHE.allRaces = null;
+  RENDER_CACHE.entities = null; RENDER_CACHE.totals = null;
+  STATE.data = block; STATE.season = year; STATE.series = series;
+  try {
+    return fn();
+  } finally {
+    STATE.data = prev.data; STATE.season = prev.season; STATE.series = prev.series;
+    RENDER_CACHE.races = prevCache.races; RENDER_CACHE.allRaces = prevCache.allRaces;
+    RENDER_CACHE.entities = prevCache.entities; RENDER_CACHE.totals = prevCache.totals;
+  }
+}
+
+// Compact, expandable predicted-finish row for the home 3-series side-by-side.
+// Summary shows FIN + ODDS (fits a ~1/3-width column); expanding reveals pred
+// pts, stage pts, and the evidence dots. Native <details> — no JS wiring.
+function _renderMiniPredRow(p, i, series) {
+  const carNum = p.entity ? p.entity.car_number : null;
+  const carHex = carNum ? colorFor(series, carNum) : "#888";
+  const carTxt = contrastTextFor(carHex);
+  const slug = slugify(p.driverName);
+  const finishVal = p.predicted_finish;
+  const tierCls = _finishTierClass(finishVal);
+  let totalCls = "";
+  const tp = p.predicted_total_pts || 0;
+  if (tp >= 35) totalCls = "tier-good"; else if (tp >= 20) totalCls = "tier-mid"; else totalCls = "tier-poor";
+  const stageCls = _stagePtsTierClass(p.predicted_stage_pts);
+  let dots = "•○○";
+  if (p.has_track_history && p.has_type_history) dots = "•••";
+  else if (p.has_track_history || p.has_type_history) dots = "••○";
+  const oddsProb = p.top5_prob != null ? p.top5_prob : p.win_prob;
+  const oddsStr = _formatAmericanOdds(_winProbToAmericanOdds(oddsProb));
+  const modelRank = i + 1;
+  const isValue = oddsProb != null && p.odds_rank != null &&
+                  modelRank <= 20 && (p.odds_rank - modelRank) >= 5;
+  const ptBadge = p.is_part_time
+    ? `<span class="hp-parttime" title="Part-time entry">PT</span>` : "";
+  const valueBadge = isValue ? `<span class="hp-value" title="Model rates ahead of the market">▲</span>` : "";
+  const carLabel = carNum ? `#${carNum}` : "—";
+  return `
+    <details class="hpt-row-wrap">
+      <summary class="hpt-row">
+        <span class="hp-pos">${i + 1}</span>
+        <span class="hp-car" style="background:${carHex};color:${carTxt}">${carLabel}</span>
+        <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}${valueBadge}</span>
+        <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
+        <span class="hp-stat-cell hp-odds ${isValue ? "hp-odds-value" : ""}">${oddsStr}</span>
+      </summary>
+      <div class="hpt-row-detail">
+        <a class="hpt-detail-link profile-link" href="#/driver/${slug}">full profile →</a>
+        <span class="hpt-detail-stat"><label>pred pts</label><span class="${totalCls}">${p.predicted_total_pts.toFixed(1)}</span></span>
+        <span class="hpt-detail-stat"><label>stage pts</label><span class="${stageCls}">${p.predicted_stage_pts.toFixed(1)}</span></span>
+        <span class="hpt-detail-stat"><label>evidence</label><span class="hp-evidence-dots">${dots}</span></span>
+      </div>
+    </details>
+  `;
+}
+
+// Home 3-series side-by-side: NCS | NOS | NTS, each the upcoming race's top-10
+// predicted finishers. Each series is computed in its own series context so the
+// model and entity resolution read the right data.
+function renderHomePredictionTrio(year) {
+  return ["NCS", "NOS", "NTS"].map(series => {
+    const computed = _withSeriesContext(year, series, () => {
+      const races = allRacesSorted();
+      const nextRace = races.find(r => !(r.results || []).some(d => d.finish_pos === 1));
+      if (!nextRace || !nextRace.track_code) return null;
+      const preds = _computeRacePredictions(series, nextRace.track_code);
+      if (!preds || !preds.byFinish.length) return null;
+      // Render rows INSIDE the context so colorFor / entity lookups resolve
+      // against this series, not the page's active one.
+      const rowsHTML = preds.byFinish.slice(0, 10)
+        .map((p, idx) => _renderMiniPredRow(p, idx, series)).join("");
+      return {
+        trackCode: nextRace.track_code,
+        trackName: prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD",
+        round: nextRace.round,
+        rowsHTML,
+      };
+    });
+    if (!computed) {
+      return `<div class="home-card hpt-col">
+        <div class="hpt-head"><span class="hpt-series">${series}</span></div>
+        <div class="muted" style="font-size:12px;padding:12px 4px;">No upcoming race or data loaded.</div>
+      </div>`;
+    }
+    const trackHref = `#/track/${encodeURIComponent(computed.trackCode)}`;
+    return `<div class="home-card hpt-col">
+      <div class="hpt-head">
+        <span class="hpt-series">${series}</span>
+        <a class="hpt-race profile-link" href="${trackHref}">R${computed.round} · ${escapeHTML(computed.trackName)} →</a>
+      </div>
+      <div class="hpt-table-head">
+        <span></span><span></span><span></span>
+        <span class="rps-col-label">FIN</span>
+        <span class="rps-col-label">ODDS</span>
+      </div>
+      <div class="rps-list">${computed.rowsHTML}</div>
+    </div>`;
+  }).join("");
 }
 
 
