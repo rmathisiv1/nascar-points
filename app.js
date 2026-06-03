@@ -4826,6 +4826,9 @@ async function loadEntryList() {
           // a `top5_prob` field per entry to the scrape switches the column to
           // top-5 odds with no further code change.
           top5_prob: typeof e.top5_prob === "number" ? e.top5_prob : null,
+          // Raw American top-5 odds (e.g. +450, -160), shown exactly as posted
+          // when present (preferred over the implied-prob round-trip).
+          top5_odds: typeof e.top5_odds === "number" ? e.top5_odds : null,
         }))
         .filter(e => e.driver);
       if (!list.length) continue;
@@ -11770,6 +11773,7 @@ function _computeRacePredictions(series, trackCode) {
         entity: ent || null,
         win_prob: en.win_prob != null ? en.win_prob : null,
         top5_prob: en.top5_prob != null ? en.top5_prob : null,
+        top5_odds: en.top5_odds != null ? en.top5_odds : null,
         // Part-time = the car isn't a full-time charter (single source of truth).
         // A driver with no resolvable car/entity is treated part-time too.
         isPartTime: !(ent && isFullTime(ent)),
@@ -11804,14 +11808,13 @@ function _computeRacePredictions(series, trackCode) {
     const pred = predictDriverForRace(r.driverName, series, trackCode);
     if (!pred) return null;
     return { entity: r.entity, driverName: r.driverName,
-             win_prob: r.win_prob, top5_prob: r.top5_prob,
+             win_prob: r.win_prob, top5_prob: r.top5_prob, top5_odds: r.top5_odds,
              is_part_time: r.isPartTime, ...pred };
   }).filter(Boolean);
-  // Market rank by the odds shown (top-5 prob if the feed has it, else win prob;
-  // 1 = shortest odds). Used to flag model "value" picks — drivers the model's
-  // predicted finish ranks well ahead of where the market ranks them. Drivers
-  // without odds get no rank.
-  const oddsProbOf = p => (p.top5_prob != null ? p.top5_prob : p.win_prob);
+  // Market rank by the odds shown (raw top-5 odds → top-5 prob → win prob;
+  // 1 = shortest odds). Used to flag model "value" picks. Drivers without any
+  // odds get no rank.
+  const oddsProbOf = p => _oddsFor(p).prob;
   predictions.filter(p => oddsProbOf(p) != null)
     .sort((a, b) => oddsProbOf(b) - oddsProbOf(a))
     .forEach((p, idx) => { p.odds_rank = idx + 1; });
@@ -12605,6 +12608,30 @@ function _formatAmericanOdds(odds) {
   if (odds == null) return "—";
   return odds > 0 ? `+${odds}` : `${odds}`;
 }
+// American moneyline → implied probability (for the value-pick ranking).
+function _americanToProb(odds) {
+  if (odds == null || !isFinite(odds)) return null;
+  return odds >= 0 ? 100 / (odds + 100) : (-odds) / ((-odds) + 100);
+}
+// Resolve the odds to display for a prediction row, with a priority chain:
+//   1. top5_odds  — raw American odds from the feed → shown EXACTLY as posted.
+//   2. top5_prob  — implied top-5 probability → converted to American.
+//   3. win_prob   — win odds, the fallback until top-5 is in the feed.
+// Returns { display, prob } where prob (0-1) drives the value-pick comparison.
+function _oddsFor(p) {
+  if (p.top5_odds != null && isFinite(p.top5_odds)) {
+    return { display: _formatAmericanOdds(Math.round(p.top5_odds)), prob: _americanToProb(p.top5_odds) };
+  }
+  if (p.top5_prob != null) {
+    return { display: _formatAmericanOdds(_winProbToAmericanOdds(p.top5_prob)),
+             prob: p.top5_prob > 1 ? p.top5_prob / 100 : p.top5_prob };
+  }
+  if (p.win_prob != null) {
+    return { display: _formatAmericanOdds(_winProbToAmericanOdds(p.win_prob)),
+             prob: p.win_prob > 1 ? p.win_prob / 100 : p.win_prob };
+  }
+  return { display: "—", prob: null };
+}
 
 // Render a single predicted-finish row (used inside the full-field <details>).
 function _renderFinishRow(p, i, series) {
@@ -12636,14 +12663,14 @@ function _renderFinishRow(p, i, series) {
   // charter (only set when ranking off an entry list).
   const ptBadge = p.is_part_time
     ? `<span class="hp-parttime" title="Part-time entry (not a full-time charter)">PT</span>` : "";
-  // Betting odds (American) from the upcoming-race odds feed. Prefers a top-5
-  // finish probability (top5_prob) when the feed provides one; otherwise falls
-  // back to win probability. The "value" flag fires when the model ranks this
-  // driver's finish well ahead of where the market ranks their odds.
-  const oddsProb = p.top5_prob != null ? p.top5_prob : p.win_prob;
-  const oddsStr = _formatAmericanOdds(_winProbToAmericanOdds(oddsProb));
+  // Betting odds (American) from the upcoming-race odds feed. Prefers raw
+  // top-5 odds, then implied top-5 prob, then win odds (see _oddsFor). The
+  // "value" flag fires when the model ranks this driver's finish well ahead of
+  // where the market ranks their odds.
+  const od = _oddsFor(p);
+  const oddsStr = od.display;
   const modelRank = i + 1;
-  const isValue = oddsProb != null && p.odds_rank != null &&
+  const isValue = od.prob != null && p.odds_rank != null &&
                   modelRank <= 20 && (p.odds_rank - modelRank) >= 5;
   const valueBadge = isValue
     ? `<span class="hp-value" title="Model value: predicted to finish ahead of the market's odds (market #${p.odds_rank})">▲ VALUE</span>` : "";
@@ -12919,10 +12946,10 @@ function _renderMiniPredRow(p, i, series) {
   let dots = "•○○";
   if (p.has_track_history && p.has_type_history) dots = "•••";
   else if (p.has_track_history || p.has_type_history) dots = "••○";
-  const oddsProb = p.top5_prob != null ? p.top5_prob : p.win_prob;
-  const oddsStr = _formatAmericanOdds(_winProbToAmericanOdds(oddsProb));
+  const od = _oddsFor(p);
+  const oddsStr = od.display;
   const modelRank = i + 1;
-  const isValue = oddsProb != null && p.odds_rank != null &&
+  const isValue = od.prob != null && p.odds_rank != null &&
                   modelRank <= 20 && (p.odds_rank - modelRank) >= 5;
   const ptBadge = p.is_part_time
     ? `<span class="hp-parttime" title="Part-time entry">PT</span>` : "";
