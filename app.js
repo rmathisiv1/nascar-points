@@ -12005,9 +12005,8 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 21;  // v21: predictor thin-venue/plate-sample regression (re-freeze chase_preds)
-                            // v20: freeze chase-race predictions in proj so render-time
-                            // chase traces/champ% are deterministic (no live predictDriverForRace)
+  const PROJ_VERSION = 22;  // v22: drafting-track prediction uses plate-specific history only
+                            // (no overall form leak) — re-freeze chase_preds
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -13091,9 +13090,13 @@ function predictDriverForRace(driverName, series, trackCode) {
   // not predictive of finish — pack racing means everyone runs flat-out at
   // nearly identical speed, so "fast laps" don't separate cars. Finish here is
   // about drafting, wreck-avoidance, and timing. So we DROP all pace signals
-  // (track, type, and pace-form) and predict purely from finish history at the
-  // track + qualifying. All-time finish here (drafting skill persists) carries
-  // most of the weight. NOTE: this returns early-ish via a separate weight set.
+  // (track, type, and pace-form) and predict purely from PLATE-SPECIFIC finish
+  // history + qualifying. CRITICALLY we do NOT use recent OVERALL form here: a
+  // driver who's red-hot on intermediates/short tracks (Hamlin, Reddick) has no
+  // reason to run well at a superspeedway, and letting overall form leak in was
+  // pulling hot drivers to the front of the flat plate pack and crowning them as
+  // the predicted plate winner despite mediocre actual plate records. Plate
+  // skill = your plate record, not your current speed everywhere else.
   if (isDraftingTrack(trackCode)) {
     // UNTRIMMED all-time finish here. At normal tracks we trim wreck/DNF
     // finishes as flukes — but at a superspeedway, wrecks are NOT outliers,
@@ -13105,18 +13108,18 @@ function predictDriverForRace(driverName, series, trackCode) {
     const draftAllTime = _trackFinishes.length
       ? _trackFinishes.reduce((a, b) => a + b, 0) / _trackFinishes.length
       : null;
+    // Recent finishes AT THIS TRACK (plate-specific form, newest-first), so the
+    // read reacts to how the driver has run at superspeedways LATELY — not to
+    // their form at other track types. Hamlin's recent Talladega runs (P15, P21,
+    // P24, P37, P10) are mediocre, so this correctly keeps him mid-pack rather
+    // than letting his hot intermediate form crown him.
+    const draftRecentHere = _trackFinishes.length
+      ? (() => { const r = _trackFinishes.slice(0, 5); return r.reduce((a, b) => a + b, 0) / r.length; })()
+      : null;
     const draftSignals = [
-      { name: "track_alltime", label: "All-time here (untrimmed)", w: 0.65, val: draftAllTime },
-      { name: "qual_track",    label: "Qual · this track", w: 0.15, val: trackQual },
-      // recent FINISH form (not pace) as a small reactive signal — at draft
-      // tracks finishes are what matter. Untrimmed too, for the same reason:
-      // a recent plate wreck is real information about plate outcomes.
-      { name: "finish_form",   label: "Recent finish form", w: 0.20, val: (() => {
-          const hist = getDriverRaceHistory(driverName, series) || [];
-          const last8 = hist.slice(0, 8).map(r => r.finish_pos).filter(n => n != null);
-          if (!last8.length) return null;
-          return last8.reduce((a, b) => a + b, 0) / last8.length;
-        })() },
+      { name: "track_alltime", label: "All-time here (untrimmed)", w: 0.50, val: draftAllTime },
+      { name: "recent_here",   label: "Recent finishes here",     w: 0.30, val: draftRecentHere },
+      { name: "qual_track",    label: "Qual · this track",        w: 0.20, val: trackQual },
     ];
     const dAvail = draftSignals.filter(s => s.val != null);
     if (dAvail.length) {
