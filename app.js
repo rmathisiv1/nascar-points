@@ -4812,7 +4812,11 @@ async function loadEntryList() {
   if (_entryListAttempted) return;
   _entryListAttempted = true;
   try {
-    const r = await fetch("data/entry_list.json");
+    // Cache-bust: this file is rewritten several times a day by the scheduled
+    // scrape, and GitHub Pages serves it with a cache header. Without a unique
+    // query the browser can serve a stale copy (e.g. last race's field), so we
+    // append a timestamp to force a fresh pull every load.
+    const r = await fetch("data/entry_list.json?v=" + Date.now(), { cache: "no-store" });
     if (!r.ok) return;
     const data = await r.json();
     const bySeries = (data && data.series) || {};
