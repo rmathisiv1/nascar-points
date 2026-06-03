@@ -24,6 +24,10 @@ on:
         description: 'Entry-list fallback URLs when odds arent posted: SERIES=URL,SERIES=URL (e.g. NTS=https://www.jayski.com/truck-series/2026-ncts-michigan-entry-list/)'
         required: false
         default: ''
+      jayski_auto:
+        description: 'Auto-discover Jayski entry-list URLs from the upcoming track (no manual URL needed)'
+        required: false
+        default: 'true'
 
 permissions:
   contents: write
@@ -55,9 +59,11 @@ jobs:
           SEASON: ${{ github.event.inputs.season || '2026' }}
           ONLY:   ${{ github.event.inputs.only   || 'NCS,NOS,NTS' }}
           JAYSKI: ${{ github.event.inputs.jayski  || '' }}
+          JAYSKI_AUTO: ${{ github.event.inputs.jayski_auto || 'true' }}
         run: |
           ARGS="--season \"$SEASON\" --only \"$ONLY\" --out \"data/entry_list.json\""
           if [ -n "$JAYSKI" ]; then ARGS="$ARGS --jayski \"$JAYSKI\""; fi
+          if [ "$JAYSKI_AUTO" = "true" ]; then ARGS="$ARGS --jayski-auto"; fi
           eval python scripts/scrape_entry_list.py $ARGS
 
       - name: Commit & push if changed

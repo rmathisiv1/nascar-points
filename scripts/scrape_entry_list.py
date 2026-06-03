@@ -70,8 +70,10 @@ except Exception:
 # posted yet). Lives alongside this file in scripts/.
 try:
     from scrape_jayski_entry import fetch_entries as _jayski_fetch
+    from scrape_jayski_entry import fetch_entries_auto as _jayski_auto
 except Exception:
     _jayski_fetch = None
+    _jayski_auto = None
 
 CACHER = "https://cf.nascar.com/cacher"
 ODDS = "https://fantasygames.nascar.com/api/v1/live/odds/race/{race_id}.json"
@@ -275,6 +277,10 @@ def main():
                     help="entry-list fallback per series when the odds market isn't posted: "
                          "comma-separated SERIES=URL "
                          "(e.g. NTS=https://www.jayski.com/truck-series/2026-ncts-michigan-entry-list/)")
+    ap.add_argument("--jayski-auto", action="store_true",
+                    help="auto-discover the Jayski entry-list URL from the upcoming "
+                         "track (no per-week URL needed). Manual --jayski URLs still "
+                         "take priority for a given series.")
     args = ap.parse_args()
 
     only = None
@@ -308,13 +314,26 @@ def main():
         print(f"  {code}: race_id={rid}  {track}", file=sys.stderr)
         entries = entries_from_odds(rid, list_markets=args.list_markets)
         source = "odds"
-        if not entries and code in jayski_urls and _jayski_fetch:
-            print(f"    no odds market — falling back to Jayski entry list", file=sys.stderr)
-            try:
-                je = _jayski_fetch(jayski_urls[code])
-            except Exception as ex:
-                je = None
-                print(f"    Jayski fallback failed: {ex}", file=sys.stderr)
+        if not entries:
+            # No odds market yet — fall back to Jayski's entry list. Prefer a
+            # manually supplied URL for this series; otherwise auto-discover it
+            # from the upcoming track name (hands-off weekly).
+            manual_url = jayski_urls.get(code)
+            je = None
+            used_url = None
+            if manual_url and _jayski_fetch:
+                print(f"    no odds market — Jayski (manual URL)", file=sys.stderr)
+                used_url = manual_url
+                try:
+                    je = _jayski_fetch(manual_url)
+                except Exception as ex:
+                    print(f"    Jayski manual fetch failed: {ex}", file=sys.stderr)
+            elif args.jayski_auto and _jayski_auto:
+                print(f"    no odds market — auto-discovering Jayski entry list", file=sys.stderr)
+                try:
+                    je, used_url = _jayski_auto(code, args.season, track)
+                except Exception as ex:
+                    print(f"    Jayski auto-discovery failed: {ex}", file=sys.stderr)
             if je:
                 entries = [{
                     "driver": e["driver"],
@@ -323,6 +342,8 @@ def main():
                     "car": e.get("car"),
                 } for e in je]
                 source = "jayski"
+                if used_url:
+                    print(f"    Jayski source: {used_url}", file=sys.stderr)
         if not entries:
             print(f"    (no odds/entry data yet — skipping)", file=sys.stderr)
             continue
