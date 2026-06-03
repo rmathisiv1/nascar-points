@@ -7810,18 +7810,24 @@ body.lightbox-open {
 .hpt-race:hover { text-decoration: underline; }
 .hpt-table-head {
   display: grid;
-  grid-template-columns: 20px 34px 1fr 40px 48px;
+  grid-template-columns: 20px 32px 1fr 34px 56px;
   gap: 6px;
   align-items: center;
   padding: 0 4px 4px;
   border-bottom: 1px solid var(--border);
+}
+/* Keep the column labels (incl. "T5 ODDS") on a single line in the narrow trio */
+.hpt-table-head .rps-col-label {
+  font-size: 8px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 /* Compact expandable row */
 .hpt-row-wrap { border-bottom: 1px solid var(--border-soft, rgba(255,255,255,0.05)); }
 .hpt-row-wrap[open] { background: var(--surface-2, rgba(255,255,255,0.02)); }
 .hpt-row {
   display: grid;
-  grid-template-columns: 20px 34px 1fr 40px 48px;
+  grid-template-columns: 20px 32px 1fr 34px 56px;
   gap: 6px;
   align-items: center;
   padding: 5px 4px;
