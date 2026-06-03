@@ -4034,11 +4034,13 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
 
   const roundsInWindow = new Set(use.map(r => r.round));
 
-  // Recency weighting: more recent races count slightly more. A gentle linear
-  // step — the newest race weighs 1.0 and each race further back drops by
-  // RECENCY_STEP, floored so even the oldest still contributes meaningfully.
+  // Recency weighting: more recent races count more. Linear step — the newest
+  // race weighs 1.0 and each race further back drops by RECENCY_STEP, floored
+  // so even the oldest still contributes. At 0.28 the most recent ~3 races
+  // carry the weight (older ones sit at the 0.3 floor) — an aggressive, hot-
+  // hand-sensitive setting chosen deliberately.
   // `use` is oldest→newest (driverRaces is chronological), so index 0 is oldest.
-  const RECENCY_STEP = 0.08;
+  const RECENCY_STEP = 0.28;
   const nUse = use.length;
   const wAt = (idx) => Math.max(0.3, 1 - (nUse - 1 - idx) * RECENCY_STEP);
   // Weighted average over a value-extractor, skipping rows where it's null.
@@ -12632,6 +12634,16 @@ function _oddsFor(p) {
   }
   return { display: "—", prob: null };
 }
+// Column label for the odds column, reflecting what's actually shown:
+// "TOP 5" when the feed carried top-5 odds, "WIN" on win-odds fallback,
+// "ODDS" if no market is present. Accepts a predictions object (uses .byFinish)
+// or a raw array of prediction rows.
+function _oddsColLabel(preds) {
+  const list = (preds && preds.byFinish) ? preds.byFinish : (Array.isArray(preds) ? preds : []);
+  if (list.some(p => p.top5_odds != null || p.top5_prob != null)) return "TOP 5";
+  if (list.some(p => p.win_prob != null)) return "WIN";
+  return "ODDS";
+}
 
 // Render a single predicted-finish row (used inside the full-field <details>).
 function _renderFinishRow(p, i, series) {
@@ -12699,6 +12711,7 @@ function renderRacePredictionSection(opts) {
 
   const performers = _computeTrackPerformers(series, trackCode);
   const predictions = _computeRacePredictions(series, trackCode);
+  const oddsLabel = _oddsColLabel(predictions);
 
   // If we have NO performers AND no predictions, render nothing — common
   // on a brand-new venue with no historical data and no full-timers yet.
@@ -12764,14 +12777,14 @@ function renderRacePredictionSection(opts) {
     <div class="rps-col rps-col-finish">
       <div class="rps-col-head">
         <div class="rps-col-title">Top 10 predicted finish</div>
-        <div class="ed-byline">With predicted points + odds</div>
+        <div class="ed-byline">With predicted points + ${oddsLabel === "TOP 5" ? "top-5 finish" : oddsLabel === "WIN" ? "win" : ""} odds</div>
       </div>
       <div class="rps-col-table-head">
         <span></span><span></span><span></span>
         <span class="rps-col-label">PRED FIN</span>
         <span class="rps-col-label">PRED PTS</span>
         <span class="rps-col-label">EVD</span>
-        <span class="rps-col-label">ODDS</span>
+        <span class="rps-col-label">${oddsLabel}</span>
       </div>
       <div class="rps-list">
         ${finishTop10HTML}
@@ -12793,7 +12806,7 @@ function renderRacePredictionSection(opts) {
           <span class="rps-col-label">PRED FIN</span>
           <span class="rps-col-label">PRED PTS</span>
           <span class="rps-col-label">EVD</span>
-          <span class="rps-col-label">ODDS</span>
+          <span class="rps-col-label">${oddsLabel}</span>
         </div>
         <div class="rps-list">
           ${finishFullHTML}
@@ -12993,6 +13006,7 @@ function renderHomePredictionTrio(year) {
         trackCode: nextRace.track_code,
         trackName: prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD",
         round: nextRace.round,
+        oddsLabel: _oddsColLabel(preds),
         rowsHTML,
       };
     });
@@ -13011,7 +13025,7 @@ function renderHomePredictionTrio(year) {
       <div class="hpt-table-head">
         <span></span><span></span><span></span>
         <span class="rps-col-label">FIN</span>
-        <span class="rps-col-label">ODDS</span>
+        <span class="rps-col-label">${computed.oddsLabel === "TOP 5" ? "T5 ODDS" : computed.oddsLabel === "WIN" ? "WIN" : "ODDS"}</span>
       </div>
       <div class="rps-list">${computed.rowsHTML}</div>
     </div>`;
