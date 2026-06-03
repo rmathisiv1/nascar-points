@@ -7,6 +7,13 @@
 const STATE = {
   series: "NCS",
   season: 2026,
+  // Per-page series memory. The site is no longer in a single global "series
+  // mode" — each series-scoped view (standings, schedule, projection, the
+  // analytics tabs, race/track, etc.) remembers its own NCS/NOS/NTS choice.
+  // Keyed by STATE.view. ensurePageSeries() restores the active series from
+  // here on navigation/boot; the #page-series-bar toggle writes to it.
+  // Home stays multi-series (the trios) and is never keyed here.
+  pageSeries: {},
   // Tracks which series the user last picked in Present mode. Used by
   // the side panels (standings/form/metric bar) to snap back to the
   // user's preferred series when STATE temporarily wandered into a
@@ -1187,6 +1194,10 @@ async function boot() {
   }
   populateSeasonPicker();
   applyModeToDom();   // hide/show season picker based on restored mode
+  // If the landing view is series-scoped, adopt that page's remembered
+  // series (defaults to NCS) BEFORE the initial data load so we fetch the
+  // right block. Home / entity / all-time views are left untouched.
+  ensurePageSeries();
   // Sync series toggle UI to initial STATE.series — sets data-series
   // on the mobile <select> so it gets the correct color at boot.
   syncSeriesUIGlobal(STATE.series);
@@ -1287,6 +1298,11 @@ async function boot() {
     if (STATE.view === "profile" && STATE.profile && STATE.profile.kind === "driver") {
       await resolveDriverRoute();
     }
+    // Per-page series: if we navigated to a series-scoped view, adopt that
+    // page's remembered series (independent of every other page). Runs after
+    // the profile resolver (which owns its own series) and before the load
+    // guard below, so any change is picked up by the same loadCurrentData.
+    ensurePageSeries();
     if (STATE.season !== preSeason || STATE.series !== preSeries) {
       await loadCurrentData();
       resetRenderCache();
@@ -2836,6 +2852,88 @@ async function applySeriesChangeGlobal(next) {
   render();
 }
 
+// ============================================================
+// PER-PAGE SERIES TOGGLE
+// ============================================================
+// The site is no longer in one global series "mode". Each series-scoped
+// view owns its NCS/NOS/NTS choice independently (STATE.pageSeries[view]).
+// STATE.series remains the single "active render series" that all ~175 read
+// sites consume — we just drive it from the current page's memory on every
+// navigation/boot (ensurePageSeries) and let the #page-series-bar toggle
+// rewrite that memory (applyPageSeries).
+//
+// Views that get the toggle. Excluded on purpose:
+//   home                         → multi-series (the trios), never single-series
+//   profile / team / cc          → entity-locked to that entity's home series
+//   drivers / teams / crewchiefs → all-time pages with their own series filter
+//                                  (incl. an "All" option) — a second toggle
+//                                  would fight it
+//   pointscalc                   → points-format calculator, series-agnostic
+const SERIES_TOGGLE_VIEWS = [
+  "schedule", "standings", "playoffs", "projection",
+  "race", "track",
+  "form", "arc", "breakdown", "trajectory", "teammates", "heatmap",
+  "trackstats", "compare",
+];
+
+// Restore (or initialize) the active series for the current view from its
+// per-page memory. Pure state mutation — callers must run inside an async
+// context and reload data afterward (boot's loadCurrentData, or the
+// hashchange load guard) since the series may have changed. First visit to a
+// page defaults to NCS so the new baseline is predictable everywhere.
+function ensurePageSeries() {
+  const view = STATE.view;
+  if (!SERIES_TOGGLE_VIEWS.includes(view)) return;
+  STATE.pageSeries = STATE.pageSeries || {};
+  if (!STATE.pageSeries[view]) STATE.pageSeries[view] = "NCS";
+  const want = STATE.pageSeries[view];
+  if (want !== STATE.series) {
+    STATE.series = want;
+    if (STATE.mode === "present") STATE.lastPresentSeries = want;
+    // Clamp the season into the new series's available range (same guard
+    // applySeriesChangeGlobal uses) so we never request a year the series
+    // didn't run.
+    const yrs = seasonsAvailableForSeries(want);
+    if (yrs.length > 0 && !yrs.includes(STATE.season)) STATE.season = yrs[0];
+  }
+}
+
+// Paint the #page-series-bar for the current view. Shown only on
+// series-scoped views; highlights whichever series is active. Cheap and
+// idempotent — safe to call on every render().
+function renderPageSeriesBar() {
+  const bar = document.getElementById("page-series-bar");
+  if (!bar) return;
+  const show = SERIES_TOGGLE_VIEWS.includes(STATE.view);
+  bar.hidden = !show;
+  if (!show) { bar.innerHTML = ""; return; }
+  const cur = STATE.series;
+  bar.innerHTML =
+    `<div class="pgs-track" role="tablist" aria-label="Series">` +
+    ["NCS", "NOS", "NTS"].map(s =>
+      `<button type="button" class="pgs-btn${s === cur ? " on" : ""}" ` +
+      `data-pgs="${s}" data-series="${s}" role="tab" ` +
+      `aria-selected="${s === cur ? "true" : "false"}">${s}</button>`
+    ).join("") +
+    `</div>`;
+}
+
+// Toggle handler: record the choice for THIS page, then apply. Reuses
+// applySeriesChangeGlobal for the heavy lifting (clamp season, load data,
+// reset cache, repopulate pickers, render). If the page is already on that
+// series we just repaint the bar.
+async function applyPageSeries(series) {
+  if (series !== "NCS" && series !== "NOS" && series !== "NTS") return;
+  const view = STATE.view;
+  STATE.pageSeries = STATE.pageSeries || {};
+  STATE.pageSeries[view] = series;
+  if (series !== STATE.series) {
+    await applySeriesChangeGlobal(series);   // calls render() → renderPageSeriesBar()
+  } else {
+    renderPageSeriesBar();
+  }
+}
+
 function wireUIControls() {
   // Race Center session tabs (Race / Practice 1 / Practice 2 / Qualifying).
   // Delegated since the tabs DOM is rebuilt every time the user navigates
@@ -2854,20 +2952,29 @@ function wireUIControls() {
 
   // Helper: sync the series toggle UI (buttons + mobile select) to match
   // the active series. Used both at boot and after every series change.
-  // (Now a thin wrapper around the module-scoped helper.)
+  // (Now a thin wrapper around the module-scoped helper. The old global
+  // #series-sw element is gone, so this is effectively a no-op for the
+  // header but kept so callers don't need null-checks everywhere.)
   const syncSeriesUI = syncSeriesUIGlobal;
 
-  // Shared handler: applies a series change. The mobile <select> and the
-  // desktop <button> group both call this so the swap behavior is identical.
-  // (Now a thin wrapper around the module-scoped helper.)
-  const applySeriesChange = applySeriesChangeGlobal;
-
-  document.querySelectorAll("#series-sw button").forEach(b => {
-    b.addEventListener("click", () => applySeriesChange(b.dataset.series));
+  // Per-page series toggle (#page-series-bar). Delegated because the bar's
+  // buttons are rebuilt on every render. Clicking one records the choice for
+  // the current page and applies it.
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".pgs-btn");
+    if (!b) return;
+    e.preventDefault();
+    applyPageSeries(b.dataset.pgs);
   });
-  // Mobile dropdown — same effect, single-tap series swap
-  document.getElementById("series-sw-select")?.addEventListener("change", (e) => {
-    applySeriesChange(e.target.value);
+
+  // Home trio "next race" links carry their column's series. Set the race
+  // page's remembered series BEFORE the anchor navigates (no preventDefault —
+  // we let the href change the hash) so the race page opens in that series.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-race-series]");
+    if (!a) return;
+    STATE.pageSeries = STATE.pageSeries || {};
+    STATE.pageSeries["race"] = a.dataset.raceSeries;
   });
 
   // Brand link — clicking "datacarracing" is the global escape hatch.
@@ -3433,6 +3540,11 @@ function render() {
   if (seriesSwitcher) seriesSwitcher.classList.toggle("locked", navLocked);
   if (seasonPicker)   seasonPicker.classList.toggle("locked", navLocked);
   if (racePicker)     racePicker.classList.toggle("locked", navLocked);
+
+  // Per-page series toggle — show on series-scoped views, hide elsewhere,
+  // highlight the active series. STATE.series was already set to this page's
+  // remembered series by ensurePageSeries() before we got here.
+  renderPageSeriesBar();
 
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
@@ -13031,11 +13143,18 @@ function renderHomePredictionTrio(year) {
         <div class="muted" style="font-size:12px;padding:12px 4px;">No upcoming race or data loaded.</div>
       </div>`;
     }
-    const trackHref = `#/track/${encodeURIComponent(computed.trackCode)}`;
+    // Header link goes to the Race Center for THIS race, in THIS column's
+    // series. data-race-series is read by the delegated handler in
+    // wireUIControls, which sets STATE.pageSeries["race"] before navigation
+    // so the race page opens in the matching series (not whatever the race
+    // page last remembered). The round is series-specific (computed inside
+    // _withSeriesContext above), so it resolves correctly once the series
+    // is set.
+    const raceHref = `#/race/${computed.round}`;
     return `<div class="home-card hpt-col">
       <div class="hpt-head">
         <span class="hpt-series">${series}</span>
-        <a class="hpt-race profile-link" href="${trackHref}">R${computed.round} · ${escapeHTML(computed.trackName)} →</a>
+        <a class="hpt-race profile-link" href="${raceHref}" data-race-series="${series}">R${computed.round} · ${escapeHTML(computed.trackName)} →</a>
       </div>
       <div class="hpt-table-head">
         <span></span><span></span><span></span>
