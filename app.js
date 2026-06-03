@@ -2883,6 +2883,19 @@ const SERIES_TOGGLE_VIEWS = [
 // page defaults to NCS so the new baseline is predictable everywhere.
 function ensurePageSeries() {
   const view = STATE.view;
+  if (view === "home") {
+    // Home is multi-series (the trios render all three independently), but its
+    // surrounding chrome — left standings panel, power rankings, the next-race
+    // hero — follows STATE.series. Always anchor Home to Cup so it doesn't
+    // inherit NOS/NTS from whatever page you came from.
+    if (STATE.series !== "NCS") {
+      STATE.series = "NCS";
+      if (STATE.mode === "present") STATE.lastPresentSeries = "NCS";
+      const yrs = seasonsAvailableForSeries("NCS");
+      if (yrs.length > 0 && !yrs.includes(STATE.season)) STATE.season = yrs[0];
+    }
+    return;
+  }
   if (!SERIES_TOGGLE_VIEWS.includes(view)) return;
   STATE.pageSeries = STATE.pageSeries || {};
   if (!STATE.pageSeries[view]) STATE.pageSeries[view] = "NCS";

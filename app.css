@@ -4719,7 +4719,7 @@ a.driver-cell.profile-link:hover .car-tag {
   gap: 2px;
   min-width: 0;
 }
-.rc-sched-track > a,
+.rc-sched-track > a:first-child,
 .rc-sched-track > span:first-child {
   font-weight: 500;
   color: var(--text);
