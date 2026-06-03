@@ -464,12 +464,31 @@ def main():
                         "specific sheet, e.g. the Xfinity '...-entry.pdf')")
     g.add_argument("--discover", metavar="SERIES=TRACK",
                    help="auto-discover the entry-list URL, e.g. NCS=Michigan")
+    g.add_argument("--find", metavar="QUERY",
+                   help='recon: site-search Jayski for any doc and list candidate '
+                        'pages + the PDFs on them, e.g. --find "michigan 2026 crew roster"')
     ap.add_argument("--year", type=int, default=2026, help="season for --discover")
     ap.add_argument("--dump", action="store_true", help="print parsed entries as JSON")
     ap.add_argument("--inspect", action="store_true",
                     help="with --pdf/--pdf-url: print the PDF's table/text structure "
                          "instead of parsing (for adapting the parser to a new layout)")
     args = ap.parse_args()
+
+    if args.find:
+        cands = _html_search(args.find)
+        if not cands:
+            print("(no candidates returned)", file=sys.stderr)
+            return
+        print(f"{len(cands)} candidate page(s) for: {args.find!r}", file=sys.stderr)
+        for i, u in enumerate(cands[:10]):
+            print(u)
+            if i < 4:  # peek inside the top few for their PDF links
+                html = _get(u)
+                if html:
+                    pdfs = sorted(set(re.findall(r'https?://[^\s"\'<>]+?\.pdf', html, re.I)))
+                    for p in pdfs[:6]:
+                        print(f"    PDF: {p}")
+        return
 
     if args.inspect:
         if args.pdf_url:
