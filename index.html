@@ -42,21 +42,9 @@
     <span class="brand-name">Racecar Data</span>
   </a>
   <div class="season-pill" id="season-pill">— / —</div>
-  <div class="series-sw" id="series-sw">
-    <div class="series-sw-buttons">
-      <button data-series="NCS" class="on">NCS</button>
-      <button data-series="NOS">NOS</button>
-      <button data-series="NTS">NTS</button>
-    </div>
-    <!-- Mobile-only dropdown — same series choices wrapped in a native
-         <select> so it fits in one cell. JS keeps the buttons and select
-         in sync. -->
-    <select class="series-sw-select" id="series-sw-select" aria-label="Series">
-      <option value="NCS">NCS</option>
-      <option value="NOS">NOS</option>
-      <option value="NTS">NTS</option>
-    </select>
-  </div>
+  <!-- Global series selector removed — series is now chosen per-page via the
+       #page-series-bar toggle under the nav (each page remembers its own
+       series independently). -->
   <div class="topbar-search" id="topbar-search">
     <input type="text" id="search-input" placeholder="Search drivers, teams, crew chiefs, races…  (press /)" autocomplete="off" spellcheck="false" aria-label="Search">
     <button class="topbar-search-close" type="button" aria-label="Close search" tabindex="-1">×</button>
@@ -198,6 +186,12 @@
         </div>
       </div>
     </nav>
+
+    <!-- Per-page series toggle. Shown only on series-scoped views; each page
+         remembers its own NCS/NOS/NTS choice (STATE.pageSeries). Populated by
+         renderPageSeriesBar(); clicks handled by the delegated .pgs-btn
+         listener in wireUIControls. Hidden on Home and entity/all-time views. -->
+    <div class="page-series-bar" id="page-series-bar" hidden></div>
 
     <!-- Center-pane takeovers (profile, race, track, schedule).
          Each hides tab-body when active. Race/Track/Schedule replace the

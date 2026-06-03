@@ -228,6 +228,48 @@ html, body {
 #season-picker.locked,
 #race-picker.locked { display: none; }
 
+/* ── Per-page series toggle ─────────────────────────────────────────────
+   Replaces the old global #series-sw. Sits just under the dash-tabs nav at
+   the top of the center column. Each series-scoped page remembers its own
+   NCS/NOS/NTS choice. Same gold/green/red palette as .series-sw and the
+   .series-tag chips. Hidden on Home and entity/all-time views. */
+.page-series-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+.page-series-bar[hidden] { display: none; }
+.page-series-bar::before {
+  content: "SERIES";
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.pgs-track {
+  display: inline-flex;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+.pgs-btn {
+  padding: 6px 16px;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted);
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.06em;
+  border-radius: 4px;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+.pgs-btn:not(.on):hover { color: var(--text); }
+.pgs-btn.on { background: var(--accent); color: #fff; }
+.pgs-btn[data-series="NCS"].on { background: #d4a017; color: #1a1100; }
+.pgs-btn[data-series="NOS"].on { background: #2e7d32; color: #061806; }
+.pgs-btn[data-series="NTS"].on { background: #c62828; color: #1a0303; }
+
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 
 /* Theme toggle — a small icon-only button in the topbar. The icon is a
