@@ -3159,7 +3159,8 @@ function renderPageSeriesBar() {
     right = renderRaceSeriesBar();   // includes its own weekend-series buttons
   } else if (seriesScoped) {
     const cur = STATE.series;
-    right = `<div class="pgs-track" role="tablist" aria-label="Series">` +
+    right = `<span class="pgs-label">SERIES</span>` +
+      `<div class="pgs-track" role="tablist" aria-label="Series">` +
       ["NCS", "NOS", "NTS"].map(s =>
         `<button type="button" class="pgs-btn${s === cur ? " on" : ""}" ` +
         `data-pgs="${s}" data-series="${s}" role="tab" ` +

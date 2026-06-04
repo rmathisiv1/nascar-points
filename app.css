@@ -267,20 +267,21 @@ html, body {
   flex-shrink: 0;
 }
 .page-series-bar[hidden] { display: none; }
-.page-series-bar::before {
-  content: "SERIES";
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-}
 .pgs-track {
   display: inline-flex;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 2px;
+}
+/* "SERIES" caption that sits just left of the toggle inside the header's
+   right group (was a bar-level ::before, which pushed the title to center). */
+.pgs-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--muted);
 }
 .pgs-btn {
   padding: 4px 9px;
