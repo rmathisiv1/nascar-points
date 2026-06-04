@@ -3032,10 +3032,16 @@ async function applyPageSeries(series) {
   const view = STATE.view;
   STATE.pageSeries = STATE.pageSeries || {};
   STATE.pageSeries[view] = series;
+  // The track page renders its winner card + all-races table against
+  // STATE.track.seriesView (a separate var). Keep it in lockstep with the top
+  // toggle so switching series actually updates the content — not just the
+  // toggle highlight. (The in-table mini-toggle also routes through here.)
+  if (view === "track" && STATE.track) STATE.track.seriesView = series;
   if (series !== STATE.series) {
     await applySeriesChangeGlobal(series);   // calls render() → renderPageSeriesBar()
   } else {
     renderPageSeriesBar();
+    if (view === "track") renderTrackPage();  // seriesView may have changed even if STATE.series didn't
   }
 }
 
@@ -21307,16 +21313,15 @@ function renderTrackPage() {
     </div>
   `;
 
-  // Wire the series toggle. Updates STATE.track.seriesView and re-renders
-  // — the lazy-load logic at the top will fetch any missing data for
-  // the new series automatically.
+  // Wire the in-table series toggle. Routes through applyPageSeries so it
+  // sets BOTH STATE.series and STATE.track.seriesView — keeping it in sync
+  // with the top page toggle (no more "toggle says NOS, winner shows NCS").
   document.getElementById("track-series-toggle")?.addEventListener("click", (e) => {
     const btn = e.target.closest("button");
     if (!btn) return;
     const newSeries = btn.dataset.srs;
     if (!newSeries || newSeries === tSeries) return;
-    STATE.track.seriesView = newSeries;
-    renderTrackPage();
+    applyPageSeries(newSeries);
   });
   // Wire the scope toggle (Most Wins / Best Avg Finish: current FT vs all-time)
   document.getElementById("track-scope-toggle")?.addEventListener("click", (e) => {
@@ -23517,14 +23522,16 @@ function buildPersonnelIndex() {
         if (!Array.isArray(roster)) continue;
         const track = rec.track || "";
         const date = String(rec.race_date || "").slice(0, 10);
+        const round = rec.round || null;
         for (const car of roster) {
           const team = car.team || "";
+          const won = _carWonRace(+yr, series, round, car.car);
           const add = (name, position, type) => {
             if (!name) return;
             const key = normalizeDriverName(name);
             let p = idx.get(key);
             if (!p) { p = { name, appearances: [], roles: new Set(), teams: new Set(), positions: new Set() }; idx.set(key, p); }
-            p.appearances.push({ year: +yr, series, track, date, car: car.car || "", driver: car.driver || "", team, position: position || "", type: type || "" });
+            p.appearances.push({ year: +yr, series, track, date, round, car: car.car || "", driver: car.driver || "", team, position: position || "", type: type || "", won });
             if (team) p.teams.add(team);
             if (position) p.positions.add(position);
             p.roles.add(_roleGroupOf(position));
@@ -23538,8 +23545,26 @@ function buildPersonnelIndex() {
   return idx;
 }
 
+// Did a given car win a given (year, series, round)? Cross-references the race
+// results in SEASON_CACHE (winner = finish_pos 1). Returns false when the race
+// or result isn't loaded — wins are a bonus stat, never blocking.
+const _WINNER_CAR_CACHE = new Map();
+function _carWonRace(year, series, round, car) {
+  if (!round || car == null || car === "") return false;
+  const ck = `${year}|${series}|${round}`;
+  let winCar = _WINNER_CAR_CACHE.get(ck);
+  if (winCar === undefined) {
+    const blk = SEASON_CACHE[year] && SEASON_CACHE[year][series];
+    const race = blk && (blk.races || []).find(r => r.round === round);
+    const w = race && (race.results || []).find(d => d.finish_pos === 1);
+    winCar = w ? String(w.car_number) : null;
+    _WINNER_CAR_CACHE.set(ck, winCar);
+  }
+  return winCar != null && String(car) === winCar;
+}
+
 function setPersonnelFilter(kind, val) {
-  STATE.personnel = STATE.personnel || { query: "", role: "all", page: 0 };
+  STATE.personnel = STATE.personnel || { query: "", role: "all", series: "all", position: "all", page: 0, open: {} };
   STATE.personnel[kind] = val;
   STATE.personnel.page = 0;
   renderPersonnel();
@@ -23566,14 +23591,49 @@ function personnelToggleRow(key) {
 
 const PERSONNEL_PAGE_SIZE = 50;
 
+// Distinct positions across the whole index — populates the position filter.
+function _personnelPositions() {
+  const s = new Set();
+  if (PERSONNEL_INDEX) for (const p of PERSONNEL_INDEX.values()) p.positions.forEach(x => s.add(x));
+  return Array.from(s).sort((a, b) => a.localeCompare(b));
+}
+
+// Build the filtered + scoped row list. When a series is selected, every
+// stat (races, wins, teams, positions) is scoped to that series.
+function _personnelRows() {
+  const st = STATE.personnel || {};
+  const series = st.series || "all";
+  const role = st.role || "all";
+  const pos = st.position || "all";
+  const q = (st.query || "").toLowerCase().trim();
+  const out = [];
+  if (!PERSONNEL_INDEX) return out;
+  for (const [key, p] of PERSONNEL_INDEX) {
+    if (q && !p.name.toLowerCase().includes(q)) continue;
+    const apps = series === "all" ? p.appearances : p.appearances.filter(a => a.series === series);
+    if (!apps.length) continue;
+    if (role !== "all" && !apps.some(a => _roleGroupOf(a.position) === role)) continue;
+    if (pos !== "all" && !apps.some(a => a.position === pos)) continue;
+    const rk = a => a.year + a.series + a.track + a.date;
+    const races = new Set(apps.map(rk)).size;
+    const wins = new Set(apps.filter(a => a.won).map(rk)).size;
+    const teams = Array.from(new Set(apps.map(a => a.team).filter(Boolean)));
+    const positions = Array.from(new Set(apps.map(a => a.position).filter(Boolean)));
+    out.push({ key, name: p.name, apps, races, wins, teams, positions });
+  }
+  out.sort((a, b) => b.races - a.races || b.wins - a.wins || a.name.localeCompare(b.name));
+  return out;
+}
+
 function renderPersonnel() {
   const host = document.getElementById("personnel-host");
   const sub = document.getElementById("personnel-sub");
   if (!host) return;
-  STATE.personnel = STATE.personnel || { query: "", role: "all", page: 0, open: {} };
+  STATE.personnel = STATE.personnel || { query: "", role: "all", series: "all", position: "all", page: 0, open: {} };
   if (!_raceDocsAttempted) {
     loadRaceDocs().then(() => { if (STATE.view === "personnel") renderPersonnel(); });
   }
+  _WINNER_CAR_CACHE.clear();
   PERSONNEL_INDEX = buildPersonnelIndex();
 
   let raceCount = 0; const cutoff = Date.now() + 9 * 864e5;
@@ -23585,22 +23645,30 @@ function renderPersonnel() {
       }
   if (sub) sub.textContent = PERSONNEL_INDEX.size
     ? `${PERSONNEL_INDEX.size.toLocaleString()} people across ${raceCount} race rosters`
-    : "No roster data yet — run the crew-roster backfill";
+    : "No roster data yet \u2014 run the crew-roster backfill";
 
-  const role = STATE.personnel.role || "all";
+  const st = STATE.personnel;
+  const role = st.role || "all";
+  const series = st.series || "all";
+  const position = st.position || "all";
   const roleBtns = PERSONNEL_ROLES.map(r =>
-    `<button class="alltime-series-btn ${role === r ? "active" : ""}" data-prole="${r}" onclick="setPersonnelFilter('role','${r}')">${r === "all" ? "All" : escapeHTML(r)}</button>`
+    `<button class="alltime-series-btn ${role === r ? "active" : ""}" onclick="setPersonnelFilter('role','${r}')">${r === "all" ? "All" : escapeHTML(r)}</button>`
   ).join("");
+  const seriesBtns = ["all", "NCS", "NOS", "NTS"].map(s =>
+    `<button class="alltime-series-btn ${series === s ? "active" : ""}" onclick="setPersonnelFilter('series','${s}')">${s === "all" ? "All" : s}</button>`
+  ).join("");
+  const posOpts = ['<option value="all">All positions</option>']
+    .concat(_personnelPositions().map(p =>
+      `<option value="${escapeHTML(p)}" ${position === p ? "selected" : ""}>${escapeHTML(p)}</option>`)).join("");
 
   host.innerHTML = `
     <div class="alltime-toolbar">
       <input type="search" class="alltime-search" id="alltime-search-personnel"
-             placeholder="Search personnel…" value="${escapeHTML(STATE.personnel.query || "")}"
+             placeholder="Search personnel\u2026" value="${escapeHTML(st.query || "")}"
              oninput="_personnelSearch(this)">
-      <div class="alltime-toggle-group">
-        <span class="alltime-toggle-label">Role</span>
-        ${roleBtns}
-      </div>
+      <div class="alltime-toggle-group"><span class="alltime-toggle-label">Series</span>${seriesBtns}</div>
+      <div class="alltime-toggle-group"><span class="alltime-toggle-label">Role</span>${roleBtns}</div>
+      <select class="alltime-search pers-pos-select" onchange="setPersonnelFilter('position', this.value)">${posOpts}</select>
     </div>
     <div id="personnel-list"></div>`;
   _renderPersonnelList();
@@ -23610,14 +23678,8 @@ function _renderPersonnelList() {
   const wrap = document.getElementById("personnel-list");
   if (!wrap || !PERSONNEL_INDEX) return;
   const st = STATE.personnel || {};
-  const q = (st.query || "").toLowerCase().trim();
-  const role = st.role || "all";
   st.open = st.open || {};
-
-  let rows = Array.from(PERSONNEL_INDEX.entries());   // [key, person]
-  if (role !== "all") rows = rows.filter(([, p]) => p.roles.has(role));
-  if (q) rows = rows.filter(([, p]) => p.name.toLowerCase().includes(q));
-  rows.sort((a, b) => b[1].appearances.length - a[1].appearances.length || a[1].name.localeCompare(b[1].name));
+  const rows = _personnelRows();
 
   const total = rows.length;
   const pageCount = Math.max(1, Math.ceil(total / PERSONNEL_PAGE_SIZE));
@@ -23625,32 +23687,43 @@ function _renderPersonnelList() {
   const page = st.page || 0;
   const slice = rows.slice(page * PERSONNEL_PAGE_SIZE, (page + 1) * PERSONNEL_PAGE_SIZE);
 
-  const racesOf = p => new Set(p.appearances.map(a => a.year + a.series + a.track + a.date)).size;
-  const body = slice.map(([key, p], i) => {
+  const body = slice.map((r, i) => {
     const rank = page * PERSONNEL_PAGE_SIZE + i + 1;
-    const positions = Array.from(p.positions).slice(0, 3).join(", ") + (p.positions.size > 3 ? "…" : "");
-    const teams = Array.from(p.teams).join(" · ");
-    const open = !!st.open[key];
-    const main = `<tr class="pers-row${open ? " open" : ""}" onclick="personnelToggleRow('${key.replace(/'/g, "\\'")}')">
+    const positions = r.positions.slice(0, 3).join(", ") + (r.positions.length > 3 ? "\u2026" : "");
+    const teams = r.teams.join(" \u00b7 ");
+    const open = !!st.open[r.key];
+    const main = `<tr class="pers-row${open ? " open" : ""}" onclick="personnelToggleRow('${r.key.replace(/'/g, "\\'")}')">
         <td class="num alltime-rank-cell">${rank}</td>
-        <td class="pers-name-cell"><span class="pers-caret">${open ? "▾" : "▸"}</span>${escapeHTML(p.name)}</td>
+        <td class="pers-name-cell"><span class="pers-caret">${open ? "\u25be" : "\u25b8"}</span>${escapeHTML(r.name)}</td>
         <td>${escapeHTML(positions)}</td>
         <td class="pers-teams-cell">${escapeHTML(teams)}</td>
-        <td class="num"><b>${racesOf(p)}</b></td></tr>`;
+        <td class="num">${r.races}</td>
+        <td class="num"><b>${r.wins || ""}</b></td></tr>`;
     if (!open) return main;
-    const hist = p.appearances.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-      .map(a => `<tr class="pers-hist-row"><td></td>
-        <td class="rdoc-pos">${a.year} · ${escapeHTML(a.series)}</td>
-        <td>${escapeHTML(a.track)}</td>
-        <td>${escapeHTML(a.team)}${a.car ? ` · #${escapeHTML(String(a.car))} ${escapeHTML(a.driver || "")}` : ""}</td>
-        <td>${escapeHTML(a.position)}</td></tr>`).join("");
-    return main + hist;
+    // Compact breakdown: group by team + position with race/win counts
+    // (NOT one row per race).
+    const groups = new Map();
+    for (const a of r.apps) {
+      const gk = (a.team || "\u2014") + " | " + (a.position || "\u2014");
+      let g = groups.get(gk);
+      if (!g) { g = { team: a.team || "\u2014", position: a.position || "\u2014", races: new Set(), wins: new Set() }; groups.set(gk, g); }
+      const id = a.year + a.series + a.track + a.date;
+      g.races.add(id); if (a.won) g.wins.add(id);
+    }
+    const gr = Array.from(groups.values()).sort((x, y) => y.races.size - x.races.size);
+    const detail = gr.map(g =>
+      `<tr class="pers-hist-row"><td></td>
+        <td>${escapeHTML(g.position)}</td>
+        <td colspan="2">${escapeHTML(g.team)}</td>
+        <td class="num">${g.races.size}</td>
+        <td class="num">${g.wins.size || ""}</td></tr>`).join("");
+    return main + detail;
   }).join("");
 
   const pag = `<div class="alltime-pag">
-      <button class="alltime-pag-btn" ${page === 0 ? "disabled" : ""} onclick="personnelPage(-1)">← Prev</button>
-      <span class="alltime-pag-status">Page ${page + 1} of ${pageCount} · ${total.toLocaleString()} people</span>
-      <button class="alltime-pag-btn" ${page >= pageCount - 1 ? "disabled" : ""} onclick="personnelPage(1)">Next →</button>
+      <button class="alltime-pag-btn" ${page === 0 ? "disabled" : ""} onclick="personnelPage(-1)">\u2190 Prev</button>
+      <span class="alltime-pag-status">Page ${page + 1} of ${pageCount} \u00b7 ${total.toLocaleString()} people</span>
+      <button class="alltime-pag-btn" ${page >= pageCount - 1 ? "disabled" : ""} onclick="personnelPage(1)">Next \u2192</button>
     </div>`;
 
   wrap.innerHTML = total ? `
@@ -23663,12 +23736,14 @@ function _renderPersonnelList() {
           <th class="alltime-th">Position(s)</th>
           <th class="alltime-th">Team(s)</th>
           <th class="alltime-th num">Races</th>
+          <th class="alltime-th num">Wins</th>
         </tr></thead>
         <tbody>${body}</tbody>
       </table>
     </div>
     ${pag}` : `<div class="rc-empty">No people match.</div>`;
 }
+
 
 function renderAllTimeDrivers() {
   const host = document.getElementById("drivers-host");

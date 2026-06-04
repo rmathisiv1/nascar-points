@@ -12463,5 +12463,6 @@ body.lightbox-open {
   padding-bottom: 3px;
   border-top: 0;
 }
-.pers-hist-row td:first-child { border-left: 2px solid var(--accent); }
+.pers-hist-row td:first-child { border-left: 2px solid var(--accent); width: 0; padding: 0; }
+.pers-pos-select { flex: 0 0 auto; max-width: 200px; cursor: pointer; }
 
