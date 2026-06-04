@@ -33,6 +33,7 @@ import io
 import json
 import re
 import sys
+from urllib.parse import urljoin
 
 import requests
 try:
@@ -261,6 +262,224 @@ def parse_entry_pdf(source):
     return out
 
 
+def parse_pitstall_pdf(source):
+    """Parse the pit-stall diagram (Cup/Truck and Xfinity share the same visual
+    layout). The sheet draws each car's number inside its pit box, with the box
+    numbers (44…1, Turn 4 → Turn 1) labeled along the bottom. We read word
+    coordinates and map each car to the box directly under it by x-position.
+
+    Returns a list of {box, car} sorted by box number, plus picks up the
+    left-side/right-side stall IDs from the header if present. Eliminated/vacant
+    boxes (no car) are simply absent."""
+    if pdfplumber is None:
+        raise RuntimeError("pdfplumber not installed (pip install pdfplumber)")
+    opener = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
+    with pdfplumber.open(opener) as pdf:
+        page = pdf.pages[0]
+        words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
+
+    nums = [w for w in words if re.fullmatch(r"\d{1,3}", w["text"])]
+    if not nums:
+        return []
+
+    def xc(w):
+        return (w["x0"] + w["x1"]) / 2
+
+    # Cluster numeric words into horizontal rows by their vertical position.
+    nums.sort(key=lambda w: w["top"])
+    rows = []
+    for w in nums:
+        if rows and abs(w["top"] - rows[-1]["top"]) <= 4:
+            rows[-1]["words"].append(w)
+        else:
+            rows.append({"top": w["top"], "words": [w]})
+
+    # The box-number row is the longest numeric row (≈44 boxes vs ≈19/row of
+    # cars) and forms a 1..N sequence.
+    box_row = max(rows, key=lambda r: len(r["words"]))
+    box_words = box_row["words"]
+    boxvals = sorted(int(w["text"]) for w in box_words)
+    # Sanity: looks like a contiguous-ish 1..N pit-box ruler?
+    if len(box_words) < 10 or boxvals[0] != 1 or boxvals[-1] < 10:
+        return []
+
+    # Car numbers are the numeric words sitting ABOVE the box ruler.
+    car_words = [w for w in nums if w["top"] < box_row["top"] - 4]
+
+    assign = {}            # box number -> (car, x-distance) keep nearest
+    for cw in car_words:
+        cx = xc(cw)
+        nearest = min(box_words, key=lambda bw: abs(xc(bw) - cx))
+        dist = abs(xc(nearest) - cx)
+        box_no = int(nearest["text"])
+        if box_no not in assign or dist < assign[box_no][1]:
+            assign[box_no] = (cw["text"], dist)
+
+    return [{"box": b, "car": assign[b][0]} for b in sorted(assign)]
+
+
+# ---- coordinate helpers (shared by the column-aligned sheets) -------------
+def _word_lines(page, tol=3):
+    """Cluster a page's words into visual lines (top within tol px)."""
+    ws = page.extract_words(use_text_flow=False, keep_blank_chars=False)
+    ws.sort(key=lambda w: (round(w["top"]), w["x0"]))
+    lines = []
+    for w in ws:
+        if lines and abs(w["top"] - lines[-1]["top"]) <= tol:
+            lines[-1]["ws"].append(w)
+        else:
+            lines.append({"top": w["top"], "ws": [w]})
+    for ln in lines:
+        ln["ws"].sort(key=lambda w: w["x0"])
+    return lines
+
+
+def _bucket(line_ws, starts):
+    """Bucket a line's words into columns by x. `starts` is a sorted list of
+    column-start x's; a word joins the column with the greatest start <= its x0
+    (small tolerance). Returns list[str] of joined column text."""
+    cols = [[] for _ in starts]
+    for w in line_ws:
+        idx = 0
+        for i, sx in enumerate(starts):
+            if w["x0"] >= sx - 4:
+                idx = i
+        cols[idx].append(w["text"])
+    return [" ".join(c).strip() for c in cols]
+
+
+def _clean_name(s):
+    """'Bradley "Brad" Keselowski' -> 'Brad Keselowski'; 'Connor "" Zilisch' ->
+    'Connor Zilisch'; 'Joshua "JOSH" Sell' -> 'Josh Sell'; keep short initials
+    like TJ/AJ/JD. Keep plain names."""
+    s = re.sub(r"\s+", " ", s or "").strip()
+    s = re.sub(r'\s*""\s*', " ", s).strip()      # empty nickname quotes
+    m = re.search(r'"([^"]+)"', s)
+    if m:
+        nick = m.group(1).strip()
+        if nick.isupper() and len(nick) > 3:     # JOSH -> Josh, keep TJ/AJ/JD
+            nick = nick.title()
+        after = s[m.end():].strip()
+        s = (nick + " " + after).strip() if after else nick
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def parse_roster_pdf(source):
+    """Crew-roster sheet: one page per car. Pulls labeled header fields
+    (team/car/driver/crew chief) and the 3-column personnel table
+    (Position Type | Position | Name). Returns one dict per car:
+    {car, driver, team, crew_chief, crew:[{type, position, name}]}."""
+    if pdfplumber is None:
+        raise RuntimeError("pdfplumber not installed (pip install pdfplumber)")
+    opener = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
+    cars = []
+    with pdfplumber.open(opener) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text() or ""
+
+            def field(label):
+                m = re.search(rf"{label}:\s*(.+)", text)
+                return m.group(1).strip() if m else None
+
+            car = field("Car")
+            driver = _clean_name(field("Driver") or "")
+            if not car and not driver:
+                continue
+            entry = {
+                "car": re.sub(r"\D", "", car) if car else None,
+                "driver": driver or None,
+                "team": field("Team"),
+                "crew_chief": _clean_name(field("Crew Chief") or "") or None,
+                "crew": [],
+            }
+            lines = _word_lines(page)
+            starts, header_i = None, None
+            for li, ln in enumerate(lines):
+                toks = [w["text"].lower() for w in ln["ws"]]
+                if toks.count("position") >= 2 and "name" in toks:
+                    pos_xs = [w["x0"] for w in ln["ws"] if w["text"].lower() == "position"]
+                    name_x = min(w["x0"] for w in ln["ws"] if w["text"].lower() == "name")
+                    starts = sorted([min(pos_xs), max(pos_xs), name_x])
+                    header_i = li
+                    break
+            if starts:
+                for ln in lines[header_i + 1:]:
+                    ctype, cpos, cname = _bucket(ln["ws"], starts)
+                    if not ctype and not cpos and cname and entry["crew"]:
+                        entry["crew"][-1]["name"] = _clean_name(
+                            entry["crew"][-1]["name"] + " " + cname)
+                        continue
+                    if cname:
+                        entry["crew"].append({
+                            "type": ctype or None,
+                            "position": cpos or None,
+                            "name": _clean_name(cname),
+                        })
+            cars.append(entry)
+    return cars
+
+
+def parse_infraction_pdf(source):
+    """Infraction sheet: a single 7-column table
+    (No | Lap | Infraction | Flag | Penalty | Assessed | Notes). Infraction text
+    sometimes wraps to a second line. Returns one dict per infraction."""
+    if pdfplumber is None:
+        raise RuntimeError("pdfplumber not installed (pip install pdfplumber)")
+    opener = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
+    labels = ["no", "lap", "infraction", "flag", "penalty", "assessed", "notes"]
+    out = []
+    with pdfplumber.open(opener) as pdf:
+        for page in pdf.pages:
+            lines = _word_lines(page)
+            starts, cols, header_i = None, None, None
+            for li, ln in enumerate(lines):
+                toks = [w["text"].lower() for w in ln["ws"]]
+                if "infraction" in toks and "penalty" in toks and "flag" in toks:
+                    xmap = {}
+                    for w in ln["ws"]:
+                        t = w["text"].lower()
+                        if t in labels and t not in xmap:
+                            xmap[t] = w["x0"]
+                    if len(xmap) >= 5:
+                        pairs = sorted((x, l) for l, x in xmap.items())
+                        starts = [p[0] for p in pairs]
+                        cols = [p[1] for p in pairs]
+                        header_i = li
+                        break
+            if not starts:
+                continue
+            for ln in lines[header_i + 1:]:
+                vals = _bucket(ln["ws"], starts)
+                row = dict(zip(cols, vals))
+                car = re.sub(r"\D", "", row.get("no", "") or "")
+                if not car:
+                    extra = (row.get("infraction") or "").strip()
+                    if extra and out:
+                        out[-1]["infraction"] = (out[-1]["infraction"] + " " + extra).strip()
+                    continue
+                out.append({
+                    "car": car,
+                    "lap": row.get("lap") or None,
+                    "infraction": (row.get("infraction") or "").strip() or None,
+                    "flag": row.get("flag") or None,
+                    "penalty": (row.get("penalty") or "").strip() or None,
+                    "assessed": (row.get("assessed") or "").strip() or None,
+                    "notes": (row.get("notes") or "").strip() or None,
+                })
+    return out
+
+
+# Doc-type -> parser. Entry list returns driver rows; pit stalls return box rows.
+def parse_doc(source, doc_type="entry"):
+    if doc_type == "pitstall":
+        return parse_pitstall_pdf(source)
+    if doc_type == "roster":
+        return parse_roster_pdf(source)
+    if doc_type == "infraction":
+        return parse_infraction_pdf(source)
+    return parse_entry_pdf(source)
+
+
 def inspect_pdf(source):
     """Diagnostic: print a PDF's structure (page count, tables under both the
     default line-based and a text-based strategy, plus a raw-text sample) so a
@@ -454,6 +673,141 @@ def fetch_entries_auto(series, year, track_name):
     return fetch_entries(url), url
 
 
+# ---------------------------------------------------------------------------
+# RACE-PAGE HUB  (each race's "Race Resources" links every doc for that race)
+# ---------------------------------------------------------------------------
+# Link-text -> internal doc key. The race page lists all of these; we keep the
+# ones we care about. Matched against the visible <a> text on the race page.
+RESOURCE_LABELS = {
+    "entry":      ["entry list"],
+    "pitstall":   ["pit stalls", "pit stall"],
+    "infraction": ["infraction report", "infraction", "penalty report", "penalties"],
+    "roster":     ["crew rosters", "crew roster"],
+    "lineup":     ["starting lineup"],
+    "practice":   ["practice results"],
+    "qualifying": ["qualifying order", "qualifying results"],
+    "results":    ["race results"],
+}
+
+
+def discover_race_page(series, year, track_name, verbose=True):
+    """Find the per-race 'race page' (the resource hub) for the REQUESTED track.
+    Every Jayski page carries header quick-links to the *upcoming* races' race
+    pages, so we can't just grab the first race-page href — we match the track.
+    Strategy: from the entry-list page, pick the race-page link whose URL
+    contains the track token; fall back to an on-site search."""
+    def log(m):
+        if verbose:
+            print(f"    [race-page {series}] {m}", file=sys.stderr)
+
+    slug = _track_slug(track_name)
+    tokens = [t for t in ([slug] + slug.split("-")) if len(t) >= 3]
+
+    def track_match(href):
+        h = href.lower()
+        return "race-page" in h and any(t in h for t in tokens)
+
+    entry = discover_entry_url(series, year, track_name, verbose=verbose)
+    if entry:
+        html = _get(entry)
+        if html:
+            hrefs = re.findall(r'href="([^"#]*race-page[^"]*)"', html, re.I)
+            for href in hrefs:
+                if track_match(href):
+                    url = urljoin(entry, href)
+                    log(f"via entry-list page: {url}")
+                    return url
+
+    for u in _html_search(f"{slug.replace('-', ' ')} {year} race page"):
+        if track_match(u):
+            log(f"via search: {u}")
+            return u
+    log("no track-matching race page found")
+    return None
+
+
+def race_resource_links(race_page_url):
+    """Scrape a race page's 'Race Resources' block; return {doc_key: doc_page_url}
+    for the docs we recognize. Inactive (not-yet-posted) links are skipped."""
+    html = _get(race_page_url)
+    if not html:
+        return {}
+    out = {}
+    for m in re.finditer(r'<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S):
+        href = m.group(1).strip()
+        # Jayski uses '####' / '#' for not-yet-posted (inactive) resource links.
+        if not href or href.startswith("#") or "####" in href or href.lower().startswith("javascript"):
+            continue
+        text = re.sub(r"<[^>]+>", "", m.group(2))
+        text = re.sub(r"\s+", " ", text).strip().lower()
+        if not text:
+            continue
+        for key, labels in RESOURCE_LABELS.items():
+            if key not in out and any(text == lab or text.startswith(lab) for lab in labels):
+                out[key] = urljoin(race_page_url, href)
+                break
+    return out
+
+
+# Per-doc-type filename markers for picking the right PDF off a doc page.
+DOC_PDF_MARKERS = {
+    "entry":      ["preentnum", "-entry.pdf", "noaps-2026-entry"],
+    "pitstall":   ["pitstall", "-pits.pdf"],
+    "infraction": ["penrpt", "penalt", "infraction"],
+    "roster":     ["roster"],
+    "lineup":     ["startinglineup", "lineup", "linup"],
+    "practice":   ["practice"],
+    "qualifying": ["qual"],
+    "results":    ["official", "results"],
+}
+
+
+def find_doc_pdf(doc_url, doc_type):
+    """Resolve a resource's PDF. Some resource links are already the PDF (e.g.
+    crew rosters); otherwise fetch the doc page and pick the PDF whose filename
+    matches the doc type, falling back to the first uploaded PDF."""
+    if doc_url.split("?")[0].lower().endswith(".pdf"):
+        return doc_url
+    html = _get(doc_url)
+    if not html:
+        return None
+    pdfs = re.findall(r'https?://[^\s"\'<>]+?\.pdf', html, re.I)
+    if not pdfs:
+        return None
+    markers = DOC_PDF_MARKERS.get(doc_type, [])
+    for p in pdfs:
+        if any(mk in p.lower() for mk in markers):
+            return p
+    for p in pdfs:                      # fallback: first real upload
+        if "/uploads/" in p.lower():
+            return p
+    return pdfs[0]
+
+
+def discover_race_docs(series, year, track_name, want=None):
+    """Full hub resolve: race page -> {doc_key: doc_page_url} -> {doc_key: pdf_url}.
+    Returns (race_page_url, resources, pdfs). `want` limits which doc PDFs we
+    fetch (default: the ones we parse). A short delay between page fetches keeps
+    Cloudflare from rate-limiting the burst."""
+    import time
+    if want is None:
+        want = ("entry", "pitstall", "infraction", "roster")
+    race_page = discover_race_page(series, year, track_name)
+    if not race_page:
+        return None, {}, {}
+    resources = race_resource_links(race_page)
+    pdfs = {}
+    for key in want:
+        doc_url = resources.get(key)
+        if not doc_url:
+            continue
+        pdf = find_doc_pdf(doc_url, key)
+        if pdf:
+            pdfs[key] = pdf
+        time.sleep(1.0)   # be polite; avoid the rapid-fire Cloudflare block
+    return race_page, resources, pdfs
+
+
 def main():
     ap = argparse.ArgumentParser(description="Scrape a NASCAR entry list from Jayski's PDF.")
     g = ap.add_mutually_exclusive_group(required=True)
@@ -467,22 +821,58 @@ def main():
     g.add_argument("--find", metavar="QUERY",
                    help='recon: site-search Jayski for any doc and list candidate '
                         'pages + the PDFs on them, e.g. --find "michigan 2026 crew roster"')
+    g.add_argument("--resources", metavar="SERIES=TRACK",
+                   help="resolve a race's full document hub (race page + every "
+                        "resource link + its PDF), e.g. NCS=Nashville")
     ap.add_argument("--year", type=int, default=2026, help="season for --discover")
+    ap.add_argument("--doc", default="entry",
+                    choices=["entry", "pitstall", "roster", "infraction"],
+                    help="which parser to use with --pdf / --pdf-url (default entry)")
     ap.add_argument("--dump", action="store_true", help="print parsed entries as JSON")
     ap.add_argument("--inspect", action="store_true",
                     help="with --pdf/--pdf-url: print the PDF's table/text structure "
                          "instead of parsing (for adapting the parser to a new layout)")
     args = ap.parse_args()
 
+    if args.resources:
+        series, _, track = args.resources.partition("=")
+        race_page, resources, pdfs = discover_race_docs(series.strip(), args.year, track.strip())
+        if not race_page:
+            raise SystemExit("No race page found.")
+        print(f"RACE PAGE: {race_page}")
+        for key in sorted(resources):
+            print(f"  {key:11} page: {resources[key]}")
+            if key in pdfs:
+                print(f"  {'':11} PDF:  {pdfs[key]}")
+            else:
+                print(f"  {'':11} PDF:  (none found / not yet posted)")
+        return
+
     if args.find:
-        cands = _html_search(args.find)
+        # The search results page leads with site nav/asset links; filter those
+        # out so the actual article posts surface.
+        junk = re.compile(
+            r'\.(png|jpe?g|gif|svg|ico|css|js|txt|xml|pdf)(\?|$)'
+            r'|/wp-content/|/wp-json/|/wp-includes/|xmlrpc|/feed/|humans\.txt',
+            re.I)
+        nav = ("/cup-teams/", "-team-driver-chart", "-schedule/", "-race-results/")
+        cands = []
+        seen = set()
+        for u in _html_search(args.find):
+            if junk.search(u) or any(n in u.lower() for n in nav):
+                continue
+            base = u.split("#")[0]
+            if base not in seen:
+                seen.add(base)
+                cands.append(base)
         if not cands:
-            print("(no candidates returned)", file=sys.stderr)
+            print("(no article candidates — try different terms, or send me a "
+                  "sample URL)", file=sys.stderr)
             return
         print(f"{len(cands)} candidate page(s) for: {args.find!r}", file=sys.stderr)
-        for i, u in enumerate(cands[:10]):
+        for i, u in enumerate(cands[:12]):
             print(u)
-            if i < 4:  # peek inside the top few for their PDF links
+            if i < 5:  # peek inside the top few for their PDF links
                 html = _get(u)
                 if html:
                     pdfs = sorted(set(re.findall(r'https?://[^\s"\'<>]+?\.pdf', html, re.I)))
@@ -515,12 +905,41 @@ def main():
         pdf_bytes = _get(args.pdf_url, binary=True)
         if not pdf_bytes:
             raise SystemExit("Could not fetch the PDF.")
-        entries = parse_entry_pdf(pdf_bytes)
+        entries = parse_doc(pdf_bytes, args.doc)
     else:
-        entries = parse_entry_pdf(args.pdf) if args.pdf else fetch_entries(args.url)
+        entries = parse_doc(args.pdf, args.doc) if args.pdf else fetch_entries(args.url)
 
     if not entries:
-        raise SystemExit("No entries parsed.")
+        raise SystemExit("No rows parsed.")
+    if args.doc == "pitstall":
+        print(f"{len(entries)} pit boxes assigned", file=sys.stderr)
+        if args.dump:
+            print(json.dumps(entries, indent=2))
+        else:
+            for e in entries:
+                print(f"  box {e['box']:>2}  ->  #{e['car']}", file=sys.stderr)
+        return
+
+    if args.doc == "roster":
+        print(f"{len(entries)} car rosters", file=sys.stderr)
+        if args.dump:
+            print(json.dumps(entries, indent=2))
+        else:
+            for e in entries:
+                print(f"  #{e['car'] or '?':>3}  {e['driver'] or ''}  (CC: {e['crew_chief'] or '?'}"
+                      f", {len(e['crew'])} crew)", file=sys.stderr)
+        return
+
+    if args.doc == "infraction":
+        print(f"{len(entries)} infractions", file=sys.stderr)
+        if args.dump:
+            print(json.dumps(entries, indent=2))
+        else:
+            for e in entries:
+                print(f"  #{e['car']:>3}  L{e['lap'] or '?':<4} {e['penalty'] or ''} — {e['infraction'] or ''}",
+                      file=sys.stderr)
+        return
+
     print(f"{len(entries)} entries (withdrawn excluded)", file=sys.stderr)
     if args.dump:
         print(json.dumps(entries, indent=2))
