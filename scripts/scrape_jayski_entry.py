@@ -262,21 +262,51 @@ def parse_entry_pdf(source):
     return out
 
 
+def _classify_fill(rgb):
+    """Map a pit-box rectangle's non-stroking fill to a stall category, matching
+    the sheet's legend: red=eliminated/mobility, black=vacant, green=monster,
+    blue/cyan=SMI. White/None = an ordinary (in-play, occupied) box."""
+    if rgb is None:
+        return None
+    # pdfplumber gives a float (gray) or a tuple of 0..1 channels.
+    if isinstance(rgb, (int, float)):
+        g = float(rgb)
+        return "vacant" if g < 0.25 else None
+    try:
+        r, g, b = (float(rgb[0]), float(rgb[1]), float(rgb[2])) if len(rgb) >= 3 \
+            else (float(rgb[0]),) * 3
+    except Exception:
+        return None
+    if r > 0.55 and g < 0.4 and b < 0.4:
+        return "eliminated"
+    if g > 0.45 and r < 0.5 and b < 0.5:
+        return "monster"
+    if b > 0.6 and r < 0.5:
+        return "smi"
+    if r < 0.25 and g < 0.25 and b < 0.25:
+        return "vacant"
+    return None
+
+
 def parse_pitstall_pdf(source):
     """Parse the pit-stall diagram (Cup/Truck and Xfinity share the same visual
     layout). The sheet draws each car's number inside its pit box, with the box
     numbers (44…1, Turn 4 → Turn 1) labeled along the bottom. We read word
-    coordinates and map each car to the box directly under it by x-position.
+    coordinates and map each car to the box directly under it by x-position,
+    then read each box rectangle's fill color so unused boxes carry the sheet's
+    category (eliminated/vacant/monster/smi).
 
-    Returns a list of {box, car} sorted by box number, plus picks up the
-    left-side/right-side stall IDs from the header if present. Eliminated/vacant
-    boxes (no car) are simply absent."""
+    Returns a list of {box, car, type} for EVERY box 1..N (car None when unused),
+    sorted by box number. `type` is "occupied" for a box with a car, else the
+    color category (or "vacant" when uncolored-but-empty)."""
     if pdfplumber is None:
         raise RuntimeError("pdfplumber not installed (pip install pdfplumber)")
     opener = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
     with pdfplumber.open(opener) as pdf:
         page = pdf.pages[0]
         words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
+        rects = [{"x0": r["x0"], "x1": r["x1"], "top": r["top"], "bottom": r["bottom"],
+                  "fill": r.get("non_stroking_color")} for r in (page.rects or [])]
 
     nums = [w for w in words if re.fullmatch(r"\d{1,3}", w["text"])]
     if not nums:
@@ -299,7 +329,6 @@ def parse_pitstall_pdf(source):
     box_row = max(rows, key=lambda r: len(r["words"]))
     box_words = box_row["words"]
     boxvals = sorted(int(w["text"]) for w in box_words)
-    # Sanity: looks like a contiguous-ish 1..N pit-box ruler?
     if len(box_words) < 10 or boxvals[0] != 1 or boxvals[-1] < 10:
         return []
 
@@ -315,7 +344,32 @@ def parse_pitstall_pdf(source):
         if box_no not in assign or dist < assign[box_no][1]:
             assign[box_no] = (cw["text"], dist)
 
-    return [{"box": b, "car": assign[b][0]} for b in sorted(assign)]
+    # For each box label, find the colored rectangle sitting above it (the stall
+    # body) and classify its fill. The box body is above the ruler row.
+    box_x = {int(w["text"]): xc(w) for w in box_words}
+    box_type = {}
+    for b, bx in box_x.items():
+        best, best_d = None, 1e9
+        for rc in rects:
+            if rc["bottom"] >= box_row["top"]:        # only stall bodies (above ruler)
+                continue
+            if rc["x0"] - 2 <= bx <= rc["x1"] + 2:    # rect spans this box's x
+                d = box_row["top"] - rc["bottom"]
+                if 0 <= d < best_d:
+                    best, best_d = rc, d
+        if best is not None:
+            t = _classify_fill(best["fill"])
+            if t:
+                box_type[b] = t
+
+    maxbox = boxvals[-1]
+    out = []
+    for b in range(1, maxbox + 1):
+        if b in assign:
+            out.append({"box": b, "car": assign[b][0], "type": "occupied"})
+        else:
+            out.append({"box": b, "car": None, "type": box_type.get(b, "vacant")})
+    return out
 
 
 # ---- coordinate helpers (shared by the column-aligned sheets) -------------

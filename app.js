@@ -5103,61 +5103,95 @@ function _rdocEntryTable(rows, carMeta) {
       <tbody>${body}</tbody></table></div>`;
 }
 
-// Pit stalls as a visual pit lane that mirrors the NASCAR stall sheet: one row
-// of boxes numbered high→low (Turn 4 on the left, Turn 1 on the right), split
-// by the start/finish line, each occupied box showing its car number in the
-// car's color above the box number. Empty/eliminated boxes show faded.
-function _rdocPitVisual(rows, drv) {
-  const byBox = {}; let maxBox = 0;
-  rows.forEach(r => { if (r.box != null) { byBox[r.box] = r; maxBox = Math.max(maxBox, r.box); } });
-  if (!maxBox) return `<div class="rc-empty">No pit-stall data.</div>`;
-  const sfBox = Math.ceil(maxBox / 2);   // start/finish ≈ midpoint of the lane
-  const cells = [];
-  for (let b = maxBox; b >= 1; b--) {
-    const r = byBox[b];
-    if (r) {
-      const hex = (typeof colorFor === "function") ? colorFor(STATE.series, r.car) : "#888";
-      const txt = (typeof safeContrastColor === "function") ? safeContrastColor(hex) : "#fff";
-      cells.push(`<div class="rdoc-box" title="#${_td(r.car)} ${escapeHTML(drv(r.car) || "")}">
-          <div class="rdoc-box-car" style="background:${hex};color:${txt}">${_td(r.car)}</div>
-          <div class="rdoc-box-n">${b}</div></div>`);
-    } else {
-      cells.push(`<div class="rdoc-box rdoc-box-empty"><div class="rdoc-box-car"></div><div class="rdoc-box-n">${b}</div></div>`);
-    }
-    if (b === sfBox) cells.push(`<div class="rdoc-sf"><span>START / FINISH</span></div>`);
-  }
-  return `<div class="rdoc-pit2">
-      <div class="rdoc-pit2-turn">◄ Turn&nbsp;4</div>
-      <div class="rdoc-pit2-lane">${cells.join("")}</div>
-      <div class="rdoc-pit2-turn">Turn&nbsp;1 ►</div>
-    </div>
-    <div class="rdoc-pit2-hint">Boxes run pit-entry (Turn 4) → pit-exit (Turn 1); hover a box for the driver.</div>`;
+// A car-number pill + driver name as a single consolidated cell, matching the
+// standings-rail look so the colored swatch always carries its number.
+function _carDriverCell(car, driver) {
+  const hex = (typeof colorFor === "function") ? colorFor(STATE.series, car) : "#888";
+  const txt = (typeof contrastTextFor === "function") ? contrastTextFor(hex) : "#000";
+  return `<span class="car-tag" style="background:${hex};color:${txt}">${escapeHTML(String(car ?? ""))}</span>` +
+    `<span class="rdoc-cd-name">${escapeHTML(driver || "")}</span>`;
 }
 
-// Starting lineup from a completed race's results — the grid, by start
-// position, with the qualifying position alongside (they differ after
-// penalties / backup cars). Returns null for races with no grid data.
+// Map a parsed stall "type" to its legend class. Occupied boxes are colored by
+// the car; unused boxes get the sheet's category colors.
+const _STALL_TYPES = [
+  { type: "eliminated", label: "Eliminated / Mobility", cls: "st-elim" },
+  { type: "vacant",     label: "Vacant",                cls: "st-vac" },
+  { type: "monster",    label: "Monster",               cls: "st-mon" },
+  { type: "smi",        label: "SMI C10",               cls: "st-smi" },
+];
+function _stallCls(type) {
+  const m = _STALL_TYPES.find(s => s.type === type);
+  return m ? m.cls : "st-vac";
+}
+
+// Pit stalls as the NASCAR stall sheet: boxes numbered high→low (Turn 4 → Turn
+// 1), split at start/finish, each occupied box showing its car number in the
+// car's color over the box number; unused boxes colored by category with a
+// legend. Wraps to fit the column (no horizontal scroll).
+function _rdocPitVisual(rows, drv) {
+  const byBox = {}; let maxBox = 0;
+  rows.forEach(r => {
+    if (r.box == null) return;
+    byBox[r.box] = r;
+    maxBox = Math.max(maxBox, r.box);
+  });
+  if (!maxBox) return `<div class="rc-empty">No pit-stall data.</div>`;
+  const sfBox = Math.ceil(maxBox / 2);
+
+  const boxHTML = b => {
+    const r = byBox[b];
+    if (r && r.car != null && r.car !== "") {
+      const hex = (typeof colorFor === "function") ? colorFor(STATE.series, r.car) : "#888";
+      const txt = (typeof contrastTextFor === "function") ? contrastTextFor(hex) : "#000";
+      return `<div class="rdoc-box" title="#${_td(r.car)} ${escapeHTML(drv(r.car) || "")}">
+          <div class="rdoc-box-car" style="background:${hex};color:${txt}">${_td(r.car)}</div>
+          <div class="rdoc-box-n">${b}</div></div>`;
+    }
+    const cls = _stallCls(r && r.type);
+    return `<div class="rdoc-box rdoc-box-${cls}"><div class="rdoc-box-car"></div><div class="rdoc-box-n">${b}</div></div>`;
+  };
+
+  const group = (hi, lo) => {
+    let s = "";
+    for (let b = hi; b >= lo; b--) s += boxHTML(b);
+    return `<div class="rdoc-pit-group">${s}</div>`;
+  };
+
+  const legend = _STALL_TYPES.map(s =>
+    `<span class="rdoc-leg"><span class="rdoc-leg-sw rdoc-box-${s.cls}"></span>${s.label}</span>`).join("");
+
+  return `<div class="rdoc-pit">
+      <div class="rdoc-pit-legend">${legend}</div>
+      <div class="rdoc-pit-lane">
+        <span class="rdoc-pit-turn">◄ Turn&nbsp;4</span>
+        ${group(maxBox, sfBox + 1)}
+        <span class="rdoc-pit-sf">START<br>FINISH</span>
+        ${group(sfBox, 1)}
+        <span class="rdoc-pit-turn">Turn&nbsp;1 ►</span>
+      </div>
+    </div>`;
+}
+
+// Starting lineup from a completed race's results — grid by start position,
+// with qualifying position alongside (they differ after penalties).
 function raceLineupTab(race) {
   const grid = ((race && race.results) || [])
     .filter(d => d.start_pos != null && d.start_pos > 0)
     .slice().sort((a, b) => a.start_pos - b.start_pos);
   if (!grid.length) return null;
-  const body = grid.map(d => {
-    const hex = colorFor(STATE.series, d.car_number);
-    const txt = safeContrastColor(hex);
-    return `<tr><td class="rdoc-lap">${d.start_pos}</td>
-        <td><span class="car-tag" style="background:${hex};color:${txt}">${escapeHTML(String(d.car_number))}</span></td>
-        <td>${escapeHTML(d.driver || "")}</td>
-        <td class="rdoc-lap">${d.qual_pos != null && d.qual_pos > 0 ? "P" + d.qual_pos : "—"}</td></tr>`;
-  }).join("");
-  const html = `<div class="rdoc-body"><div class="table-scroll"><table class="data-table rdoc-table">
-      <thead><tr><th>Start</th><th>Car</th><th>Driver</th><th>Qual</th></tr></thead>
+  const body = grid.map(d => `<tr>
+      <td class="rdoc-pos">${d.start_pos}</td>
+      <td class="rdoc-cd">${_carDriverCell(d.car_number, d.driver)}</td>
+      <td class="rdoc-pos">${d.qual_pos != null && d.qual_pos > 0 ? "P" + d.qual_pos : "—"}</td></tr>`).join("");
+  const html = `<div class="rdoc-body"><div class="table-scroll"><table class="data-table rdoc-table rdoc-narrow">
+      <thead><tr><th>Start</th><th>Car / Driver</th><th>Qual</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
-  return { key: "lineup", label: "Starting Lineup", count: grid.length, html };
+  return { key: "lineup", label: "Starting Lineup", html };
 }
 
-// Driver + owner championship points AS OF this race's round, using the same
-// builders the Standings view uses. Only for completed races.
+// Driver + owner championship points AS OF this race's round: rank, car/driver,
+// starts, wins, points, and points behind the leader.
 function racePointsTab(race) {
   if (!race || !((race.results || []).length)) return null;
   if (typeof driverPointsMapThroughRound !== "function" ||
@@ -5166,18 +5200,21 @@ function racePointsTab(race) {
   const dRows = driverRankingRowsFrom(driverPointsMapThroughRound(round));
   const oRows = rankingRowsFrom(pointsMapThroughRound(round));
   const tbl = (rows, who) => {
+    const leader = rows.length ? Math.round(rows[0].total) : 0;
     const b = rows.map((r, i) => {
-      const hex = colorFor(STATE.series, r.car_number);
-      const txt = safeContrastColor(hex);
+      const pts = Math.round(r.total);
+      const behind = i === 0 ? "—" : "-" + (leader - pts);
       const name = who === "owner" ? (r.primaryDriver || r.driver) : r.driver;
-      return `<tr><td class="rdoc-lap">${i + 1}</td>
-          <td><span class="car-tag" style="background:${hex};color:${txt}">${escapeHTML(String(r.car_number))}</span></td>
-          <td>${escapeHTML(name || "")}</td>
-          <td class="rdoc-lap"><b>${Math.round(r.total)}</b></td></tr>`;
+      return `<tr><td class="rdoc-pos">${i + 1}</td>
+          <td class="rdoc-cd">${_carDriverCell(r.car_number, name)}</td>
+          <td class="rdoc-pos">${r.starts ?? "—"}</td>
+          <td class="rdoc-pos">${r.wins ?? 0}</td>
+          <td class="rdoc-pos"><b>${pts}</b></td>
+          <td class="rdoc-pos rdoc-behind">${behind}</td></tr>`;
     }).join("");
-    return `<table class="data-table rdoc-table"><thead><tr><th>#</th><th>Car</th>` +
-      `<th>${who === "owner" ? "Owner · primary driver" : "Driver"}</th><th>Pts</th></tr></thead>` +
-      `<tbody>${b}</tbody></table>`;
+    return `<table class="data-table rdoc-table"><thead><tr><th>#</th>` +
+      `<th>${who === "owner" ? "Car / Owner" : "Car / Driver"}</th>` +
+      `<th>St</th><th>W</th><th>Pts</th><th>Back</th></tr></thead><tbody>${b}</tbody></table>`;
   };
   const html = `<div class="rdoc-body"><div class="rc-pts-grid">
       <div class="rc-pts-col"><div class="rc-pts-h">Driver Points</div>
@@ -19994,7 +20031,7 @@ function renderRaceCenter() {
   const active = tabs.find(t => t.key === activeKey) || tabs[0];
   const tabBar = tabs.map(t =>
     `<button class="rdoc-tab${t.key === activeKey ? " is-active" : ""}" onclick="selectRaceTab('${t.key}')">` +
-    `${escapeHTML(t.label)}${t.count != null ? `<span class="rdoc-tab-n">${t.count}</span>` : ""}</button>`).join("");
+    `${escapeHTML(t.label)}</button>`).join("");
 
   host.innerHTML = `
     <div class="rc-hero">
