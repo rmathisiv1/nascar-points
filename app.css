@@ -12411,3 +12411,19 @@ body.lightbox-open {
   letter-spacing: 0.02em;
   line-height: 24px;
 }
+
+/* ---- Back control relocated into the series-toggle row (race/track/schedule),
+   sitting to the LEFT of the "SERIES" ::before label ---- */
+.pgs-back { order: -1; margin-right: 8px; }
+#race-takeover    > .profile-takeover-head,
+#track-takeover   > .profile-takeover-head,
+#schedule-takeover > .profile-takeover-head { display: none; }
+
+/* Give the page title room to breathe — away from the series row above and the
+   first card below (the title was crowding both lines). */
+#view-track .view-head,
+#view-race .view-head,
+#view-schedule .view-head {
+  padding: 18px 4px 16px;
+  margin-bottom: 8px;
+}

@@ -2921,7 +2921,14 @@ function renderPageSeriesBar() {
   bar.hidden = !show;
   if (!show) { bar.innerHTML = ""; return; }
   const cur = STATE.series;
-  bar.innerHTML =
+  // Drill-in takeovers (race/track/schedule) carry a Back control. Render it
+  // on the LEFT of the series toggle (ordered before the "SERIES" label) so it
+  // sits up on this row rather than below it; their own takeover-head Back is
+  // hidden via CSS.
+  const back = ["race", "track", "schedule"].includes(STATE.view)
+    ? `<a href="#" class="takeover-back pgs-back" onclick="takeoverBack(event)">← Back</a>`
+    : "";
+  bar.innerHTML = back +
     `<div class="pgs-track" role="tablist" aria-label="Series">` +
     ["NCS", "NOS", "NTS"].map(s =>
       `<button type="button" class="pgs-btn${s === cur ? " on" : ""}" ` +
@@ -2929,6 +2936,20 @@ function renderPageSeriesBar() {
       `aria-selected="${s === cur ? "true" : "false"}">${s}</button>`
     ).join("") +
     `</div>`;
+}
+
+// Shared Back behavior for drill-in takeovers: return to the previous hash if we
+// have one, else the previous view, else a sensible default.
+function takeoverBack(e) {
+  if (e) e.preventDefault();
+  if (STATE.prevHash && STATE.prevHash !== location.hash) {
+    location.hash = STATE.prevHash;
+    return;
+  }
+  const skip = ["race", "track", "schedule", "profile", "team", "cc",
+                "drivers", "teams", "crewchiefs"];
+  const prev = (STATE.prevView && !skip.includes(STATE.prevView)) ? STATE.prevView : "arc";
+  location.hash = `#/${prev}`;
 }
 
 // Toggle handler: record the choice for THIS page, then apply. Reuses
