@@ -5104,8 +5104,31 @@ a.rc-sched-winner:hover {
   .tk-history-table td:nth-child(5),
   .tk-history-table th:nth-child(6),
   .tk-history-table td:nth-child(6) { display: none; }
-  .tk-col-yr { width: 60px; }
-  .tk-col-rd { width: 50px; }
+  /* CRITICAL: with table-layout:fixed, a <colgroup> reserves width for the
+     hidden Mfr/Pole columns too, so the visible columns overflow and the text
+     overlaps. Switch to auto layout on mobile and neutralize every fixed col
+     width so the four shown columns reflow to fit the viewport. */
+  .tk-history-table,
+  #track-host .tk-history-table { table-layout: auto; width: 100%; }
+  .tk-history-table col { width: auto !important; }
+  .tk-history-table th, .tk-history-table td {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .tk-col-yr, #track-host .tk-col-yr { width: 48px !important; }
+  .tk-col-rd, #track-host .tk-col-rd { width: 40px !important; }
+  /* Let the wide card body scroll horizontally as a last resort instead of
+     painting cells on top of each other. */
+  .rc-card-wide .rc-card-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* The card header (title + series toggle + "newest first") was colliding
+     on narrow screens — stack it. */
+  .rc-card-wide .rc-card-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .rc-card-controls { flex-wrap: wrap; }
 }
 
 /* Heatmap header links (clickable R# to navigate to track page) */
