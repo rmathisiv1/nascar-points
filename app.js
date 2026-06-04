@@ -61,6 +61,7 @@ const STATE = {
   // in the loaded data" (the default — what the Race tab used to do).
   // Set from the #/race/<round> URL when a user clicks into a specific race.
   race: { round: null },
+  personnel: { query: "", role: "all" },
   // Standings view + sort. view = "driver" | "owner" | "manufacturer".
   // Driver is default (most-fan-friendly); Owner mirrors NASCAR's owner
   // standings (per-car, subs accrue to the car); Manufacturer uses
@@ -145,7 +146,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs", "pointscalc", "projection"];
+const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs", "personnel", "pointscalc", "projection"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -2158,7 +2159,7 @@ function parseHash() {
   }
   // All-time database pages: #/drivers, #/teams, #/crewchiefs.
   // No parameters — these always render against the full SEASON_CACHE.
-  if (view === "drivers" || view === "teams" || view === "crewchiefs") {
+  if (view === "drivers" || view === "teams" || view === "crewchiefs" || view === "personnel") {
     stashPrev(view);
     STATE.view = view;
     STATE.lastHash = location.hash;
@@ -2170,9 +2171,9 @@ function parseHash() {
   // what was stashed, since the user opted into "always live" — even the
   // original entry point may have been historical.
   const wasProfile = STATE.view === "profile" && STATE.profile && STATE.profile.locked;
-  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc", "projection"].includes(STATE.view);
+  const wasOtherTakeover = ["team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "personnel", "pointscalc", "projection"].includes(STATE.view);
   const leavingTakeover = wasProfile || wasOtherTakeover;
-  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc", "projection"].includes(view);
+  const enteringNonTakeover = !["profile", "team", "cc", "track", "race", "schedule", "playoffs", "drivers", "teams", "crewchiefs", "personnel", "pointscalc", "projection"].includes(view);
   if (leavingTakeover && enteringNonTakeover) {
     if (STATE.mode === "present") {
       const latest = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]);
@@ -2947,7 +2948,7 @@ function takeoverBack(e) {
     return;
   }
   const skip = ["race", "track", "schedule", "profile", "team", "cc",
-                "drivers", "teams", "crewchiefs"];
+                "drivers", "teams", "crewchiefs", "personnel"];
   const prev = (STATE.prevView && !skip.includes(STATE.prevView)) ? STATE.prevView : "arc";
   location.hash = `#/${prev}`;
 }
@@ -3192,7 +3193,7 @@ function wireUIControls() {
   });
   // Race / Track / Schedule / Team back: same logic as profile-back.
   ["race-back", "track-back", "schedule-back", "team-back", "cc-back",
-   "drivers-back", "teams-back", "crewchiefs-back"].forEach(id => {
+   "drivers-back", "teams-back", "crewchiefs-back", "personnel-back"].forEach(id => {
     document.getElementById(id)?.addEventListener("click", (e) => {
       e.preventDefault();
       if (STATE.prevHash && STATE.prevHash !== location.hash) {
@@ -3505,7 +3506,7 @@ const TAB_VIEWS = ["home", "arc", "form", "breakdown", "trajectory", "teammates"
 const TAKEOVER_VIEWS = [];
 // Center-column takeovers — these hide tab-body and live in the center pane,
 // alongside left (standings) and right (form) panels.
-const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs", "drivers", "teams", "crewchiefs", "pointscalc", "projection"];
+const CENTER_TAKEOVER_VIEWS = ["profile", "race", "track", "schedule", "team", "cc", "playoffs", "drivers", "teams", "crewchiefs", "personnel", "pointscalc", "projection"];
 
 function render() {
   // Memo cache lives for the duration of one render pass — avoids re-running
@@ -3597,6 +3598,7 @@ function render() {
   const ccsTakeover     = document.getElementById("crewchiefs-takeover");
   const pointscalcTakeover = document.getElementById("pointscalc-takeover");
   const projectionTakeover = document.getElementById("projection-takeover");
+  const personnelTakeover = document.getElementById("personnel-takeover");
   const tabBody         = document.getElementById("tab-body");
   if (profileTakeover) profileTakeover.hidden = (STATE.view !== "profile");
   if (raceTakeover)    raceTakeover.hidden    = (STATE.view !== "race");
@@ -3610,6 +3612,7 @@ function render() {
   if (ccsTakeover)     ccsTakeover.hidden     = (STATE.view !== "crewchiefs");
   if (pointscalcTakeover) pointscalcTakeover.hidden = (STATE.view !== "pointscalc");
   if (projectionTakeover) projectionTakeover.hidden = (STATE.view !== "projection");
+  if (personnelTakeover) personnelTakeover.hidden = (STATE.view !== "personnel");
   // The view-playoffs section inside its takeover wrapper has its own
   // hidden attribute — keep it in sync so renderPlayoffs paints into it.
   const pElem = document.getElementById("view-playoffs");
@@ -3682,6 +3685,8 @@ function render() {
       renderAllTimeTeams();
     } else if (STATE.view === "crewchiefs") {
       renderAllTimeCrewChiefs();
+    } else if (STATE.view === "personnel") {
+      renderPersonnel();
     } else if (STATE.view === "pointscalc") {
       renderPointsCalc();
     } else if (STATE.view === "projection") {
@@ -5011,6 +5016,7 @@ async function loadEntryList() {
 // ============================================================
 const RACE_DOCS_CACHE = {};
 let _raceDocsAttempted = false;
+let PERSONNEL_INDEX = null;   // built lazily by renderPersonnel from roster docs
 
 async function loadRaceDocs() {
   if (_raceDocsAttempted) return;
@@ -23407,6 +23413,151 @@ function wireAllTimeTable(stateKey, rerender) {
       if (viewEl) viewEl.scrollTop = 0;
     });
   });
+}
+
+// ============================================================
+// PERSONNEL DATABASE — built from the per-race crew-roster docs
+// (data/race_docs.json). Each roster lists every team member by
+// {type, position, name} per car; aggregated across completed races this
+// gives a searchable index of where each engineer / pit-crew member / car
+// chief / mechanic has worked. Future-race rosters are excluded (they can be
+// a spring-race fallback for dual-date tracks).
+// ============================================================
+function _roleGroupOf(position) {
+  const p = (position || "").toLowerCase();
+  if (p.includes("crew chief")) return "Crew Chief";
+  if (p.includes("engineer")) return "Engineer";
+  if (["front changer", "rear changer", "jack", "fueler", "tire carrier"].some(x => p.includes(x)))
+    return "Pit Crew";
+  if (p.includes("car chief") || p.includes("mechanic")) return "Car Chief / Mechanic";
+  if (p.includes("spotter")) return "Spotter";
+  return "Other";
+}
+const PERSONNEL_ROLES = ["all", "Engineer", "Pit Crew", "Car Chief / Mechanic", "Crew Chief"];
+
+function buildPersonnelIndex() {
+  const idx = new Map();   // normName -> {name, appearances[], roles:Set, teams:Set, positions:Set}
+  const cutoff = Date.now() + 9 * 864e5;   // race-week window; excludes far-future fallbacks
+  for (const [yr, bySeries] of Object.entries(RACE_DOCS_CACHE || {})) {
+    for (const [series, races] of Object.entries(bySeries || {})) {
+      for (const rec of Object.values(races || {})) {
+        const rd = Date.parse(String(rec.race_date || "").slice(0, 10));
+        if (!rd || rd > cutoff) continue;
+        const roster = rec.docs && rec.docs.roster && rec.docs.roster.rows;
+        if (!Array.isArray(roster)) continue;
+        const track = rec.track || "";
+        const date = String(rec.race_date || "").slice(0, 10);
+        for (const car of roster) {
+          const team = car.team || "";
+          const add = (name, position, type) => {
+            if (!name) return;
+            const key = normalizeDriverName(name);
+            let p = idx.get(key);
+            if (!p) { p = { name, appearances: [], roles: new Set(), teams: new Set(), positions: new Set() }; idx.set(key, p); }
+            p.appearances.push({ year: +yr, series, track, date, car: car.car || "", driver: car.driver || "", team, position: position || "", type: type || "" });
+            if (team) p.teams.add(team);
+            if (position) p.positions.add(position);
+            p.roles.add(_roleGroupOf(position));
+          };
+          add(car.crew_chief, "Crew Chief", "Crew Chief");
+          for (const c of (car.crew || [])) add(c.name, c.position, c.type);
+        }
+      }
+    }
+  }
+  return idx;
+}
+
+function setPersonnelFilter(kind, val) {
+  STATE.personnel = STATE.personnel || { query: "", role: "all" };
+  STATE.personnel[kind] = val;
+  renderPersonnel();
+}
+function _personnelSearch(el) { STATE.personnel = STATE.personnel || {}; STATE.personnel.query = el.value; _renderPersonnelList(); }
+
+function renderPersonnel() {
+  const host = document.getElementById("personnel-host");
+  const sub = document.getElementById("personnel-sub");
+  if (!host) return;
+  STATE.personnel = STATE.personnel || { query: "", role: "all" };
+  // Lazy-load the docs file, then re-render once when it arrives.
+  if (!_raceDocsAttempted) {
+    loadRaceDocs().then(() => { if (STATE.view === "personnel") renderPersonnel(); });
+  }
+  const idx = buildPersonnelIndex();
+  PERSONNEL_INDEX = idx;
+  const total = idx.size;
+  const raceCount = (() => {
+    let n = 0; const cutoff = Date.now() + 9 * 864e5;
+    for (const bySeries of Object.values(RACE_DOCS_CACHE || {}))
+      for (const races of Object.values(bySeries || {}))
+        for (const rec of Object.values(races || {})) {
+          const rd = Date.parse(String(rec.race_date || "").slice(0, 10));
+          if (rd && rd <= cutoff && rec.docs && rec.docs.roster) n++;
+        }
+    return n;
+  })();
+  if (sub) sub.textContent = total
+    ? `${total} people across ${raceCount} race rosters`
+    : "No roster data yet — run the crew-roster backfill";
+
+  const roleTabs = PERSONNEL_ROLES.map(r =>
+    `<button class="pers-role${(STATE.personnel.role || "all") === r ? " on" : ""}" onclick="setPersonnelFilter('role','${r}')">${r === "all" ? "All Roles" : escapeHTML(r)}</button>`
+  ).join("");
+
+  host.innerHTML = `
+    <div class="pers-controls">
+      <input type="text" class="pers-search" id="pers-search" placeholder="Search a name…"
+        value="${escapeHTML(STATE.personnel.query || "")}" oninput="_personnelSearch(this)">
+      <div class="pers-roles">${roleTabs}</div>
+    </div>
+    <div id="personnel-list"></div>`;
+  _renderPersonnelList();
+  const inp = document.getElementById("pers-search");
+  if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+
+function _renderPersonnelList() {
+  const wrap = document.getElementById("personnel-list");
+  if (!wrap || !PERSONNEL_INDEX) return;
+  const st = STATE.personnel || {};
+  const q = (st.query || "").toLowerCase().trim();
+  const role = st.role || "all";
+  let rows = Array.from(PERSONNEL_INDEX.values());
+  if (role !== "all") rows = rows.filter(p => p.roles.has(role));
+  if (q) rows = rows.filter(p => p.name.toLowerCase().includes(q));
+  rows.sort((a, b) => b.appearances.length - a.appearances.length || a.name.localeCompare(b.name));
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="rc-empty">No people match.</div>`;
+    return;
+  }
+  const CAP = 250;
+  const shown = rows.slice(0, CAP);
+  const cards = shown.map(p => {
+    const races = new Set(p.appearances.map(a => a.year + a.series + a.track + a.date)).size;
+    const teams = Array.from(p.teams);
+    const positions = Array.from(p.positions);
+    // history newest-first
+    const hist = p.appearances.slice().sort((a, b) =>
+      (b.date || "").localeCompare(a.date || "")).map(a =>
+      `<tr><td class="rdoc-pos">${a.year}</td><td>${escapeHTML(a.series)}</td>
+        <td>${escapeHTML(a.track)}</td><td class="rdoc-car">#${escapeHTML(String(a.car))}</td>
+        <td>${escapeHTML(a.driver)}</td><td>${escapeHTML(a.team)}</td>
+        <td>${escapeHTML(a.position)}</td></tr>`).join("");
+    return `<details class="pers-card">
+      <summary>
+        <span class="pers-name">${escapeHTML(p.name)}</span>
+        <span class="pers-meta">${escapeHTML(positions.slice(0, 2).join(", "))}${positions.length > 2 ? " +" + (positions.length - 2) : ""}</span>
+        <span class="pers-teams">${escapeHTML(teams.join(" · "))}</span>
+        <span class="pers-count">${races} race${races === 1 ? "" : "s"}</span>
+      </summary>
+      <div class="table-scroll"><table class="data-table rdoc-table">
+        <thead><tr><th>Yr</th><th>Series</th><th>Track</th><th>Car</th><th>Driver</th><th>Team</th><th>Position</th></tr></thead>
+        <tbody>${hist}</tbody></table></div>
+    </details>`;
+  }).join("");
+  const more = rows.length > CAP ? `<div class="pers-more">Showing ${CAP} of ${rows.length} — narrow with search or a role filter.</div>` : "";
+  wrap.innerHTML = `<div class="pers-list">${cards}</div>${more}`;
 }
 
 function renderAllTimeDrivers() {
