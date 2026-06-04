@@ -12305,45 +12305,97 @@ body.lightbox-open {
 .rc-tabbar .rdoc-tab { font-size: 12px; padding: 9px 14px; }
 .rc-tabbody { padding-top: 8px; }
 
-/* ---- pit stalls as a visual pit-lane stall chart ---- */
-.rdoc-pitlane-wrap { padding: 12px 10px 6px; }
-.rdoc-pitlane-label {
+/* ---- pit stalls: PDF-style pit lane ---- */
+.rdoc-pit2 {
   display: flex;
-  justify-content: space-between;
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 8px;
+  align-items: stretch;
+  gap: 8px;
+  padding: 14px 10px 4px;
+  overflow-x: auto;
 }
-.rdoc-pitlane { display: flex; flex-wrap: wrap; gap: 6px; }
-.rdoc-stall {
-  width: 76px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card-hi);
-  padding: 5px 4px 6px;
-  text-align: center;
-}
-.rdoc-stall-box {
+.rdoc-pit2-turn {
+  display: flex;
+  align-items: center;
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--muted);
+  white-space: nowrap;
+  padding: 0 2px;
 }
-.rdoc-stall-car {
+.rdoc-pit2-lane {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.rdoc-box {
+  flex: 0 0 auto;
+  width: 30px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card-hi);
+  overflow: hidden;
+}
+.rdoc-box-car {
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 14px;
-  border-radius: 5px;
-  padding: 3px 0;
-  margin: 3px 2px;
+  font-size: 12px;
+  text-align: center;
+  line-height: 24px;
+  height: 24px;
 }
-.rdoc-stall-drv {
-  font-size: 9.5px;
-  line-height: 1.18;
-  color: var(--text);
-  min-height: 22px;
-  overflow-wrap: anywhere;
+.rdoc-box-n {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  text-align: center;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  line-height: 14px;
+}
+.rdoc-box-empty { opacity: 0.4; }
+.rdoc-box-empty .rdoc-box-car { background: repeating-linear-gradient(45deg, transparent, transparent 3px, var(--border) 3px, var(--border) 4px); }
+.rdoc-sf {
+  flex: 0 0 auto;
+  width: 2px;
+  align-self: stretch;
+  margin: 0 4px;
+  border-left: 2px dashed var(--accent);
+  position: relative;
+}
+.rdoc-sf span {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%) rotate(0deg);
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: var(--card);
+  padding: 1px 4px;
+}
+.rdoc-pit2-hint {
+  font-size: 10px;
+  color: var(--muted);
+  padding: 6px 12px 2px;
+}
+
+/* ---- points-after-race: driver + owner side by side ---- */
+.rc-pts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  padding: 8px 8px 4px;
+}
+.rc-pts-h {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
 }
