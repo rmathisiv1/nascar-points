@@ -2897,6 +2897,12 @@ function ensurePageSeries() {
     }
     return;
   }
+  // The race page is identified by (series, round) — round N is a DIFFERENT
+  // race in each series — so it must NOT inherit a remembered per-page series
+  // (that caused "click NCS Nashville from the schedule, land on NTS Lime
+  // Rock"). It keeps whatever series the navigation context set; its toggle
+  // (renderPageSeriesBar) jumps to the same race weekend in another series.
+  if (view === "race") return;
   if (!SERIES_TOGGLE_VIEWS.includes(view)) return;
   STATE.pageSeries = STATE.pageSeries || {};
   if (!STATE.pageSeries[view]) STATE.pageSeries[view] = "NCS";
@@ -2921,12 +2927,18 @@ function renderPageSeriesBar() {
   const show = SERIES_TOGGLE_VIEWS.includes(STATE.view);
   bar.hidden = !show;
   if (!show) { bar.innerHTML = ""; return; }
+
+  // The race page gets a SPECIAL series toggle: only the series that actually
+  // ran this race weekend (same track) are offered, and switching jumps to
+  // THAT series' race at this track — not the same round number (round N is a
+  // different race in each series).
+  if (STATE.view === "race") {
+    bar.innerHTML = renderRaceSeriesBar();
+    return;
+  }
+
   const cur = STATE.series;
-  // Drill-in takeovers (race/track/schedule) carry a Back control. Render it
-  // on the LEFT of the series toggle (ordered before the "SERIES" label) so it
-  // sits up on this row rather than below it; their own takeover-head Back is
-  // hidden via CSS.
-  const back = ["race", "track", "schedule"].includes(STATE.view)
+  const back = ["track", "schedule"].includes(STATE.view)
     ? `<a href="#" class="takeover-back pgs-back" onclick="takeoverBack(event)">← Back</a>`
     : "";
   bar.innerHTML = back +
@@ -2937,6 +2949,64 @@ function renderPageSeriesBar() {
       `aria-selected="${s === cur ? "true" : "false"}">${s}</button>`
     ).join("") +
     `</div>`;
+}
+
+// Which series ran a race at this track this season, and at what round. Matches
+// by track_code with a date window so the two annual races at a track don't
+// collide. Returns [{series, round}] for the series present this weekend.
+function raceWeekendSeries() {
+  const cur = SEASON_CACHE[STATE.season] && SEASON_CACHE[STATE.season][STATE.series];
+  const here = cur && (cur.races || []).find(r => r.round === (STATE.race && STATE.race.round));
+  if (!here) return [];
+  const tcode = here.track_code;
+  const hereDate = here.date ? Date.parse(here.date + "T00:00:00") : null;
+  const out = [];
+  for (const s of ["NCS", "NOS", "NTS"]) {
+    const blk = SEASON_CACHE[STATE.season] && SEASON_CACHE[STATE.season][s];
+    if (!blk || !blk.races) continue;
+    // best track match within ±5 days (or any track match if no dates)
+    let best = null, bestGap = Infinity;
+    for (const r of blk.races) {
+      if (r.track_code !== tcode) continue;
+      const d = r.date ? Date.parse(r.date + "T00:00:00") : null;
+      const gap = (hereDate != null && d != null) ? Math.abs(d - hereDate) : 0;
+      if (gap < bestGap) { best = r; bestGap = gap; }
+    }
+    if (best && (hereDate == null || bestGap <= 5 * 864e5)) out.push({ series: s, round: best.round });
+  }
+  return out;
+}
+
+function renderRaceSeriesBar() {
+  const back = `<a href="#" class="takeover-back pgs-back" onclick="takeoverBack(event)">← Back</a>`;
+  const weekend = raceWeekendSeries();
+  // If we can't resolve (data for other series not loaded yet, or no match),
+  // just show the current series so the bar isn't empty.
+  if (!weekend.length) {
+    return back + `<div class="pgs-track"><button class="pgs-btn on" disabled>${STATE.series}</button></div>`;
+  }
+  const btns = weekend.map(w =>
+    `<button type="button" class="pgs-btn${w.series === STATE.series ? " on" : ""}" ` +
+    `onclick="selectRaceSeries('${w.series}', ${w.round})" role="tab" ` +
+    `aria-selected="${w.series === STATE.series ? "true" : "false"}">${w.series}</button>`
+  ).join("");
+  return back + `<div class="pgs-track" role="tablist" aria-label="Series at this track">${btns}</div>`;
+}
+
+// Switch the race page to another series' race AT THE SAME TRACK (its own round).
+async function selectRaceSeries(series, round) {
+  STATE.race = { round: round };
+  if (series === STATE.series) { render(); return; }
+  STATE.series = series;
+  syncSeriesUIGlobal(series);
+  if (STATE.mode === "present") STATE.lastPresentSeries = series;
+  const yrs = seasonsAvailableForSeries(series);
+  if (yrs.length && !yrs.includes(STATE.season)) STATE.season = yrs[0];
+  await loadCurrentData();
+  resetRenderCache();
+  populateRacePicker();
+  history.replaceState(null, "", `#/race/${round}`);
+  render();
 }
 
 // Shared Back behavior for drill-in takeovers: return to the previous hash if we
