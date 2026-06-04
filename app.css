@@ -330,9 +330,50 @@ html, body {
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   font-family: var(--mono); font-size: 10px;
-  overflow-x: auto;
+  overflow: hidden;
   white-space: nowrap;
   -webkit-overflow-scrolling: touch;
+}
+/* The bar always contains a .metricbar-track with two identical copies. At
+   comfortable widths we show one copy statically (hide the duplicate, no
+   animation). Narrower widths flip on the auto-scrolling ticker (see the
+   width media queries below). */
+.metricbar-track {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+}
+.metricbar-copy {
+  display: flex;
+  gap: 24px;
+  flex-shrink: 0;
+}
+.metricbar-copy + .metricbar-copy { display: none; }   /* hide duplicate when static */
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* Narrow desktop (above the mobile breakpoint but too tight for the full
+   metrics row): switch the static bar into the same auto-scrolling ticker used
+   on mobile, so the metrics never overlap / clip. */
+@media (min-width: 768px) and (max-width: 1200px) {
+  .metricbar {
+    overflow: hidden;
+    position: relative;
+    gap: 0;
+  }
+  .metricbar-track {
+    width: max-content;
+    flex: none;
+    animation: ticker 34s linear infinite;
+  }
+  .metricbar-track:hover { animation-play-state: paused; }
+  .metricbar-copy {
+    padding-right: 24px;
+  }
+  .metricbar-copy + .metricbar-copy { display: flex; }
 }
 
 /* Time-cursor banner: shown when STATE.throughRound is non-null.
@@ -709,6 +750,7 @@ html, body {
 .tab-body {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   padding: 8px 10px;
@@ -718,6 +760,7 @@ html, body {
 .tab-panel {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3466,13 +3509,9 @@ a.driver-cell.profile-link:hover .car-tag {
   }
 
   /* ---- Metric bar: auto-scrolling ticker on mobile ----
-     Strategy: JS emits two identical copies of the metrics side-by-side as
-     children of .metricbar-track. The track is flex; each copy is a wrapper
-     .metricbar-copy that takes its natural width. We animate translateX from
-     0 to -50% of the track's own width — since the track contains exactly two
-     identical copies, -50% lands the second copy exactly where the first was,
-     making the loop seamless.
-  */
+     The bar always contains .metricbar-track with two identical .metricbar-copy
+     children (emitted unconditionally by renderMetricBar). On mobile we reveal
+     the second copy and animate translateX to -50% so the loop is seamless. */
   .metricbar {
     padding: 5px 0;
     font-size: 10px;
@@ -3484,6 +3523,7 @@ a.driver-cell.profile-link:hover .car-tag {
   .metricbar-track {
     display: flex;
     width: max-content;  /* let the two copies sum to their natural width */
+    flex: none;
     animation: ticker 28s linear infinite;
   }
   .metricbar-track:hover { animation-play-state: paused; }
@@ -3493,14 +3533,10 @@ a.driver-cell.profile-link:hover .car-tag {
     padding-right: 24px;  /* gap between the end of copy 1 and start of copy 2 */
     flex-shrink: 0;
   }
+  .metricbar-copy + .metricbar-copy { display: flex; }   /* reveal duplicate for the loop */
   .metric { flex-shrink: 0; }
   .metric .k { font-size: 8px; }
   .metric .v { font-size: 11px; }
-
-  @keyframes ticker {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-50%); }
-  }
 
   /* Hamburger button */
   .mobile-menu-btn {

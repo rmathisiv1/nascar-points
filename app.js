@@ -3036,7 +3036,20 @@ async function renderHistorical() {
   });
 
   if (sub === "schedule") { renderSchedulePage(); }
-  else if (sub === "race") { STATE.race = { round: h.round != null ? h.round : null }; renderRaceCenter(); }
+  else if (sub === "race") {
+    // Guarantee the global context is the historical selection before the race
+    // renders — a background render() pass can otherwise drift STATE.season
+    // back to the present anchor, making the round resolve to the 2026 race.
+    if (STATE.season !== h.year || STATE.series !== h.series) {
+      STATE.season = h.year;
+      STATE.series = h.series;
+      await loadCurrentData();
+      resetRenderCache();
+    }
+    STATE.throughRound = null;
+    STATE.race = { round: h.round != null ? h.round : null };
+    renderRaceCenter();
+  }
   else if (sub === "standings") renderStandings();
   else if (sub === "form") renderFormTable();
   else if (sub === "arc") renderArc();
@@ -5917,16 +5930,15 @@ function renderMetricBar() {
       <span class="v">${upcoming ? `<a class="metric-name-link" href="#/race/${upcoming.round}">${upcomingHTML}</a>` : upcomingHTML}</span></div>
   `;
 
-  if (isMobile()) {
-    // Two identical copies side-by-side; the CSS animates the track by -50%
-    // so the second copy lands exactly where the first began — seamless loop.
-    bar.innerHTML = `<div class="metricbar-track">
-      <div class="metricbar-copy">${metricsHTML}</div>
-      <div class="metricbar-copy">${metricsHTML}</div>
-    </div>`;
-  } else {
-    bar.innerHTML = metricsHTML;
-  }
+  // Always emit the two-copy ticker structure. CSS decides the presentation:
+  // at comfortable widths it shows a single static copy (second hidden, no
+  // animation); when the bar is too narrow to fit the metrics, it switches to
+  // the auto-scrolling ticker (both copies + animation). This makes the bar
+  // responsive to ANY narrow width, not just the mobile breakpoint.
+  bar.innerHTML = `<div class="metricbar-track">
+    <div class="metricbar-copy">${metricsHTML}</div>
+    <div class="metricbar-copy" aria-hidden="true">${metricsHTML}</div>
+  </div>`;
 
   // Wire hover handlers for the floating metric tooltip
   const tip = document.getElementById("metric-tooltip");
