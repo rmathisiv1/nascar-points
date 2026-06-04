@@ -21298,12 +21298,12 @@ function renderTrackPage() {
               <span>${escapeHTML(lastNameOf(pole.driver))}</span>
             </a>` : `<span class="muted">—</span>`;
           return `<tr class="profile-link" style="cursor:pointer;" onclick="location.hash='${raceHref.replace(/'/g, "\\'")}'"  title="View race results">
-            <td>${h.year}</td>
-            <td class="num">R${h.round}</td>
-            <td>${wHTML}</td>
-            <td>${tHTML}</td>
-            <td class="tk-col-mfr-cell">${mHTML}</td>
-            <td class="tk-col-pole-cell">${pHTML}</td>
+            <td data-label="Year">${h.year}</td>
+            <td class="num" data-label="Round">R${h.round}</td>
+            <td data-label="Winner">${wHTML}</td>
+            <td data-label="Team">${tHTML}</td>
+            <td class="tk-col-mfr-cell" data-label="Mfr">${mHTML}</td>
+            <td class="tk-col-pole-cell" data-label="Pole">${pHTML}</td>
           </tr>`;
         }).join("")}
       </tbody>
