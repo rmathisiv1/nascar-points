@@ -3212,6 +3212,12 @@ async function selectRaceSeries(series, round) {
 // have one, else the previous view, else a sensible default.
 function takeoverBack(e) {
   if (e) e.preventDefault();
+  // Inside the Historical browser, a race's back returns to the historical
+  // schedule (stay in the historical page) rather than the present route.
+  if (STATE.view === "historical" && STATE.historical && STATE.historical.view === "race") {
+    historicalSelect("view", "schedule");
+    return;
+  }
   // Guard against a back-target that points at the SAME route we're on (which
   // would do nothing) or at the same view family (race→race), which can ping-
   // pong. Only honor prevHash when it leads somewhere genuinely different.
@@ -3476,6 +3482,13 @@ function wireUIControls() {
    "drivers-back", "teams-back", "crewchiefs-back", "personnel-back"].forEach(id => {
     document.getElementById(id)?.addEventListener("click", (e) => {
       e.preventDefault();
+      // When a race (or other takeover) is being shown INSIDE the Historical
+      // browser, its own "← Back" should return to the historical schedule,
+      // not jump out to the global (present-day) route.
+      if (STATE.view === "historical" && STATE.historical && STATE.historical.view === "race") {
+        historicalSelect("view", "schedule");
+        return;
+      }
       const curSeg = (location.hash.replace("#/", "").split("/")[0] || "").split("?")[0];
       const prevSeg = (String(STATE.prevHash || "").replace("#/", "").split("/")[0] || "").split("?")[0];
       if (STATE.prevHash && STATE.prevHash !== location.hash && prevSeg !== curSeg) {
@@ -5367,7 +5380,13 @@ let _raceTab = "overview";
 let _raceTabRound = null;
 function selectRaceTab(k) {
   _raceTab = k;
+  // The race page renders both as its own route (#/race) and inside the
+  // Historical browser (STATE.view === "historical" with a race sub-view).
+  // Re-render through the right path so tabs work in both contexts.
   if (STATE.view === "race") renderRaceCenter();
+  else if (STATE.view === "historical" && STATE.historical && STATE.historical.view === "race") {
+    renderRaceCenter();
+  }
 }
 
 // Track-history rows ("All Races at …") behave differently by viewport:
@@ -20497,7 +20516,9 @@ function _renderRaceCenterImpl() {
     <div class="rc-tabbody">${active.html}</div>
 
     <div class="rc-jump-row">
-      <a class="btn-ghost" href="#/schedule">View full ${STATE.season} schedule →</a>
+      ${(STATE.view === "historical")
+        ? `<a class="btn-ghost" href="#" onclick="historicalSelect('view','schedule');return false;">View full ${STATE.season} schedule →</a>`
+        : `<a class="btn-ghost" href="#/schedule">View full ${STATE.season} schedule →</a>`}
     </div>
   `;
 }
