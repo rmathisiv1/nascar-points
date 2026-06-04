@@ -160,7 +160,7 @@ def docs_for_race(code, year, track, race_d, want):
     where docs maps doc_key -> {url, rows}. Each parse is isolated so one bad
     sheet doesn't sink the rest."""
     hub_want = tuple(k for k in want if k != "infraction")
-    race_page, _resources, pdfs = discover_race_docs(code, year, track, want=hub_want)
+    race_page, _resources, pdfs = discover_race_docs(code, year, track, want=hub_want, race_date=race_d)
     docs = {}
     for key in hub_want:
         url = pdfs.get(key)

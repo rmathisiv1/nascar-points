@@ -662,29 +662,32 @@ def _html_search(query):
     return out
 
 
-def _pick_entry_url(urls, year, track_tokens, sections):
+def _pick_entry_url(urls, year, track_tokens, sections, race_date=None):
     """From a set of candidate URLs (already relevance-filtered by a search
     query), pick the best entry-list URL. Jayski sometimes slugs Cup pages by
     RACE NAME ('...firekeepers-casino-400-entry-list') rather than the track,
     so we don't hard-require a track token here: section + year + 'entry-list'
     plus the search relevance is enough. A track-token match is preferred when
-    present."""
+    present, and `race_date` breaks dual-date ties via the spring/fall slug
+    heuristic."""
     yr = str(year)
     cands = [u for u in urls if "entry-list" in u.lower() and yr in u.lower()]
     if not cands:
         return None
     in_section = [u for u in cands if any(s in u.lower() for s in sections)] if sections else []
     pool = in_section or cands
-    for u in pool:                       # prefer an explicit track-token hit
-        if any(t in u.lower() for t in track_tokens if len(t) >= 3):
-            return u
-    return pool[0]                       # else trust search relevance + section
+    # Track-token hits first; among those, let date break a dual-date tie.
+    tok_hits = [u for u in pool if any(t in u.lower() for t in track_tokens if len(t) >= 3)]
+    if tok_hits:
+        return _pick_by_date(tok_hits, race_date)
+    return _pick_by_date(pool, race_date)    # else trust search relevance + section
 
 
-def discover_entry_url(series, year, track_name, verbose=True):
+def discover_entry_url(series, year, track_name, verbose=True, race_date=None):
     """Find the Jayski entry-list page URL for (series, year, track) with no
     manual input. Tries REST search, then the section index page, then a
-    constructed URL. Returns the page URL or None.
+    constructed URL. Returns the page URL or None. `race_date` (YYYY-MM-DD)
+    disambiguates dual-date tracks via a spring/fall slug heuristic.
 
     Logs which strategy hit (to stderr) so a hands-off cron run is auditable."""
     series = (series or "").upper()
@@ -707,7 +710,7 @@ def discover_entry_url(series, year, track_name, verbose=True):
 
     # --- Strategy 1: Jayski on-site search (most reliable; REST is blocked) ---
     for q in search_queries:
-        hit = _pick_entry_url(_html_search(q), yr, track_tokens, sections)
+        hit = _pick_entry_url(_html_search(q), yr, track_tokens, sections, race_date)
         if hit:
             log(f"site-search hit ('{q}'): {hit}")
             return hit
@@ -715,7 +718,7 @@ def discover_entry_url(series, year, track_name, verbose=True):
     # --- Strategy 2: WordPress REST search (if the JSON API happens to work) ---
     for q in search_queries:
         urls = [r["url"] for r in _rest_search(q)]
-        hit = _pick_entry_url(urls, yr, track_tokens, sections)
+        hit = _pick_entry_url(urls, yr, track_tokens, sections, race_date)
         if hit:
             log(f"REST hit ('{q}'): {hit}")
             return hit
@@ -726,7 +729,7 @@ def discover_entry_url(series, year, track_name, verbose=True):
         if not html:
             continue
         urls = re.findall(r'href="(https?://[^"]+)"', html, re.I)
-        hit = _pick_entry_url(urls, yr, track_tokens, [sec])
+        hit = _pick_entry_url(urls, yr, track_tokens, [sec], race_date)
         if hit:
             log(f"index-scrape hit ({sec}/): {hit}")
             return hit
@@ -770,12 +773,16 @@ RESOURCE_LABELS = {
 }
 
 
-def discover_race_page(series, year, track_name, verbose=True):
-    """Find the per-race 'race page' (the resource hub) for the REQUESTED track.
+def discover_race_page(series, year, track_name, verbose=True, race_date=None):
+    """Find the per-race 'race page' (the resource hub) for the REQUESTED race.
     Every Jayski page carries header quick-links to the *upcoming* races' race
     pages, so we can't just grab the first race-page href — we match the track.
-    Strategy: from the entry-list page, pick the race-page link whose URL
-    contains the track token; fall back to an on-site search."""
+    When a track hosts two races in a season (Kansas, Vegas, Bristol, ...),
+    multiple race-page links share the track token; `race_date` (YYYY-MM-DD)
+    lets us prefer the one for THIS race via a spring/fall slug heuristic, so a
+    fall race doesn't borrow the spring sibling's docs.
+    Strategy: from the entry-list page, collect race-page links containing the
+    track token; score by date fit; fall back to an on-site search."""
     def log(m):
         if verbose:
             print(f"    [race-page {series}] {m}", file=sys.stderr)
@@ -787,16 +794,17 @@ def discover_race_page(series, year, track_name, verbose=True):
         h = href.lower()
         return "race-page" in h and any(t in h for t in tokens)
 
-    entry = discover_entry_url(series, year, track_name, verbose=verbose)
+    entry = discover_entry_url(series, year, track_name, verbose=verbose, race_date=race_date)
     if entry:
         html = _get(entry)
         if html:
             hrefs = re.findall(r'href="([^"#]*race-page[^"]*)"', html, re.I)
-            for href in hrefs:
-                if track_match(href):
-                    url = urljoin(entry, href)
-                    log(f"via entry-list page: {url}")
-                    return url
+            matches = [urljoin(entry, h) for h in hrefs if track_match(h)]
+            if matches:
+                best = _pick_by_date(matches, race_date)
+                if best:
+                    log(f"via entry-list page{' (date-matched)' if race_date else ''}: {best}")
+                    return best
 
     for u in _html_search(f"{slug.replace('-', ' ')} {year} race page"):
         if track_match(u):
@@ -804,6 +812,49 @@ def discover_race_page(series, year, track_name, verbose=True):
             return u
     log("no track-matching race page found")
     return None
+
+
+# Spring/fall slug hints. Jayski slugs the second visit to a dual-date track
+# with "fall-" / season-2 event names; the first with "spring-" / season-1
+# names. We score a URL's fit to the race's month so the right sibling wins.
+_FALL_MONTHS = {7, 8, 9, 10, 11, 12}
+_SPRING_HINTS = ("spring", "ambetter-health-400", "pennzoil", "toyota-owners",
+                 "food-city-500", "geico-500", "goodyear-400", "wurth-400")
+_FALL_HINTS = ("fall", "south-point", "hollywood-casino", "bass-pro",
+               "yellawood", "bristol-night", "playoff", "round-of",
+               "coca-cola-600")  # 600 is May but slugged distinctly; harmless
+
+
+def _pick_by_date(urls, race_date):
+    """From candidate race-page URLs (all track-matching), pick the one whose
+    slug best fits the race's season-half. With no date, or a single candidate,
+    return the first. Never returns None when given a non-empty list."""
+    if not urls:
+        return None
+    if len(urls) == 1 or not race_date:
+        return urls[0]
+    try:
+        month = int(str(race_date)[5:7])
+    except (ValueError, IndexError):
+        return urls[0]
+    is_fall = month in _FALL_MONTHS
+    want_hints = _FALL_HINTS if is_fall else _SPRING_HINTS
+    avoid_hints = _SPRING_HINTS if is_fall else _FALL_HINTS
+
+    def score(u):
+        lu = u.lower()
+        s = 0
+        if any(h in lu for h in want_hints):
+            s += 2
+        if any(h in lu for h in avoid_hints):
+            s -= 2
+        # Generic "spring"/"fall" tokens are the strongest single signal.
+        if ("fall" in lu) == is_fall and ("fall" in lu or "spring" in lu):
+            s += 1
+        return s
+
+    best = max(urls, key=score)
+    return best
 
 
 def race_resource_links(race_page_url):
@@ -864,15 +915,17 @@ def find_doc_pdf(doc_url, doc_type):
     return pdfs[0]
 
 
-def discover_race_docs(series, year, track_name, want=None):
+def discover_race_docs(series, year, track_name, want=None, race_date=None):
     """Full hub resolve: race page -> {doc_key: doc_page_url} -> {doc_key: pdf_url}.
     Returns (race_page_url, resources, pdfs). `want` limits which doc PDFs we
-    fetch (default: the ones we parse). A short delay between page fetches keeps
-    Cloudflare from rate-limiting the burst."""
+    fetch (default: the ones we parse). `race_date` (YYYY-MM-DD) disambiguates
+    dual-date tracks (Kansas/Vegas/Bristol...) so a fall race doesn't grab the
+    spring sibling's docs. A short delay between page fetches keeps Cloudflare
+    from rate-limiting the burst."""
     import time
     if want is None:
         want = ("entry", "pitstall", "infraction", "roster")
-    race_page = discover_race_page(series, year, track_name)
+    race_page = discover_race_page(series, year, track_name, race_date=race_date)
     if not race_page:
         return None, {}, {}
     resources = race_resource_links(race_page)
