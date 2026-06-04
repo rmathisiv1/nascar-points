@@ -23525,7 +23525,8 @@ function buildPersonnelIndex() {
         const round = rec.round || null;
         for (const car of roster) {
           const team = car.team || "";
-          const won = _carWonRace(+yr, series, round, car.car);
+          const winCar = _winningCarFor(+yr, series, date, track);
+          const won = winCar != null && car.car != null && String(car.car) === winCar;
           const add = (name, position, type) => {
             if (!name) return;
             const key = normalizeDriverName(name);
@@ -23545,22 +23546,27 @@ function buildPersonnelIndex() {
   return idx;
 }
 
-// Did a given car win a given (year, series, round)? Cross-references the race
-// results in SEASON_CACHE (winner = finish_pos 1). Returns false when the race
-// or result isn't loaded — wins are a bonus stat, never blocking.
+// Did a given car win the race a roster appearance refers to? The roster's
+// stored `round` comes from the producer and isn't reliably the within-season
+// round number, so we resolve the race in SEASON_CACHE by DATE (then track) —
+// the same robust match getRaceDocs uses — and check finish_pos 1.
+// Returns false when the race/result isn't loaded; wins are a bonus stat.
 const _WINNER_CAR_CACHE = new Map();
-function _carWonRace(year, series, round, car) {
-  if (!round || car == null || car === "") return false;
-  const ck = `${year}|${series}|${round}`;
-  let winCar = _WINNER_CAR_CACHE.get(ck);
-  if (winCar === undefined) {
-    const blk = SEASON_CACHE[year] && SEASON_CACHE[year][series];
-    const race = blk && (blk.races || []).find(r => r.round === round);
-    const w = race && (race.results || []).find(d => d.finish_pos === 1);
-    winCar = w ? String(w.car_number) : null;
-    _WINNER_CAR_CACHE.set(ck, winCar);
+function _winningCarFor(year, series, date, track) {
+  const ck = `${year}|${series}|${date}|${track}`;
+  if (_WINNER_CAR_CACHE.has(ck)) return _WINNER_CAR_CACHE.get(ck);
+  const blk = SEASON_CACHE[year] && SEASON_CACHE[year][series];
+  let race = null;
+  if (blk && blk.races) {
+    const wantTrack = String(track || "").toLowerCase().trim();
+    // Prefer exact date match; fall back to track name if dates are absent.
+    race = blk.races.find(r => r.date && date && String(r.date).slice(0, 10) === date)
+        || blk.races.find(r => wantTrack && String(r.track || "").toLowerCase().trim() === wantTrack);
   }
-  return winCar != null && String(car) === winCar;
+  const w = race && (race.results || []).find(d => d.finish_pos === 1);
+  const winCar = w ? String(w.car_number) : null;
+  _WINNER_CAR_CACHE.set(ck, winCar);
+  return winCar;
 }
 
 function setPersonnelFilter(kind, val) {
@@ -23700,21 +23706,27 @@ function _renderPersonnelList() {
         <td class="num">${r.races}</td>
         <td class="num"><b>${r.wins || ""}</b></td></tr>`;
     if (!open) return main;
-    // Compact breakdown: group by team + position with race/win counts
-    // (NOT one row per race).
+    // Compact breakdown: group by team + position with race/win counts and
+    // the year span the person held that role (NOT one row per race).
     const groups = new Map();
     for (const a of r.apps) {
       const gk = (a.team || "\u2014") + " | " + (a.position || "\u2014");
       let g = groups.get(gk);
-      if (!g) { g = { team: a.team || "\u2014", position: a.position || "\u2014", races: new Set(), wins: new Set() }; groups.set(gk, g); }
+      if (!g) { g = { team: a.team || "\u2014", position: a.position || "\u2014", races: new Set(), wins: new Set(), years: new Set() }; groups.set(gk, g); }
       const id = a.year + a.series + a.track + a.date;
-      g.races.add(id); if (a.won) g.wins.add(id);
+      g.races.add(id); if (a.won) g.wins.add(id); if (a.year) g.years.add(a.year);
     }
+    const yrLabel = ys => {
+      const arr = Array.from(ys).sort((m, n) => m - n);
+      if (!arr.length) return "";
+      return arr.length === 1 ? String(arr[0]) : `${arr[0]}\u2013${arr[arr.length - 1]}`;
+    };
     const gr = Array.from(groups.values()).sort((x, y) => y.races.size - x.races.size);
     const detail = gr.map(g =>
       `<tr class="pers-hist-row"><td></td>
         <td>${escapeHTML(g.position)}</td>
-        <td colspan="2">${escapeHTML(g.team)}</td>
+        <td>${escapeHTML(g.team)}</td>
+        <td class="pers-hist-years">${yrLabel(g.years)}</td>
         <td class="num">${g.races.size}</td>
         <td class="num">${g.wins.size || ""}</td></tr>`).join("");
     return main + detail;

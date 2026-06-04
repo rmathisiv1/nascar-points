@@ -12465,4 +12465,5 @@ body.lightbox-open {
 }
 .pers-hist-row td:first-child { border-left: 2px solid var(--accent); width: 0; padding: 0; }
 .pers-pos-select { flex: 0 0 auto; max-width: 200px; cursor: pointer; }
+.pers-hist-years { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 
