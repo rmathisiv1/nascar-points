@@ -154,6 +154,21 @@ function seriesLabel(seriesCode, season) {
 const FALLBACK_COLOR = "#9ca3af";
 const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs", "personnel", "pointscalc", "projection", "historical"];
 
+// Display label for each view — used by the unified page header (title left of
+// the series toggle) and the mobile page-title bar. Some views (profile, team,
+// cc) carry an entity-specific title rendered by their own renderers, so the
+// page header skips its generic label for those.
+const PAGE_TITLES = {
+  race: "Race Center", track: "Track", schedule: "Schedule",
+  form: "Power Rankings", arc: "Cumulative Season", breakdown: "Stage Points",
+  trajectory: "Stage vs Finish", teammates: "Teammate Delta", heatmap: "Heatmap",
+  trackstats: "Tracks", compare: "Driver Compare", standings: "Standings",
+  playoffs: "Playoff Picture", profile: "Driver Profile", team: "Team",
+  cc: "Crew Chief", drivers: "Drivers", teams: "Teams", crewchiefs: "Crew Chiefs",
+  personnel: "Personnel", pointscalc: "Points Format Calc", projection: "Season Projection",
+};
+function pageTitleLabel(view) { return PAGE_TITLES[view] || ""; }
+
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
 // ------------------------------------------------------------
@@ -3123,31 +3138,43 @@ function renderHistoricalBar() {
 function renderPageSeriesBar() {
   const bar = document.getElementById("page-series-bar");
   if (!bar) return;
-  const show = SERIES_TOGGLE_VIEWS.includes(STATE.view);
-  bar.hidden = !show;
-  if (!show) { bar.innerHTML = ""; return; }
-
-  // The race page gets a SPECIAL series toggle: only the series that actually
-  // ran this race weekend (same track) are offered, and switching jumps to
-  // THAT series' race at this track — not the same round number (round N is a
-  // different race in each series).
-  if (STATE.view === "race") {
-    bar.innerHTML = renderRaceSeriesBar();
+  const v = STATE.view;
+  // Unified page header lives here now: a title on the left (panel-title look)
+  // and the series toggle (or a back link) on the right, with a divider under.
+  // Hidden only on Home and on the Historical page (which has its own bar).
+  if (v === "home" || v === "historical") {
+    bar.hidden = true; bar.innerHTML = ""; bar.classList.remove("page-hd");
     return;
   }
+  bar.hidden = false;
+  bar.classList.add("page-hd");
 
-  const cur = STATE.series;
-  const back = ["track", "schedule"].includes(STATE.view)
-    ? `<a href="#" class="takeover-back pgs-back" onclick="takeoverBack(event)">← Back</a>`
-    : "";
-  bar.innerHTML = back +
-    `<div class="pgs-track" role="tablist" aria-label="Series">` +
-    ["NCS", "NOS", "NTS"].map(s =>
-      `<button type="button" class="pgs-btn${s === cur ? " on" : ""}" ` +
-      `data-pgs="${s}" data-series="${s}" role="tab" ` +
-      `aria-selected="${s === cur ? "true" : "false"}">${s}</button>`
-    ).join("") +
-    `</div>`;
+  const seriesScoped = SERIES_TOGGLE_VIEWS.includes(v);
+
+  // Right side: the race page keeps its special weekend-series toggle; other
+  // series-scoped views get the normal NCS/NOS/NTS toggle; everything else
+  // gets nothing on the right.
+  let right = "";
+  if (v === "race") {
+    right = renderRaceSeriesBar();   // includes its own weekend-series buttons
+  } else if (seriesScoped) {
+    const cur = STATE.series;
+    right = `<div class="pgs-track" role="tablist" aria-label="Series">` +
+      ["NCS", "NOS", "NTS"].map(s =>
+        `<button type="button" class="pgs-btn${s === cur ? " on" : ""}" ` +
+        `data-pgs="${s}" data-series="${s}" role="tab" ` +
+        `aria-selected="${s === cur ? "true" : "false"}">${s}</button>`
+      ).join("") + `</div>`;
+  }
+
+  // Entity pages (profile/team/cc) carry their own rich title in the body, so
+  // the generic label is suppressed for them — the header still shows so the
+  // divider/toggle line stays consistent, just without a duplicate title.
+  const suppressTitle = ["profile", "team", "cc"].includes(v);
+  const title = suppressTitle ? "" : pageTitleLabel(v);
+  const titleHTML = `<span class="page-hd-title">${escapeHTML(title)}</span>`;
+
+  bar.innerHTML = `${titleHTML}<div class="page-hd-right">${right}</div>`;
 }
 
 // Which series ran a race at this track this season, and at what round. Matches
@@ -3825,30 +3852,7 @@ function render() {
   const pageTitleEl = document.getElementById("mobile-page-title-text");
   const pageTitleWrap = document.getElementById("mobile-page-title");
   if (pageTitleEl) {
-    const titleMap = {
-      race: "Race Center",
-      track: "Track",
-      schedule: "Schedule",
-      form: "Power Rankings",
-      arc: "Cumulative Season",
-      breakdown: "Stage Points",
-      trajectory: "Stage vs Finish",
-      teammates: "Teammate Delta",
-      heatmap: "Heatmap",
-      trackstats: "Tracks",
-      compare: "Driver Compare",
-      standings: "Standings",
-      playoffs: "Playoff Picture",
-      profile: "Driver Profile",
-      team: "Team",
-      cc: "Crew Chief",
-      drivers: "Drivers",
-      teams: "Teams",
-      crewchiefs: "Crew Chiefs",
-      pointscalc: "Points Format Calc",
-      projection: "Season Projection",
-    };
-    pageTitleEl.textContent = titleMap[STATE.view] || "";
+    pageTitleEl.textContent = pageTitleLabel(STATE.view);
   }
   if (pageTitleWrap) {
     pageTitleWrap.style.display = (STATE.view === "home" || STATE.view === "historical") ? "none" : "";

@@ -241,6 +241,31 @@ html, body {
   gap: 8px;
   padding: 10px 10px 4px;
 }
+/* Unified page header: title (panel-title look) on the left, series toggle /
+   back on the right, thin divider beneath. Applied on every page except Home
+   and the Historical browser. */
+.page-series-bar.page-hd {
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 12px 8px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+.page-hd-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: lowercase;
+  color: var(--accent);
+}
+.page-hd-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 .page-series-bar[hidden] { display: none; }
 .page-series-bar::before {
   content: "SERIES";
@@ -258,10 +283,10 @@ html, body {
   padding: 2px;
 }
 .pgs-btn {
-  padding: 5px 11px;
+  padding: 4px 9px;
   background: none; border: none; cursor: pointer;
   color: var(--muted);
-  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  font-family: var(--mono); font-size: 9px; font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   border-radius: 3px;
@@ -1148,15 +1173,10 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   flex-wrap: wrap;
 }
 .view-head h1 {
-  /* Match the table-data font (Inter / --sans) rather than the display serif,
-     so titles like "Personnel" share the type of the data beneath them. */
-  font-family: var(--sans);
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-  color: var(--text);
+  /* The big per-view title is replaced by the unified page header (title in
+     the page-series-bar). Hidden here so we don't show it twice. The .view-sub
+     descriptive line below still shows where present. */
+  display: none;
 }
 .view-sub {
   /* Italic byline — was muted sans 12. */
