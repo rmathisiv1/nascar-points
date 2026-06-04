@@ -21171,17 +21171,13 @@ function renderSeasonSchedule(allRaces, currentRound, lastWinnerAt) {
     }
 
     const trackDisplay = prettyTrack(r.track_code, r.track) || "—";
-    const trackLink = r.track_code
-      ? `<a class="rc-sched-track-link" href="#/track/${escapeHTML(r.track_code)}" onclick="event.stopPropagation()">${escapeHTML(trackDisplay)}</a>`
-      : `<span>${escapeHTML(trackDisplay)}</span>`;
-    // Race name: links to Race Center ONLY when the race has been run.
-    // Future races get plain-text styling (no anchor) since there's no
-    // race results to show. The anchor wraps only the name text — not
-    // the full row — so the clickable area is exactly the race title.
+    // No track-profile link on the schedule: the whole row navigates to the
+    // race (the only inner links that opt out are the driver/winner pills).
+    const trackLink = `<span class="rc-sched-track-name">${escapeHTML(trackDisplay)}</span>`;
+    // Race name as plain text — the row-level click handler owns navigation
+    // (it routes to the race, and is historical-aware), so no inner anchor.
     const raceNameHTML = r.name
-      ? (hasRun
-          ? `<a class="rc-sched-name rc-sched-name-link" href="#/race/${r.round}" onclick="event.stopPropagation()">${escapeHTML(r.name)}</a>`
-          : `<span class="rc-sched-name">${escapeHTML(r.name)}</span>`)
+      ? `<span class="rc-sched-name">${escapeHTML(r.name)}</span>`
       : "";
 
     const roundCell = isCurrent

@@ -1148,13 +1148,13 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   flex-wrap: wrap;
 }
 .view-head h1 {
-  /* Display serif headline — was sans 20/600. The size bump and the
-     serif transition is the single biggest visual change on the page. */
-  font-family: var(--serif);
-  font-size: 30px;
-  font-weight: 600;
+  /* Match the table-data font (Inter / --sans) rather than the display serif,
+     so titles like "Personnel" share the type of the data beneath them. */
+  font-family: var(--sans);
+  font-size: 28px;
+  font-weight: 700;
   margin: 0;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   line-height: 1.05;
   color: var(--text);
 }
@@ -4768,6 +4768,11 @@ a.driver-cell.profile-link:hover .car-tag {
   min-width: 0;
 }
 .rc-sched-track-link { align-self: flex-start; display: inline-block; }
+.rc-sched-track-name {
+  color: var(--text);
+  font-weight: 600;
+  align-self: flex-start;
+}
 .rc-sched-track > a:first-child,
 .rc-sched-track > span:first-child {
   font-weight: 500;
