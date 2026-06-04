@@ -12738,21 +12738,6 @@ body.lightbox-open {
   .sched-hero-fact-next { flex-basis: 100%; }
 }
 
-/* Historical-only topbar selects (series picker + track filter) */
+/* Historical-only topbar select (series picker) */
 .season-select.hist-only[hidden] { display: none; }
-.season-select.hist-only { max-width: 180px; }
-/* Track-filter banner clear button (reuses .time-cursor-banner shell) */
-#hist-track-banner .tcb-clear,
-.tcb-clear {
-  margin-left: 10px;
-  background: transparent;
-  border: 1px solid currentColor;
-  border-radius: 5px;
-  padding: 1px 8px;
-  font: inherit;
-  font-size: 11px;
-  color: inherit;
-  cursor: pointer;
-  opacity: .8;
-}
-.tcb-clear:hover { opacity: 1; }
+.season-select.hist-only { max-width: 120px; }
