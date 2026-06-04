@@ -5174,6 +5174,12 @@ function entryListLink(race, series, compact) {
   return `<a class="entry-list-link" href="${href}" onclick="_pendingRaceTab='entry';">${label}</a>`;
 }
 let _pendingRaceTab = null;
+// Active top-level tab on the race page + the round it belongs to. Reset to
+// "overview" whenever the viewed round changes (see renderRaceCenter). These
+// were inadvertently dropped during an earlier edit, which made the race
+// center throw "_raceTabRound is not defined" — declare them here.
+let _raceTab = "overview";
+let _raceTabRound = null;
 function selectRaceTab(k) {
   _raceTab = k;
   if (STATE.view === "race") renderRaceCenter();
