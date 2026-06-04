@@ -12292,3 +12292,58 @@ body.lightbox-open {
 .rdoc-roster-full .data-table { margin-top: 6px; }
 .rdoc-roster-full .data-table th,
 .rdoc-roster-full .data-table td { font-size: 10.5px; padding: 4px 6px; }
+
+/* ---- race-page unified top tab bar ---- */
+.rc-tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin: 16px 0 0;
+  padding: 0 2px;
+}
+.rc-tabbar .rdoc-tab { font-size: 12px; padding: 9px 14px; }
+.rc-tabbody { padding-top: 8px; }
+
+/* ---- pit stalls as a visual pit-lane stall chart ---- */
+.rdoc-pitlane-wrap { padding: 12px 10px 6px; }
+.rdoc-pitlane-label {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.rdoc-pitlane { display: flex; flex-wrap: wrap; gap: 6px; }
+.rdoc-stall {
+  width: 76px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-hi);
+  padding: 5px 4px 6px;
+  text-align: center;
+}
+.rdoc-stall-box {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.rdoc-stall-car {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 5px;
+  padding: 3px 0;
+  margin: 3px 2px;
+}
+.rdoc-stall-drv {
+  font-size: 9.5px;
+  line-height: 1.18;
+  color: var(--text);
+  min-height: 22px;
+  overflow-wrap: anywhere;
+}

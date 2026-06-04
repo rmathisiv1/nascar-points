@@ -4990,7 +4990,6 @@ async function loadEntryList() {
 // ============================================================
 const RACE_DOCS_CACHE = {};
 let _raceDocsAttempted = false;
-let _raceDocsTab = null;   // active Documents tab on the race page
 
 async function loadRaceDocs() {
   if (_raceDocsAttempted) return;
@@ -5022,8 +5021,12 @@ function getRaceDocs(year, series, race) {
   return byTrack;
 }
 
-function selectRaceDocTab(t) {
-  _raceDocsTab = t;
+// Active top-level tab on the race page; reset when the round changes so a
+// fresh race always lands on Overview.
+let _raceTab = null;
+let _raceTabRound = null;
+function selectRaceTab(k) {
+  _raceTab = k;
   if (STATE.view === "race") renderRaceCenter();
 }
 
@@ -5043,72 +5046,81 @@ function _pitAbbr(p) {
 }
 function _td(v) { return escapeHTML(v == null || v === "" ? "—" : String(v)); }
 
-// The "Documents" card on the race page. Returns "" when no docs exist for the
-// race (so it simply doesn't appear). loadRaceDocs() is kicked off by the caller
-// (renderRaceCenter), which re-renders when the file arrives.
-function renderRaceDocsCard(race) {
+// Build the per-document race-page tabs (entry / pit stalls / rosters /
+// infractions) as [{ key, label, count, html }]. The entry list's team and
+// crew-chief columns are enriched from the roster doc when the entry sheet
+// itself omits them. Returns [] when no docs exist for the race.
+function raceDocTabs(race) {
   const rec = getRaceDocs(STATE.season, STATE.series, race);
-  if (!rec || !rec.docs) return "";
+  if (!rec || !rec.docs) return [];
   const docs = rec.docs;
-  const avail = _DOC_ORDER.filter(
-    k => docs[k] && Array.isArray(docs[k].rows) && docs[k].rows.length);
-  if (!avail.length) return "";
-  const tab = (_raceDocsTab && avail.includes(_raceDocsTab)) ? _raceDocsTab : avail[0];
 
-  // car -> driver (for pit stalls + infractions), preferring roster then entry.
-  const carDriver = {};
+  // car -> driver, and car -> {team, crew_chief}, sourced from the roster
+  // (richest) and then the entry list.
+  const carDriver = {}, carMeta = {};
   for (const src of ["roster", "entry"]) {
-    if (docs[src]) for (const row of docs[src].rows) {
+    if (!docs[src]) continue;
+    for (const row of docs[src].rows) {
       const c = row.car != null ? String(row.car) : "";
-      if (c && row.driver && !carDriver[c]) carDriver[c] = row.driver;
+      if (!c) continue;
+      if (row.driver && !carDriver[c]) carDriver[c] = row.driver;
+      if (!carMeta[c]) carMeta[c] = {};
+      if (row.team && !carMeta[c].team) carMeta[c].team = row.team;
+      if (row.crew_chief && !carMeta[c].crew_chief) carMeta[c].crew_chief = row.crew_chief;
     }
   }
   const drv = c => carDriver[String(c)] || "";
+  const srcFoot = k => docs[k] && docs[k].url
+    ? `<div class="rdoc-foot"><a class="rdoc-src" href="${escapeHTML(docs[k].url)}" ` +
+      `target="_blank" rel="noopener">source PDF&nbsp;↗</a></div>` : "";
 
-  const tabs = avail.map(k =>
-    `<button class="rdoc-tab${k === tab ? " is-active" : ""}" onclick="selectRaceDocTab('${k}')">` +
-    `${_DOC_LABELS[k]}<span class="rdoc-tab-n">${docs[k].rows.length}</span></button>`).join("");
-
-  let body = "";
-  if (tab === "entry") body = _rdocEntryTable(docs.entry.rows);
-  else if (tab === "pitstall") body = _rdocPitTable(docs.pitstall.rows, drv);
-  else if (tab === "roster") body = _rdocRosters(docs.roster.rows);
-  else if (tab === "infraction") body = _rdocInfractionTable(docs.infraction.rows, drv);
-
-  const url = docs[tab] && docs[tab].url;
-  const src = url
-    ? `<a class="rdoc-src" href="${escapeHTML(url)}" target="_blank" rel="noopener">source PDF&nbsp;↗</a>`
-    : "";
-
-  return `
-    <div class="card rc-card rdoc-card">
-      <div class="rc-card-head">
-        <span class="rc-card-title">Documents</span>
-        <span class="rc-card-sub">via Jayski</span>
-      </div>
-      <div class="rdoc-tabs">${tabs}</div>
-      <div class="rdoc-body">${body}</div>
-      <div class="rdoc-foot">${src}</div>
-    </div>`;
+  const tabs = [];
+  for (const k of _DOC_ORDER) {
+    const d = docs[k];
+    if (!d || !Array.isArray(d.rows) || !d.rows.length) continue;
+    let html = "";
+    if (k === "entry") html = _rdocEntryTable(d.rows, carMeta);
+    else if (k === "pitstall") html = _rdocPitVisual(d.rows, drv);
+    else if (k === "roster") html = _rdocRosters(d.rows);
+    else if (k === "infraction") html = _rdocInfractionTable(d.rows, drv);
+    tabs.push({ key: k, label: _DOC_LABELS[k], count: d.rows.length,
+                html: `<div class="rdoc-body">${html}${srcFoot(k)}</div>` });
+  }
+  return tabs;
 }
 
-function _rdocEntryTable(rows) {
-  const body = rows.map(r => `<tr>
-      <td class="rdoc-car">#${_td(r.car)}</td><td>${_td(r.driver)}</td>
-      <td>${_td(r.team)}</td><td>${_td(r.crew_chief)}</td></tr>`).join("");
+function _rdocEntryTable(rows, carMeta) {
+  carMeta = carMeta || {};
+  const body = rows.map(r => {
+    const m = carMeta[String(r.car)] || {};
+    const team = r.team || m.team;
+    const cc = r.crew_chief || m.crew_chief;
+    return `<tr><td class="rdoc-car">#${_td(r.car)}</td><td>${_td(r.driver)}</td>
+      <td>${_td(team)}</td><td>${_td(cc)}</td></tr>`;
+  }).join("");
   return `<div class="table-scroll"><table class="data-table rdoc-table">
       <thead><tr><th>Car</th><th>Driver</th><th>Team</th><th>Crew Chief</th></tr></thead>
       <tbody>${body}</tbody></table></div>`;
 }
 
-function _rdocPitTable(rows, drv) {
+// Pit stalls as a visual pit lane: numbered stalls in box order, each tile a
+// car-colored number with its driver — reads like the Jayski stall chart.
+function _rdocPitVisual(rows, drv) {
   const sorted = rows.slice().sort((a, b) => (a.box || 0) - (b.box || 0));
-  const body = sorted.map(r => `<tr>
-      <td class="rdoc-box">${_td(r.box)}</td><td class="rdoc-car">#${_td(r.car)}</td>
-      <td>${_td(drv(r.car))}</td></tr>`).join("");
-  return `<div class="table-scroll"><table class="data-table rdoc-table">
-      <thead><tr><th>Pit Box</th><th>Car</th><th>Driver</th></tr></thead>
-      <tbody>${body}</tbody></table></div>`;
+  const tiles = sorted.map(r => {
+    const hex = (typeof colorFor === "function") ? colorFor(STATE.series, r.car) : "#888";
+    const txt = (typeof safeContrastColor === "function") ? safeContrastColor(hex) : "#fff";
+    const d = drv(r.car);
+    return `<div class="rdoc-stall">
+        <div class="rdoc-stall-box">BOX ${_td(r.box)}</div>
+        <div class="rdoc-stall-car" style="background:${hex};color:${txt}">#${_td(r.car)}</div>
+        <div class="rdoc-stall-drv">${escapeHTML(d || "")}</div>
+      </div>`;
+  }).join("");
+  return `<div class="rdoc-pitlane-wrap">
+      <div class="rdoc-pitlane-label"><span>◄ pit entry</span><span>pit exit ►</span></div>
+      <div class="rdoc-pitlane">${tiles}</div>
+    </div>`;
 }
 
 function _rdocInfractionTable(rows, drv) {
@@ -19882,11 +19894,38 @@ function renderRaceCenter() {
     : "";
 
   // Tabbed session view: Race Results / Practice 1 / Practice 2 /
-  // Qualifying. Renders only the tabs that have data on this race
-  // weekend. Wraps resultsHTML so the existing race-results table can
-  // live inside the same tab strip rather than as a separate card above
-  // the practice/qual cards.
+  // Qualifying. Returns "" for an upcoming race with no session data.
   const sessionsHTML = renderRaceSessionTabs(nextRace, resultsHTML);
+
+  // ---- Unified race-page tabs. Landing tab is "Overview" (track history);
+  // race results and the Jayski documents are revealed on click rather than
+  // stacked into one long scroll.
+  const overviewHTML = `
+    <div class="rc-grid">
+      <div class="card rc-card">
+        <div class="rc-card-head"><span class="rc-card-title">Last 5 Winners Here</span></div>
+        <div class="rc-card-body">${winnersHTML}</div>
+      </div>
+      <div class="card rc-card">
+        <div class="rc-card-head"><span class="rc-card-title">Hot at This Track</span><span class="rc-card-sub">avg finish · current FT cars</span></div>
+        <div class="rc-card-body">${hotHTML}</div>
+      </div>
+    </div>`;
+
+  const tabs = [{ key: "overview", label: "Overview", html: overviewHTML }];
+  if (sessionsHTML) {
+    tabs.push({ key: "results", label: isUpcoming ? "Sessions" : "Race Results", html: sessionsHTML });
+  }
+  for (const t of raceDocTabs(nextRace)) tabs.push(t);
+
+  // Reset the active tab when the race changes; otherwise keep the user's
+  // choice across the background-data re-renders.
+  if (_raceTabRound !== nextRace.round) { _raceTab = "overview"; _raceTabRound = nextRace.round; }
+  const activeKey = tabs.some(t => t.key === _raceTab) ? _raceTab : "overview";
+  const active = tabs.find(t => t.key === activeKey) || tabs[0];
+  const tabBar = tabs.map(t =>
+    `<button class="rdoc-tab${t.key === activeKey ? " is-active" : ""}" onclick="selectRaceTab('${t.key}')">` +
+    `${escapeHTML(t.label)}${t.count != null ? `<span class="rdoc-tab-n">${t.count}</span>` : ""}</button>`).join("");
 
   host.innerHTML = `
     <div class="rc-hero">
@@ -19899,20 +19938,8 @@ function renderRaceCenter() {
       ${renderRaceSummaryStrip(nextRace)}
     </div>
 
-    ${sessionsHTML}
-
-    ${renderRaceDocsCard(nextRace)}
-
-    <div class="rc-grid">
-      <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Last 5 Winners Here</span></div>
-        <div class="rc-card-body">${winnersHTML}</div>
-      </div>
-      <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Hot at This Track</span><span class="rc-card-sub">avg finish · current FT cars</span></div>
-        <div class="rc-card-body">${hotHTML}</div>
-      </div>
-    </div>
+    <div class="rc-tabbar">${tabBar}</div>
+    <div class="rc-tabbody">${active.html}</div>
 
     <div class="rc-jump-row">
       <a class="btn-ghost" href="#/schedule">View full ${STATE.season} schedule →</a>
