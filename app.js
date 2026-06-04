@@ -5124,21 +5124,57 @@ function getRaceDocs(year, series, race) {
   return byTrack;
 }
 
-// Direct link to the official entry-list PDF for a race, if we have it in the
-// race-docs store. Returns an <a>…↗ string (opens in a new tab) or "" when no
-// entry doc exists. Used on the race-page hero and the home upcoming tile so
-// "who's entered this weekend" is one click away. `compact` trims the label.
+// Link to OUR parsed Entry List (the race page's Entry List tab) — never an
+// external site. On the race page it just switches tabs; from elsewhere (home)
+// it navigates to that race and asks the race page to open the Entry List tab
+// once it renders. Returns "" when we have no entry doc for the race.
 function entryListLink(race, series, compact) {
-  const rec = getRaceDocs(STATE.season, series || STATE.series, race);
-  const url = rec && rec.docs && rec.docs.entry && rec.docs.entry.url;
-  if (!url) return "";
-  const label = compact ? "Entry list&nbsp;↗" : "Official entry list&nbsp;↗";
-  return `<a class="entry-list-link" href="${escapeHTML(url)}" target="_blank" rel="noopener">${label}</a>`;
+  const s = series || STATE.series;
+  const rec = getRaceDocs(STATE.season, s, race);
+  const hasEntry = rec && rec.docs && rec.docs.entry && Array.isArray(rec.docs.entry.rows) && rec.docs.entry.rows.length;
+  if (!hasEntry) return "";
+  const label = compact ? "Entry list →" : "View entry list →";
+  if (STATE.view === "race") {
+    return `<a class="entry-list-link" href="#" onclick="selectRaceTab('entry');return false;">${label}</a>`;
+  }
+  // From home/other views: go to the race, open Entry List on arrival.
+  const href = `#/race/${race.round}?_y=${STATE.season}&_s=${encodeURIComponent(s)}`;
+  return `<a class="entry-list-link" href="${href}" onclick="_pendingRaceTab='entry';">${label}</a>`;
 }
+let _pendingRaceTab = null;
 function selectRaceTab(k) {
   _raceTab = k;
   if (STATE.view === "race") renderRaceCenter();
 }
+
+// Track-history rows ("All Races at …") behave differently by viewport:
+//  - Desktop: the row is a full table line; clicking opens the race page.
+//  - Mobile: the row is a collapsed card (Year + Winner only); the first tap
+//    EXPANDS it to reveal Round/Team/Mfr/Pole, and an "Open race →" affordance
+//    inside handles navigation. One delegated, idempotent listener covers the
+//    table wherever it renders (track page + race page track-king area).
+let _tkHistWired = false;
+function wireTrackHistoryRows() {
+  if (_tkHistWired) return;
+  _tkHistWired = true;
+  document.addEventListener("click", (e) => {
+    const row = e.target.closest(".tk-hist-row");
+    if (!row) return;
+    const href = row.getAttribute("data-race-href");
+    const isMobile = window.matchMedia("(max-width: 767.98px)").matches;
+    if (!isMobile) {
+      if (href) location.hash = href;
+      return;
+    }
+    // Mobile: a tap on a link inside the row still navigates; otherwise toggle.
+    if (e.target.closest("a")) return;
+    const wasOpen = row.classList.contains("tk-row-open");
+    row.classList.toggle("tk-row-open");
+    // If it was already open, a second tap on the (now-visible) row navigates.
+    if (wasOpen && href) location.hash = href;
+  });
+}
+wireTrackHistoryRows();
 
 const _DOC_LABELS = { entry: "Entry List", pitstall: "Pit Stalls",
                       roster: "Crew Rosters", infraction: "Infractions" };
@@ -5180,9 +5216,10 @@ function raceDocTabs(race) {
     }
   }
   const drv = c => carDriver[String(c)] || "";
-  const srcFoot = k => docs[k] && docs[k].url
-    ? `<div class="rdoc-foot"><a class="rdoc-src" href="${escapeHTML(docs[k].url)}" ` +
-      `target="_blank" rel="noopener">source PDF&nbsp;↗</a></div>` : "";
+  // No external "source PDF" link — everything stays on our site. (We keep the
+  // parsed tables; the upstream PDF URL is retained in the data only for the
+  // scraper's own re-fetching, not surfaced to users.)
+  const srcFoot = () => "";
 
   const tabs = [];
   for (const k of _DOC_ORDER) {
@@ -20183,6 +20220,12 @@ function renderRaceCenter() {
   // Reset the active tab when the race changes; otherwise keep the user's
   // choice across the background-data re-renders.
   if (_raceTabRound !== nextRace.round) { _raceTab = "overview"; _raceTabRound = nextRace.round; }
+  // A link elsewhere (e.g. home "View entry list →") can request a specific
+  // tab on arrival; honor it once if that tab exists this render.
+  if (_pendingRaceTab && tabs.some(t => t.key === _pendingRaceTab)) {
+    _raceTab = _pendingRaceTab;
+  }
+  _pendingRaceTab = null;
   const activeKey = tabs.some(t => t.key === _raceTab) ? _raceTab : "overview";
   const active = tabs.find(t => t.key === activeKey) || tabs[0];
   const tabBar = tabs.map(t =>
@@ -21009,21 +21052,11 @@ function renderSchedulePage() {
 
   const scheduleHTML = renderSeasonSchedule(allRaces, nextRound, lastWinnerAt);
 
-  // "This Weekend" / "Next Weekend" card — filtered to the currently
-  // active series so a user on NCS doesn't see Dover NOS/NTS races at
-  // the top of the NCS schedule page. The races that appear in the
-  // card match the series block being viewed below.
-  const weekendCard = buildWeekendCard(STATE.season, STATE.series);
-  const weekendHTML = weekendCard
-    ? `<div class="schedule-weekend-wrap">
-         <div class="home-section-h">${weekendCard.label}</div>
-         ${weekendCard.html}
-       </div>`
-    : "";
+  // (The next-race weekend now lives in the schedule hero above, so the
+  // separate "This Weekend" pane was removed to keep one header pane.)
 
   host.innerHTML = `
     ${scheduleHeroHTML}
-    ${weekendHTML}
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-body rc-schedule-body">${scheduleHTML}</div>
     </div>
@@ -21297,7 +21330,7 @@ function renderTrackPage() {
               <span class="car-tag" style="background:${colorFor(seriesForRow, pole.car_number)};color:${contrastTextFor(colorFor(seriesForRow, pole.car_number))}">${pole.car_number}</span>
               <span>${escapeHTML(lastNameOf(pole.driver))}</span>
             </a>` : `<span class="muted">—</span>`;
-          return `<tr class="profile-link" style="cursor:pointer;" onclick="location.hash='${raceHref.replace(/'/g, "\\'")}'"  title="View race results">
+          return `<tr class="profile-link tk-hist-row" data-race-href="${raceHref}" style="cursor:pointer;" title="View race results">
             <td data-label="Year">${h.year}</td>
             <td class="num" data-label="Round">R${h.round}</td>
             <td data-label="Winner">${wHTML}</td>

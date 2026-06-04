@@ -5099,10 +5099,9 @@ a.rc-sched-winner:hover {
   .tk-this-driver { font-size: 22px; }
   .tk-this-tag { font-size: 16px; padding: 5px 10px; }
 
-  /* The 6-column table can't fit ~380px without text wrapping onto itself, so
-     on mobile we turn each race ROW into a labeled card: the colgroup, header,
-     and table layout are all neutralized and every cell becomes a flex line
-     with its column name (from data-label) on the left, value on the right. */
+  /* On mobile each race ROW is a collapsible card: collapsed it shows just
+     Year + Winner; tapping expands to reveal Round / Team / Mfr / Pole. The
+     row gets .tk-row-open toggled by a click handler (wired in JS). */
   .tk-history-table,
   #track-host .tk-history-table { display: block; width: 100%; table-layout: auto; }
   .tk-history-table colgroup { display: none; }
@@ -5110,12 +5109,24 @@ a.rc-sched-winner:hover {
   .tk-history-table tbody { display: block; }
   .tk-history-table tr {
     display: block;
+    position: relative;
     background: var(--card-hi);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 8px 12px;
-    margin: 0 10px 10px;
+    padding: 10px 36px 10px 12px;
+    margin: 0 10px 8px;
   }
+  /* caret affordance */
+  .tk-history-table tr::after {
+    content: "▸";
+    position: absolute;
+    right: 14px;
+    top: 12px;
+    color: var(--muted);
+    font-size: 11px;
+    transition: transform .15s ease;
+  }
+  .tk-history-table tr.tk-row-open::after { content: "▾"; }
   .tk-history-table td {
     display: flex;
     align-items: center;
@@ -5125,7 +5136,6 @@ a.rc-sched-winner:hover {
     border: 0;
     white-space: normal;
   }
-  .tk-history-table td + td { border-top: 1px solid var(--tint-1); }
   .tk-history-table td::before {
     content: attr(data-label);
     font-size: 10px;
@@ -5136,8 +5146,15 @@ a.rc-sched-winner:hover {
     flex: 0 0 auto;
   }
   .tk-history-table td.num { text-align: left; }
-  /* Winner/Pole driver cells: keep the car-tag + name on the value side. */
   .tk-history-table td .rc-result-name { justify-content: flex-end; }
+  /* Collapsed: show only Year (1st) + Winner (3rd); hide the rest. */
+  .tk-history-table tr:not(.tk-row-open) td:nth-child(2),
+  .tk-history-table tr:not(.tk-row-open) td:nth-child(4),
+  .tk-history-table tr:not(.tk-row-open) td:nth-child(5),
+  .tk-history-table tr:not(.tk-row-open) td:nth-child(6) { display: none; }
+  /* Collapsed Year+Winner read as a compact header (no top border on Winner). */
+  .tk-history-table tr:not(.tk-row-open) td + td { border-top: 0; }
+  .tk-history-table tr.tk-row-open td + td { border-top: 1px solid var(--tint-1); }
 
   /* Card header (title + series toggle + "newest first") stacks too. */
   .rc-card-wide .rc-card-head {
@@ -5172,11 +5189,9 @@ a.rc-sched-winner:hover {
   min-width: 0;
 }
 #view-schedule .view-head {
-  width: 100%;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 24px;
-  box-sizing: border-box;
+  /* The schedule hero pane now carries the season/series/progress header,
+     so the generic "Schedule" title row is redundant — hide it. */
+  display: none;
 }
 
 /* Race Center "View full schedule" jump link */
