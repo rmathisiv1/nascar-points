@@ -23539,52 +23539,71 @@ function buildPersonnelIndex() {
 }
 
 function setPersonnelFilter(kind, val) {
-  STATE.personnel = STATE.personnel || { query: "", role: "all" };
+  STATE.personnel = STATE.personnel || { query: "", role: "all", page: 0 };
   STATE.personnel[kind] = val;
+  STATE.personnel.page = 0;
   renderPersonnel();
 }
-function _personnelSearch(el) { STATE.personnel = STATE.personnel || {}; STATE.personnel.query = el.value; _renderPersonnelList(); }
+function _personnelSearch(el) {
+  STATE.personnel = STATE.personnel || {};
+  STATE.personnel.query = el.value;
+  STATE.personnel.page = 0;
+  _renderPersonnelList();
+  const inp = document.getElementById("alltime-search-personnel");
+  if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+function personnelPage(delta) {
+  STATE.personnel = STATE.personnel || {};
+  STATE.personnel.page = Math.max(0, (STATE.personnel.page || 0) + delta);
+  _renderPersonnelList();
+}
+function personnelToggleRow(key) {
+  STATE.personnel = STATE.personnel || {};
+  STATE.personnel.open = STATE.personnel.open || {};
+  STATE.personnel.open[key] = !STATE.personnel.open[key];
+  _renderPersonnelList();
+}
+
+const PERSONNEL_PAGE_SIZE = 50;
 
 function renderPersonnel() {
   const host = document.getElementById("personnel-host");
   const sub = document.getElementById("personnel-sub");
   if (!host) return;
-  STATE.personnel = STATE.personnel || { query: "", role: "all" };
-  // Lazy-load the docs file, then re-render once when it arrives.
+  STATE.personnel = STATE.personnel || { query: "", role: "all", page: 0, open: {} };
   if (!_raceDocsAttempted) {
     loadRaceDocs().then(() => { if (STATE.view === "personnel") renderPersonnel(); });
   }
-  const idx = buildPersonnelIndex();
-  PERSONNEL_INDEX = idx;
-  const total = idx.size;
-  const raceCount = (() => {
-    let n = 0; const cutoff = Date.now() + 9 * 864e5;
-    for (const bySeries of Object.values(RACE_DOCS_CACHE || {}))
-      for (const races of Object.values(bySeries || {}))
-        for (const rec of Object.values(races || {})) {
-          const rd = Date.parse(String(rec.race_date || "").slice(0, 10));
-          if (rd && rd <= cutoff && rec.docs && rec.docs.roster) n++;
-        }
-    return n;
-  })();
-  if (sub) sub.textContent = total
-    ? `${total} people across ${raceCount} race rosters`
+  PERSONNEL_INDEX = buildPersonnelIndex();
+
+  let raceCount = 0; const cutoff = Date.now() + 9 * 864e5;
+  for (const bySeries of Object.values(RACE_DOCS_CACHE || {}))
+    for (const races of Object.values(bySeries || {}))
+      for (const rec of Object.values(races || {})) {
+        const rd = Date.parse(String(rec.race_date || "").slice(0, 10));
+        if (rd && rd <= cutoff && rec.docs && rec.docs.roster) raceCount++;
+      }
+  if (sub) sub.textContent = PERSONNEL_INDEX.size
+    ? `${PERSONNEL_INDEX.size.toLocaleString()} people across ${raceCount} race rosters`
     : "No roster data yet — run the crew-roster backfill";
 
-  const roleTabs = PERSONNEL_ROLES.map(r =>
-    `<button class="pers-role${(STATE.personnel.role || "all") === r ? " on" : ""}" onclick="setPersonnelFilter('role','${r}')">${r === "all" ? "All Roles" : escapeHTML(r)}</button>`
+  const role = STATE.personnel.role || "all";
+  const roleBtns = PERSONNEL_ROLES.map(r =>
+    `<button class="alltime-series-btn ${role === r ? "active" : ""}" data-prole="${r}" onclick="setPersonnelFilter('role','${r}')">${r === "all" ? "All" : escapeHTML(r)}</button>`
   ).join("");
 
   host.innerHTML = `
-    <div class="pers-controls">
-      <input type="text" class="pers-search" id="pers-search" placeholder="Search a name…"
-        value="${escapeHTML(STATE.personnel.query || "")}" oninput="_personnelSearch(this)">
-      <div class="pers-roles">${roleTabs}</div>
+    <div class="alltime-toolbar">
+      <input type="search" class="alltime-search" id="alltime-search-personnel"
+             placeholder="Search personnel…" value="${escapeHTML(STATE.personnel.query || "")}"
+             oninput="_personnelSearch(this)">
+      <div class="alltime-toggle-group">
+        <span class="alltime-toggle-label">Role</span>
+        ${roleBtns}
+      </div>
     </div>
     <div id="personnel-list"></div>`;
   _renderPersonnelList();
-  const inp = document.getElementById("pers-search");
-  if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
 }
 
 function _renderPersonnelList() {
@@ -23593,41 +23612,62 @@ function _renderPersonnelList() {
   const st = STATE.personnel || {};
   const q = (st.query || "").toLowerCase().trim();
   const role = st.role || "all";
-  let rows = Array.from(PERSONNEL_INDEX.values());
-  if (role !== "all") rows = rows.filter(p => p.roles.has(role));
-  if (q) rows = rows.filter(p => p.name.toLowerCase().includes(q));
-  rows.sort((a, b) => b.appearances.length - a.appearances.length || a.name.localeCompare(b.name));
-  if (!rows.length) {
-    wrap.innerHTML = `<div class="rc-empty">No people match.</div>`;
-    return;
-  }
-  const CAP = 250;
-  const shown = rows.slice(0, CAP);
-  const cards = shown.map(p => {
-    const races = new Set(p.appearances.map(a => a.year + a.series + a.track + a.date)).size;
-    const teams = Array.from(p.teams);
-    const positions = Array.from(p.positions);
-    // history newest-first
-    const hist = p.appearances.slice().sort((a, b) =>
-      (b.date || "").localeCompare(a.date || "")).map(a =>
-      `<tr><td class="rdoc-pos">${a.year}</td><td>${escapeHTML(a.series)}</td>
-        <td>${escapeHTML(a.track)}</td><td class="rdoc-car">#${escapeHTML(String(a.car))}</td>
-        <td>${escapeHTML(a.driver)}</td><td>${escapeHTML(a.team)}</td>
+  st.open = st.open || {};
+
+  let rows = Array.from(PERSONNEL_INDEX.entries());   // [key, person]
+  if (role !== "all") rows = rows.filter(([, p]) => p.roles.has(role));
+  if (q) rows = rows.filter(([, p]) => p.name.toLowerCase().includes(q));
+  rows.sort((a, b) => b[1].appearances.length - a[1].appearances.length || a[1].name.localeCompare(b[1].name));
+
+  const total = rows.length;
+  const pageCount = Math.max(1, Math.ceil(total / PERSONNEL_PAGE_SIZE));
+  if ((st.page || 0) >= pageCount) st.page = pageCount - 1;
+  const page = st.page || 0;
+  const slice = rows.slice(page * PERSONNEL_PAGE_SIZE, (page + 1) * PERSONNEL_PAGE_SIZE);
+
+  const racesOf = p => new Set(p.appearances.map(a => a.year + a.series + a.track + a.date)).size;
+  const body = slice.map(([key, p], i) => {
+    const rank = page * PERSONNEL_PAGE_SIZE + i + 1;
+    const positions = Array.from(p.positions).slice(0, 3).join(", ") + (p.positions.size > 3 ? "…" : "");
+    const teams = Array.from(p.teams).join(" · ");
+    const open = !!st.open[key];
+    const main = `<tr class="pers-row${open ? " open" : ""}" onclick="personnelToggleRow('${key.replace(/'/g, "\\'")}')">
+        <td class="num alltime-rank-cell">${rank}</td>
+        <td class="pers-name-cell"><span class="pers-caret">${open ? "▾" : "▸"}</span>${escapeHTML(p.name)}</td>
+        <td>${escapeHTML(positions)}</td>
+        <td class="pers-teams-cell">${escapeHTML(teams)}</td>
+        <td class="num"><b>${racesOf(p)}</b></td></tr>`;
+    if (!open) return main;
+    const hist = p.appearances.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+      .map(a => `<tr class="pers-hist-row"><td></td>
+        <td class="rdoc-pos">${a.year} · ${escapeHTML(a.series)}</td>
+        <td>${escapeHTML(a.track)}</td>
+        <td>${escapeHTML(a.team)}${a.car ? ` · #${escapeHTML(String(a.car))} ${escapeHTML(a.driver || "")}` : ""}</td>
         <td>${escapeHTML(a.position)}</td></tr>`).join("");
-    return `<details class="pers-card">
-      <summary>
-        <span class="pers-name">${escapeHTML(p.name)}</span>
-        <span class="pers-meta">${escapeHTML(positions.slice(0, 2).join(", "))}${positions.length > 2 ? " +" + (positions.length - 2) : ""}</span>
-        <span class="pers-teams">${escapeHTML(teams.join(" · "))}</span>
-        <span class="pers-count">${races} race${races === 1 ? "" : "s"}</span>
-      </summary>
-      <div class="table-scroll"><table class="data-table rdoc-table">
-        <thead><tr><th>Yr</th><th>Series</th><th>Track</th><th>Car</th><th>Driver</th><th>Team</th><th>Position</th></tr></thead>
-        <tbody>${hist}</tbody></table></div>
-    </details>`;
+    return main + hist;
   }).join("");
-  const more = rows.length > CAP ? `<div class="pers-more">Showing ${CAP} of ${rows.length} — narrow with search or a role filter.</div>` : "";
-  wrap.innerHTML = `<div class="pers-list">${cards}</div>${more}`;
+
+  const pag = `<div class="alltime-pag">
+      <button class="alltime-pag-btn" ${page === 0 ? "disabled" : ""} onclick="personnelPage(-1)">← Prev</button>
+      <span class="alltime-pag-status">Page ${page + 1} of ${pageCount} · ${total.toLocaleString()} people</span>
+      <button class="alltime-pag-btn" ${page >= pageCount - 1 ? "disabled" : ""} onclick="personnelPage(1)">Next →</button>
+    </div>`;
+
+  wrap.innerHTML = total ? `
+    ${pag}
+    <div class="card alltime-table-wrap">
+      <table class="data-table alltime-table">
+        <thead><tr>
+          <th class="alltime-th alltime-th-rank">#</th>
+          <th class="alltime-th">Name</th>
+          <th class="alltime-th">Position(s)</th>
+          <th class="alltime-th">Team(s)</th>
+          <th class="alltime-th num">Races</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    ${pag}` : `<div class="rc-empty">No people match.</div>`;
 }
 
 function renderAllTimeDrivers() {

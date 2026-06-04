@@ -814,6 +814,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .profile-takeover #view-drivers,
 .profile-takeover #view-teams,
 .profile-takeover #view-crewchiefs,
+.profile-takeover #view-personnel,
 .profile-takeover #view-pointscalc,
 .profile-takeover #view-projection {
   flex: 1;
@@ -834,6 +835,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .profile-takeover #view-drivers::-webkit-scrollbar,
 .profile-takeover #view-teams::-webkit-scrollbar,
 .profile-takeover #view-crewchiefs::-webkit-scrollbar,
+.profile-takeover #view-personnel::-webkit-scrollbar,
 .profile-takeover #view-pointscalc::-webkit-scrollbar,
 .profile-takeover #view-projection::-webkit-scrollbar { display: none; }
 
@@ -12444,81 +12446,22 @@ body.lightbox-open {
 }
 
 /* ============================================================
-   PERSONNEL DATABASE — searchable crew index from roster docs
+   PERSONNEL DATABASE — reuses .alltime-toolbar / .alltime-table styling;
+   adds expandable history rows.
    ============================================================ */
-.pers-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 6px 0 14px;
-}
-.pers-search {
-  flex: 1 1 220px;
-  max-width: 340px;
-  background: var(--card-hi);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 11px;
-  font: inherit;
-  font-size: 13px;
-  color: var(--text);
-}
-.pers-search::placeholder { color: var(--muted); }
-.pers-search:focus { outline: none; border-color: var(--accent); }
-.pers-roles { display: flex; flex-wrap: wrap; gap: 4px; }
-.pers-role {
-  appearance: none;
-  background: var(--card-hi);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font: inherit;
+.pers-row { cursor: pointer; }
+.pers-row:hover td { background: var(--card-hi); }
+.pers-row.open td { background: var(--card-hi); }
+.pers-caret { color: var(--muted); font-size: 9px; margin-right: 7px; }
+.pers-name-cell { font-weight: 600; color: var(--text); white-space: nowrap; }
+.pers-teams-cell { font-size: 11px; color: var(--muted); }
+.pers-hist-row td {
   font-size: 11px;
-  font-weight: 600;
   color: var(--muted);
-  cursor: pointer;
+  background: var(--bg-2);
+  padding-top: 3px;
+  padding-bottom: 3px;
+  border-top: 0;
 }
-.pers-role:hover { color: var(--text); }
-.pers-role.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pers-hist-row td:first-child { border-left: 2px solid var(--accent); }
 
-.pers-list { display: flex; flex-direction: column; gap: 4px; }
-.pers-card {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--card-hi);
-  overflow: hidden;
-}
-.pers-card > summary {
-  display: grid;
-  grid-template-columns: minmax(120px, 1.4fr) minmax(90px, 1fr) minmax(80px, 1.2fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  cursor: pointer;
-  list-style: none;
-  font-size: 12.5px;
-}
-.pers-card > summary::-webkit-details-marker { display: none; }
-.pers-card > summary::before { content: "▸"; color: var(--muted); font-size: 10px; }
-.pers-card[open] > summary::before { content: "▾"; }
-.pers-name { font-weight: 600; color: var(--text); }
-.pers-meta { font-size: 11px; color: var(--muted); }
-.pers-teams { font-size: 11px; color: var(--text); }
-.pers-count {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--muted);
-  text-align: right;
-  white-space: nowrap;
-}
-.pers-card > .table-scroll { padding: 0 12px 10px; }
-.pers-card .data-table th,
-.pers-card .data-table td { font-size: 11px; padding: 4px 7px; }
-.pers-more { font-size: 11px; color: var(--muted); padding: 10px 4px; }
-
-@media (max-width: 640px) {
-  .pers-card > summary { grid-template-columns: 1fr auto; }
-  .pers-card > summary .pers-meta,
-  .pers-card > summary .pers-teams { display: none; }
-}
