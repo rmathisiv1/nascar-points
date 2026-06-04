@@ -12403,3 +12403,11 @@ body.lightbox-open {
   color: var(--muted);
   margin-bottom: 6px;
 }
+
+.rdoc-box-special {
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
+  line-height: 24px;
+}

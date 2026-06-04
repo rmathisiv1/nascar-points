@@ -262,30 +262,32 @@ def parse_entry_pdf(source):
     return out
 
 
-def _classify_fill(rgb):
-    """Map a pit-box rectangle's non-stroking fill to a stall category, matching
-    the sheet's legend: red=eliminated/mobility, black=vacant, green=monster,
-    blue/cyan=SMI. White/None = an ordinary (in-play, occupied) box."""
-    if rgb is None:
+def _classify_fill(fill):
+    """Map a FILLED pit-box rectangle's color to a stall category. The sheet
+    uses: a red hatch pattern = eliminated and solid red = mobility (both shown
+    red); green = monster; blue/cyan = SMI; solid black = vacant; white = an
+    ordinary in-play box."""
+    if fill is None:
         return None
-    # pdfplumber gives a float (gray) or a tuple of 0..1 channels.
-    if isinstance(rgb, (int, float)):
-        g = float(rgb)
-        return "vacant" if g < 0.25 else None
+    # Pattern color space comes through as a name like 'P7'/'P9' — the sheet
+    # only patterns the red eliminated hatch.
+    if isinstance(fill, str):
+        return "eliminated"
+    if isinstance(fill, (int, float)):
+        return "vacant" if float(fill) <= 0.15 else None
     try:
-        r, g, b = (float(rgb[0]), float(rgb[1]), float(rgb[2])) if len(rgb) >= 3 \
-            else (float(rgb[0]),) * 3
+        r, g, b = float(fill[0]), float(fill[1]), float(fill[2])
     except Exception:
         return None
     if r > 0.55 and g < 0.4 and b < 0.4:
-        return "eliminated"
-    if g > 0.45 and r < 0.5 and b < 0.5:
-        return "monster"
+        return "eliminated"        # red (mobility) — grouped under eliminated
+    if g > 0.45 and r < 0.6 and b < 0.7:
+        return "monster"           # green
     if b > 0.6 and r < 0.5:
-        return "smi"
-    if r < 0.25 and g < 0.25 and b < 0.25:
-        return "vacant"
-    return None
+        return "smi"               # blue / cyan
+    if r < 0.2 and g < 0.2 and b < 0.2:
+        return "vacant"            # solid black
+    return None                    # white / light = ordinary box
 
 
 def parse_pitstall_pdf(source):
@@ -306,7 +308,8 @@ def parse_pitstall_pdf(source):
         page = pdf.pages[0]
         words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
         rects = [{"x0": r["x0"], "x1": r["x1"], "top": r["top"], "bottom": r["bottom"],
-                  "fill": r.get("non_stroking_color")} for r in (page.rects or [])]
+                  "fill": r.get("non_stroking_color"), "filled": bool(r.get("fill"))}
+                 for r in (page.rects or [])]
 
     nums = [w for w in words if re.fullmatch(r"\d{1,3}", w["text"])]
     if not nums:
@@ -344,23 +347,26 @@ def parse_pitstall_pdf(source):
         if box_no not in assign or dist < assign[box_no][1]:
             assign[box_no] = (cw["text"], dist)
 
-    # For each box label, find the colored rectangle sitting above it (the stall
-    # body) and classify its fill. The box body is above the ruler row.
+    # For each box label, find the PAINTED rectangle(s) sitting just above it
+    # (the stall body, within ~60px of the ruler) and classify the fill. Only
+    # filled rects count — the 80-odd black rects are stroked box OUTLINES, not
+    # fills, and would otherwise read as "vacant".
     box_x = {int(w["text"]): xc(w) for w in box_words}
     box_type = {}
+    _PRI = {"eliminated": 3, "monster": 3, "smi": 3, "vacant": 1}
     for b, bx in box_x.items():
-        best, best_d = None, 1e9
+        best, best_pri = None, 0
         for rc in rects:
-            if rc["bottom"] >= box_row["top"]:        # only stall bodies (above ruler)
+            if not rc["filled"]:
                 continue
-            if rc["x0"] - 2 <= bx <= rc["x1"] + 2:    # rect spans this box's x
-                d = box_row["top"] - rc["bottom"]
-                if 0 <= d < best_d:
-                    best, best_d = rc, d
-        if best is not None:
-            t = _classify_fill(best["fill"])
-            if t:
-                box_type[b] = t
+            if rc["bottom"] >= box_row["top"] or rc["top"] < box_row["top"] - 60:
+                continue                                  # only the stall band
+            if rc["x0"] - 2 <= bx <= rc["x1"] + 2:        # rect spans this box's x
+                cat = _classify_fill(rc["fill"])
+                if cat and _PRI[cat] >= best_pri:
+                    best, best_pri = cat, _PRI[cat]
+        if best:
+            box_type[b] = best
 
     maxbox = boxvals[-1]
     out = []
@@ -369,6 +375,26 @@ def parse_pitstall_pdf(source):
             out.append({"box": b, "car": assign[b][0], "type": "occupied"})
         else:
             out.append({"box": b, "car": None, "type": box_type.get(b, "vacant")})
+
+    # Special colored stalls that sit OUTSIDE the numbered range — e.g. the SMI
+    # C10 box at the pit-exit (Turn 1) end. Larger x = Turn 1 (box 1) side.
+    xs = list(box_x.values())
+    minx, maxx = min(xs), max(xs)
+    for rc in rects:
+        if not rc["filled"]:
+            continue
+        if rc["bottom"] >= box_row["top"] or rc["top"] < box_row["top"] - 60:
+            continue
+        cat = _classify_fill(rc["fill"])
+        if not cat or cat == "vacant":
+            continue
+        cx = (rc["x0"] + rc["x1"]) / 2
+        if any(abs(cx - bx) < 8 for bx in xs):
+            continue                              # already a numbered box
+        if cx > maxx + 6:
+            out.append({"box": None, "car": None, "type": cat, "side": "right"})
+        elif cx < minx - 6:
+            out.append({"box": None, "car": None, "type": cat, "side": "left"})
     return out
 
 
@@ -862,6 +888,66 @@ def discover_race_docs(series, year, track_name, want=None):
     return race_page, resources, pdfs
 
 
+def debug_pitstall_geometry(source):
+    """Print the pit sheet's vector inventory so we can see how the colored
+    stalls are drawn (rects vs curves vs images) and what their fills are,
+    to calibrate the stall-color classifier."""
+    if pdfplumber is None:
+        raise RuntimeError("pdfplumber not installed (pip install pdfplumber)")
+    opener = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
+    with pdfplumber.open(opener) as pdf:
+        page = pdf.pages[0]
+        words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
+        rects = list(page.rects or [])
+        curves = list(page.curves or [])
+        images = list(page.images or [])
+
+        nums = [w for w in words if re.fullmatch(r"\d{1,3}", w["text"])]
+        nums.sort(key=lambda w: w["top"])
+        rows = []
+        for w in nums:
+            if rows and abs(w["top"] - rows[-1]["top"]) <= 4:
+                rows[-1]["words"].append(w)
+            else:
+                rows.append({"top": w["top"], "words": [w]})
+        box_row = max(rows, key=lambda r: len(r["words"])) if rows else None
+        ruler_top = box_row["top"] if box_row else None
+
+        print(f"rects={len(rects)}  curves={len(curves)}  images={len(images)}")
+        print(f"box-ruler top y = {ruler_top}")
+        if box_row:
+            bx = sorted((int(w['text']), round((w['x0']+w['x1'])/2, 1)) for w in box_row['words'])
+            print(f"box x-centers (first 6): {bx[:6]}  (last 6): {bx[-6:]}")
+
+        def fills(objs, name):
+            print(f"\n--- {name}: fills present (non_stroking_color) ---")
+            seen = {}
+            for o in objs:
+                f = o.get("non_stroking_color")
+                key = str(f)
+                seen[key] = seen.get(key, 0) + 1
+            for k, c in sorted(seen.items(), key=lambda x: -x[1]):
+                print(f"   {c:>4}x  fill={k}")
+
+        fills(rects, "RECTS")
+        fills(curves, "CURVES")
+
+        # Show the colored (non white/none/black-line) shapes sitting ABOVE the
+        # ruler, sorted left→right, so we can match them to box numbers.
+        cand = []
+        for o in (rects + curves):
+            if ruler_top is not None and o.get("bottom", 1e9) >= ruler_top:
+                continue
+            f = o.get("non_stroking_color")
+            cand.append((round((o["x0"]+o["x1"])/2, 1), round(o["top"], 1),
+                         round(o["bottom"], 1), f))
+        cand.sort()
+        print(f"\n--- shapes above ruler with a fill (x-center, top, bottom, fill) "
+              f"[{len(cand)}] ---")
+        for c in cand:
+            print(f"   x={c[0]:>7}  top={c[1]:>6}  bot={c[2]:>6}  fill={c[3]}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Scrape a NASCAR entry list from Jayski's PDF.")
     g = ap.add_mutually_exclusive_group(required=True)
@@ -886,6 +972,9 @@ def main():
     ap.add_argument("--inspect", action="store_true",
                     help="with --pdf/--pdf-url: print the PDF's table/text structure "
                          "instead of parsing (for adapting the parser to a new layout)")
+    ap.add_argument("--pit-debug", action="store_true",
+                    help="with --pdf-url: dump the pit sheet's rects/curves + fills so "
+                         "the stall-color classifier can be calibrated")
     args = ap.parse_args()
 
     if args.resources:
@@ -932,6 +1021,13 @@ def main():
                     pdfs = sorted(set(re.findall(r'https?://[^\s"\'<>]+?\.pdf', html, re.I)))
                     for p in pdfs[:6]:
                         print(f"    PDF: {p}")
+        return
+
+    if args.pit_debug:
+        src = args.pdf_url and _get(args.pdf_url, binary=True)
+        if not src:
+            raise SystemExit("--pit-debug needs --pdf-url")
+        debug_pitstall_geometry(src)
         return
 
     if args.inspect:

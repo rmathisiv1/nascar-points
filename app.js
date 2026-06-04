@@ -5131,8 +5131,12 @@ function _stallCls(type) {
 // legend. Wraps to fit the column (no horizontal scroll).
 function _rdocPitVisual(rows, drv) {
   const byBox = {}; let maxBox = 0;
+  const specialsL = [], specialsR = [];
   rows.forEach(r => {
-    if (r.box == null) return;
+    if (r.box == null) {
+      (r.side === "left" ? specialsL : specialsR).push(r);
+      return;
+    }
     byBox[r.box] = r;
     maxBox = Math.max(maxBox, r.box);
   });
@@ -5149,7 +5153,12 @@ function _rdocPitVisual(rows, drv) {
           <div class="rdoc-box-n">${b}</div></div>`;
     }
     const cls = _stallCls(r && r.type);
-    return `<div class="rdoc-box rdoc-box-${cls}"><div class="rdoc-box-car"></div><div class="rdoc-box-n">${b}</div></div>`;
+    return `<div class="rdoc-box rdoc-box-${cls}" title="${escapeHTML((r && r.type) || "vacant")}"><div class="rdoc-box-car"></div><div class="rdoc-box-n">${b}</div></div>`;
+  };
+  const specialHTML = r => {
+    const lbl = { smi: "SMI", monster: "MON", eliminated: "ELIM", vacant: "" }[r.type] || "";
+    return `<div class="rdoc-box rdoc-box-${_stallCls(r.type)}" title="${escapeHTML(r.type)}">
+        <div class="rdoc-box-car rdoc-box-special">${lbl}</div><div class="rdoc-box-n">·</div></div>`;
   };
 
   const group = (hi, lo) => {
@@ -5165,9 +5174,11 @@ function _rdocPitVisual(rows, drv) {
       <div class="rdoc-pit-legend">${legend}</div>
       <div class="rdoc-pit-lane">
         <span class="rdoc-pit-turn">◄ Turn&nbsp;4</span>
+        ${specialsL.map(specialHTML).join("")}
         ${group(maxBox, sfBox + 1)}
         <span class="rdoc-pit-sf">START<br>FINISH</span>
         ${group(sfBox, 1)}
+        ${specialsR.map(specialHTML).join("")}
         <span class="rdoc-pit-turn">Turn&nbsp;1 ►</span>
       </div>
     </div>`;
