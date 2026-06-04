@@ -12446,81 +12446,116 @@ body.lightbox-open {
 }
 
 /* ============================================================
-   PERSONNEL DATABASE — reuses .alltime-toolbar / .alltime-table styling;
-   adds multi-select filters, sortable headers, expandable breakdown.
+   PERSONNEL DATABASE — toolbar + Filter popup + sortable table.
    ============================================================ */
-.pers-toolbar { align-items: flex-end; }
-.pers-multi { display: flex; flex-direction: column; gap: 3px; }
-.pers-multi > span {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.pers-multi select {
+.pers-toolbar { align-items: center; }
+.pers-filter-open {
+  appearance: none;
   background: var(--card-hi);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 7px 14px;
   font: inherit;
   font-size: 12px;
+  font-weight: 600;
   color: var(--text);
-  min-width: 150px;
-  max-width: 200px;
-}
-.pers-multi select:focus { outline: none; border-color: var(--accent); }
-
-.pers-active-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 0 4px;
-}
-.pers-active-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  padding: 3px 6px 3px 10px;
-  font-size: 11px;
-  color: var(--text);
-}
-.pers-active-filter button {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
   cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 0 2px;
 }
-.pers-active-filter button:hover { color: var(--text); }
+.pers-filter-open:hover { border-color: var(--accent); color: var(--accent); }
+.pers-active-row { margin: 8px 0 4px; }
 .pers-hint { font-size: 11px; color: var(--muted); }
 
+/* Filter modal */
+.pers-modal-wrap { display: none; }
+.pers-modal-wrap.open { display: block; }
+.pers-modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, .55);
+  z-index: 6000;
+}
+.pers-modal {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(620px, 92vw);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2, #1a1a1a);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  z-index: 6001;
+  overflow: hidden;
+}
+.pers-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 14px;
+}
+.pers-modal-x {
+  appearance: none; border: 0; background: transparent;
+  color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer;
+}
+.pers-modal-x:hover { color: var(--text); }
+.pers-modal-body { padding: 16px 18px; overflow-y: auto; }
+.pers-modal-sec + .pers-modal-sec { margin-top: 20px; }
+.pers-modal-sec h4 {
+  margin: 0 0 10px;
+  font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted);
+  display: flex; align-items: center; gap: 10px;
+}
+.pers-team-series { display: inline-flex; gap: 3px; }
+.pers-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 4px 14px;
+}
+.pers-check {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; color: var(--text);
+  padding: 3px 0; cursor: pointer;
+}
+.pers-check input { accent-color: var(--accent); cursor: pointer; }
+.pers-modal-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+.pers-modal-clear {
+  appearance: none; border: 0; background: transparent;
+  color: var(--muted); font: inherit; font-size: 12px; cursor: pointer;
+}
+.pers-modal-clear:hover { color: var(--text); }
+.pers-modal-done {
+  appearance: none; border: 0; background: var(--accent);
+  color: #fff; border-radius: 6px; padding: 8px 18px;
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+
+/* Table */
 .pers-sortable { cursor: pointer; user-select: none; }
 .pers-sortable:hover { color: var(--accent); }
 .pers-sort-arrow { color: var(--accent); }
-
 .pers-row { cursor: pointer; }
 .pers-row:hover td,
 .pers-row.open td { background: var(--card-hi); }
 .pers-caret { color: var(--muted); font-size: 9px; margin-right: 7px; }
 .pers-name-cell { font-weight: 600; color: var(--text); white-space: nowrap; }
-.pers-teams-cell { font-size: 11px; color: var(--muted); }
+.pers-teams-cell { font-size: 12px; color: var(--text); white-space: nowrap; }
+.pers-more-tag { font-size: 10px; color: var(--muted); }
 .pers-car-cell { font-family: var(--mono); font-size: 11px; color: var(--text); white-space: nowrap; }
 .pers-hist-row td {
   font-size: 11px;
   color: var(--muted);
   background: var(--bg-2);
-  padding-top: 3px;
-  padding-bottom: 3px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   border-top: 0;
 }
 .pers-hist-row td:first-child { border-left: 2px solid var(--accent); width: 0; padding: 0; }
-.pers-hist-years { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.pers-hist-when { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
 

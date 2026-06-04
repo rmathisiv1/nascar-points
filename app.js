@@ -23575,14 +23575,14 @@ function _finishMapFor(year, series, date, track) {
   return map;
 }
 
+function _personnelDefaults() {
+  return { query: "", series: "all", positions: [], teams: [], teamPopupSeries: "all", sort: "races", page: 0, open: {}, filterOpen: false };
+}
 function setPersonnelFilter(kind, val) {
   STATE.personnel = STATE.personnel || _personnelDefaults();
   STATE.personnel[kind] = val;
   STATE.personnel.page = 0;
   renderPersonnel();
-}
-function _personnelDefaults() {
-  return { query: "", series: "all", roles: [], positions: [], teams: [], sort: "races", page: 0, open: {} };
 }
 function _personnelSearch(el) {
   STATE.personnel = STATE.personnel || _personnelDefaults();
@@ -23609,10 +23609,48 @@ function personnelSort(key) {
   STATE.personnel.page = 0;
   _renderPersonnelList();
 }
-// Multi-select dropdowns post their full selection back as a JSON array.
-function personnelSetMulti(kind, selectEl) {
-  const vals = Array.from(selectEl.selectedOptions).map(o => o.value).filter(v => v !== "");
-  setPersonnelFilter(kind, vals);
+// --- Filter popup -------------------------------------------------------
+function personnelOpenFilter() {
+  STATE.personnel.filterOpen = true;
+  document.getElementById("pers-modal-wrap")?.classList.add("open");
+}
+function personnelCloseFilter() {
+  STATE.personnel.filterOpen = false;
+  document.getElementById("pers-modal-wrap")?.classList.remove("open");
+}
+function personnelToggleFilter(kind, val) {
+  const arr = STATE.personnel[kind] || (STATE.personnel[kind] = []);
+  const i = arr.indexOf(val);
+  if (i >= 0) arr.splice(i, 1); else arr.push(val);
+  STATE.personnel.page = 0;
+  _renderPersonnelList();
+  _updatePersonnelFilterBtn();
+}
+function personnelClearFilters() {
+  STATE.personnel.positions = [];
+  STATE.personnel.teams = [];
+  STATE.personnel.page = 0;
+  _refreshPersonnelModal();
+  _renderPersonnelList();
+  _updatePersonnelFilterBtn();
+}
+function personnelSetTeamPopupSeries(s) {
+  STATE.personnel.teamPopupSeries = s;
+  const grid = document.getElementById("pers-team-grid");
+  if (grid) grid.innerHTML = _personnelTeamGridHTML();
+  document.querySelectorAll("#pers-team-series .alltime-series-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.tps === s));
+}
+function _updatePersonnelFilterBtn() {
+  const n = (STATE.personnel.positions || []).length + (STATE.personnel.teams || []).length;
+  const b = document.getElementById("pers-filter-btn");
+  if (b) b.textContent = n ? `Filters (${n})` : "Filters";
+}
+function _refreshPersonnelModal() {
+  const pg = document.getElementById("pers-pos-grid");
+  if (pg) pg.innerHTML = _personnelPositionGridHTML();
+  const tg = document.getElementById("pers-team-grid");
+  if (tg) tg.innerHTML = _personnelTeamGridHTML();
 }
 
 const PERSONNEL_PAGE_SIZE = 50;
@@ -23627,7 +23665,14 @@ function _personnelTeams() {
   if (PERSONNEL_INDEX) for (const p of PERSONNEL_INDEX.values()) p.teams.forEach(x => s.add(x));
   return Array.from(s).sort((a, b) => a.localeCompare(b));
 }
-// Earliest / latest roster years present (drives the "data goes back to" note).
+// Teams that appear in a given series (for the popup's team-by-series filter).
+function _personnelTeamsForSeries(series) {
+  if (series === "all") return _personnelTeams();
+  const s = new Set();
+  if (PERSONNEL_INDEX) for (const p of PERSONNEL_INDEX.values())
+    for (const a of p.appearances) if (a.series === series && a.team) s.add(a.team);
+  return Array.from(s).sort((a, b) => a.localeCompare(b));
+}
 function _personnelYearSpan() {
   let lo = Infinity, hi = -Infinity;
   if (PERSONNEL_INDEX) for (const p of PERSONNEL_INDEX.values())
@@ -23635,13 +23680,29 @@ function _personnelYearSpan() {
   return (lo === Infinity) ? null : { lo, hi };
 }
 
-// Build the filtered + scoped row list. A selected series scopes every stat;
-// roles/positions/teams are OR-within-filter, AND-across-filters. A car can
-// differ race to race, so we surface the set of cars in the scoped window.
+function _personnelPositionGridHTML() {
+  const sel = STATE.personnel.positions || [];
+  return _personnelPositions().map(p =>
+    `<label class="pers-check"><input type="checkbox" ${sel.includes(p) ? "checked" : ""}
+       onchange="personnelToggleFilter('positions','${p.replace(/'/g, "\\'")}')"> ${escapeHTML(p)}</label>`
+  ).join("") || `<span class="pers-hint">No positions in data.</span>`;
+}
+function _personnelTeamGridHTML() {
+  const sel = STATE.personnel.teams || [];
+  const series = STATE.personnel.teamPopupSeries || "all";
+  return _personnelTeamsForSeries(series).map(t =>
+    `<label class="pers-check"><input type="checkbox" ${sel.includes(t) ? "checked" : ""}
+       onchange="personnelToggleFilter('teams','${t.replace(/'/g, "\\'")}')"> ${escapeHTML(t)}</label>`
+  ).join("") || `<span class="pers-hint">No teams for this series.</span>`;
+}
+
+// Build the filtered + scoped row list. A selected series scopes every stat.
+// Positions/teams are OR-within-filter, AND-across-filters. The row surfaces
+// the PRIMARY team (most races this scope); other teams/cars live in the
+// expandable breakdown.
 function _personnelRows() {
   const st = STATE.personnel || _personnelDefaults();
   const series = st.series || "all";
-  const roles = st.roles || [];
   const positions = st.positions || [];
   const teams = st.teams || [];
   const q = (st.query || "").toLowerCase().trim();
@@ -23651,18 +23712,26 @@ function _personnelRows() {
     if (q && !p.name.toLowerCase().includes(q)) continue;
     let apps = series === "all" ? p.appearances : p.appearances.filter(a => a.series === series);
     if (!apps.length) continue;
-    if (roles.length && !apps.some(a => roles.includes(_roleGroupOf(a.position)))) continue;
     if (positions.length && !apps.some(a => positions.includes(a.position))) continue;
     if (teams.length && !apps.some(a => teams.includes(a.team))) continue;
     const rk = a => a.year + a.series + a.track + a.date;
     const races = new Set(apps.map(rk)).size;
     const wins = new Set(apps.filter(a => a.won).map(rk)).size;
     const top5 = new Set(apps.filter(a => a.top5).map(rk)).size;
-    const teamList = Array.from(new Set(apps.map(a => a.team).filter(Boolean)));
     const posList = Array.from(new Set(apps.map(a => a.position).filter(Boolean)));
-    const carList = Array.from(new Set(apps.map(a => a.car).filter(c => c !== "" && c != null)))
+    // Primary team = most distinct races; its cars shown in the main row.
+    const teamRaces = new Map();
+    for (const a of apps) {
+      if (!a.team) continue;
+      let m = teamRaces.get(a.team); if (!m) { m = new Set(); teamRaces.set(a.team, m); }
+      m.add(rk(a));
+    }
+    let primaryTeam = "", primaryN = -1;
+    for (const [t, set] of teamRaces) if (set.size > primaryN) { primaryTeam = t; primaryN = set.size; }
+    const teamCount = teamRaces.size;
+    const primaryCars = Array.from(new Set(apps.filter(a => a.team === primaryTeam).map(a => a.car).filter(c => c !== "" && c != null)))
       .sort((m, n) => (parseInt(m, 10) || 999) - (parseInt(n, 10) || 999));
-    out.push({ key, name: p.name, apps, races, wins, top5, teams: teamList, positions: posList, cars: carList });
+    out.push({ key, name: p.name, apps, races, wins, top5, positions: posList, primaryTeam, teamCount, primaryCars });
   }
   const sort = st.sort || "races";
   const cmp = {
@@ -23694,9 +23763,7 @@ function renderPersonnel() {
         if (rd && rd <= cutoff && rec.docs && rec.docs.roster) raceCount++;
       }
   const span = _personnelYearSpan();
-  const coverage = span
-    ? (span.lo === span.hi ? `roster data: ${span.lo}` : `roster data: ${span.lo}\u2013${span.hi}`)
-    : "";
+  const coverage = span ? (span.lo === span.hi ? `roster data: ${span.lo}` : `roster data: ${span.lo}\u2013${span.hi}`) : "";
   if (sub) sub.textContent = PERSONNEL_INDEX.size
     ? `${PERSONNEL_INDEX.size.toLocaleString()} people \u00b7 ${raceCount} race rosters \u00b7 ${coverage}`
     : "No roster data yet \u2014 run the crew-roster backfill";
@@ -23706,17 +23773,12 @@ function renderPersonnel() {
   const seriesBtns = ["all", "NCS", "NOS", "NTS"].map(s =>
     `<button class="alltime-series-btn ${series === s ? "active" : ""}" onclick="setPersonnelFilter('series','${s}')">${s === "all" ? "All" : s}</button>`
   ).join("");
+  const nSel = (st.positions || []).length + (st.teams || []).length;
 
-  const roleSel = ['<option value="">All roles</option>'].concat(
-    PERSONNEL_ROLES.filter(r => r !== "all").map(r =>
-      `<option value="${escapeHTML(r)}" ${(st.roles || []).includes(r) ? "selected" : ""}>${escapeHTML(r)}</option>`)).join("");
-  const posSel = _personnelPositions().map(p =>
-    `<option value="${escapeHTML(p)}" ${(st.positions || []).includes(p) ? "selected" : ""}>${escapeHTML(p)}</option>`).join("");
-  const teamSel = _personnelTeams().map(t =>
-    `<option value="${escapeHTML(t)}" ${(st.teams || []).includes(t) ? "selected" : ""}>${escapeHTML(t)}</option>`).join("");
-
-  const chip = (arr, kind, label) => (arr && arr.length)
-    ? `<span class="pers-active-filter">${escapeHTML(label)}: ${arr.map(escapeHTML).join(", ")} <button onclick="setPersonnelFilter('${kind}',[])" title="clear">\u00d7</button></span>` : "";
+  const tpsSeries = st.teamPopupSeries || "all";
+  const tpsBtns = ["all", "NCS", "NOS", "NTS"].map(s =>
+    `<button class="alltime-series-btn ${tpsSeries === s ? "active" : ""}" data-tps="${s}" onclick="personnelSetTeamPopupSeries('${s}')">${s === "all" ? "All" : s}</button>`
+  ).join("");
 
   host.innerHTML = `
     <div class="alltime-toolbar pers-toolbar">
@@ -23724,18 +23786,36 @@ function renderPersonnel() {
              placeholder="Search personnel\u2026" value="${escapeHTML(st.query || "")}"
              oninput="_personnelSearch(this)">
       <div class="alltime-toggle-group"><span class="alltime-toggle-label">Series</span>${seriesBtns}</div>
-      <label class="pers-multi"><span>Role</span>
-        <select multiple size="1" onchange="personnelSetMulti('roles', this)">${roleSel}</select></label>
-      <label class="pers-multi"><span>Position</span>
-        <select multiple size="1" onchange="personnelSetMulti('positions', this)">${posSel}</select></label>
-      <label class="pers-multi"><span>Team</span>
-        <select multiple size="1" onchange="personnelSetMulti('teams', this)">${teamSel}</select></label>
+      <button class="pers-filter-open" id="pers-filter-btn" onclick="personnelOpenFilter()">${nSel ? `Filters (${nSel})` : "Filters"}</button>
     </div>
     <div class="pers-active-row">
-      ${chip(st.roles, "roles", "Role")}${chip(st.positions, "positions", "Position")}${chip(st.teams, "teams", "Team")}
-      <span class="pers-hint">Hold \u2318/Ctrl to pick several. Click a name for the breakdown; click Races / Top 5 / Wins to sort.</span>
+      <span class="pers-hint">Click a name for the breakdown \u00b7 click Races / Top 5 / Wins to sort \u00b7 team shown is where they ran most this season.</span>
     </div>
-    <div id="personnel-list"></div>`;
+    <div id="personnel-list"></div>
+
+    <div class="pers-modal-wrap${st.filterOpen ? " open" : ""}" id="pers-modal-wrap">
+      <div class="pers-modal-backdrop" onclick="personnelCloseFilter()"></div>
+      <div class="pers-modal" role="dialog" aria-label="Personnel filters">
+        <div class="pers-modal-head">
+          <span>Filter personnel</span>
+          <button class="pers-modal-x" onclick="personnelCloseFilter()" aria-label="Close">\u00d7</button>
+        </div>
+        <div class="pers-modal-body">
+          <section class="pers-modal-sec">
+            <h4>Position / role</h4>
+            <div class="pers-check-grid" id="pers-pos-grid">${_personnelPositionGridHTML()}</div>
+          </section>
+          <section class="pers-modal-sec">
+            <h4>Team <span class="pers-team-series" id="pers-team-series">${tpsBtns}</span></h4>
+            <div class="pers-check-grid" id="pers-team-grid">${_personnelTeamGridHTML()}</div>
+          </section>
+        </div>
+        <div class="pers-modal-foot">
+          <button class="pers-modal-clear" onclick="personnelClearFilters()">Clear all</button>
+          <button class="pers-modal-done" onclick="personnelCloseFilter()">Done</button>
+        </div>
+      </div>
+    </div>`;
   _renderPersonnelList();
 }
 
@@ -23758,36 +23838,38 @@ function _renderPersonnelList() {
   const body = slice.map((r, i) => {
     const rank = page * PERSONNEL_PAGE_SIZE + i + 1;
     const positions = r.positions.slice(0, 3).join(", ") + (r.positions.length > 3 ? "\u2026" : "");
-    const teams = r.teams.join(" \u00b7 ");
+    const teamCell = escapeHTML(r.primaryTeam || "\u2014") + (r.teamCount > 1 ? ` <span class="pers-more-tag">+${r.teamCount - 1}</span>` : "");
     const open = !!st.open[r.key];
     const main = `<tr class="pers-row${open ? " open" : ""}" onclick="personnelToggleRow('${r.key.replace(/'/g, "\\'")}')">
         <td class="num alltime-rank-cell">${rank}</td>
         <td class="pers-name-cell"><span class="pers-caret">${open ? "\u25be" : "\u25b8"}</span>${escapeHTML(r.name)}</td>
         <td>${escapeHTML(positions)}</td>
-        <td class="pers-teams-cell">${escapeHTML(teams)}</td>
-        <td class="pers-car-cell">${escapeHTML(carLabel(r.cars))}</td>
+        <td class="pers-teams-cell">${teamCell}</td>
+        <td class="pers-car-cell">${escapeHTML(carLabel(r.primaryCars))}</td>
         <td class="num">${r.races}</td>
         <td class="num">${r.top5 || ""}</td>
         <td class="num"><b>${r.wins || ""}</b></td></tr>`;
     if (!open) return main;
-    // Compact breakdown: group by team + position + car, with race/win/top-5
-    // counts and the year span (NOT one row per race).
+    // Breakdown: ONE row per (series, team, position) with all cars from that
+    // grouping combined. Columns align with the main table.
     const groups = new Map();
     for (const a of r.apps) {
-      const gk = (a.team || "\u2014") + " | " + (a.position || "\u2014") + " | " + (a.car || "\u2014");
+      const gk = a.series + " | " + (a.team || "\u2014") + " | " + (a.position || "\u2014");
       let g = groups.get(gk);
-      if (!g) { g = { team: a.team || "\u2014", position: a.position || "\u2014", car: a.car || "", races: new Set(), wins: new Set(), top5: new Set(), years: new Set() }; groups.set(gk, g); }
+      if (!g) { g = { series: a.series, team: a.team || "\u2014", position: a.position || "\u2014", cars: new Set(), races: new Set(), wins: new Set(), top5: new Set(), years: new Set() }; groups.set(gk, g); }
       const id = a.year + a.series + a.track + a.date;
-      g.races.add(id); if (a.won) g.wins.add(id); if (a.top5) g.top5.add(id); if (a.year) g.years.add(a.year);
+      g.races.add(id); if (a.won) g.wins.add(id); if (a.top5) g.top5.add(id);
+      if (a.year) g.years.add(a.year); if (a.car !== "" && a.car != null) g.cars.add(a.car);
     }
     const yrLabel = ys => { const arr = Array.from(ys).sort((m, n) => m - n); return !arr.length ? "" : (arr.length === 1 ? String(arr[0]) : `${arr[0]}\u2013${arr[arr.length - 1]}`); };
+    const carsLabel = cs => { const arr = Array.from(cs).sort((m, n) => (parseInt(m, 10) || 999) - (parseInt(n, 10) || 999)); return arr.length ? arr.map(c => "#" + c).join(", ") : "\u2014"; };
     const gr = Array.from(groups.values()).sort((x, y) => y.races.size - x.races.size);
     const detail = gr.map(g =>
       `<tr class="pers-hist-row"><td></td>
+        <td class="pers-hist-when">${escapeHTML(g.series)} \u00b7 ${yrLabel(g.years)}</td>
         <td>${escapeHTML(g.position)}</td>
         <td>${escapeHTML(g.team)}</td>
-        <td class="pers-car-cell">${g.car ? "#" + escapeHTML(g.car) : "\u2014"}</td>
-        <td class="pers-hist-years">${yrLabel(g.years)}</td>
+        <td class="pers-car-cell">${carsLabel(g.cars)}</td>
         <td class="num">${g.races.size}</td>
         <td class="num">${g.top5.size || ""}</td>
         <td class="num">${g.wins.size || ""}</td></tr>`).join("");
@@ -23800,28 +23882,26 @@ function _renderPersonnelList() {
       <button class="alltime-pag-btn" ${page >= pageCount - 1 ? "disabled" : ""} onclick="personnelPage(1)">Next \u2192</button>
     </div>`;
 
-  const sortArrow = k => sort === k ? ' <span class="pers-sort-arrow">\u25be</span>' : "";
+  const arrow = k => sort === k ? ' <span class="pers-sort-arrow">\u25be</span>' : "";
   wrap.innerHTML = total ? `
     ${pag}
     <div class="card alltime-table-wrap">
       <table class="data-table alltime-table">
         <thead><tr>
           <th class="alltime-th alltime-th-rank">#</th>
-          <th class="alltime-th pers-sortable" onclick="personnelSort('name')">Name${sortArrow("name")}</th>
-          <th class="alltime-th">Position(s)</th>
-          <th class="alltime-th">Team(s)</th>
-          <th class="alltime-th">Car(s)</th>
-          <th class="alltime-th num pers-sortable" onclick="personnelSort('races')">Races${sortArrow("races")}</th>
-          <th class="alltime-th num pers-sortable" onclick="personnelSort('top5')">Top 5${sortArrow("top5")}</th>
-          <th class="alltime-th num pers-sortable" onclick="personnelSort('wins')">Wins${sortArrow("wins")}</th>
+          <th class="alltime-th pers-sortable" onclick="personnelSort('name')">Name${arrow("name")}</th>
+          <th class="alltime-th">Position</th>
+          <th class="alltime-th">Team</th>
+          <th class="alltime-th">Car</th>
+          <th class="alltime-th num pers-sortable" onclick="personnelSort('races')">Races${arrow("races")}</th>
+          <th class="alltime-th num pers-sortable" onclick="personnelSort('top5')">Top 5${arrow("top5")}</th>
+          <th class="alltime-th num pers-sortable" onclick="personnelSort('wins')">Wins${arrow("wins")}</th>
         </tr></thead>
         <tbody>${body}</tbody>
       </table>
     </div>
     ${pag}` : `<div class="rc-empty">No people match.</div>`;
 }
-
-
 
 function renderAllTimeDrivers() {
   const host = document.getElementById("drivers-host");
