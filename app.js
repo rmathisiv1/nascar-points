@@ -61,6 +61,7 @@ const STATE = {
   // in the loaded data" (the default — what the Race tab used to do).
   // Set from the #/race/<round> URL when a user clicks into a specific race.
   race: { round: null },
+  histTrack: "",   // historical-mode track filter (track_code) — "" = all
   personnel: { query: "", role: "all" },
   // Standings view + sort. view = "driver" | "owner" | "manufacturer".
   // Driver is default (most-fan-friendly); Owner mirrors NASCAR's owner
@@ -2775,6 +2776,19 @@ function applyModeToDom() {
   // tease state, just gone, per the design intent of "live at the present").
   const seasonSel = document.getElementById("season-picker");
   if (seasonSel) seasonSel.hidden = !isHistorical;
+  // The race "time cursor" (view season through R#) is a historical-analysis
+  // tool — hide it in Present mode so the topbar isn't cluttered with a
+  // dropdown that only matters when browsing the past.
+  const raceSel = document.getElementById("race-picker");
+  if (raceSel) raceSel.hidden = !isHistorical;
+  // Series + Track filters are historical-only too. They populate lazily when
+  // entering Historical (populateHistoricalControls) so Present mode boots
+  // without building option lists the user can't see.
+  ["series-picker", "track-filter"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = !isHistorical;
+  });
+  if (isHistorical) populateHistoricalControls();
   // Mobile secondary topbar row — only visible in Historical mode. Hosts
   // both the season picker and the race-cursor picker.
   const historicalRow = document.getElementById("topbar-historical");
@@ -2791,6 +2805,77 @@ function applyModeToDom() {
   // Sync the mobile mode <select> to match.
   const modeSel = document.getElementById("topbar-mode-sw-select");
   if (modeSel && modeSel.value !== STATE.mode) modeSel.value = STATE.mode;
+}
+
+// Populate the Historical-only controls (series picker + track filter). Called
+// when entering Historical mode and after season/series changes so the lists
+// stay current. The track filter is built from the active season's schedule.
+function populateHistoricalControls() {
+  // --- Series picker ---
+  const ser = document.getElementById("series-picker");
+  if (ser) {
+    const opts = [["NCS", "Cup"], ["NOS", "Xfinity"], ["NTS", "Truck"]]
+      .map(([code, name]) => `<option value="${code}" ${code === STATE.series ? "selected" : ""}>${name}</option>`).join("");
+    ser.innerHTML = opts;
+    if (!ser._wired) {
+      ser.addEventListener("change", () => { applySeriesChangeGlobal(ser.value); });
+      ser._wired = true;
+    }
+  }
+  // --- Track filter (codes present in the active season) ---
+  const trk = document.getElementById("track-filter");
+  const mobTrk = document.getElementById("topbar-historical-track");
+  const races = (STATE.data && STATE.data.races) || [];
+  const seen = new Map();   // code -> pretty name
+  for (const r of races) {
+    if (r.track_code && !seen.has(r.track_code)) {
+      seen.set(r.track_code, prettyTrack(r.track_code, r.track) || r.track || r.track_code);
+    }
+  }
+  const sorted = Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  const optsHTML = `<option value="">All tracks</option>` +
+    sorted.map(([code, name]) => `<option value="${escapeHTML(code)}" ${code === STATE.histTrack ? "selected" : ""}>${escapeHTML(name)}</option>`).join("");
+  [trk, mobTrk].forEach(sel => {
+    if (!sel) return;
+    sel.innerHTML = optsHTML;
+    sel.value = STATE.histTrack || "";
+    if (!sel._wired) {
+      sel.addEventListener("change", () => {
+        STATE.histTrack = sel.value || "";
+        // keep both mirrors in sync
+        [trk, mobTrk].forEach(o => { if (o && o !== sel) o.value = STATE.histTrack; });
+        renderHistTrackBanner();
+        render();
+      });
+      sel._wired = true;
+    }
+  });
+  renderHistTrackBanner();
+}
+
+// Small banner under the topbar showing the active track filter (with a clear
+// button), mirroring the time-cursor banner pattern.
+function renderHistTrackBanner() {
+  let el = document.getElementById("hist-track-banner");
+  const active = STATE.mode === "historical" && STATE.histTrack;
+  if (!active) { if (el) el.remove(); return; }
+  const name = prettyTrack(STATE.histTrack, "") || STATE.histTrack;
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "hist-track-banner";
+    el.className = "time-cursor-banner";
+    const anchor = document.getElementById("time-cursor-banner") || document.getElementById("topbar-historical");
+    (anchor && anchor.parentNode ? anchor.parentNode : document.body).insertBefore(el, anchor ? anchor.nextSibling : null);
+  }
+  el.innerHTML = `Filtering to <strong>${escapeHTML(name)}</strong> <button class="tcb-clear" onclick="clearHistTrack()">clear ✕</button>`;
+}
+function clearHistTrack() {
+  STATE.histTrack = "";
+  ["track-filter", "topbar-historical-track"].forEach(id => {
+    const s = document.getElementById(id); if (s) s.value = "";
+  });
+  renderHistTrackBanner();
+  render();
 }
 
 // Pull the persisted mode from localStorage on boot. Default to "present"
@@ -2849,6 +2934,12 @@ async function applySeriesChangeGlobal(next) {
   resetRenderCache();
   populateSeasonPicker();  // dropdown must reflect new series's available years
   populateRacePicker();
+  // A series change usually changes which tracks exist — clear any stale track
+  // filter and rebuild the historical track list.
+  if (STATE.mode === "historical") {
+    STATE.histTrack = "";
+    populateHistoricalControls();
+  }
   renderTimeCursorBanner();
   render();
 }
@@ -3513,6 +3604,7 @@ function populateSeasonPicker() {
     await loadCurrentData();
     resetRenderCache();   // crucial: STATE.data just changed; cached races/entities are stale
     populateRacePicker();
+    if (STATE.mode === "historical") { STATE.histTrack = ""; populateHistoricalControls(); }
     renderTimeCursorBanner();
     render();
   });
@@ -20964,7 +21056,13 @@ function renderSchedulePage() {
   const sub  = document.getElementById("schedule-sub");
   if (!host || !STATE.data) return;
 
-  const allRaces = allRacesSorted();
+  let allRaces = allRacesSorted();
+  // Historical-mode track filter: when a track is selected, narrow the
+  // schedule (and its progress facts) to that track's races only.
+  if (STATE.mode === "historical" && STATE.histTrack) {
+    const codes = trackCodesForLookup(STATE.histTrack);
+    allRaces = allRaces.filter(r => codes.includes(r.track_code));
+  }
   const runRaces = allRaces.filter(r => (r.results || []).length > 0);
 
   // Background-load prior years so we can show the most recent winner at each

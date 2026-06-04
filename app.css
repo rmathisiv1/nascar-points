@@ -5147,6 +5147,11 @@ a.rc-sched-winner:hover {
   }
   .tk-history-table td.num { text-align: left; }
   .tk-history-table td .rc-result-name { justify-content: flex-end; }
+  /* Desktop gives the Pole column (6th cell) a left divider border + padding,
+     and the Year cell mono styling — on mobile flex cards those render as a
+     stray box on the left edge. Reset all per-column borders/padding here. */
+  .tk-history-table td:nth-child(6) { border-left: 0; padding-left: 0; }
+  .tk-history-table td:first-child { padding-left: 0; }
   /* Collapsed: show only Year (1st) + Winner (3rd); hide the rest. */
   .tk-history-table tr:not(.tk-row-open) td:nth-child(2),
   .tk-history-table tr:not(.tk-row-open) td:nth-child(4),
@@ -12732,3 +12737,22 @@ body.lightbox-open {
   .sched-hero-facts { gap: 16px; }
   .sched-hero-fact-next { flex-basis: 100%; }
 }
+
+/* Historical-only topbar selects (series picker + track filter) */
+.season-select.hist-only[hidden] { display: none; }
+.season-select.hist-only { max-width: 180px; }
+/* Track-filter banner clear button (reuses .time-cursor-banner shell) */
+#hist-track-banner .tcb-clear,
+.tcb-clear {
+  margin-left: 10px;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  padding: 1px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+  opacity: .8;
+}
+.tcb-clear:hover { opacity: 1; }

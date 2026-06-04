@@ -62,8 +62,10 @@
     <span class="theme-toggle-icon" aria-hidden="true">☀</span>
   </button>
   <div class="topbar-right">
+    <select id="series-picker" class="season-select hist-only" title="Series" hidden></select>
     <select id="season-picker" class="season-select"></select>
     <select id="race-picker" class="season-select race-select" title="View season through a specific race"></select>
+    <select id="track-filter" class="season-select hist-only" title="Filter to a track" hidden></select>
   </div>
 </header>
 
@@ -79,6 +81,10 @@
   <label class="th-field">
     <span class="th-label">Through</span>
     <select id="topbar-historical-race"></select>
+  </label>
+  <label class="th-field">
+    <span class="th-label">Track</span>
+    <select id="topbar-historical-track"></select>
   </label>
 </div>
 
