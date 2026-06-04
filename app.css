@@ -6347,11 +6347,13 @@ a.rc-sched-winner:hover {
    floating arbitrarily. Long names ellipsis-truncate. */
 #cc-career-heatmap .ph-row-label {
   display: grid;
-  grid-template-columns: 36px 38px 1fr 50px;
+  grid-template-columns: 36px 38px auto 1fr 50px;
   align-items: center;
   gap: 6px;
   overflow: hidden;
 }
+#cc-career-heatmap .ph-row-label .ph-car-badge { justify-self: start; }
+.ph-car-badge-empty { background: transparent !important; padding: 0 !important; }
 #cc-career-heatmap .ph-row-label > a:not(.ph-team-pill):not(:last-child),
 #cc-career-heatmap .ph-row-label > .ph-team-pill-empty:not(:last-child) {
   overflow: hidden;

@@ -666,21 +666,31 @@ def _pick_entry_url(urls, year, track_tokens, sections, race_date=None):
     """From a set of candidate URLs (already relevance-filtered by a search
     query), pick the best entry-list URL. Jayski sometimes slugs Cup pages by
     RACE NAME ('...firekeepers-casino-400-entry-list') rather than the track,
-    so we don't hard-require a track token here: section + year + 'entry-list'
-    plus the search relevance is enough. A track-token match is preferred when
-    present, and `race_date` breaks dual-date ties via the spring/fall slug
-    heuristic."""
+    so we don't hard-require a track token. A track-token match is preferred
+    when present, and `race_date` breaks dual-date ties via the spring/fall
+    slug heuristic.
+
+    CRITICAL: we never cross series. Every Jayski entry URL carries its series
+    section in the path (nascar-cup-series / oreilly-auto-parts-series /
+    truck-series), so if `sections` is given we ONLY consider in-section URLs.
+    Returning an out-of-section URL caused e.g. a Truck race to borrow a Cup
+    roster (NCS #54 crew showing up under NTS)."""
     yr = str(year)
     cands = [u for u in urls if "entry-list" in u.lower() and yr in u.lower()]
     if not cands:
         return None
-    in_section = [u for u in cands if any(s in u.lower() for s in sections)] if sections else []
-    pool = in_section or cands
+    if sections:
+        in_section = [u for u in cands if any(s in u.lower() for s in sections)]
+        if not in_section:
+            return None          # no same-series candidate → give up, don't cross series
+        pool = in_section
+    else:
+        pool = cands
     # Track-token hits first; among those, let date break a dual-date tie.
     tok_hits = [u for u in pool if any(t in u.lower() for t in track_tokens if len(t) >= 3)]
     if tok_hits:
         return _pick_by_date(tok_hits, race_date)
-    return _pick_by_date(pool, race_date)    # else trust search relevance + section
+    return _pick_by_date(pool, race_date)    # else trust search relevance (still in-section)
 
 
 def discover_entry_url(series, year, track_name, verbose=True, race_date=None):
@@ -789,10 +799,15 @@ def discover_race_page(series, year, track_name, verbose=True, race_date=None):
 
     slug = _track_slug(track_name)
     tokens = [t for t in ([slug] + slug.split("-")) if len(t) >= 3]
+    sections = (SERIES_JAYSKI.get((series or "").upper(), {}) or {}).get("sections", [])
 
     def track_match(href):
         h = href.lower()
-        return "race-page" in h and any(t in h for t in tokens)
+        if "race-page" not in h:
+            return False
+        if sections and not any(s in h for s in sections):
+            return False        # stay in this series' section — never cross series
+        return any(t in h for t in tokens)
 
     entry = discover_entry_url(series, year, track_name, verbose=verbose, race_date=race_date)
     if entry:

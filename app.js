@@ -5226,10 +5226,17 @@ function raceDocTabs(race) {
     const d = docs[k];
     if (!d || !Array.isArray(d.rows) || !d.rows.length) continue;
     let html = "";
-    if (k === "entry") html = _rdocEntryTable(d.rows, carMeta);
-    else if (k === "pitstall") html = _rdocPitVisual(d.rows, drv);
-    else if (k === "roster") html = _rdocRosters(d.rows);
-    else if (k === "infraction") html = _rdocInfractionTable(d.rows, drv);
+    try {
+      if (k === "entry") html = _rdocEntryTable(d.rows, carMeta);
+      else if (k === "pitstall") html = _rdocPitVisual(d.rows, drv);
+      else if (k === "roster") html = _rdocRosters(d.rows);
+      else if (k === "infraction") html = _rdocInfractionTable(d.rows, drv);
+    } catch (err) {
+      // One malformed doc (e.g. an odd row from a sweep) must never blank the
+      // whole race page — show a small notice for that tab and keep the rest.
+      console.warn(`race doc "${k}" failed to render:`, err);
+      html = `<div class="rc-empty">This document couldn't be displayed.</div>`;
+    }
     tabs.push({ key: k, label: _DOC_LABELS[k], count: d.rows.length,
                 html: `<div class="rdoc-body">${html}${srcFoot(k)}</div>` });
   }
@@ -12179,7 +12186,7 @@ function paintCrewChiefCareerHeatmap() {
       <div class="ph-row-label">
         <span class="ph-yr">${r.year}</span>
         <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
-        ${r.car ? `<span class="ph-car-badge" style="background:${colorFor(r.series, r.car)};color:${contrastTextFor(colorFor(r.series, r.car))}" title="Primary car #${escapeHTML(String(r.car))}">#${escapeHTML(String(r.car))}</span>` : ""}
+        ${r.car ? `<span class="ph-car-badge" style="background:${colorFor(r.series, r.car)};color:${contrastTextFor(colorFor(r.series, r.car))}" title="Primary car #${escapeHTML(String(r.car))}">#${escapeHTML(String(r.car))}</span>` : `<span class="ph-car-badge ph-car-badge-empty"></span>`}
         ${driverPill}
         ${teamPill}
       </div>
