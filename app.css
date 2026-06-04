@@ -605,18 +605,19 @@ html, body {
 .dash-tabs {
   display: flex;
   gap: 2px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  /* visible (not auto) so dropdown submenus aren't clipped by the
-     scroll container. Mobile hides this whole bar via the media
-     query below in favor of the bottom mobile-nav. */
+  /* Now lives on the top bar (flex row). It flexes to fill the space between
+     the brand and the search box; no row border/padding needed here. */
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border-bottom: 0;
   overflow: visible;
-  flex-shrink: 0;
-  /* No z-index here — creating a stacking context traps the submenus
-     beneath sticky toolbars in tab-body. Submenus carry their own
-     high z-index (see below). */
+  flex-shrink: 1;
 }
 .dash-tabs::-webkit-scrollbar { height: 0; }
+.dash-tab-historical {
+  margin-left: auto;   /* push Historical to the right end of the nav */
+}
 .dash-tab {
   padding: 4px 10px;
   color: var(--muted);
@@ -6013,9 +6014,9 @@ a.rc-sched-winner:hover {
    to an icon-button (separate handling below). */
 .topbar-search {
   position: relative;
-  flex: 1;
-  max-width: 480px;
-  margin: 0 16px;
+  flex: 0 1 320px;
+  max-width: 360px;
+  margin: 0 10px 0 0;
 }
 .topbar-search::before {
   /* Magnifier glyph at the left of the input — the visual cue that this
@@ -12741,3 +12742,105 @@ body.lightbox-open {
 /* Historical-only topbar select (series picker) */
 .season-select.hist-only[hidden] { display: none; }
 .season-select.hist-only { max-width: 120px; }
+
+/* ============================================================
+   HISTORICAL BROWSER — pinned control bar in the center pane
+   ============================================================ */
+.historical-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.historical-bar[hidden] { display: none; }
+.hist-bar-pickers {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.hist-bar-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 6px;
+}
+.hist-pick { display: flex; flex-direction: column; gap: 3px; }
+.hist-pick > span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  font-weight: 700;
+}
+.hist-pick select {
+  background: var(--card-hi);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  min-width: 90px;
+}
+.hist-pick select:focus { outline: none; border-color: var(--accent); }
+
+.hist-bar-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.hist-nav-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.hist-nav-btn:hover { color: var(--text); background: var(--card-hi); }
+.hist-nav-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hist-nav-group { position: relative; }
+.hist-nav-group:hover .hist-sub { display: flex; }
+.hist-sub {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  flex-direction: column;
+  min-width: 180px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 40;
+  box-shadow: 0 10px 30px rgba(0,0,0,.4);
+}
+.hist-sub-item {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.hist-sub-item:hover { background: var(--card-hi); }
+.hist-sub-item.on { color: var(--accent-2); font-weight: 700; }

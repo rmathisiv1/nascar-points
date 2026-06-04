@@ -61,6 +61,12 @@ const STATE = {
   // in the loaded data" (the default — what the Race tab used to do).
   // Set from the #/race/<round> URL when a user clicks into a specific race.
   race: { round: null },
+  // Historical browser: a dedicated page (route #/historical) with its own
+  // series/year/round pickers + a restricted sub-nav. The chosen sub-view
+  // renders below the pinned control bar, scoped to this selection. `view`
+  // is one of: schedule | standings | form | arc | heatmap | teammates |
+  // trajectory | breakdown | compare | race.
+  historical: { active: false, series: "NCS", year: null, round: null, view: "standings" },
   personnel: { query: "", role: "all" },
   // Standings view + sort. view = "driver" | "owner" | "manufacturer".
   // Driver is default (most-fan-friendly); Owner mirrors NASCAR's owner
@@ -146,7 +152,7 @@ function seriesLabel(seriesCode, season) {
   return seriesCode || "—";
 }
 const FALLBACK_COLOR = "#9ca3af";
-const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs", "personnel", "pointscalc", "projection"];
+const VIEWS = ["home", "race", "track", "schedule", "form", "arc", "breakdown", "trajectory", "teammates", "heatmap", "trackstats", "compare", "standings", "playoffs", "profile", "team", "cc", "drivers", "teams", "crewchiefs", "personnel", "pointscalc", "projection", "historical"];
 
 // ============================================================
 // GLOBAL SEARCH  (topbar search bar)
@@ -2953,6 +2959,141 @@ function ensurePageSeries() {
 // Paint the #page-series-bar for the current view. Shown only on
 // series-scoped views; highlights whichever series is active. Cheap and
 // idempotent — safe to call on every render().
+// ============================================================
+// HISTORICAL BROWSER PAGE  (route #/historical)
+// ------------------------------------------------------------
+// A dedicated page with its own series/year/round pickers and a restricted
+// sub-nav (Schedule / Standings / Analytics / Race). The chosen sub-view
+// renders BELOW the pinned control bar, scoped to the selected season/series.
+// Implementation: we reuse the existing view renderers as-is. renderHistorical
+// sets STATE.season/series/throughRound to the historical selection, paints the
+// control bar, then dispatches the chosen sub-view (managing tab-body vs
+// takeover visibility for it) so it lands in its normal host beneath the bar.
+// ============================================================
+const HIST_ANALYTICS = [
+  ["form", "Power Rankings"], ["arc", "Cumulative Season"], ["heatmap", "Heatmap"],
+  ["teammates", "Teammate"], ["trajectory", "Stage vs Finish"], ["breakdown", "Season Data"],
+  ["compare", "Driver Compare"],
+];
+const HIST_VIEWS = ["schedule", "standings", "form", "arc", "heatmap", "teammates", "trajectory", "breakdown", "compare", "race"];
+
+function historicalEnter() {
+  const h = STATE.historical;
+  if (!h.series) h.series = STATE.series || "NCS";
+  if (!h.year) {
+    const yrs = seasonsAvailableForSeries(h.series);
+    h.year = (yrs && yrs[0]) || STATE.season;
+  }
+  if (!h.view) h.view = "standings";
+}
+
+async function historicalSelect(kind, value) {
+  const h = STATE.historical;
+  if (kind === "series") {
+    h.series = value;
+    const yrs = seasonsAvailableForSeries(value);
+    if (yrs.length && !yrs.includes(h.year)) h.year = yrs[0];
+    h.round = null;
+  } else if (kind === "year") {
+    h.year = parseInt(value, 10);
+    h.round = null;
+  } else if (kind === "round") {
+    h.round = value === "" ? null : parseInt(value, 10);
+    if (h.round != null) h.view = "race";
+  } else if (kind === "view") {
+    h.view = value;
+    if (value !== "race") h.round = null;
+  }
+  await renderHistorical();
+}
+
+async function renderHistorical() {
+  historicalEnter();
+  const h = STATE.historical;
+  h.active = true;
+
+  if (STATE.season !== h.year || STATE.series !== h.series || STATE.data == null) {
+    STATE.season = h.year;
+    STATE.series = h.series;
+    await loadCurrentData();
+    resetRenderCache();
+  }
+  STATE.throughRound = (h.view !== "race" && h.round != null) ? h.round : null;
+
+  renderHistoricalBar();
+
+  const sub = HIST_VIEWS.includes(h.view) ? h.view : "standings";
+  const tabBody = document.getElementById("tab-body");
+  const subIsTakeover = (sub === "schedule" || sub === "race");
+
+  ["schedule-takeover", "race-takeover"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = !(subIsTakeover && id === `${sub}-takeover`);
+  });
+  if (tabBody) tabBody.hidden = subIsTakeover;
+  TAB_VIEWS.forEach(v => {
+    const el = document.getElementById(`view-${v}`);
+    if (el) el.hidden = (v !== sub);
+  });
+
+  if (sub === "schedule") { renderSchedulePage(); }
+  else if (sub === "race") { STATE.race = { round: h.round != null ? h.round : null }; renderRaceCenter(); }
+  else if (sub === "standings") renderStandings();
+  else if (sub === "form") renderFormTable();
+  else if (sub === "arc") renderArc();
+  else if (sub === "heatmap") renderHeatmap();
+  else if (sub === "teammates") renderTeammates();
+  else if (sub === "trajectory") renderTrajectory();
+  else if (sub === "breakdown") renderBreakdown();
+  else if (sub === "compare") renderCompare();
+}
+
+function renderHistoricalBar() {
+  const bar = document.getElementById("historical-bar");
+  if (!bar) return;
+  bar.hidden = false;
+  const h = STATE.historical;
+
+  const years = seasonsAvailableForSeries(h.series);
+  const seriesOpts = ["NCS", "NOS", "NTS"]
+    .map(s => `<option value="${s}" ${s === h.series ? "selected" : ""}>${s}</option>`).join("");
+  const yearOpts = years
+    .map(y => `<option value="${y}" ${y === h.year ? "selected" : ""}>${y}</option>`).join("");
+  const races = (STATE.data && STATE.data.races) || [];
+  const roundOpts = `<option value="">All / season</option>` +
+    races.slice().sort((a, b) => (a.round || 0) - (b.round || 0)).map(r => {
+      const t = prettyTrack(r.track_code, r.track) || r.track || "";
+      return `<option value="${r.round}" ${r.round === h.round ? "selected" : ""}>R${r.round} · ${escapeHTML(t)}</option>`;
+    }).join("");
+
+  const navBtn = (key, label) =>
+    `<button class="hist-nav-btn${h.view === key ? " on" : ""}" onclick="historicalSelect('view','${key}')">${escapeHTML(label)}</button>`;
+  const analyticsOn = HIST_ANALYTICS.some(([k]) => k === h.view);
+  const analyticsLabel = (HIST_ANALYTICS.find(([k]) => k === h.view) || [null, "Analytics"])[1];
+  const analyticsItems = HIST_ANALYTICS.map(([k, lbl]) =>
+    `<button class="hist-sub-item${h.view === k ? " on" : ""}" onclick="historicalSelect('view','${k}')">${escapeHTML(lbl)}</button>`).join("");
+
+  bar.innerHTML = `
+    <div class="hist-bar-pickers">
+      <span class="hist-bar-title">Historical</span>
+      <label class="hist-pick"><span>Series</span>
+        <select onchange="historicalSelect('series', this.value)">${seriesOpts}</select></label>
+      <label class="hist-pick"><span>Year</span>
+        <select onchange="historicalSelect('year', this.value)">${yearOpts}</select></label>
+      <label class="hist-pick"><span>Round</span>
+        <select onchange="historicalSelect('round', this.value)">${roundOpts}</select></label>
+    </div>
+    <div class="hist-bar-nav">
+      ${navBtn("schedule", "Schedule")}
+      ${navBtn("standings", "Standings")}
+      <div class="hist-nav-group">
+        <button class="hist-nav-btn hist-nav-parent${analyticsOn ? " on" : ""}">${escapeHTML(analyticsOn ? analyticsLabel : "Analytics")} ▾</button>
+        <div class="hist-sub">${analyticsItems}</div>
+      </div>
+      ${navBtn("race", "Race")}
+    </div>`;
+}
+
 function renderPageSeriesBar() {
   const bar = document.getElementById("page-series-bar");
   if (!bar) return;
@@ -3664,7 +3805,7 @@ function render() {
     pageTitleEl.textContent = titleMap[STATE.view] || "";
   }
   if (pageTitleWrap) {
-    pageTitleWrap.style.display = (STATE.view === "home") ? "none" : "";
+    pageTitleWrap.style.display = (STATE.view === "home" || STATE.view === "historical") ? "none" : "";
   }
 
   // Lock the navigation pickers when the view is bound to a specific driver
@@ -3689,6 +3830,14 @@ function render() {
   // highlight the active series. STATE.series was already set to this page's
   // remembered series by ensurePageSeries() before we got here.
   renderPageSeriesBar();
+
+  // Historical control bar — only on the historical page. renderHistorical
+  // un-hides + populates it; everywhere else we hide it and clear the flag.
+  if (STATE.view !== "historical") {
+    const hbar = document.getElementById("historical-bar");
+    if (hbar) { hbar.hidden = true; hbar.innerHTML = ""; }
+    if (STATE.historical) STATE.historical.active = false;
+  }
 
   if (dashboard) dashboard.hidden = inTakeover;
   if (takeover) takeover.hidden = !inTakeover;
@@ -3751,6 +3900,7 @@ function render() {
     if (tv === "race")          active = (v === "race");
     else if (tv === "schedule") active = (v === "schedule");
     else if (tv === "projection") active = (v === "projection");
+    else if (tv === "historical") active = (v === "historical");
     else                        active = (!inCenterTakeover && tv === activeTab);
     a.classList.toggle("active", active);
   });
@@ -3775,6 +3925,8 @@ function render() {
 
     if (STATE.view === "profile") {
       renderProfile();
+    } else if (STATE.view === "historical") {
+      renderHistorical();
     } else if (STATE.view === "race") {
       renderRaceCenter();
     } else if (STATE.view === "track") {

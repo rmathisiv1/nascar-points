@@ -42,30 +42,55 @@
     <span class="brand-name">Racecar Data</span>
   </a>
   <div class="season-pill" id="season-pill">— / —</div>
-  <!-- Global series selector removed — series is now chosen per-page via the
-       #page-series-bar toggle under the nav (each page remembers its own
-       series independently). -->
+
+  <!-- Primary navigation now lives on the top bar (moved up from col-center).
+       Series/year/round pickers and the old Present/Historical toggle were
+       removed; "Historical" is a single tab at the right that opens a
+       dedicated center-pane page with its own series/year/round + sub-nav. -->
+  <nav class="dash-tabs" id="dash-tabs">
+    <a href="#/home"       class="dash-tab" data-view="home">Home</a>
+    <a href="#/schedule"   class="dash-tab" data-view="schedule">Schedule</a>
+    <div class="dash-tab-group" data-group="standings">
+      <a href="#/standings" class="dash-tab dash-tab-parent" data-view="standings">Standings <span class="dash-caret">▾</span></a>
+      <div class="dash-submenu">
+        <a href="#/playoffs"    class="dash-subitem" data-view="playoffs">Playoffs</a>
+      </div>
+    </div>
+    <a href="#/projection" class="dash-tab" data-view="projection">Projection</a>
+    <div class="dash-tab-group" data-group="analytics">
+      <a href="#/form" class="dash-tab dash-tab-parent" data-view="analytics" data-fallback-view="form">Analytics <span class="dash-caret">▾</span></a>
+      <div class="dash-submenu">
+        <a href="#/form"       class="dash-subitem" data-view="form">Power Rankings</a>
+        <a href="#/arc"        class="dash-subitem" data-view="arc">Cumulative Season</a>
+        <a href="#/heatmap"    class="dash-subitem" data-view="heatmap">Heatmap</a>
+        <a href="#/teammates"  class="dash-subitem" data-view="teammates">Teammate</a>
+        <a href="#/trajectory" class="dash-subitem" data-view="trajectory">Stage vs Finish</a>
+        <a href="#/breakdown"  class="dash-subitem" data-view="breakdown">Season Data</a>
+        <a href="#/compare"    class="dash-subitem" data-view="compare">Driver Compare</a>
+      </div>
+    </div>
+    <div class="dash-tab-group" data-group="more">
+      <a href="#/drivers" class="dash-tab dash-tab-parent" data-view="more" data-fallback-view="drivers">Data <span class="dash-caret">▾</span></a>
+      <div class="dash-submenu">
+        <a href="#/drivers"     class="dash-subitem" data-view="drivers">Drivers</a>
+        <a href="#/teams"       class="dash-subitem" data-view="teams">Teams</a>
+        <a href="#/trackstats"  class="dash-subitem" data-view="trackstats">Tracks</a>
+        <a href="#/crewchiefs"  class="dash-subitem" data-view="crewchiefs">Crew Chiefs</a>
+        <a href="#/personnel"  class="dash-subitem" data-view="personnel">Personnel</a>
+        <a href="#/pointscalc"  class="dash-subitem" data-view="pointscalc">Points Format Calc</a>
+      </div>
+    </div>
+    <a href="#/historical" class="dash-tab dash-tab-historical" data-view="historical">Historical</a>
+  </nav>
+
   <div class="topbar-search" id="topbar-search">
     <input type="text" id="search-input" placeholder="Search drivers, teams, crew chiefs, races…  (press /)" autocomplete="off" spellcheck="false" aria-label="Search">
     <button class="topbar-search-close" type="button" aria-label="Close search" tabindex="-1">×</button>
     <div class="search-dropdown" id="search-dropdown" hidden></div>
   </div>
-  <div class="topbar-mode-sw" id="topbar-mode-sw" role="group" aria-label="Site mode">
-    <button data-mode="present" class="on" title="Locked to current season">Present</button>
-    <button data-mode="historical" title="Unlocks the season picker for browsing past years">Historical</button>
-    <select class="topbar-mode-sw-select" id="topbar-mode-sw-select" aria-label="Site mode">
-      <option value="present">Present</option>
-      <option value="historical">Historical</option>
-    </select>
-  </div>
   <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle light/dark">
     <span class="theme-toggle-icon" aria-hidden="true">☀</span>
   </button>
-  <div class="topbar-right">
-    <select id="series-picker" class="season-select hist-only" title="Series" hidden></select>
-    <select id="season-picker" class="season-select"></select>
-    <select id="race-picker" class="season-select race-select" title="Jump to a race / view season through it"></select>
-  </div>
 </header>
 
 <!-- Secondary topbar row — mobile-only, visible only in Historical mode.
@@ -122,6 +147,9 @@
   <a href="#/personnel" class="mobile-nav-link" data-view="personnel">Personnel</a>
   <a href="#/pointscalc" class="mobile-nav-link" data-view="pointscalc">Points Format Calc</a>
   <a href="#/projection" class="mobile-nav-link" data-view="projection">Season Projection</a>
+
+  <div class="mobile-nav-section">Historical</div>
+  <a href="#/historical" class="mobile-nav-link" data-view="historical">Historical Browser</a>
 </nav>
 
 <div class="metricbar" id="metricbar"></div>
@@ -146,49 +174,13 @@
   </aside>
 
   <section class="col-center" id="col-center">
-    <nav class="dash-tabs" id="dash-tabs">
-      <a href="#/home"       class="dash-tab" data-view="home">Home</a>
-      <a href="#/schedule"   class="dash-tab" data-view="schedule">Schedule</a>
-
-      <!-- Standings group: parent links to standings; hover reveals Playoffs subtab -->
-      <div class="dash-tab-group" data-group="standings">
-        <a href="#/standings" class="dash-tab dash-tab-parent" data-view="standings">Standings <span class="dash-caret">▾</span></a>
-        <div class="dash-submenu">
-          <a href="#/playoffs"    class="dash-subitem" data-view="playoffs">Playoffs</a>
-        </div>
-      </div>
-
-      <a href="#/projection" class="dash-tab" data-view="projection">Projection</a>
-
-      <!-- Analytics group: container only (no own view); hover reveals analysis tabs.
-           Trending lives here now (was a top-level tab); Track Stats moved out
-           to the Data group and renamed Tracks. -->
-      <div class="dash-tab-group" data-group="analytics">
-        <a href="#/form" class="dash-tab dash-tab-parent" data-view="analytics" data-fallback-view="form">Analytics <span class="dash-caret">▾</span></a>
-        <div class="dash-submenu">
-          <a href="#/form"       class="dash-subitem" data-view="form">Power Rankings</a>
-          <a href="#/arc"        class="dash-subitem" data-view="arc">Cumulative Season</a>
-          <a href="#/heatmap"    class="dash-subitem" data-view="heatmap">Heatmap</a>
-          <a href="#/teammates"  class="dash-subitem" data-view="teammates">Teammate</a>
-          <a href="#/trajectory" class="dash-subitem" data-view="trajectory">Stage vs Finish</a>
-          <a href="#/breakdown"  class="dash-subitem" data-view="breakdown">Season Data</a>
-          <a href="#/compare"    class="dash-subitem" data-view="compare">Driver Compare</a>
-        </div>
-      </div>
-
-      <!-- Data group: all-time database tabs + per-track stats (was in Analytics) -->
-      <div class="dash-tab-group" data-group="more">
-        <a href="#/drivers" class="dash-tab dash-tab-parent" data-view="more" data-fallback-view="drivers">Data <span class="dash-caret">▾</span></a>
-        <div class="dash-submenu">
-          <a href="#/drivers"     class="dash-subitem" data-view="drivers">Drivers</a>
-          <a href="#/teams"       class="dash-subitem" data-view="teams">Teams</a>
-          <a href="#/trackstats"  class="dash-subitem" data-view="trackstats">Tracks</a>
-          <a href="#/crewchiefs"  class="dash-subitem" data-view="crewchiefs">Crew Chiefs</a>
-          <a href="#/personnel"  class="dash-subitem" data-view="personnel">Personnel</a>
-          <a href="#/pointscalc"  class="dash-subitem" data-view="pointscalc">Points Format Calc</a>
-        </div>
-      </div>
-    </nav>
+    <!-- Historical control bar — pinned at the top of the center pane when the
+         Historical page is active. Holds the series/year/round pickers and the
+         restricted sub-nav (Schedule / Standings / Analytics / Race). The
+         selected sub-view renders normally BELOW this bar (tab-body or a
+         takeover), scoped to the chosen series/year/round. Built by
+         renderHistoricalBar(); hidden otherwise. -->
+    <div class="historical-bar" id="historical-bar" hidden></div>
 
     <!-- Per-page series toggle. Shown only on series-scoped views; each page
          remembers its own NCS/NOS/NTS choice (STATE.pageSeries). Populated by
