@@ -2028,13 +2028,22 @@ function parseHash() {
   // Helper: stash the full PREVIOUS hash before we change view, so back
   // buttons can restore parameterized routes (#/team/HMS, #/track/KAN, etc.)
   // verbatim instead of dropping the parameter.
+  const TAKEOVER_SET = ["race", "track", "schedule", "profile", "team", "cc",
+                        "drivers", "teams", "crewchiefs", "personnel",
+                        "pointscalc", "projection", "playoffs", "historical"];
   const stashPrev = (newView) => {
     if (STATE.view && STATE.view !== newView) {
+      // Going from one takeover to another (e.g. schedule → race → results)?
+      // Keep the ORIGINAL origin so Back returns to where the user actually
+      // came from instead of ping-ponging between the two takeovers. Only
+      // record a new prevHash when leaving a non-takeover (a real "page").
+      const leavingTakeover = TAKEOVER_SET.includes(STATE.view);
+      const enteringTakeover = TAKEOVER_SET.includes(newView);
+      if (leavingTakeover && enteringTakeover && STATE.prevHash) {
+        // preserve existing prevHash/prevView (the real origin)
+        return;
+      }
       STATE.prevView = STATE.view;
-      // Take whatever the previous hash was before this navigation. We're
-      // mid-parseHash so the URL has already changed; the most reliable
-      // source is the prior STATE.lastHash we set at the bottom of this
-      // function on each successful resolve.
       STATE.prevHash = STATE.lastHash || `#/${STATE.view}`;
     }
   };
@@ -3203,7 +3212,12 @@ async function selectRaceSeries(series, round) {
 // have one, else the previous view, else a sensible default.
 function takeoverBack(e) {
   if (e) e.preventDefault();
-  if (STATE.prevHash && STATE.prevHash !== location.hash) {
+  // Guard against a back-target that points at the SAME route we're on (which
+  // would do nothing) or at the same view family (race→race), which can ping-
+  // pong. Only honor prevHash when it leads somewhere genuinely different.
+  const curViewSeg = (location.hash.replace("#/", "").split("/")[0] || "").split("?")[0];
+  const prevViewSeg = (String(STATE.prevHash || "").replace("#/", "").split("/")[0] || "").split("?")[0];
+  if (STATE.prevHash && STATE.prevHash !== location.hash && prevViewSeg !== curViewSeg) {
     location.hash = STATE.prevHash;
     return;
   }
@@ -3462,7 +3476,9 @@ function wireUIControls() {
    "drivers-back", "teams-back", "crewchiefs-back", "personnel-back"].forEach(id => {
     document.getElementById(id)?.addEventListener("click", (e) => {
       e.preventDefault();
-      if (STATE.prevHash && STATE.prevHash !== location.hash) {
+      const curSeg = (location.hash.replace("#/", "").split("/")[0] || "").split("?")[0];
+      const prevSeg = (String(STATE.prevHash || "").replace("#/", "").split("/")[0] || "").split("?")[0];
+      if (STATE.prevHash && STATE.prevHash !== location.hash && prevSeg !== curSeg) {
         location.hash = STATE.prevHash;
         return;
       }
