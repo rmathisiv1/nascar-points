@@ -5124,10 +5124,17 @@ function getRaceDocs(year, series, race) {
   return byTrack;
 }
 
-// Active top-level tab on the race page; reset when the round changes so a
-// fresh race always lands on Overview.
-let _raceTab = null;
-let _raceTabRound = null;
+// Direct link to the official entry-list PDF for a race, if we have it in the
+// race-docs store. Returns an <a>…↗ string (opens in a new tab) or "" when no
+// entry doc exists. Used on the race-page hero and the home upcoming tile so
+// "who's entered this weekend" is one click away. `compact` trims the label.
+function entryListLink(race, series, compact) {
+  const rec = getRaceDocs(STATE.season, series || STATE.series, race);
+  const url = rec && rec.docs && rec.docs.entry && rec.docs.entry.url;
+  if (!url) return "";
+  const label = compact ? "Entry list&nbsp;↗" : "Official entry list&nbsp;↗";
+  return `<a class="entry-list-link" href="${escapeHTML(url)}" target="_blank" rel="noopener">${label}</a>`;
+}
 function selectRaceTab(k) {
   _raceTab = k;
   if (STATE.view === "race") renderRaceCenter();
@@ -5583,8 +5590,34 @@ function renderMetricBar() {
   const hottest = last5.slice().sort((a, b) => b.points - a.points)[0];
   const coldest = last5.slice().sort((a, b) => a.points - b.points)[0];
 
+  // Biggest movers in the power rankings vs last week — replaces the raw
+  // hot/cold points readout with the more interesting "who's climbing/sliding"
+  // signal. Build the field's power ranking at the latest completed round and
+  // at the prior round; delta = prevRank − rank (positive = moved UP).
+  let topRiser = null, topFaller = null;
+  const moverField = allEntities().filter(isFullTime);
+  const completedRoundsMB = races.map(r => r.round).filter(rd => rd != null).sort((a, b) => a - b);
+  if (completedRoundsMB.length >= 2 && moverField.length) {
+    const curRound = completedRoundsMB[completedRoundsMB.length - 1];
+    const prevRound = completedRoundsMB[completedRoundsMB.length - 2];
+    const curRank = buildPowerRankings(moverField, STATE.series, 8, curRound);
+    const prevRank = buildPowerRankings(moverField, STATE.series, 8, prevRound);
+    const movers = [];
+    for (const d of moverField) {
+      const k = entityKey(d);
+      const c = curRank.get(k), p = prevRank.get(k);
+      if (!c || !p) continue;
+      movers.push({ entity: d, delta: p.rank - c.rank, rank: c.rank });
+    }
+    const risers = movers.filter(m => m.delta > 0).sort((a, b) => b.delta - a.delta);
+    const fallers = movers.filter(m => m.delta < 0).sort((a, b) => a.delta - b.delta);
+    topRiser = risers[0] || null;
+    topFaller = fallers[0] || null;
+  }
+
   const winLen = lastRunRounds.length;
   const hotColdTip = `Total points scored in the last ${winLen} race${winLen === 1 ? "" : "s"} (full-time drivers only). Resets each week as new races run.`;
+  const moverTip = "Largest power-ranking change vs the previous race (full-time drivers). ▲ = positions gained, ▼ = positions lost.";
   const leaderTip = "Points leader through the last completed race.";
   const raceTip = "Most recent race in the dataset, with the top 3 finishers.";
   const upcomingTip = "Next scheduled race.";
@@ -5632,10 +5665,10 @@ function renderMetricBar() {
   const metricsHTML = `
     <div class="metric" data-tip="${escapeHTML(leaderTip)}"><span class="k">Leader</span>
       <span class="v">${leader ? `${driverLink(leader)} \u00b7 ${leader.total}` : "\u2014"}</span></div>
-    <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Hottest</span>
-      <span class="v hot">${hottest ? `${driverLink(hottest.entity)} <span class="metric-pts">${hottest.points}pts</span>` : "\u2014"}</span></div>
-    <div class="metric" data-tip="${escapeHTML(hotColdTip)}"><span class="k">Coldest</span>
-      <span class="v cold">${coldest ? `${driverLink(coldest.entity)} <span class="metric-pts">${coldest.points}pts</span>` : "\u2014"}</span></div>
+    <div class="metric" data-tip="${escapeHTML(moverTip)}"><span class="k">Biggest Riser</span>
+      <span class="v hot">${topRiser ? `${driverLink(topRiser.entity)} <span class="metric-move up">▲${topRiser.delta}</span>` : "\u2014"}</span></div>
+    <div class="metric" data-tip="${escapeHTML(moverTip)}"><span class="k">Biggest Faller</span>
+      <span class="v cold">${topFaller ? `${driverLink(topFaller.entity)} <span class="metric-move down">▼${Math.abs(topFaller.delta)}</span>` : "\u2014"}</span></div>
     <div class="metric metric-lastrace" data-tip="${escapeHTML(raceTip)}"><span class="k">${STATE.throughRound != null ? "As Of" : "Last Race"}</span>
       <div class="metric-lastrace-row">
         <span class="v">${lastRace ? `<a class="metric-name-link" href="#/race/${lastRace.round}">R${lastRace.round} \u00b7 ${escapeHTML(prettyTrack(lastRace.track_code, lastRace.track))}</a>` : "\u2014"}</span>
@@ -11871,6 +11904,7 @@ function paintProfileCareerHeatmap() {
       <div class="ph-row-label">
         <span class="ph-yr">${r.year}</span>
         <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
+        ${r.car ? `<span class="ph-car-badge" style="background:${colorFor(r.series, r.car)};color:${contrastTextFor(colorFor(r.series, r.car))}" title="Primary car #${escapeHTML(String(r.car))}">#${escapeHTML(String(r.car))}</span>` : ""}
         ${teamPill}
       </div>
       ${cells.join("")}
@@ -12108,6 +12142,7 @@ function paintCrewChiefCareerHeatmap() {
       <div class="ph-row-label">
         <span class="ph-yr">${r.year}</span>
         <span class="series-tag series-${r.series.toLowerCase()}">${r.series}</span>
+        ${r.car ? `<span class="ph-car-badge" style="background:${colorFor(r.series, r.car)};color:${contrastTextFor(colorFor(r.series, r.car))}" title="Primary car #${escapeHTML(String(r.car))}">#${escapeHTML(String(r.car))}</span>` : ""}
         ${driverPill}
         ${teamPill}
       </div>
@@ -12176,6 +12211,12 @@ function renderHome() {
     host.innerHTML = `<div class="muted" style="padding:40px;text-align:center;">Loading season data…</div>`;
     restoreCtx();
     return;
+  }
+
+  // Pull the per-race document store (entry lists, etc.) once so the upcoming
+  // hero can show an "Entry list ↗" link. Re-render when it lands.
+  if (!_raceDocsAttempted) {
+    loadRaceDocs().then(() => { if (STATE.view === "home") renderHome(); });
   }
 
   // Lazily pull lap-time pace data (current + 2 prior years) so the
@@ -14034,6 +14075,7 @@ function renderHomeHero(year, series) {
             ${lastWinnerHTML ? `<div class="home-hero-track-fact"><span class="k">Last winner</span><span class="v">${lastWinnerHTML}</span></div>` : ""}
             ${trackKingHTML ? `<div class="home-hero-track-fact"><span class="k">Track king</span><span class="v">${trackKingHTML}</span></div>` : ""}
           </div>
+          ${(() => { const el = entryListLink(nextRace, series, true); return el ? `<div class="home-hero-entry">${el}</div>` : ""; })()}
         </div>
       </div>
     `;
@@ -20155,6 +20197,7 @@ function renderRaceCenter() {
       <div class="rc-hero-meta">
         ${dateStr}${timeTV ? " · " + escapeHTML(timeTV) : ""} · ${seriesNameStr}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
       </div>
+      ${(() => { const el = entryListLink(nextRace, STATE.series, false); return el ? `<div class="rc-hero-entry">${el}</div>` : ""; })()}
       ${renderRaceSummaryStrip(nextRace)}
     </div>
 
@@ -20938,6 +20981,32 @@ function renderSchedulePage() {
   const seriesName = seriesLabel(STATE.series, STATE.season);
   if (sub) sub.textContent = `${STATE.season} ${seriesName} · ${runRaces.length} of ${allRaces.length} races run`;
 
+  // Schedule hero: season + series, a progress bar, and quick facts so the
+  // top of the page reads as an intentional header rather than a bare title.
+  const nextRace = allRaces.find(r => (r.results || []).length === 0);
+  const total = allRaces.length;
+  const run = runRaces.length;
+  const pct = total ? Math.round((run / total) * 100) : 0;
+  const nextStr = nextRace
+    ? `R${nextRace.round} · ${escapeHTML(prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD")}${nextRace.date ? ` · ${escapeHTML(formatRaceDate(nextRace.date))}` : ""}`
+    : "Season complete";
+  const scheduleHeroHTML = `
+    <div class="sched-hero">
+      <div class="sched-hero-top">
+        <div class="sched-hero-title">${STATE.season} <span class="sched-hero-series series-${STATE.series.toLowerCase()}">${STATE.series}</span></div>
+        <div class="sched-hero-name">${escapeHTML(seriesName)}</div>
+      </div>
+      <div class="sched-hero-progress" title="${run} of ${total} races complete">
+        <div class="sched-hero-bar"><span style="width:${pct}%"></span></div>
+        <div class="sched-hero-progress-label">${run} of ${total} run · ${pct}%</div>
+      </div>
+      <div class="sched-hero-facts">
+        <div class="sched-hero-fact"><span class="k">Run</span><span class="v">${run}</span></div>
+        <div class="sched-hero-fact"><span class="k">Remaining</span><span class="v">${Math.max(0, total - run)}</span></div>
+        <div class="sched-hero-fact sched-hero-fact-next"><span class="k">Next</span><span class="v">${nextStr}</span></div>
+      </div>
+    </div>`;
+
   const scheduleHTML = renderSeasonSchedule(allRaces, nextRound, lastWinnerAt);
 
   // "This Weekend" / "Next Weekend" card — filtered to the currently
@@ -20953,6 +21022,7 @@ function renderSchedulePage() {
     : "";
 
   host.innerHTML = `
+    ${scheduleHeroHTML}
     ${weekendHTML}
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-body rc-schedule-body">${scheduleHTML}</div>

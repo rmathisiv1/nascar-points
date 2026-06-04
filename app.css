@@ -12582,3 +12582,119 @@ body.lightbox-open {
 .pers-hist-row td:first-child { border-left: 2px solid var(--accent); width: 0; padding: 0; }
 .pers-hist-when { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
 
+
+/* Entry-list quick links (race hero + home upcoming tile) */
+.entry-list-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.entry-list-link:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.rc-hero-entry { margin-top: 10px; }
+.home-hero-entry { margin-top: 10px; }
+
+/* Power-ranking movers in the metric bar (replaces hot/cold points) */
+.metric-move {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+.metric-move.up { color: var(--pos, #4ade80); }
+.metric-move.down { color: var(--neg, #f87171); }
+
+/* Car-number badge in career-heatmap row labels (driver + crew chief) */
+.ph-car-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+/* ============================================================
+   SCHEDULE HERO — season header with progress bar + quick facts
+   ============================================================ */
+.sched-hero {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sched-hero-top {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sched-hero-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sched-hero-series {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  letter-spacing: .03em;
+}
+.sched-hero-name { font-size: 14px; color: var(--muted); }
+.sched-hero-progress { display: flex; flex-direction: column; gap: 5px; }
+.sched-hero-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--tint-1);
+  overflow: hidden;
+}
+.sched-hero-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #fff));
+}
+.sched-hero-progress-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.sched-hero-facts {
+  display: flex;
+  gap: 26px;
+  flex-wrap: wrap;
+}
+.sched-hero-fact { display: flex; flex-direction: column; gap: 2px; }
+.sched-hero-fact .k {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+}
+.sched-hero-fact .v { font-size: 14px; font-weight: 600; color: var(--text); }
+.sched-hero-fact-next .v { font-weight: 600; }
+@media (max-width: 640px) {
+  .sched-hero-title { font-size: 21px; }
+  .sched-hero-facts { gap: 16px; }
+  .sched-hero-fact-next { flex-basis: 100%; }
+}
