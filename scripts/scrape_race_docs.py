@@ -198,6 +198,14 @@ def load_store(path):
         return {}
 
 
+def _write_store(store, path):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(store, f, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, path)        # atomic — never leaves a half-written file
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -217,6 +225,8 @@ def main():
                          "(entry,pitstall,roster,infraction); default all")
     ap.add_argument("--out", default=DEFAULT_OUT, help=f"output JSON (default {DEFAULT_OUT})")
     ap.add_argument("--dry-run", action="store_true", help="parse but don't write the file")
+    ap.add_argument("--skip-existing", action="store_true",
+                    help="skip races that already have every wanted doc (resume a backfill)")
     args = ap.parse_args()
 
     want = tuple(x.strip() for x in args.only.split(",") if x.strip()) or WANT_DOCS
@@ -248,6 +258,13 @@ def main():
             race_d = _race_date(r)
             if not rid or not track:
                 continue
+            # Resumable backfills: skip a race that already has every wanted doc.
+            if args.skip_existing:
+                have = (sstore.get(str(rid), {}).get("docs") or {})
+                if all(k in have for k in want):
+                    print(f"[{code}] race {rid}  {track} — already have {','.join(want)}, skip",
+                          file=sys.stderr)
+                    continue
             print(f"[{code}] race {rid}  {track}  ({race_d})", file=sys.stderr)
             try:
                 race_page, docs = docs_for_race(code, args.year, track, race_d, want)
@@ -274,6 +291,10 @@ def main():
             got = ", ".join(f"{k}:{len(v['rows'])}" for k, v in docs.items()) or "none"
             print(f"    -> {got}", file=sys.stderr)
             total_docs += len(docs)
+            # Incremental save: a long backfill that gets interrupted (or rate-
+            # limited) keeps the progress made so far. Tiny file, cheap to rewrite.
+            if not args.dry_run:
+                _write_store(store, args.out)
             time.sleep(1.5)                  # polite gap between races
 
     if args.dry_run:
@@ -281,9 +302,7 @@ def main():
         print(json.dumps(store, ensure_ascii=False, indent=2))
         return
 
-    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-    with open(args.out, "w", encoding="utf-8") as f:
-        json.dump(store, f, ensure_ascii=False, separators=(",", ":"))
+    _write_store(store, args.out)
     print(f"\nWrote {args.out}  ({total_docs} doc set(s) refreshed this run)", file=sys.stderr)
 
 
