@@ -605,19 +605,16 @@ html, body {
 .dash-tabs {
   display: flex;
   gap: 2px;
-  /* Now lives on the top bar (flex row). It flexes to fill the space between
-     the brand and the search box; no row border/padding needed here. */
-  flex: 1 1 auto;
+  /* Lives on the top bar as an inline group, sized to its tabs so the search
+     box + theme toggle sit immediately to its right (Historical is just the
+     last tab, after Data). */
+  flex: 0 1 auto;
   min-width: 0;
   padding: 0;
   border-bottom: 0;
   overflow: visible;
-  flex-shrink: 1;
 }
 .dash-tabs::-webkit-scrollbar { height: 0; }
-.dash-tab-historical {
-  margin-left: auto;   /* push Historical to the right end of the nav */
-}
 .dash-tab {
   padding: 4px 10px;
   color: var(--muted);
@@ -1706,8 +1703,17 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   overflow: auto;
   padding: 8px 0;
   max-height: 80vh;
+  /* Bound the width to the parent so a wide (36-round) grid scrolls
+     horizontally inside the card instead of overflowing past its right
+     edge. Without max-width the wrap grows to the grid's intrinsic width
+     and overflow:auto never engages — which is what pushed the historical
+     heatmap under the power-rankings panel. */
+  max-width: 100%;
   -webkit-overflow-scrolling: touch;
 }
+.card.scrollable > .heatmap-wrap,
+#view-heatmap .heatmap-wrap { min-width: 0; }
+#view-heatmap .card.scrollable { min-width: 0; max-width: 100%; overflow: hidden; }
 .heatmap-grid {
   display: grid;
   gap: 1px;
@@ -6014,9 +6020,9 @@ a.rc-sched-winner:hover {
    to an icon-button (separate handling below). */
 .topbar-search {
   position: relative;
-  flex: 0 1 320px;
-  max-width: 360px;
-  margin: 0 10px 0 0;
+  flex: 1 1 auto;
+  max-width: 420px;
+  margin: 0 0 0 14px;
 }
 .topbar-search::before {
   /* Magnifier glyph at the left of the input — the visual cue that this
@@ -12844,3 +12850,14 @@ body.lightbox-open {
 }
 .hist-sub-item:hover { background: var(--card-hi); }
 .hist-sub-item.on { color: var(--accent-2); font-weight: 700; }
+
+/* Historical: "← Schedule" back control + "viewing race" note (shown when a
+   schedule row was clicked to drill into a race) */
+.hist-nav-back { color: var(--accent-2); }
+.hist-race-note {
+  align-self: center;
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}

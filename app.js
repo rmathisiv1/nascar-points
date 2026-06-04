@@ -2973,9 +2973,8 @@ function ensurePageSeries() {
 const HIST_ANALYTICS = [
   ["form", "Power Rankings"], ["arc", "Cumulative Season"], ["heatmap", "Heatmap"],
   ["teammates", "Teammate"], ["trajectory", "Stage vs Finish"], ["breakdown", "Season Data"],
-  ["compare", "Driver Compare"],
 ];
-const HIST_VIEWS = ["schedule", "standings", "form", "arc", "heatmap", "teammates", "trajectory", "breakdown", "compare", "race"];
+const HIST_VIEWS = ["schedule", "standings", "form", "arc", "heatmap", "teammates", "trajectory", "breakdown", "race"];
 
 function historicalEnter() {
   const h = STATE.historical;
@@ -3045,7 +3044,6 @@ async function renderHistorical() {
   else if (sub === "teammates") renderTeammates();
   else if (sub === "trajectory") renderTrajectory();
   else if (sub === "breakdown") renderBreakdown();
-  else if (sub === "compare") renderCompare();
 }
 
 function renderHistoricalBar() {
@@ -3072,6 +3070,12 @@ function renderHistoricalBar() {
   const analyticsLabel = (HIST_ANALYTICS.find(([k]) => k === h.view) || [null, "Analytics"])[1];
   const analyticsItems = HIST_ANALYTICS.map(([k, lbl]) =>
     `<button class="hist-sub-item${h.view === k ? " on" : ""}" onclick="historicalSelect('view','${k}')">${escapeHTML(lbl)}</button>`).join("");
+  // When the user drilled into a race (by clicking a schedule row), show a
+  // "viewing race" note + a one-tap return to the schedule.
+  const raceNote = h.view === "race"
+    ? `<button class="hist-nav-btn hist-nav-back" onclick="historicalSelect('view','schedule')">← Schedule</button>
+       <span class="hist-race-note">Viewing R${h.round} results</span>`
+    : "";
 
   bar.innerHTML = `
     <div class="hist-bar-pickers">
@@ -3090,7 +3094,7 @@ function renderHistoricalBar() {
         <button class="hist-nav-btn hist-nav-parent${analyticsOn ? " on" : ""}">${escapeHTML(analyticsOn ? analyticsLabel : "Analytics")} ▾</button>
         <div class="hist-sub">${analyticsItems}</div>
       </div>
-      ${navBtn("race", "Race")}
+      ${raceNote}
     </div>`;
 }
 
@@ -21296,7 +21300,16 @@ function renderSchedulePage() {
       // track link and race-name link inside the row are still clickable
       // and handle their own navigation).
       if (isCompleted) {
-        window.location.hash = `#/race/${round}`;
+        // In the Historical browser, keep the user inside the historical page:
+        // open the race as the historical sub-view (control bar stays pinned)
+        // instead of navigating away to the global race route.
+        if (STATE.view === "historical") {
+          STATE.historical.round = round;
+          STATE.historical.view = "race";
+          renderHistorical();
+        } else {
+          window.location.hash = `#/race/${round}`;
+        }
       }
     });
   });
