@@ -20099,8 +20099,28 @@ function wireRaceLightbox() {
 
 function renderRaceCenter() {
   const host = document.getElementById("race-host");
+  try {
+    _renderRaceCenterImpl();
+  } catch (err) {
+    console.error("renderRaceCenter failed:", err);
+    if (host) {
+      host.innerHTML = `<div class="card po-mini-empty" style="padding:24px;">
+        <p>Sorry — this race page hit a snag rendering.</p>
+        <p class="muted" style="font-size:12px;margin-top:8px;">${escapeHTML(String(err && err.message || err))}</p>
+      </div>`;
+    }
+  }
+}
+
+function _renderRaceCenterImpl() {
+  const host = document.getElementById("race-host");
   const sub = document.getElementById("race-sub");
-  if (!host || !STATE.data) return;
+  if (!host) { console.warn("renderRaceCenter: no #race-host element"); return; }
+  if (!STATE.data) {
+    console.warn("renderRaceCenter: STATE.data is empty");
+    host.innerHTML = `<div class="card po-mini-empty" style="padding:24px;">Loading race data…</div>`;
+    return;
+  }
 
   const allRaces = allRacesSorted();
   if (allRaces.length === 0) {
@@ -20250,9 +20270,10 @@ function renderRaceCenter() {
   if (sessionsHTML) {
     tabs.push({ key: "results", label: isUpcoming ? "Sessions" : "Race Results", html: sessionsHTML });
   }
-  const lineupTab = raceLineupTab(nextRace);
+  let lineupTab = null, pointsTab = null;
+  try { lineupTab = raceLineupTab(nextRace); } catch (e) { console.warn("lineup tab failed:", e); }
   if (lineupTab) tabs.push(lineupTab);
-  const pointsTab = racePointsTab(nextRace);
+  try { pointsTab = racePointsTab(nextRace); } catch (e) { console.warn("points tab failed:", e); }
   if (pointsTab) tabs.push(pointsTab);
   for (const t of raceDocTabs(nextRace)) tabs.push(t);
 
