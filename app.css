@@ -12149,3 +12149,146 @@ body.lightbox-open {
     color: var(--text);
   }
 }
+
+/* ============================================================
+   RACE DOCUMENTS — per-race Jayski sheets on the race page
+   (entry list / pit stalls / crew rosters / infractions).
+   ============================================================ */
+.rdoc-card { padding-bottom: 4px; }
+.rdoc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.rdoc-tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 7px 11px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color .12s ease, border-color .12s ease;
+}
+.rdoc-tab:hover { color: var(--text); }
+.rdoc-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+.rdoc-tab-n {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 5px;
+  line-height: 15px;
+}
+.rdoc-tab.is-active .rdoc-tab-n { color: var(--accent); }
+.rdoc-body { padding: 4px 6px 2px; }
+
+/* tables reuse .data-table; a few per-cell tweaks */
+.rdoc-table .rdoc-car  { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+.rdoc-table .rdoc-box  { font-family: var(--mono); font-weight: 600; text-align: center; }
+.rdoc-table .rdoc-lap  { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.rdoc-table .rdoc-inf  { white-space: normal; overflow-wrap: anywhere; min-width: 180px; }
+
+.rdoc-foot { padding: 4px 14px 8px; text-align: right; }
+.rdoc-src {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.rdoc-src:hover { color: var(--accent); }
+
+/* crew rosters — a compact card per car with an expandable full crew */
+.rdoc-rosters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+  padding: 8px 8px 4px;
+}
+.rdoc-roster {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-hi);
+  padding: 9px 11px;
+}
+.rdoc-roster-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+.rdoc-roster-head .rdoc-car {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+}
+.rdoc-roster-drv { font-weight: 600; font-size: 13px; color: var(--text); }
+.rdoc-roster-cc {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.rdoc-roster-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  color: var(--text);
+}
+.rdoc-roster-roles label {
+  display: inline-block;
+  min-width: 64px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rdoc-roster-pit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border);
+}
+.rdoc-pit { font-size: 10.5px; color: var(--text); white-space: nowrap; }
+.rdoc-pit b {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.rdoc-roster-full { margin-top: 7px; }
+.rdoc-roster-full > summary {
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  list-style: none;
+}
+.rdoc-roster-full > summary::-webkit-details-marker { display: none; }
+.rdoc-roster-full > summary::before { content: "▸ "; }
+.rdoc-roster-full[open] > summary::before { content: "▾ "; }
+.rdoc-roster-full > summary:hover { color: var(--accent); }
+.rdoc-roster-full .data-table { margin-top: 6px; }
+.rdoc-roster-full .data-table th,
+.rdoc-roster-full .data-table td { font-size: 10.5px; padding: 4px 6px; }

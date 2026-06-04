@@ -4977,6 +4977,183 @@ async function loadEntryList() {
   } catch (e) { /* no entry list — fall back to full-time roster */ }
 }
 
+// ============================================================
+// RACE DOCUMENTS — per-race Jayski sheets (entry list, pit stalls,
+// crew rosters, infraction report) parsed into tables by
+// scripts/scrape_race_docs.py into data/race_docs.json:
+//   { "<year>": { "<series>": { "<race_id>": {
+//       track, race_date, round, race_page,
+//       docs: { entry|pitstall|roster|infraction: { url, rows:[...] } } } } } }
+// The race page matches a record by date (unique within a series-year),
+// with track name as a fallback, since the app keys races by round (no
+// NASCAR race_id of its own).
+// ============================================================
+const RACE_DOCS_CACHE = {};
+let _raceDocsAttempted = false;
+let _raceDocsTab = null;   // active Documents tab on the race page
+
+async function loadRaceDocs() {
+  if (_raceDocsAttempted) return;
+  _raceDocsAttempted = true;
+  try {
+    // Cache-bust: rewritten by the scheduled scrape; force a fresh pull.
+    const r = await fetch("data/race_docs.json?v=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const data = await r.json();
+    for (const [yr, bySeries] of Object.entries(data || {})) {
+      RACE_DOCS_CACHE[yr] = bySeries;
+    }
+  } catch (e) { /* no race-docs file yet — the section just won't render */ }
+}
+
+// Find the document record for a race. Date (YYYY-MM-DD) is unique within a
+// series-year, so match on it first; fall back to track name.
+function getRaceDocs(year, series, race) {
+  const blk = RACE_DOCS_CACHE[String(year)] && RACE_DOCS_CACHE[String(year)][series];
+  if (!blk || !race) return null;
+  const wantDate = String(race.date || "").slice(0, 10);
+  const wantTrack = String(race.track || "").toLowerCase().trim();
+  let byTrack = null;
+  for (const rec of Object.values(blk)) {
+    const recDate = String(rec.race_date || "").slice(0, 10);
+    if (wantDate && recDate && recDate === wantDate) return rec;
+    if (wantTrack && String(rec.track || "").toLowerCase().trim() === wantTrack) byTrack = rec;
+  }
+  return byTrack;
+}
+
+function selectRaceDocTab(t) {
+  _raceDocsTab = t;
+  if (STATE.view === "race") renderRaceCenter();
+}
+
+const _DOC_LABELS = { entry: "Entry List", pitstall: "Pit Stalls",
+                      roster: "Crew Rosters", infraction: "Infractions" };
+const _DOC_ORDER = ["entry", "pitstall", "roster", "infraction"];
+
+// All crew member names whose position contains a keyword (case-insensitive).
+function _crewBy(crew, kw) {
+  return (crew || [])
+    .filter(c => (c.position || "").toLowerCase().includes(kw))
+    .map(c => c.name).filter(Boolean);
+}
+function _pitAbbr(p) {
+  return { "front changer": "FC", "rear changer": "RC", "jack": "Jack",
+           "fueler": "Fuel", "tire carrier": "TC" }[p] || p;
+}
+function _td(v) { return escapeHTML(v == null || v === "" ? "—" : String(v)); }
+
+// The "Documents" card on the race page. Returns "" when no docs exist for the
+// race (so it simply doesn't appear). loadRaceDocs() is kicked off by the caller
+// (renderRaceCenter), which re-renders when the file arrives.
+function renderRaceDocsCard(race) {
+  const rec = getRaceDocs(STATE.season, STATE.series, race);
+  if (!rec || !rec.docs) return "";
+  const docs = rec.docs;
+  const avail = _DOC_ORDER.filter(
+    k => docs[k] && Array.isArray(docs[k].rows) && docs[k].rows.length);
+  if (!avail.length) return "";
+  const tab = (_raceDocsTab && avail.includes(_raceDocsTab)) ? _raceDocsTab : avail[0];
+
+  // car -> driver (for pit stalls + infractions), preferring roster then entry.
+  const carDriver = {};
+  for (const src of ["roster", "entry"]) {
+    if (docs[src]) for (const row of docs[src].rows) {
+      const c = row.car != null ? String(row.car) : "";
+      if (c && row.driver && !carDriver[c]) carDriver[c] = row.driver;
+    }
+  }
+  const drv = c => carDriver[String(c)] || "";
+
+  const tabs = avail.map(k =>
+    `<button class="rdoc-tab${k === tab ? " is-active" : ""}" onclick="selectRaceDocTab('${k}')">` +
+    `${_DOC_LABELS[k]}<span class="rdoc-tab-n">${docs[k].rows.length}</span></button>`).join("");
+
+  let body = "";
+  if (tab === "entry") body = _rdocEntryTable(docs.entry.rows);
+  else if (tab === "pitstall") body = _rdocPitTable(docs.pitstall.rows, drv);
+  else if (tab === "roster") body = _rdocRosters(docs.roster.rows);
+  else if (tab === "infraction") body = _rdocInfractionTable(docs.infraction.rows, drv);
+
+  const url = docs[tab] && docs[tab].url;
+  const src = url
+    ? `<a class="rdoc-src" href="${escapeHTML(url)}" target="_blank" rel="noopener">source PDF&nbsp;↗</a>`
+    : "";
+
+  return `
+    <div class="card rc-card rdoc-card">
+      <div class="rc-card-head">
+        <span class="rc-card-title">Documents</span>
+        <span class="rc-card-sub">via Jayski</span>
+      </div>
+      <div class="rdoc-tabs">${tabs}</div>
+      <div class="rdoc-body">${body}</div>
+      <div class="rdoc-foot">${src}</div>
+    </div>`;
+}
+
+function _rdocEntryTable(rows) {
+  const body = rows.map(r => `<tr>
+      <td class="rdoc-car">#${_td(r.car)}</td><td>${_td(r.driver)}</td>
+      <td>${_td(r.team)}</td><td>${_td(r.crew_chief)}</td></tr>`).join("");
+  return `<div class="table-scroll"><table class="data-table rdoc-table">
+      <thead><tr><th>Car</th><th>Driver</th><th>Team</th><th>Crew Chief</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+}
+
+function _rdocPitTable(rows, drv) {
+  const sorted = rows.slice().sort((a, b) => (a.box || 0) - (b.box || 0));
+  const body = sorted.map(r => `<tr>
+      <td class="rdoc-box">${_td(r.box)}</td><td class="rdoc-car">#${_td(r.car)}</td>
+      <td>${_td(drv(r.car))}</td></tr>`).join("");
+  return `<div class="table-scroll"><table class="data-table rdoc-table">
+      <thead><tr><th>Pit Box</th><th>Car</th><th>Driver</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+}
+
+function _rdocInfractionTable(rows, drv) {
+  const body = rows.map(r => `<tr>
+      <td class="rdoc-car">#${_td(r.car)}</td><td>${_td(drv(r.car))}</td>
+      <td class="rdoc-lap">${_td(r.lap)}</td><td class="rdoc-inf">${_td(r.infraction)}</td>
+      <td>${_td(r.penalty)}</td><td class="rdoc-lap">${_td(r.assessed)}</td></tr>`).join("");
+  return `<div class="table-scroll"><table class="data-table rdoc-table">
+      <thead><tr><th>Car</th><th>Driver</th><th>Lap</th><th>Infraction</th>
+      <th>Penalty</th><th>Assessed</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+}
+
+function _rdocRosters(rows) {
+  const sorted = rows.slice().sort(
+    (a, b) => (parseInt(a.car, 10) || 999) - (parseInt(b.car, 10) || 999));
+  const cards = sorted.map(r => {
+    const carChief = _crewBy(r.crew, "car chief").join(", ");
+    const eng = _crewBy(r.crew, "engineer").join(", ");
+    const spotter = _crewBy(r.crew, "spotter").join(", ");
+    const pit = ["front changer", "rear changer", "jack", "fueler", "tire carrier"]
+      .map(p => { const n = _crewBy(r.crew, p)[0];
+        return n ? `<span class="rdoc-pit"><b>${_pitAbbr(p)}</b>&nbsp;${escapeHTML(n)}</span>` : ""; })
+      .filter(Boolean).join("");
+    const role = (lbl, v) => v ? `<span><label>${lbl}</label> ${escapeHTML(v)}</span>` : "";
+    const full = (r.crew || []).map(c =>
+      `<tr><td>${_td(c.type)}</td><td>${_td(c.position)}</td><td>${_td(c.name)}</td></tr>`).join("");
+    return `<div class="rdoc-roster">
+        <div class="rdoc-roster-head">
+          <span class="rdoc-car">#${_td(r.car)}</span>
+          <span class="rdoc-roster-drv">${_td(r.driver)}</span>
+          <span class="rdoc-roster-cc">CC&nbsp;·&nbsp;${_td(r.crew_chief)}</span>
+        </div>
+        <div class="rdoc-roster-roles">${role("Car Chief", carChief)}${role("Engineer", eng)}${role("Spotter", spotter)}</div>
+        ${pit ? `<div class="rdoc-roster-pit">${pit}</div>` : ""}
+        <details class="rdoc-roster-full"><summary>Full crew (${(r.crew || []).length})</summary>
+          <div class="table-scroll"><table class="data-table rdoc-table">
+            <thead><tr><th>Type</th><th>Position</th><th>Name</th></tr></thead>
+            <tbody>${full}</tbody></table></div>
+        </details>
+      </div>`;
+  }).join("");
+  return `<div class="rdoc-rosters">${cards}</div>`;
+}
+
 // Resolve a feed track name to the app's track code via TRACK_NAMES token match.
 function _entryTrackToCode(trackName) {
   if (typeof TRACK_NAMES === "undefined" || !trackName) return null;
@@ -19658,6 +19835,12 @@ function renderRaceCenter() {
     }).catch(() => {});
   }
 
+  // Lazily pull the per-race Jayski documents file; re-render once it lands so
+  // the Documents card can populate.
+  if (!_raceDocsAttempted) {
+    loadRaceDocs().then(() => { if (STATE.view === "race") renderRaceCenter(); });
+  }
+
   // ---- Hero
   const dateStr = nextRace.date ? formatRaceDate(nextRace.date) : "Date TBD";
   // Use prettyTrack so sponsor-renamed tracks (e.g., "EchoPark Speedway")
@@ -19717,6 +19900,8 @@ function renderRaceCenter() {
     </div>
 
     ${sessionsHTML}
+
+    ${renderRaceDocsCard(nextRace)}
 
     <div class="rc-grid">
       <div class="card rc-card">
