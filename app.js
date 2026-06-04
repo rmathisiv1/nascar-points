@@ -20306,7 +20306,6 @@ function _renderRaceCenterImpl() {
       <div class="rc-hero-meta">
         ${dateStr}${timeTV ? " · " + escapeHTML(timeTV) : ""} · ${seriesNameStr}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
       </div>
-      ${(() => { const el = entryListLink(nextRace, STATE.series, false); return el ? `<div class="rc-hero-entry">${el}</div>` : ""; })()}
       ${renderRaceSummaryStrip(nextRace)}
     </div>
 
