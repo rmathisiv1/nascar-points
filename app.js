@@ -23510,6 +23510,24 @@ function _roleGroupOf(position) {
 }
 const PERSONNEL_ROLES = ["all", "Engineer", "Pit Crew", "Car Chief / Mechanic", "Crew Chief"];
 
+// Collapse "open"/charter sibling team names so they index as one org in the
+// personnel database. Jayski rosters list a non-chartered entry as e.g.
+// "23XI Open" — same shop, same crew — so we fold it into the parent name.
+// Extend this map as other "<Team> Open" variants show up in the data.
+const PERSONNEL_TEAM_ALIASES = {
+  "23xi open": "23XI Racing",
+};
+function _canonTeamName(team) {
+  const t = String(team || "").trim();
+  if (!t) return "";
+  const alias = PERSONNEL_TEAM_ALIASES[t.toLowerCase()];
+  if (alias) return alias;
+  // Generic: "<Something> Open" → "<Something> Racing" when the Racing form
+  // also exists in the data is risky, so we only strip a trailing " Open"
+  // for the explicitly-listed aliases above. Everything else passes through.
+  return t;
+}
+
 function buildPersonnelIndex() {
   const idx = new Map();   // normName -> {name, appearances[], roles:Set, teams:Set, positions:Set}
   const cutoff = Date.now() + 9 * 864e5;   // race-week window; excludes far-future fallbacks
@@ -23524,7 +23542,7 @@ function buildPersonnelIndex() {
         const date = String(rec.race_date || "").slice(0, 10);
         const round = rec.round || null;
         for (const car of roster) {
-          const team = car.team || "";
+          const team = _canonTeamName(car.team || "");
           const finMap = _finishMapFor(+yr, series, date, track);
           const finish = (finMap && car.car != null) ? finMap.get(String(car.car)) : undefined;
           const won = finish === 1;
