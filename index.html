@@ -65,9 +65,9 @@
       <a href="#/standings" class="dash-tab dash-tab-parent" data-view="standings">Standings <span class="dash-caret">▾</span></a>
       <div class="dash-submenu">
         <a href="#/playoffs"    class="dash-subitem" data-view="playoffs">Playoffs</a>
+        <a href="#/projection"  class="dash-subitem" data-view="projection">Projection</a>
       </div>
     </div>
-    <a href="#/projection" class="dash-tab" data-view="projection">Projection</a>
     <div class="dash-tab-group" data-group="analytics">
       <a href="#/form" class="dash-tab dash-tab-parent" data-view="analytics" data-fallback-view="form">Analytics <span class="dash-caret">▾</span></a>
       <div class="dash-submenu">
@@ -203,16 +203,10 @@
          Each hides tab-body when active. Race/Track/Schedule replace the
          old full-width takeover so they live alongside left/right panels. -->
     <div class="profile-takeover" id="profile-takeover" hidden>
-      <div class="profile-takeover-head">
-        <a href="#" class="takeover-back" id="takeover-back">← Back</a>
-      </div>
       <section class="view" id="view-profile"></section>
     </div>
 
     <div class="profile-takeover" id="race-takeover" hidden>
-      <div class="profile-takeover-head">
-        <a href="#" class="takeover-back" id="race-back">← Back</a>
-      </div>
       <section class="view" id="view-race">
         <div class="view-head">
           <h1>Race Center</h1>
@@ -223,9 +217,6 @@
     </div>
 
     <div class="profile-takeover" id="track-takeover" hidden>
-      <div class="profile-takeover-head">
-        <a href="#" class="takeover-back" id="track-back">← Back</a>
-      </div>
       <section class="view" id="view-track">
         <div class="view-head">
           <h1 id="track-title">Track</h1>
@@ -236,9 +227,6 @@
     </div>
 
     <div class="profile-takeover" id="schedule-takeover" hidden>
-      <div class="profile-takeover-head">
-        <a href="#" class="takeover-back" id="schedule-back">← Back</a>
-      </div>
       <section class="view" id="view-schedule">
         <div class="view-head">
           <h1>Schedule</h1>
@@ -249,9 +237,6 @@
     </div>
 
     <div class="profile-takeover" id="team-takeover" hidden>
-      <div class="profile-takeover-head">
-        <a href="#" class="takeover-back" id="team-back">← Back</a>
-      </div>
       <section class="view" id="view-team">
         <div class="view-head">
           <h1 id="team-title">Team</h1>
@@ -262,9 +247,6 @@
     </div>
 
     <div class="profile-takeover" id="cc-takeover" hidden>
-      <div class="profile-takeover-head">
-        <a href="#" class="takeover-back" id="cc-back">← Back</a>
-      </div>
       <section class="view" id="view-cc">
         <div class="view-head">
           <h1 id="cc-title">Crew Chief</h1>
@@ -275,12 +257,6 @@
     </div>
 
     <div class="profile-takeover" id="playoffs-takeover" hidden>
-      <div class="profile-takeover-head">
-        <div class="takeover-siblings">
-          <a href="#/standings" class="takeover-sibling" data-view="standings">Standings</a>
-          <a href="#/playoffs" class="takeover-sibling active" data-view="playoffs">Playoffs</a>
-        </div>
-      </div>
       <section class="view" id="view-playoffs" hidden>
         <div class="view-head">
           <h1>Playoff Picture</h1>
@@ -295,16 +271,6 @@
          a single sortable career-stats table. They live in the "More"
          dropdown of the tab bar. -->
     <div class="profile-takeover" id="drivers-takeover" hidden>
-      <div class="profile-takeover-head">
-        <div class="takeover-siblings">
-          <a href="#/drivers" class="takeover-sibling active" data-view="drivers">Drivers</a>
-          <a href="#/teams" class="takeover-sibling" data-view="teams">Teams</a>
-          <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
-          <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
-          <a href="#/personnel" class="takeover-sibling" data-view="personnel">Personnel</a>
-          <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
-        </div>
-      </div>
       <section class="view" id="view-drivers">
         <div class="view-head">
           <h1>Drivers</h1>
@@ -315,16 +281,6 @@
     </div>
 
     <div class="profile-takeover" id="teams-takeover" hidden>
-      <div class="profile-takeover-head">
-        <div class="takeover-siblings">
-          <a href="#/drivers" class="takeover-sibling" data-view="drivers">Drivers</a>
-          <a href="#/teams" class="takeover-sibling active" data-view="teams">Teams</a>
-          <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
-          <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
-          <a href="#/personnel" class="takeover-sibling" data-view="personnel">Personnel</a>
-          <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
-        </div>
-      </div>
       <section class="view" id="view-teams">
         <div class="view-head">
           <h1>Teams</h1>
@@ -335,16 +291,6 @@
     </div>
 
     <div class="profile-takeover" id="crewchiefs-takeover" hidden>
-      <div class="profile-takeover-head">
-        <div class="takeover-siblings">
-          <a href="#/drivers" class="takeover-sibling" data-view="drivers">Drivers</a>
-          <a href="#/teams" class="takeover-sibling" data-view="teams">Teams</a>
-          <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
-          <a href="#/crewchiefs" class="takeover-sibling active" data-view="crewchiefs">Crew Chiefs</a>
-          <a href="#/personnel" class="takeover-sibling" data-view="personnel">Personnel</a>
-          <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
-        </div>
-      </div>
       <section class="view" id="view-crewchiefs">
         <div class="view-head">
           <h1>Crew Chiefs</h1>
@@ -356,16 +302,6 @@
 
 
     <div class="profile-takeover" id="personnel-takeover" hidden>
-      <div class="profile-takeover-head">
-        <div class="takeover-siblings">
-          <a href="#/drivers" class="takeover-sibling" data-view="drivers">Drivers</a>
-          <a href="#/teams" class="takeover-sibling" data-view="teams">Teams</a>
-          <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
-          <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
-          <a href="#/personnel" class="takeover-sibling active" data-view="personnel">Personnel</a>
-          <a href="#/pointscalc" class="takeover-sibling" data-view="pointscalc">Points Format Calc</a>
-        </div>
-      </div>
       <section class="view" id="view-personnel">
         <div class="view-head">
           <h1>Personnel</h1>
@@ -376,16 +312,6 @@
     </div>
 
     <div class="profile-takeover" id="pointscalc-takeover" hidden>
-      <div class="profile-takeover-head">
-        <div class="takeover-siblings">
-          <a href="#/drivers" class="takeover-sibling" data-view="drivers">Drivers</a>
-          <a href="#/teams" class="takeover-sibling" data-view="teams">Teams</a>
-          <a href="#/trackstats" class="takeover-sibling" data-view="trackstats">Tracks</a>
-          <a href="#/crewchiefs" class="takeover-sibling" data-view="crewchiefs">Crew Chiefs</a>
-          <a href="#/personnel" class="takeover-sibling" data-view="personnel">Personnel</a>
-          <a href="#/pointscalc" class="takeover-sibling active" data-view="pointscalc">Points Format Calc</a>
-        </div>
-      </div>
       <section class="view" id="view-pointscalc">
         <div class="view-head">
           <h1>Points Format Calc</h1>
@@ -396,8 +322,6 @@
     </div>
 
     <div class="profile-takeover" id="projection-takeover" hidden>
-      <div class="profile-takeover-head">
-      </div>
       <section class="view" id="view-projection">
         <div class="view-head">
           <h1>Season Projection</h1>

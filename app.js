@@ -3202,7 +3202,34 @@ function renderPageSeriesBar() {
   const title = suppressTitle ? "" : pageTitleLabel(v);
   const titleHTML = `<span class="page-hd-title">${escapeHTML(title)}</span>`;
 
-  bar.innerHTML = `${titleHTML}<div class="page-hd-right">${right}</div>`;
+  const subnav = pageSubNav(v);
+  bar.innerHTML =
+    `<div class="page-hd-row">${titleHTML}<div class="page-hd-right">${right}</div></div>` +
+    subnav;
+}
+
+// In-page sub-nav: pages that belong to a group (Standings/Playoffs/Projection,
+// the Analytics views, the Data pages) get a thin row of links to their
+// siblings so you can switch between related pages without the top menu. Shared
+// .takeover-siblings styling keeps every group consistent.
+const SUBNAV_GROUPS = [
+  { views: ["standings", "playoffs", "projection"],
+    items: [["standings", "Standings"], ["playoffs", "Playoffs"], ["projection", "Projection"]] },
+  { views: ["form", "arc", "heatmap", "teammates", "trajectory", "breakdown", "compare"],
+    items: [["form", "Power Rankings"], ["arc", "Cumulative Season"], ["heatmap", "Heatmap"],
+            ["teammates", "Teammate"], ["trajectory", "Stage vs Finish"], ["breakdown", "Season Data"],
+            ["compare", "Driver Compare"]] },
+  { views: ["drivers", "teams", "trackstats", "crewchiefs", "personnel", "pointscalc"],
+    items: [["drivers", "Drivers"], ["teams", "Teams"], ["trackstats", "Tracks"],
+            ["crewchiefs", "Crew Chiefs"], ["personnel", "Personnel"], ["pointscalc", "Points Format Calc"]] },
+];
+function pageSubNav(view) {
+  const group = SUBNAV_GROUPS.find(g => g.views.includes(view));
+  if (!group) return "";
+  const links = group.items.map(([v, label]) =>
+    `<a href="#/${v}" class="takeover-sibling${v === view ? " active" : ""}" data-view="${v}">${escapeHTML(label)}</a>`
+  ).join("");
+  return `<div class="page-subnav"><div class="takeover-siblings">${links}</div></div>`;
 }
 
 // Which series ran a race at this track this season, and at what round. Matches
@@ -4063,10 +4090,7 @@ function render() {
   // Make sure the active sub-nav tab is scrolled into view inside its
   // (horizontally scrollable) row — otherwise on narrow screens the current
   // page's tab (e.g. Personnel at the far right) can sit clipped off-edge.
-  const activeSib = document.querySelector(
-    ".profile-takeover:not([hidden]) .takeover-sibling.active, " +
-    ".takeover:not([hidden]) .takeover-sibling.active"
-  );
+  const activeSib = document.querySelector(".page-subnav .takeover-sibling.active");
   if (activeSib && activeSib.scrollIntoView) {
     try { activeSib.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {}
   }
@@ -7128,8 +7152,8 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
   const W = 980;
   const H = tall ? (isMob ? 440 : 560) : (isMob ? 260 : 280);
   const pad = isMob
-    ? { top: 14, right: 12, bottom: 24, left: 36 }
-    : { top: 14, right: 150, bottom: 24, left: 48 };
+    ? { top: 30, right: 12, bottom: 24, left: 36 }
+    : { top: 26, right: 150, bottom: 24, left: 48 };
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
 

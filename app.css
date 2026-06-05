@@ -315,11 +315,28 @@ body { overflow-x: hidden; }
    back on the right, thin divider beneath. Applied on every page except Home
    and the Historical browser. */
 .page-series-bar.page-hd {
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px 12px 0;
   margin: 0 0 10px;
   border-bottom: 1px solid var(--border);
+}
+/* Title + series-toggle row inside the header. */
+.page-hd-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+/* In-page sub-nav row — sits under the title row, above the header's bottom
+   divider, left-aligned and vertically centered between the two lines. */
+.page-subnav {
+  display: flex;
+  justify-content: flex-start;
+  padding: 4px 0 0;
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
 }
 .page-hd-title {
   font-family: var(--serif);
@@ -6137,13 +6154,9 @@ a.rc-sched-winner:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  /* The back button was removed from the Data pages, so no left margin needed.
-     On narrow screens the row scrolls horizontally instead of being cut off.
-     min-width:0 + flex:1 lets this flex child actually shrink below its content
-     width so overflow-x:auto engages (without it the row just overflows and
-     gets clipped by the takeover's overflow:hidden). */
+  /* Left-aligned, scrolls horizontally if it overflows on narrow screens.
+     min-width:0 lets it shrink so overflow-x:auto engages instead of clipping. */
   margin-left: 0;
-  flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
@@ -12905,10 +12918,13 @@ body.lightbox-open {
   gap: 14px;
 }
 .hist-bar-title {
+  /* Match the unified page-header title (accent italic serif, lowercase). */
   font-family: var(--serif);
-  font-size: 20px;
+  font-style: italic;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--text);
+  text-transform: lowercase;
+  color: var(--accent);
   margin-right: 6px;
 }
 .hist-pick { display: flex; flex-direction: column; gap: 3px; }
