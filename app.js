@@ -23925,9 +23925,9 @@ function foldRecordByFilters(rec, scope, gens, seriesFilter, currentSeason) {
 // chip to see every era at once.
 const ALLTIME_DEFAULT_GENS = ["g5", "g6", "g7"];
 const ALLTIME_STATE = {
-  drivers:    { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
-  teams:      { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
-  crewchiefs: { sortKey: "wins", sortDir: "desc", search: "", page: 0, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
+  drivers:    { sortKey: "wins", sortDir: "desc", search: "", page: 0, pageSize: 100, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
+  teams:      { sortKey: "wins", sortDir: "desc", search: "", page: 0, pageSize: 100, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
+  crewchiefs: { sortKey: "wins", sortDir: "desc", search: "", page: 0, pageSize: 100, scope: "all", gens: new Set(ALLTIME_DEFAULT_GENS), series: "all" },
 };
 
 // NASCAR track-type taxonomy is defined earlier in the file (search
@@ -23957,6 +23957,27 @@ const NASCAR_GENERATIONS = [
   { id: "g7", label: "Gen 7", year_start: 2022, year_end: 9999 },
 ];
 const ALLTIME_PAGE_SIZE = 50;
+
+// Shared rows-per-page control for the Data table pages. "all" = show every
+// row (no paging). Default 100 keeps the big lists (Drivers/Personnel) snappy
+// while still letting the user pick "All" for the full scroll.
+const ROWS_PER_PAGE_OPTS = [50, 100, 250, "all"];
+function resolvePageSize(ps) {
+  if (ps === "all") return Infinity;
+  const n = Number(ps);
+  return n > 0 ? n : 100;
+}
+function rowsPerPageSelect(id, current, onChangeAttr) {
+  const cur = (current == null) ? 100 : current;
+  const oc = onChangeAttr ? ` onchange="${onChangeAttr}"` : "";
+  return `<label class="rows-per-page-ctl"><span class="alltime-toggle-label">Rows</span>` +
+    `<select id="${id}" class="rows-per-page-select"${oc}>` +
+    ROWS_PER_PAGE_OPTS.map(o => {
+      const val = (o === "all") ? "all" : String(o);
+      const lab = (o === "all") ? "All" : String(o);
+      return `<option value="${val}"${String(cur) === val ? " selected" : ""}>${lab}</option>`;
+    }).join("") + `</select></label>`;
+}
 
 // Generic sortable table renderer for all-time pages. Pass:
 //   rawRecs    — array of records with { byYear: Map, name, slug/code, ... }
@@ -24003,11 +24024,13 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
   });
 
   const totalCount = visible.length;
-  const pageCount = Math.max(1, Math.ceil(totalCount / ALLTIME_PAGE_SIZE));
+  const sz = resolvePageSize(st.pageSize);
+  const paged = sz !== Infinity;
+  const pageCount = paged ? Math.max(1, Math.ceil(totalCount / sz)) : 1;
   if (st.page >= pageCount) st.page = pageCount - 1;
   if (st.page < 0) st.page = 0;
-  const startIdx = st.page * ALLTIME_PAGE_SIZE;
-  const pageRows = visible.slice(startIdx, startIdx + ALLTIME_PAGE_SIZE);
+  const startIdx = paged ? st.page * sz : 0;
+  const pageRows = paged ? visible.slice(startIdx, startIdx + sz) : visible;
 
   const sortAttr = (col) => {
     if (col !== k) return "";
@@ -24065,11 +24088,11 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
   }).join("");
 
   // Pagination controls (used both at top and bottom)
-  const pagBtns = (suffix) => `
+  const pagBtns = (suffix) => paged ? `
     <button class="alltime-pag-btn" data-pag="prev" data-suffix="${suffix}" ${st.page === 0 ? "disabled" : ""}>← Prev</button>
     <span class="alltime-pag-status">Page ${st.page + 1} of ${pageCount}</span>
     <button class="alltime-pag-btn" data-pag="next" data-suffix="${suffix}" ${st.page >= pageCount - 1 ? "disabled" : ""}>Next →</button>
-  `;
+  ` : `<span class="alltime-pag-status">Showing all ${totalCount.toLocaleString()}</span>`;
 
   return `
     <div class="alltime-toolbar">
@@ -24080,6 +24103,7 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
         <button class="alltime-toggle-btn ${st.scope === "all" ? "active" : ""}" data-scope="all">All-time</button>
         <button class="alltime-toggle-btn ${st.scope === "current" ? "active" : ""}" data-scope="current">${currentSeason}</button>
       </div>
+      ${rowsPerPageSelect(`alltime-rows-${stateKey}`, st.pageSize)}
       <span class="alltime-count muted">${totalCount} ${pageLabel.toLowerCase()}</span>
     </div>
     ${showGenChips ? `
@@ -24149,6 +24173,13 @@ function wireAllTimeTable(stateKey, rerender) {
       st.page = 0;
       rerender();
     });
+  });
+  // Rows-per-page selector
+  const rowsSel = document.getElementById(`alltime-rows-${stateKey}`);
+  if (rowsSel) rowsSel.addEventListener("change", () => {
+    st.pageSize = (rowsSel.value === "all") ? "all" : Number(rowsSel.value);
+    st.page = 0;
+    rerender();
   });
   // Series toggle (All / NCS / NOS / NTS). Gen chips are NCS-only; when
   // the user picks something else we clear the gen filter so they aren't
@@ -24298,7 +24329,13 @@ function _finishMapFor(year, series, date, track) {
 }
 
 function _personnelDefaults() {
-  return { query: "", series: "all", positions: [], teams: [], teamPopupSeries: "all", sort: "races", page: 0, open: {}, filterOpen: false };
+  return { query: "", series: "all", positions: [], teams: [], teamPopupSeries: "all", sort: "races", page: 0, pageSize: 100, open: {}, filterOpen: false };
+}
+function personnelSetPageSize(val) {
+  STATE.personnel = STATE.personnel || _personnelDefaults();
+  STATE.personnel.pageSize = (val === "all") ? "all" : Number(val);
+  STATE.personnel.page = 0;
+  _renderPersonnelList();
 }
 function setPersonnelFilter(kind, val) {
   STATE.personnel = STATE.personnel || _personnelDefaults();
@@ -24508,6 +24545,7 @@ function renderPersonnel() {
              placeholder="Search personnel\u2026" value="${escapeHTML(st.query || "")}"
              oninput="_personnelSearch(this)">
       <button class="pers-filter-open" id="pers-filter-btn" onclick="personnelOpenFilter()">${nSel ? `Filters (${nSel})` : "Filters"}</button>
+      ${rowsPerPageSelect("personnel-rows", st.pageSize, "personnelSetPageSize(this.value)")}
     </div>
     <div class="pers-active-row">
       <span class="pers-hint">Click a name for the breakdown \u00b7 click Races / Top 5 / Wins to sort \u00b7 team shown is where they ran most this season.</span>
@@ -24549,15 +24587,19 @@ function _renderPersonnelList() {
   const sort = st.sort || "races";
 
   const total = rows.length;
-  const pageCount = Math.max(1, Math.ceil(total / PERSONNEL_PAGE_SIZE));
+  const sz = resolvePageSize(st.pageSize);
+  const paged = sz !== Infinity;
+  const pageCount = paged ? Math.max(1, Math.ceil(total / sz)) : 1;
   if ((st.page || 0) >= pageCount) st.page = pageCount - 1;
+  if ((st.page || 0) < 0) st.page = 0;
   const page = st.page || 0;
-  const slice = rows.slice(page * PERSONNEL_PAGE_SIZE, (page + 1) * PERSONNEL_PAGE_SIZE);
+  const rankBase = paged ? page * sz : 0;
+  const slice = paged ? rows.slice(page * sz, (page + 1) * sz) : rows;
 
   const carLabel = cars => cars.length ? cars.slice(0, 4).map(c => "#" + c).join(", ") + (cars.length > 4 ? "\u2026" : "") : "\u2014";
 
   const body = slice.map((r, i) => {
-    const rank = page * PERSONNEL_PAGE_SIZE + i + 1;
+    const rank = rankBase + i + 1;
     const positions = r.positions.slice(0, 3).join(", ") + (r.positions.length > 3 ? "\u2026" : "");
     const teamCell = escapeHTML(r.primaryTeam || "\u2014") + (r.teamCount > 1 ? ` <span class="pers-more-tag">+${r.teamCount - 1}</span>` : "");
     const open = !!st.open[r.key];
@@ -24599,8 +24641,8 @@ function _renderPersonnelList() {
 
   const pag = `<div class="alltime-pag">
       <button class="alltime-pag-btn" ${page === 0 ? "disabled" : ""} onclick="personnelPage(-1)">\u2190 Prev</button>
-      <span class="alltime-pag-status">Page ${page + 1} of ${pageCount} \u00b7 ${total.toLocaleString()} people</span>
-      <button class="alltime-pag-btn" ${page >= pageCount - 1 ? "disabled" : ""} onclick="personnelPage(1)">Next \u2192</button>
+      <span class="alltime-pag-status">${paged ? `Page ${page + 1} of ${pageCount} \u00b7 ${total.toLocaleString()} people` : `Showing all ${total.toLocaleString()} people`}</span>
+      <button class="alltime-pag-btn" ${(!paged || page >= pageCount - 1) ? "disabled" : ""} onclick="personnelPage(1)">Next \u2192</button>
     </div>`;
 
   const arrow = k => sort === k ? ' <span class="pers-sort-arrow">\u25be</span>' : "";
