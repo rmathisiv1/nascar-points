@@ -6917,7 +6917,8 @@ function renderArc() {
   const showPlayoffs = hasPlayoffs && poRounds.length > 0;
   if (poCard) poCard.hidden = !showPlayoffs;
 
-  // Regular-season chart — every entity included; cumulative R1→cutoff
+  // Regular-season chart — every entity included; cumulative R1→cutoff. When
+  // there's no playoff chart beside it, render it tall to fill the page.
   drawArcChart({
     svgId: "arc-svg",
     rounds: regRounds,
@@ -6925,6 +6926,7 @@ function renderArc() {
     selectedSet: STATE.arc.selected,
     metric: STATE.arc.metric || "points",
     cumStartFromZero: true,
+    tall: !showPlayoffs,
   });
 
   // Playoffs chart — only drivers in the playoff field, cumulative from
@@ -6972,7 +6974,7 @@ function computeStandingsAtCutoff(block, cutoffRound) {
 
 // Render a single cumulative chart into an SVG. Pure rendering — caller
 // determines which rounds + which entities go in. Returns nothing.
-function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFromZero }) {
+function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFromZero, tall }) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
   if (!rounds || rounds.length === 0) {
@@ -6980,6 +6982,14 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
     svg.setAttribute("viewBox", `0 0 980 200`);
     return;
   }
+
+  // Per-entity, per-round race row (finish/track) for the hover tooltips.
+  const raceRowByEntity = {};
+  entities.forEach(d => {
+    const m = {};
+    (d.races || []).forEach(r => { m[r.round] = r; });
+    raceRowByEntity[entityKey(d)] = m;
+  });
 
   // Cumulative pts per entity over the rounds window
   const cumByEntity = entities.map(d => {
@@ -7028,9 +7038,11 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
   }
 
   const isMob = isMobile();
-  // Slightly shorter when stacked: each chart gets ~half the height it
-  // would have alone, but never below a comfortable minimum.
-  const W = 980, H = isMob ? 240 : 280;
+  // Height: when this is the lone chart (no playoffs split), let it fill the
+  // page — a tall canvas. When stacked with the playoff chart, use the compact
+  // height so both fit. `tall` is passed by renderArc for the single-chart case.
+  const W = 980;
+  const H = tall ? (isMob ? 460 : 560) : (isMob ? 240 : 280);
   const pad = isMob
     ? { top: 14, right: 12, bottom: 24, left: 36 }
     : { top: 14, right: 150, bottom: 24, left: 48 };
@@ -7115,6 +7127,27 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
     });
     if (current.length >= 2) segs.push(current);
     const polylines = segs.map(pts => `<polyline points="${pts.join(" ")}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round"/>`).join("");
+
+    // Hoverable dots at each round. A larger transparent hit-circle makes the
+    // point easy to hover; a native <title> shows that round's race result
+    // (track, finish, cumulative value) — matching the projection chart's
+    // hover-to-inspect behavior without extra JS plumbing.
+    const rowMap = raceRowByEntity[s.key] || {};
+    const dots = s.values.map((v, i) => {
+      if (v == null) return "";
+      const rd = rounds[i];
+      const row = rowMap[rd];
+      const x = xScale(i), y = yScale(v);
+      const trackName = row ? (prettyTrack(row.track_code, row.track) || row.track || `R${rd}`) : `R${rd}`;
+      const finStr = row && row.finish != null && row.finish !== "—" ? `P${row.finish}` : "DNS/—";
+      const valStr = isPosition ? `Rank ${v}` : `${Math.round(v)} pts`;
+      const tip = `${escapeHTML(s.label)} · R${rd} ${escapeHTML(trackName)}\nFinish ${finStr} · ${valStr}`;
+      return `<g class="arc-dot-hit">
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="transparent"><title>${tip}</title></circle>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${s.color}" stroke="var(--bg)" stroke-width="0.6" pointer-events="none"/>
+      </g>`;
+    }).join("");
+
     const lastVal = s.values[s.values.length - 1];
     const xEnd = xScale(nRaces - 1);
     const yEnd = lastVal != null ? yScale(lastVal) : s.labelY;
@@ -7123,13 +7156,14 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
       : "";
     return `<g>
       ${polylines}
+      ${dots}
       ${isMob ? "" : connector}
       ${isMob ? "" : `<text x="${xEnd + 7}" y="${s.labelY + 3}" fill="${s.color}" font-family="var(--mono)" font-size="10">${escapeHTML(s.label)}</text>`}
     </g>`;
   }).join("");
 
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.removeAttribute("preserveAspectRatio");
   svg.innerHTML = `${gridlines.join("")}${xLabels}${lines}`;
 }
 
