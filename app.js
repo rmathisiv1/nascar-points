@@ -625,6 +625,18 @@ function wireSearch() {
   const wrap = document.getElementById("topbar-search");
   if (!input || !drop) return;
 
+  // On mobile the search field is narrow — the long placeholder gets cut off
+  // mid-word, which looks tacky. Use a short one below the mobile breakpoint.
+  const setSearchPlaceholder = () => {
+    if (window.matchMedia("(max-width: 767.98px)").matches) {
+      input.placeholder = "Search…";
+    } else {
+      input.placeholder = "Search drivers, teams, crew chiefs, races…  (press /)";
+    }
+  };
+  setSearchPlaceholder();
+  window.addEventListener("resize", setSearchPlaceholder);
+
   // Mobile: tap on the search container expands it from icon-only to
   // full input. On blur (and the user hasn't typed anything), collapse
   // back to icon-only. Desktop CSS doesn't apply .expanded so this
@@ -7096,7 +7108,7 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
   // page — a tall canvas. When stacked with the playoff chart, use the compact
   // height so both fit. `tall` is passed by renderArc for the single-chart case.
   const W = 980;
-  const H = tall ? (isMob ? 460 : 560) : (isMob ? 240 : 280);
+  const H = tall ? (isMob ? 340 : 560) : (isMob ? 240 : 280);
   const pad = isMob
     ? { top: 14, right: 12, bottom: 24, left: 36 }
     : { top: 14, right: 150, bottom: 24, left: 48 };
@@ -18218,7 +18230,7 @@ function renderHeatmap() {
   // Toggle bar
   const toggleBar = document.createElement("div");
   toggleBar.className = "toggle-group";
-  toggleBar.style.marginBottom = "8px";
+  toggleBar.style.margin = "8px 0 8px 10px";
   ["finish", "points"].forEach(m => {
     const btn = document.createElement("button");
     btn.textContent = m === "finish" ? "Finish Position" : "Points";

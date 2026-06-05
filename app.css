@@ -934,8 +934,10 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .profile-takeover[hidden] { display: none !important; }
 .profile-takeover-head {
   flex-shrink: 0;
-  padding-bottom: 6px;
-  margin-bottom: 6px;
+  /* Thin sub-nav row — minimal vertical footprint so it doesn't eat margins
+     on Standings/Playoffs and the Data pages. */
+  padding-bottom: 2px;
+  margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -4297,6 +4299,10 @@ a.driver-cell.profile-link:hover .car-tag {
        so this separate sticky title bar would be a duplicate — hide it. */
     display: none;
   }
+  /* Bigger page-header title on mobile so it reads as a clear page heading. */
+  .page-hd-title { font-size: 19px; }
+  /* Trim the search placeholder so it doesn't get cut off mid-word on the
+     narrow field (looks tacky). JS swaps in a short placeholder on mobile. */
   /* If time-cursor banner is up, push title further down */
   .time-cursor-banner:not([hidden]) ~ .mobile-page-title {
     top: 110px;
@@ -6116,13 +6122,21 @@ a.rc-sched-winner:hover {
    so users can hop between Drivers/Teams/Crew Chiefs (or Standings/
    Playoffs) without going back to the tab bar. */
 .takeover-siblings {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: 16px;
+  /* The back button was removed from the Data pages, so no left margin needed.
+     On narrow screens the row scrolls horizontally instead of being cut off. */
+  margin-left: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.takeover-siblings::-webkit-scrollbar { height: 0; }
+.takeover-sibling { flex: 0 0 auto; white-space: nowrap; }
 .takeover-sibling {
-  padding: 4px 10px;
+  padding: 3px 10px;
   color: var(--muted);
   text-decoration: none;
   font-family: var(--mono);
@@ -6306,7 +6320,7 @@ a.rc-sched-winner:hover {
        no overlay takeover). It grows to fill the space between the brand and
        the theme toggle, which sits at the far right. !important guards against
        any leftover inline styles from the old expand/collapse JS. */
-    position: static !important;
+    position: relative !important;
     margin: 0 !important;
     max-width: none !important;
     flex: 1 1 auto !important;
@@ -6351,7 +6365,7 @@ a.rc-sched-winner:hover {
      Neutralize the old .expanded overlay so a lingering class can't cover the
      bar. */
   .topbar-search.expanded {
-    position: static;
+    position: relative;
     left: auto; right: auto;
     flex: 1 1 auto;
     width: auto; height: 32px;
@@ -8816,10 +8830,16 @@ body.lightbox-open {
   min-height: 200px;
 }
 /* When only the regular-season chart shows (no playoffs), give it a tall
-   minimum so it fills the page instead of sitting short. */
-.arc-playoff-card[hidden] ~ * .arc-regular-card svg,
-.arc-chart-stack:has(.arc-playoff-card[hidden]) .arc-regular-card svg {
-  min-height: 480px;
+   minimum on DESKTOP so it fills the page. On mobile we let it size to its
+   natural aspect (the page scrolls), avoiding big vertical dead space. */
+@media (min-width: 768px) {
+  .arc-chart-stack:has(.arc-playoff-card[hidden]) .arc-regular-card svg {
+    min-height: 480px;
+  }
+}
+@media (max-width: 767.98px) {
+  .arc-chart-stack svg { min-height: 0; height: auto; flex: none; }
+  .arc-regular-card, .arc-playoff-card { flex: none; }
 }
 /* Top-left chart label so users can tell which segment is which at a
    glance. Mono uppercase muted — same vocabulary as the metric bar. */
