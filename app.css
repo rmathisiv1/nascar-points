@@ -334,7 +334,10 @@ body { overflow-x: hidden; }
 .page-subnav {
   display: flex;
   justify-content: flex-start;
-  padding: 4px 0 0;
+  /* Equal top + bottom padding so the active (highlighted) pill is vertically
+     centered between the divider above and the header's bottom border below —
+     it shouldn't touch either. */
+  padding: 5px 0;
   margin-top: 6px;
   border-top: 1px solid var(--border);
 }
@@ -4330,6 +4333,18 @@ a.driver-cell.profile-link:hover .car-tag {
   }
   /* Bigger page-header title on mobile so it reads as a clear page heading. */
   .page-hd-title { font-size: 19px; }
+  /* Sub-nav on mobile: keep it from walking off the page. The flex parent must
+     allow its child to shrink (min-width:0) so the inner row's overflow-x
+     scroll actually engages instead of overflowing the viewport. A right-edge
+     fade hints that it scrolls; the active tab is auto-scrolled into view. */
+  .page-subnav { min-width: 0; max-width: 100%; overflow: hidden; }
+  .page-subnav .takeover-siblings {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+            mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+  }
   /* Trim the search placeholder so it doesn't get cut off mid-word on the
      narrow field (looks tacky). JS swaps in a short placeholder on mobile. */
   /* If time-cursor banner is up, push title further down */
@@ -8871,6 +8886,10 @@ body.lightbox-open {
   .arc-chart-stack svg { min-height: 0; height: auto; flex: none; }
   .arc-regular-card, .arc-playoff-card { flex: none; }
   .arc-chart-stack { flex: none; }
+  /* The chart-label ("regular season") is absolutely positioned at the top of
+     the card; push the SVG down so its top y-axis value doesn't render under
+     the title. */
+  .arc-regular-card svg, .arc-playoff-card svg { margin-top: 22px; }
 }
 /* Top-left chart label so users can tell which segment is which at a
    glance. Mono uppercase muted — same vocabulary as the metric bar. */

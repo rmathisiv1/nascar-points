@@ -7152,7 +7152,7 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
   const W = 980;
   const H = tall ? (isMob ? 440 : 560) : (isMob ? 260 : 280);
   const pad = isMob
-    ? { top: 30, right: 12, bottom: 24, left: 36 }
+    ? { top: 16, right: 12, bottom: 24, left: 36 }
     : { top: 26, right: 150, bottom: 24, left: 48 };
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
