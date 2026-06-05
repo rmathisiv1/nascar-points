@@ -13150,3 +13150,66 @@ body.lightbox-open {
     background: var(--card);   /* opaque so rows pass under, not through */
   }
 }
+
+/* ----------------------------------------------------------------------
+   Data all-time pages (Drivers / Teams / Crew Chiefs / Personnel), desktop:
+   pin the toolbar + column header and scroll only the table BODY — matching
+   Tracks. These views are the takeover scroller by default (so toolbar +
+   header scroll away); we hand vertical scrolling to .alltime-table-wrap, so
+   everything above it stays put and the (sticky) thead pins to the box top.
+
+   :not([hidden]) is REQUIRED — these views toggle via the `hidden` attribute,
+   and an unguarded display:flex would override the UA [hidden] rule and reveal
+   every inactive page at once. Desktop + fine-pointer only; mobile untouched.
+   ---------------------------------------------------------------------- */
+@media (min-width: 768px) and (pointer: fine) {
+  #view-drivers:not([hidden]),
+  #view-teams:not([hidden]),
+  #view-crewchiefs:not([hidden]),
+  #view-personnel:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden !important;   /* the table wrap scrolls now, not the view */
+  }
+  #view-drivers:not([hidden]) > .view-head,
+  #view-teams:not([hidden]) > .view-head,
+  #view-crewchiefs:not([hidden]) > .view-head,
+  #view-personnel:not([hidden]) > .view-head { flex: 0 0 auto; }
+
+  /* Host fills the view; everything in it is fixed except the table wrap. */
+  #drivers-host, #teams-host, #crewchiefs-host, #personnel-host {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #drivers-host > .alltime-table-wrap,
+  #teams-host > .alltime-table-wrap,
+  #crewchiefs-host > .alltime-table-wrap {
+    flex: 1 1 auto; min-height: 0; overflow: auto;
+  }
+  #drivers-host > :not(.alltime-table-wrap),
+  #teams-host > :not(.alltime-table-wrap),
+  #crewchiefs-host > :not(.alltime-table-wrap) { flex: 0 0 auto; }
+
+  /* Personnel nests the table one level deeper, inside #personnel-list. */
+  #personnel-host > #personnel-list {
+    display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+  }
+  #personnel-host > :not(#personnel-list) { flex: 0 0 auto; }
+  #personnel-list > .alltime-table-wrap {
+    flex: 1 1 auto; min-height: 0; overflow: auto;
+  }
+  #personnel-list > :not(.alltime-table-wrap) { flex: 0 0 auto; }
+
+  /* Pin the column header to the top of the scroll box (override the global
+     top:78px page-scroll offset, which doesn't apply inside these boxes). */
+  #view-drivers .alltime-table thead th,
+  #view-teams .alltime-table thead th,
+  #view-crewchiefs .alltime-table thead th,
+  #view-personnel .alltime-table thead th {
+    top: 0 !important; z-index: 6; background: var(--card);
+  }
+}
