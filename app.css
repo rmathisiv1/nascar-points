@@ -4223,37 +4223,26 @@ a.driver-cell.profile-link:hover .car-tag {
 
   /* ---- Page title bar ---- */
   .mobile-page-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 78px;             /* below topbar (~44px) + metricbar (~34px) */
-    z-index: 50;
-    font-family: var(--sans);
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text);
+    /* The unified page header (.page-hd) now renders the title on mobile too,
+       so this separate sticky title bar would be a duplicate — hide it. */
+    display: none;
   }
   /* If time-cursor banner is up, push title further down */
   .time-cursor-banner:not([hidden]) ~ .mobile-page-title {
     top: 110px;
   }
 
-  /* ---- Sticky table headers BELOW the page-title bar ---- */
-  /* Desktop already has them sticky at top:0; on mobile the global
-     sticky chrome stack (topbar 0–44 + metricbar 44–78 + title 78–112)
-     means the table th must stick BELOW the title bar, otherwise it
-     slides under those bars. */
+  /* ---- Sticky table headers BELOW the topbar + metricbar ---- */
+  /* On mobile the sticky chrome stack is topbar 0–44 + metricbar 44–78. The
+     separate page-title bar is gone (unified header scrolls with content), so
+     table th sticks at 78. */
   .data-table th {
-    top: 112px !important;
+    top: 78px !important;
     z-index: 8;            /* below the page chrome */
   }
   .time-cursor-banner:not([hidden]) ~ * .data-table th,
   .time-cursor-banner:not([hidden]) ~ .col-center .data-table th {
-    top: 144px !important;
+    top: 110px !important;
   }
 
   /* ---- Restore picker pills below charts; kill drawer button ---- */
@@ -4356,9 +4345,10 @@ a.driver-cell.profile-link:hover .car-tag {
     top: 78px;            /* below topbar+metricbar */
     z-index: 50;
   }
-  /* Tables' thead sticky position — directly below the page title */
+  /* Tables' thead sticky position — directly below the topbar + metricbar.
+     (The separate mobile page-title bar is hidden now, so no extra offset.) */
   .data-table th {
-    top: 112px !important;   /* topbar 44 + metricbar 34 + page-title 34 = 112 */
+    top: 78px !important;   /* topbar 44 + metricbar 34 = 78 */
     z-index: 7;
     background: var(--card) !important;
     /* Ensure background is FULLY OPAQUE so rows don't show through */
