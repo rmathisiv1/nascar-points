@@ -24103,7 +24103,6 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
         <button class="alltime-toggle-btn ${st.scope === "all" ? "active" : ""}" data-scope="all">All-time</button>
         <button class="alltime-toggle-btn ${st.scope === "current" ? "active" : ""}" data-scope="current">${currentSeason}</button>
       </div>
-      ${rowsPerPageSelect(`alltime-rows-${stateKey}`, st.pageSize)}
       <span class="alltime-count muted">${totalCount} ${pageLabel.toLowerCase()}</span>
     </div>
     ${showGenChips ? `
@@ -24120,9 +24119,6 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
         ${header}
         ${body}
       </table>
-    </div>
-    <div class="alltime-pag alltime-pag-bottom">
-      ${pagBtns("bot")}
     </div>
   `;
 }
@@ -24173,13 +24169,6 @@ function wireAllTimeTable(stateKey, rerender) {
       st.page = 0;
       rerender();
     });
-  });
-  // Rows-per-page selector
-  const rowsSel = document.getElementById(`alltime-rows-${stateKey}`);
-  if (rowsSel) rowsSel.addEventListener("change", () => {
-    st.pageSize = (rowsSel.value === "all") ? "all" : Number(rowsSel.value);
-    st.page = 0;
-    rerender();
   });
   // Series toggle (All / NCS / NOS / NTS). Gen chips are NCS-only; when
   // the user picks something else we clear the gen filter so they aren't
@@ -24545,7 +24534,6 @@ function renderPersonnel() {
              placeholder="Search personnel\u2026" value="${escapeHTML(st.query || "")}"
              oninput="_personnelSearch(this)">
       <button class="pers-filter-open" id="pers-filter-btn" onclick="personnelOpenFilter()">${nSel ? `Filters (${nSel})` : "Filters"}</button>
-      ${rowsPerPageSelect("personnel-rows", st.pageSize, "personnelSetPageSize(this.value)")}
     </div>
     <div class="pers-active-row">
       <span class="pers-hint">Click a name for the breakdown \u00b7 click Races / Top 5 / Wins to sort \u00b7 team shown is where they ran most this season.</span>
@@ -24662,8 +24650,7 @@ function _renderPersonnelList() {
         </tr></thead>
         <tbody>${body}</tbody>
       </table>
-    </div>
-    ${pag}` : `<div class="rc-empty">No people match.</div>`;
+    </div>` : `<div class="rc-empty">No people match.</div>`;
 }
 
 function renderAllTimeDrivers() {
