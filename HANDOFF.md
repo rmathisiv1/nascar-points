@@ -1,131 +1,189 @@
-# nascar-points → Racecar Data — Handoff
+# NASCAR Analytics App — Handoff Sheet
 
-## Site / repo
-- Live: https://rmathisiv1.github.io/nascar-points/
-- **Brand: "Racecar Data"**
-- Vanilla JS + CSS + HTML on GitHub Pages. Repo: `nascar-points`.
-- Dev mount (read-only): `/mnt/project/`. All working/edited copies live in `/mnt/user-data/outputs/`.
-- User deploys from local Windows repo `C:\Users\rmathis\OneDrive - Joe Gibbs Racing, Inc\Documents\GitHub\nascar-points` via PowerShell + git.
-- Files: `app.js` (~26,100 lines), `app.css` (~12,000 lines), `index.html` (~620 lines), `colors.json`, `drivers.json`, scrapers, `data/points_YYYY.json`, `data/pace_2024/2025/2026.json`, `data/entry_list.json`.
-- Series codes: NCS=Cup, NOS=Xfinity, NTS=Trucks. Feed series_id 1/2/3.
-
-## CRITICAL ENVIRONMENT NOTES
-- **Network is DISABLED in the sandbox.** Data files live ONLY on the user's machine. Claude CANNOT inspect them — reason from code OR have the user paste query/console output.
-- **Verify-before-deploy**: `node --check app.js` (and `python3 -m py_compile` for scrapers) before every handoff. Then `present_files`, then give PowerShell `git add/commit/push` + hard-refresh instructions.
-- **Hard refresh reloads JS but does NOT clear localStorage.** Only a `PROJ_VERSION` bump (or clearing site data) forces a projection recompute on clients.
-
-## RESPONSE STYLE (user preference — ACTIVE)
-- Keep responses tight. Use a dotted-line separator `- - - - -`; everything below it is deploy commands + what to verify. User dislikes over-explanation.
-- Only present files that actually changed.
-- Ask before coding when genuinely unsure (use the elicitation tool for preferences). User is a NASCAR professional at Joe Gibbs Racing and catches data/logic errors fast.
-- When the user reports a bug, investigate the code — don't assume the deploy was stale. (This session the projection bug was real and took several rounds; early diagnoses were wrong.)
-
-## 2026 NCS state at session end
-- R14/36 complete, R15 Michigan upcoming. Reddick leads 657.
-- Chase format `chase-reseeded`, top 16, regEndRound 26, 10 chase races.
-- Schedule R27-R36: Darlington, Gateway, Bristol, Kansas, Las Vegas, Charlotte, Phoenix, Talladega, Martinsville, Homestead.
-- **PROJ_VERSION = 19** (in `simulateSeasonRollout`, ~line 11983).
-
-## Working copies (start from these — latest)
-- `/mnt/user-data/outputs/app.js`
-- `/mnt/user-data/outputs/app.css`
-- `/mnt/user-data/outputs/index.html`
+App: **Racecar Data** — a NASCAR analytics web app deployed at
+`rmathisiv1.github.io/nascar-points`. Single-page app (vanilla JS, no framework),
+hash-routed. Built for a Joe Gibbs Racing professional who iterates fast via
+screenshots and deploys per logical batch.
 
 ---
 
-## [COMPLETED THIS SESSION]
+## ENVIRONMENT & WORKFLOW (read first)
 
-### 1. PROJECTION DETERMINISM — THE BIG ONE (fixed)
-Projection champion/champ% changed on every hard-refresh despite identical data. Took many rounds. ACTUAL root causes (real bugs):
-- **Seeded RNG** (`_mulberry32`, `_seedRng`/`_rng` ~line 11805): all sim randomness (`_sampleNormal`, catastrophe, `_sampleStagePts`) draws from a seeded generator. Seed = f(`completedCount`, series/year/nSims/PROJ_VERSION). Re-seeded again right before the iteration loop.
-- **Deterministic driver sort**: `drivers = dedupedDrivers.sort((a,b)=>a.slug.localeCompare(b.slug))` before the sim. CRITICAL — seeded RNG gives a fixed *sequence*, but each driver consumes draws in array order; unstable driver order desynced the mapping.
-- **THE actual culprit (v19)**: `_computeChaseTraces` wrote derived `championship_pct` BACK onto driver objects that were **shared references into the CACHED `proj.drivers`** — each render mutated the cache, next render drifted. FIX: `chaseDrivers = allSorted.slice(0,fieldSize).map(d=>({...d}))` — deep-clone per render; rendering is now pure.
-- **Cache cleanup bug**: removed stale localStorage entries inside a `for(i<localStorage.length)` loop (index shift skips entries). FIX: collect keys first, then remove.
-- **CONFIRMED FIXED** via user F12 diagnostic: CACHED champ == FRESH champ (Hamlin 38.8%), single LS key `proj_v19_NCS_2026_14`, stable count.
-- Cache: `PROJECTION_CACHE` (memory) + localStorage key `proj_v{V}_{series}_{year}_{completedCount}`; recomputes only when a race completes.
+- **Authoritative working copy:** `/mnt/user-data/outputs/` — this is where ALL
+  edits are made. Files: `app.js` (~27,870 lines), `app.css` (~2457 braces,
+  balanced), `index.html` (~640 lines), plus scrapers (`scrape_jayski_entry.py`,
+  `scrape_race_docs.py`, `scrape_entry_list.py`, `diag_personnel.py`).
+- `/mnt/project/` is a **read-only, STALE** snapshot — never edit it, always use
+  `/mnt/user-data/outputs/`.
+- **Network is DISABLED** in the sandbox bash. The user runs scrapers locally and
+  pastes the output/screenshots.
+- **Deploy flow:** user copies the outputs files into a local Windows repo
+  (`C:\Users\rmathis\OneDrive - Joe Gibbs Racing, Inc\Documents\GitHub\nascar-points`),
+  then `git add`/`commit`/`push` → GitHub Pages. **PowerShell does NOT support `&&`** —
+  always give commands as separate lines.
+- **ALWAYS remind the user to hard-refresh (Ctrl+Shift+R) after CSS edits** —
+  GitHub Pages / browser caching has repeatedly caused "it didn't change" reports
+  that were actually stale CSS, not bad code.
+- The user pastes placeholder text literally — give exact copy-paste commands with
+  REAL filenames/values, never placeholders.
 
-### 2. PROJECTION CHAMP% UNIFICATION
-- Champ% DERIVED from deterministic chase points via softmax (TEMP=55) in `_computeChaseTraces` (~24728), NOT the Monte Carlo value. Chart + points + % all agree (points leader = highest %). Written onto cloned chaseDrivers + trace only.
-- Chase table (`_renderProjectionChaseTable` ~24850) sorts by finalPts (= champ% order). Top-contender cards (`_renderProjectionTopContenders` ~25072) read derived `championship_pct`.
+### MANDATORY validation before every handoff
+- `node --check app.js`
+- brace-balance app.css: `grep -o '{' app.css | wc -l` must equal `grep -o '}' app.css | wc -l`
+- div-balance index.html via the python `html.parser` snippet (counts `<div>`/`</div>`)
+- `python3 -m py_compile <scraper>.py` for any scraper touched
+- Then `present_files` the changed files and give the exact `git add/commit/push` lines.
 
-### 3. PROJECTION CHART (Projected chase points)
-- 45-deg track labels. `W=820,H=360`, pad `{t:14,r:80,b:64,l:64}`, viewBox `-20 0 ${W+44} ${H+16}` (margin so Martinsville/edge labels don't clip).
-- Y-axis floored at chase reset base (~2000, `proj.rule.resetBase`) — no dead space. Labels every 50 pts. `.pc-gridline` dashed CSS.
-- R-labels at `axisBottomY+15`, track names at `axisBottomY+26` (clear of 2000 line).
-- **Wheel + pinch zoom** (`_wireProjectionChartZoom` ~24470): wheel zooms toward cursor via SVG viewBox; two-finger pinch on mobile; drag-pan when zoomed. `.pc-chart-svg { touch-action:none }`. NO zoom buttons (removed).
-
-### 4. PREDICTOR REBALANCE (predictDriverForRace ~12785)
-Thin-sample track pace over-crowned one-race winners (Ty Gibbs winning Bristol).
-- `getDriverTrackPace` window 3→5 races (`_avgPace(here,5)`). Low-confidence still excluded in `_paceRecordsFor`.
-- Weights: pace-track 50->40, pace-type 10->20, all-time-here 15, qual 10, pace-form 15.
-- Drafting tracks (`isDraftingTrack`: DAY/TAL/ATL/ONT) drop pace, use untrimmed finish history + thin-sample regression toward P20 (`trust=nHere/6`). Plate-winner crowning is inherent to deterministic prediction; left as-is.
-- Home methodology explainer text updated.
-
-### 5. POWER RANKINGS — FULL REWORK (view "form", renamed to "Power Rankings")
-Renamed everywhere (index.html rail title ~588, nav ~119/179, mobile title ~144, app.js titleMap `form:"Power Rankings"`).
-- **Metric** (`powerComponentsFor` + `buildPowerRankings` ~3998): field-relative blend over the **last 8 races** (fixed window, L5/L10/season toggle REMOVED from index.html + code).
-  - `POWER_WEIGHTS = { pace:30, finish:35, top15:15, qual:20 }` (results edge pace, renormalized to 100).
-  - Clean races only — `_isCleanFormRace` excludes DNF/wreck status AND "ran up front (top15>=40) but finished deep (>=P30)".
-  - **Recency weighting** `RECENCY_STEP=0.08` (newest ~2.3x oldest of 8).
-  - Components normalized across full-time field. Pace from `_paceRecordsFor` (negated). Finish/qual negated so higher=better.
-- **Display**: rank headline (1-N) + rating sub (0-100). Arrows = standings `.pos-change` pills (up/down/NEW/—) vs LAST WEEK (`buildPowerRankings` with `cutoffRound=prevRound`).
-- **Right rail** (`renderFormMini` ~18793): rank #, inline movement pill (between rank and car), rating, rating-trend sparkline (`ratingSparkSVG`, higher=up) over last 8 race-states.
-- **Main table** "last 8" column uses `ratingSparkSVG(d.ratingHistory)` — matches rail.
-- `ratingHistory` = rating at each of last 8 round cutoffs (runs `buildPowerRankings` 8x/render). PERF NOTE: table+rail each compute their own 8x; cache/share if it lags.
-- `formRatingFor` kept as back-compat shim (clean-finish rating for season-vs-form delta).
-
-### 6. PERFORMANCE PROFILE RADAR — field-rank rings
-- Rings = FIELD RANK per axis: outer=1st, top5/top10/top20 (`_spiderRankToRadius`, `_spiderFieldMetrics`). Ring labels 1st/T5/T10/T20. `_compareSpiderMetricsFor` emits `rawNum`.
-
-### 7. TEAMMATES (renderTeammates ~7315)
-- **RCR shows** — FT threshold 90%; `CHARTER_CONTINUATIONS={NCS:{"8":"33"}}` merges #8(Busch)+#33 race counts.
-- **Compare vs ANY teammate** — benchmark pool includes any car that ran (incl. points-ineligible #33 Austin Hill). Tooltip: "vs best teammate" / "no teammate ran".
-- **#33 shows Austin Hill** (most races) — primary falls back to most-frequent overall when all weeks ineligible.
-- **Sparkline by ROUND** across team-wide range (`tmSparkline(...,roundMin,roundMax)`); part-timers align under the round they ran.
-- **Null-delta render**: no-benchmark weeks = muted hollow dots at zero (`noBench`); line spans only benchmarked weeks.
-
-### 8. HOME PAGE — removed Top-10 performers + Top-10 stage pts; predicted finish full-width (`.rps-cols-single`).
-
-### 9. TOP 5 TRACKS profile feature — `getDriverTopTracks` (~4223), equal-weighted normalized components (finish IQR-trim, laps-led, top-15%, pace, front-running; avg-points removed). Current-schedule tracks only. `paintProfileTopTracks` ~9785. NOT on inactive-driver branch (pending).
-
-### 10. Misc — Nemechek alias `DRIVER_NAME_ALIASES` (~4630, add cross-source name fixes here). Corey Day P99 fix (`_paceRecordsFor` skips `low_confidence`).
+### Working style
+- Concise, surgical fixes. Validate before handoff. One logical batch per push.
+- The user catches bugs quickly from screenshots — when they say something "didn't
+  change," first suspect (a) CSS cache (tell them to hard-refresh) or (b) a more-
+  specific/`!important` rule overriding the edit, or (c) the edit being in the wrong
+  media query. Check the cascade before assuming the code is wrong.
 
 ---
 
-## PENDING / KNOWN ISSUES
-- **Gibbs at #1 Power Rankings** — user thinks slightly high. Dial: `POWER_WEIGHTS`. Watch.
-- **Talladega/Hocevar plate prediction** — deterministic crowning inherent; not fixed.
-- **Power Rankings perf** — table + rail each run `buildPowerRankings` 8x. Cache/share if laggy.
-- **Win probability** in entry_list.json, not shown on board.
-- **Elimination-format chase loop** finish-pts-only (2017-2025 projections only).
-- **Top 5 Tracks** not on inactive-driver branch.
-- **Model calibration** — watch real races, tune with multi-race evidence. User plans to scrape more pace years (pre-2024 has no pace).
-- Prior track-data items still stand (RAM in NTS mfr, pre-1972 scraper failures, re-scrape for clean historical track codes).
+## APP ARCHITECTURE (key facts)
+
+- **Routing:** hash-based, `parseHash()` → sets `STATE.view` → hashchange handler
+  calls `ensurePageSeries()` then `render()`. Views in the `VIEWS` array.
+- **Data model:** `SEASON_CACHE[year]` holds all 3 series. Races keyed by ROUND
+  within (year, series): `#/race/<round>?_y=YYYY&_s=NCS`. Round N is a DIFFERENT
+  race per series. Data files exist back to 1995 only (data-availability limit).
+  `SERIES_MIN_YEAR = {NCS:1949, NOS:1982, NTS:1995}`.
+- **Series state:** `STATE.series` is the single active render series. Each
+  series-scoped page has independent memory in `STATE.pageSeries[view]`, restored by
+  `ensurePageSeries()` on navigation and written by the page header's NCS/NOS/NTS
+  toggle (`applyPageSeries` / `applySeriesChangeGlobal`). **Home is force-pinned to
+  NCS** both in `ensurePageSeries` and defensively at the top of `renderHome()`.
+- **Color helpers:** `colorFor(series, carNumber)` → hex; `contrastTextFor(hex)` →
+  "#000"/"#fff" (CORRECT for text-on-pill — NEVER use safeContrastColor for text).
+- Other helpers: `normalizeDriverName`, `escapeHTML`, `prettyTrack(code, track)`,
+  `formatRaceDate`, `seriesLabel`, `displayName`, `entityKey`, `computeSeasonTotals`,
+  `racesSorted`, `allEntities`, `isFullTime`, `orgColorForTeam`.
+
+### Unified page header + sub-nav (recently rebuilt — important)
+- `#page-series-bar` (top of `col-center`) is the **universal page header**, rendered
+  by `renderPageSeriesBar()`. It is a flex COLUMN with two rows:
+  - `.page-hd-row` — title (left, `.page-hd-title` = italic serif, lowercase,
+    `--accent` color) + series toggle (right, `.page-hd-right` with "SERIES" label
+    `.pgs-label` + NCS/NOS/NTS `.pgs-btn`).
+  - `.page-subnav` — the in-page sub-nav, rendered by `pageSubNav(view)` from the
+    `SUBNAV_GROUPS` array. Three groups:
+    - **Standings:** Standings, Playoffs, Projection
+    - **Analytics:** Power Rankings(form), Cumulative Season(arc), Heatmap, Teammate,
+      Stage vs Finish(trajectory), Season Data(breakdown), Driver Compare(compare)
+    - **Data:** Drivers, Teams, Tracks(trackstats), Crew Chiefs, Personnel, Points Format Calc(pointscalc)
+  - Sub-nav uses shared `.takeover-siblings` / `.takeover-sibling` styling. Left-
+    aligned, vertically centered (`.page-subnav { padding: 5px 0 }`). Scrolls
+    horizontally on mobile (min-width:0 + overflow-x:auto + right-edge fade mask);
+    active item auto-scrolled into view in `render()`.
+- Header hidden only on Home and Historical. Entity pages (profile/team/cc) suppress
+  the generic title (they render their own rich title). The big per-view
+  `.view-head h1` is globally `display:none` (unified header replaces it);
+  `.view-sub` subtitle still shows.
+- The old hardcoded `.profile-takeover-head` sub-nav blocks were REMOVED from
+  index.html — there are NO hardcoded sub-navs anymore; everything is centralized in
+  `pageSubNav()`.
+- **Historical page** has its own bar (`renderHistoricalBar`); `.hist-bar-title`
+  matches the accent-italic-serif-lowercase title style.
+
+### Layout / scroll
+- **Desktop (`min-width:768px`):** body is locked to the viewport — `html,body
+  {height:100%/100vh; overflow:hidden}`, `body {display:flex; flex-direction:column}`,
+  topbar/metricbar/banner/footer are `flex:0 0 auto`, `.dashboard {flex:1 1 auto;
+  overflow:hidden}`. Panes scroll internally so the topbar never scrolls away.
+- **Mobile (`max-width:767.98px`):** topbar is `position:sticky; top:0` (see KNOWN
+  ISSUES — user reports it still scrolls away, needs fixing). Search is an always-
+  inline field (no expand-overlay); theme toggle hard-right; short "Search…"
+  placeholder set via JS. The separate `.mobile-page-title` bar is hidden (unified
+  header shows the title).
+
+### Boot loading overlay
+- `#app-loader` (first body child) — full-screen splash ("Racecar Data" + spinner +
+  "Loading season data…"). `hideAppLoader()` (idempotent) fades it out after the
+  first `render()` in `boot()`. Safety nets: 12s timeout, window error listener,
+  `boot().catch()`.
+
+### Charts
+- **Cumulative season (arc):** `drawArcChart({svgId, rounds, entities, selectedSet,
+  metric, cumStartFromZero, tall})`. `tall:!showPlayoffs` (single chart fills page,
+  splits to compact when playoffs start). Has per-round dots with white-ring win
+  highlights + a rich `.pc-tooltip`-style hover popup (`wireArcHover()`). Mobile: SVG
+  sizes to content (no dead space), `margin-top:22px` to clear the title, team PILLS
+  (not dropdown), Top 5 + Top 10 + All + Clear buttons, no per-team Clear.
+- **Projection chase chart:** the reference style for dots/tooltips. Renders dots,
+  win highlights, `.pc-tooltip` hover with driver/track/finish/cum/position.
 
 ---
 
-## KEY ARCHITECTURE
+## CURRENT STATE (as of this handoff)
 
-### Projection
-- `simulateSeasonRollout(series,year,opts)` ~11940 — cached entry. PROJ_VERSION=19. Seeds RNG, sorts drivers by slug, builds matrix, runs nSims=500.
-- `_buildProjectionMatrix` ~11856 — predictDriverForRace x (driver,race). Deterministic.
-- `_simulateOneRace` ~11883 — seeded `_sampleNormal()*PROJ_NOISE_SIGMA`(12) + catastrophe(0.08).
-- `_finishPtsScale(pos)` — P1=40, P2=35, then 35-(pos-2). +15 NCS win bonus separate.
-- `_buildProjectionHTML(proj)` ~24406 — DEEP-CLONES chaseDrivers, calls `_computeChaseTraces`. Must NOT mutate cached proj.
-- `_computeChaseTraces` ~24660 — deterministic chase points; derives champ% softmax onto cloned chaseDrivers.
+Everything below is DONE, validated, and (assuming the user pushed) live:
+- Unified page header + centralized 3-group sub-nav, left-aligned & vertically
+  centered, mobile-scrollable with fade + active-into-view.
+- Projection moved UNDER the Standings dropdown in the top nav (no longer standalone).
+- Home force-pinned to NCS (both `ensurePageSeries` and `renderHome`).
+- Desktop viewport lock so topbar stays put; footer is a flex child.
+- Mobile inline search (icon no longer overlaps hamburger), short placeholder,
+  bigger page title (19px).
+- Arc: mobile team pills, removed team Clear, Top 5 button, taller graph, dead-space
+  removed, win-highlight dots + rich hover tooltip, title clears y-axis on mobile.
+- Heatmap dropdown spacing fixed; schedule rows are whole-row→race (no track link);
+  page titles use the panel-title accent style.
+- Boot loading overlay.
+- Back buttons removed from playoffs/projection/all Data pages (kept on
+  profile/race/track/team/cc/schedule entity drill-downs).
 
-### predictDriverForRace ~12785 (single source projection rolls forward)
-- Returns predicted_finish, predicted_stage_pts, predicted_total_pts, pace_source.
-- Weights: pace-track5 40, pace-type 20, all-time-here 15 (IQR-trim), qual 10, pace-form 15. Drafting override drops pace.
-- `paceToPos` clamps 6%. `_paceRecordsFor` skips low_confidence.
+---
 
-### Power Rankings
-- `buildPowerRankings(entities,series,windowN=8,cutoffRound=null)`; `powerComponentsFor`; `POWER_WEIGHTS`; `ratingSparkSVG`.
+## BACKLOG — user's current "to work on" list (NEW, not yet started)
 
-### Data flow / normalization (unchanged from prior handoff)
-- Racing Reference -> scrape_points.py -> data/points_YYYY.json -> app.js (load + `_normalizeTrackCodes`) -> render.
-- Manufacturer points `mfrPositionPoints`, track codes — see prior handoff (still valid).
+1. **Driver Compare — total/average toggle.** Add a toggle to switch the compare
+   stats between season totals and per-race averages.
+2. **Driver Compare — head-to-head series/all toggle.** Add a toggle on the
+   head-to-head section for "this series only" vs "all series."
+3. **Mobile topbar stays at top when scrolling.** User reports the mobile topbar
+   still scrolls out of view despite `position:sticky`. Likely an ancestor with
+   `overflow` breaking sticky, or the mobile layout lets the body scroll under a
+   clipped ancestor. Needs a proper fix (consider the same flex-column viewport lock
+   used on desktop, adapted for mobile's scrolling content, or `position:fixed`
+   topbar with content padding).
+4. **Mobile landscape stays in mobile view.** Rotating the phone to horizontal
+   currently crosses the 768px breakpoint → swaps to desktop layout AND then won't
+   scroll. Need the mobile layout to persist in landscape (e.g. detect touch/coarse
+   pointer or use a different breakpoint strategy) so it stays usable.
+5. **Hamburger menu bottom margin.** The mobile nav side-sheet pop-out cuts off / the
+   last menu options are hard to see/click. Add bottom padding/margin (and ensure the
+   menu scrolls if it's taller than the viewport).
+6. **Remove projected wins / projected top-5s from the chase projection.** Too
+   confusing — strip those columns/numbers from the championship-chase projection
+   view.
 
-### Diagnostics
-- `diag_model_vs_odds.py` weekly sanity vs betting line.
-- F12: `simulateSeasonRollout('NCS',2026,{nSims:500,force:true})` fresh; compare to non-forced cached — should match.
+## DEFERRED BACKLOG (older, still open)
+
+- Spider chart season/career toggle + top driver/team spiders.
+- Track "king" all-time record holder.
+- Owner / manufacturer projection views.
+- Teammate view wins/weekends toggle.
+- Fix Petty wins (data accuracy issue).
+- Wire `scrape_race_docs.py` into GitHub Actions (`--current` weekly).
+- Session times / full event schedules (needs a new data feed).
+- Cleanup inert `STATE.mode` plumbing (left from removing the present/historical
+  toggle — DOM lookups are null-guarded, harmless, offered for cleanup).
+- Jayski roster backfill: 2020-and-earlier Truck Series rosters come back empty
+  (2020 was "Gander Outdoors/RV Truck Series" so the constructed `-ncts-` entry-list
+  URLs 404, and archived race pages return no roster). Decision pending: either patch
+  the scraper to try the Gander Outdoors URL naming, or floor NTS roster coverage at
+  2021. Roster coverage currently ~2021-2026 (some pages show 2024-2026).
+
+---
+
+## KNOWN ISSUES / WATCH-OUTS
+- Mobile topbar scroll + landscape (items 3 & 4 above) are the most user-visible
+  open bugs.
+- When editing CSS that "doesn't take," check for: stale cache (hard-refresh),
+  duplicate/`!important` rules, or wrong media query. The mobile search bug last
+  round was a `position:static` that let an absolute `::before` escape onto the
+  hamburger — small CSS details matter.
+- `:has()` selectors are used (e.g. arc chart height) — fine for 2026 browsers.

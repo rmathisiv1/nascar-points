@@ -16546,6 +16546,14 @@ function renderCompareCareerSection(drivers) {
     }
   }
 
+  // Total vs per-race display mode. In per-race mode the counting stats
+  // (wins/top5/top10/poles) are shown as a percentage of starts and laps-led
+  // as laps per race, so drivers with very different career lengths can be
+  // compared on rate rather than raw volume. Averages/seasons are unchanged.
+  const statMode = (STATE.compare && STATE.compare.statMode) || "total";
+  const perRace = statMode === "per-race";
+  const rateKeys = new Set(["wins", "top5", "top10", "poles"]);
+
   const sections = seriesOrder.map(s => {
     // Skip series where no driver has data (either bio OR cache)
     const haveAny = drivers.some(d => driverCareerByPair.has(`${d.slug}|${s}`));
@@ -16553,13 +16561,13 @@ function renderCompareCareerSection(drivers) {
 
     const statRows = [
       { key: "starts", label: "Starts" },
-      { key: "wins", label: "Wins" },
-      { key: "top5", label: "Top 5" },
-      { key: "top10", label: "Top 10" },
-      { key: "poles", label: "Poles" },
+      { key: "wins", label: perRace ? "Win %" : "Wins" },
+      { key: "top5", label: perRace ? "Top 5 %" : "Top 5" },
+      { key: "top10", label: perRace ? "Top 10 %" : "Top 10" },
+      { key: "poles", label: perRace ? "Pole %" : "Poles" },
       { key: "avg_start", label: "Avg Start", fmt: v => v?.toFixed(1) },
       { key: "avg_finish", label: "Avg Finish", fmt: v => v?.toFixed(1) },
-      { key: "laps_led", label: "Laps Led" },
+      { key: "laps_led", label: perRace ? "Laps/Race" : "Laps Led" },
       { key: "years", label: "Seasons" },
     ];
 
@@ -16574,7 +16582,15 @@ function renderCompareCareerSection(drivers) {
     const rowsHTML = statRows.map(stat => {
       const vals = drivers.map(d => {
         const c = driverCareerByPair.get(`${d.slug}|${s}`);
-        return c ? c[stat.key] : null;
+        if (!c) return null;
+        let v = c[stat.key];
+        if (v == null) return null;
+        if (perRace && c.starts > 0) {
+          if (rateKeys.has(stat.key)) v = (v / c.starts) * 100;  // % of starts
+          else if (stat.key === "laps_led") v = v / c.starts;    // laps per race
+          // starts / avg_start / avg_finish / years are unchanged
+        }
+        return v;
       });
       const numericVals = vals.filter(v => v != null && !isNaN(v));
       // Highlight best per row: for avg-finish/avg-start lower is better; others higher.
@@ -16593,7 +16609,11 @@ function renderCompareCareerSection(drivers) {
         const isWorst = (worst != null && v === worst && !isBest);
         const c = driverCareerByPair.get(`${d.slug}|${s}`);
         const partialMark = (c && c.partial) ? `<span class="cmp-cell-partial-mark" title="From loaded seasons only">*</span>` : "";
-        const display = stat.fmt ? stat.fmt(v) : v;
+        const display = stat.fmt
+          ? stat.fmt(v)
+          : (perRace && rateKeys.has(stat.key)) ? v.toFixed(1) + "%"
+          : (perRace && stat.key === "laps_led") ? v.toFixed(1)
+          : v;
         const cls = isBest ? "cmp-cell-best" : (isWorst ? "cmp-cell-worst" : "");
         return `<td class="${cls}">${display}${partialMark}</td>`;
       }).join("");
@@ -16618,7 +16638,16 @@ function renderCompareCareerSection(drivers) {
       </div>
     `;
   }).join("");
-  return sections;
+  if (!sections) return "";
+  const statControls = `
+    <div class="cmp-chart-controls">
+      <span class="cmp-chart-control-label">Stats</span>
+      <div class="toggle-group mini" id="cmp-stat-mode-toggle">
+        <button class="${!perRace ? "on" : ""}" data-cmp-stat-mode="total" data-val="total">Totals</button>
+        <button class="${perRace ? "on" : ""}" data-cmp-stat-mode="per-race" data-val="per-race">Per Race</button>
+      </div>
+    </div>`;
+  return statControls + sections;
 }
 
 // Build a sticky-style header row for any compare table. Each column
@@ -17665,7 +17694,10 @@ function renderCompareHeadToHeadSection(drivers) {
   // We walk ALL series (NCS, NOS, NTS) and aggregate. Previous version
   // hardcoded NCS which left Xfinity- or Truck-only driver matchups
   // showing "No shared races" even when they raced each other 30 times.
-  const seriesList = ["NCS", "NOS", "NTS"];
+  // Scope toggle: "all" = combined; a series code = that series only.
+  // Decoupled from the topbar series (the compare page is its own context).
+  const h2hScope = (STATE.compare && STATE.compare.h2hScope) || "all";
+  const seriesList = h2hScope === "all" ? ["NCS", "NOS", "NTS"] : [h2hScope];
   const pairs = [];
   for (let i = 0; i < drivers.length; i++) {
     for (let j = i + 1; j < drivers.length; j++) {
@@ -17739,11 +17771,25 @@ function renderCompareHeadToHeadSection(drivers) {
     `;
   }).join("");
 
+  const scopeOptions = [
+    { key: "all", label: "All" },
+    { key: "NCS", label: "NCS" },
+    { key: "NOS", label: "NOS" },
+    { key: "NTS", label: "NTS" },
+  ];
+  const scopeToggleHTML = scopeOptions.map(o =>
+    `<button class="${o.key === h2hScope ? "on" : ""}" data-cmp-h2h-scope="${o.key}" data-val="${o.key}">${o.label}</button>`
+  ).join("");
+  const scopeText = h2hScope === "all"
+    ? "across all loaded series"
+    : `${SERIES_LABELS[h2hScope] || h2hScope} only`;
+
   return `
     <div class="cmp-section">
       <div class="cmp-section-head">
         <span class="cmp-section-title">Head-to-Head</span>
-        <span class="ed-byline">Races where both drivers started · who finished higher · across all loaded series</span>
+        <span class="ed-byline">Races where both drivers started · who finished higher · ${scopeText}</span>
+        <div class="toggle-group mini" id="cmp-h2h-scope-toggle" style="margin-left:auto">${scopeToggleHTML}</div>
       </div>
       <div class="cmp-h2h-grid">${pairCards}</div>
     </div>
@@ -18034,6 +18080,38 @@ function wireCompareEventHandlers() {
       const cur = (STATE.compare.chart && STATE.compare.chart.spiderFill) || "filled";
       if (!next || next === cur) return;
       STATE.compare.chart.spiderFill = next;
+      renderCompare();
+    });
+  }
+
+  // Career stats: Totals vs Per-Race toggle.
+  const statModeToggle = document.getElementById("cmp-stat-mode-toggle");
+  if (statModeToggle && !statModeToggle._wired) {
+    statModeToggle._wired = true;
+    statModeToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-cmp-stat-mode]");
+      if (!btn) return;
+      const next = btn.dataset.cmpStatMode;
+      const cur = (STATE.compare && STATE.compare.statMode) || "total";
+      if (!next || next === cur) return;
+      STATE.compare = STATE.compare || { slugs: [] };
+      STATE.compare.statMode = next;
+      renderCompare();
+    });
+  }
+
+  // Head-to-head: All / NCS / NOS / NTS scope toggle.
+  const h2hScopeToggle = document.getElementById("cmp-h2h-scope-toggle");
+  if (h2hScopeToggle && !h2hScopeToggle._wired) {
+    h2hScopeToggle._wired = true;
+    h2hScopeToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-cmp-h2h-scope]");
+      if (!btn) return;
+      const next = btn.dataset.cmpH2hScope;
+      const cur = (STATE.compare && STATE.compare.h2hScope) || "all";
+      if (!next || next === cur) return;
+      STATE.compare = STATE.compare || { slugs: [] };
+      STATE.compare.h2hScope = next;
       renderCompare();
     });
   }
@@ -26629,8 +26707,6 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
             <th class="num">#</th>
             <th class="num">Seed</th>
             <th>Driver</th>
-            <th class="num">Proj Wins</th>
-            <th class="num">Proj Top 5</th>
             <th class="num">Chase Pts</th>
             <th class="num">From Leader</th>
             <th class="num">Champ %</th>
@@ -26641,8 +26717,6 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
               const txt = contrastTextFor(carHex);
               const champPct = (d.champPct || 0) * 100;
               const champCls = champPct >= 10 ? "proj-pct-hot" : champPct >= 3 ? "proj-pct-warm" : "proj-pct-cold";
-              const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
-              const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
               const _lg = Math.round(leaderPts) - Math.round(d.finalPts); const fromLeader = _lg <= 0 ? "—" : `−${_lg.toLocaleString()}`;
               return `<tr>
                 <td class="num">${i + 1}</td>
@@ -26653,8 +26727,6 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
                     <span>${escapeHTML(d.name)}</span>
                   </a>
                 </td>
-                <td class="num">${projWins}</td>
-                <td class="num">${projTop5}</td>
                 <td class="num">${Math.round(d.finalPts).toLocaleString()}</td>
                 <td class="num">${fromLeader}</td>
                 <td class="num ${champCls}"><strong>${champPct.toFixed(1)}%</strong></td>
