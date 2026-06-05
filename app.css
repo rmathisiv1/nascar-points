@@ -120,7 +120,77 @@ html, body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+}
+/* Desktop: lock the whole app to the viewport so the body never scrolls — the
+   topbar + metricbar stay pinned and only the inner panes scroll. The body is a
+   flex column: chrome (topbar/metricbar/banner) + dashboard (fills) + footer. */
+@media (min-width: 768px) {
+  html { height: 100%; overflow: hidden; }
+  body {
+    height: 100vh;
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .topbar, .metricbar, .time-cursor-banner, .mobile-page-title, .footer {
+    flex: 0 0 auto;
+  }
+  .dashboard {
+    flex: 1 1 auto;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: hidden;
+  }
+}
+body { overflow-x: hidden; }
+
+/* ========== BOOT LOADING OVERLAY ========== */
+.app-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Fades out (then display:none) once boot removes the .app-loader-hide class
+     trigger — we toggle a class that animates opacity, then set hidden. */
+  transition: opacity 0.35s ease;
+}
+.app-loader.app-loader-hide { opacity: 0; pointer-events: none; }
+.app-loader[hidden] { display: none; }
+.app-loader-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.app-loader-mark {
+  font-family: var(--serif, Georgia, serif);
+  font-style: italic;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--accent, #d24b4b);
+  letter-spacing: 0.01em;
+}
+.app-loader-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--border, #333);
+  border-top-color: var(--accent, #d24b4b);
+  border-radius: 50%;
+  animation: app-loader-spin 0.8s linear infinite;
+}
+@keyframes app-loader-spin { to { transform: rotate(360deg); } }
+.app-loader-msg {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #888);
 }
 
 /* ========== TOP BAR — fully opaque, no transparency ========== */
@@ -6232,105 +6302,67 @@ a.rc-sched-winner:hover {
      user taps it, then it expands to a full-width input that overlays
      the topbar. Saves room for the brand + series toggle + mode picker. */
   .topbar-search {
-    margin: 0;
-    max-width: none;
-    width: 32px;
-    height: 30px;
-    flex: 0 0 32px;
+    /* Always an inline, full-width search field on mobile (no icon-collapse,
+       no overlay takeover). It grows to fill the space between the brand and
+       the theme toggle, which sits at the far right. !important guards against
+       any leftover inline styles from the old expand/collapse JS. */
+    position: static !important;
+    margin: 0 !important;
+    max-width: none !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    height: 32px !important;
+    left: auto !important;
+    right: auto !important;
     border: 1px solid var(--border);
-    border-radius: 3px;
-    background: transparent;
-    transition: width 0.15s ease, flex-basis 0.15s ease, background 0.1s, border-color 0.1s;
+    border-radius: 6px;
+    background: var(--card);
+    transition: border-color 0.1s, background 0.1s;
   }
   .topbar-search:hover {
     border-color: var(--accent);
-    background: var(--accent-bg);
   }
   .topbar-search input {
-    /* Input is invisible in collapsed state — the magnifier ::before
-       glyph IS the button. Tap target stays full-size (32×30). */
-    padding: 0;
-    font-size: 11px;
-    width: 100%;
+    padding: 0 8px 0 26px !important;
+    font-size: 12px;
+    width: 100% !important;
     height: 100%;
-    cursor: pointer;
-    background: transparent;
+    cursor: text !important;
+    background: transparent !important;
     border: 0;
-    color: transparent;
-    text-align: center;
+    color: var(--text) !important;
+    text-align: left !important;
   }
   .topbar-search input::placeholder {
-    color: transparent;
+    color: var(--muted);
+    /* keep the placeholder from overflowing the narrow field */
+    text-overflow: ellipsis;
   }
   .topbar-search::before {
-    /* Magnifier glyph — centered both axes in the collapsed pill */
-    left: 50%;
+    /* Magnifier glyph pinned at the left of the field */
+    left: 8px;
     top: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 14px;
+    transform: translateY(-50%);
+    font-size: 13px;
     color: var(--muted);
   }
-  .topbar-search:hover::before { color: var(--accent); }
-  /* Expanded state: full-width input with caret + placeholder showing.
-     The expanded class is toggled by JS on tap and cleared on blur. */
+  /* No expanded-takeover state on mobile anymore — the field is always open.
+     Neutralize the old .expanded overlay so a lingering class can't cover the
+     bar. */
   .topbar-search.expanded {
-    /* Take over the topbar — push everything else off via absolute. */
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    z-index: 50;
-    height: auto;
-    width: auto;
+    position: static;
+    left: auto; right: auto;
     flex: 1 1 auto;
-    background: var(--bg);
-    border: 1px solid var(--border);
+    width: auto; height: 32px;
   }
   .topbar-search.expanded input {
-    color: var(--text);
-    cursor: text;
-    text-align: left;
-    /* Right padding leaves room for the close (×) button overlay */
-    padding: 6px 32px 6px 26px;
-    background: var(--card);
-    border: 0;
+    padding: 0 8px 0 26px;
   }
-  .topbar-search.expanded::before {
-    left: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-  .topbar-search.expanded input::placeholder {
-    color: var(--muted);
-    font-size: 10px;
-  }
-  /* Close (×) button — visible only when expanded. Acts as the
-     dismiss affordance for mobile users (no Escape key on touch
-     keyboards). Tap clears the input and collapses the bar. */
-  .topbar-search.expanded .topbar-search-close {
-    display: flex;
-    position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 28px;
-    height: 28px;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 0;
-    color: var(--muted);
-    font-size: 20px;
-    font-weight: 400;
-    line-height: 1;
-    cursor: pointer;
-    border-radius: 50%;
-    padding: 0;
-  }
-  .topbar-search.expanded .topbar-search-close:hover,
-  .topbar-search.expanded .topbar-search-close:active {
-    color: var(--text);
-    background: var(--tint-1);
-  }
+  /* Hide the close (×) button — there's nothing to collapse back to. */
+  .topbar-search-close { display: none; }
+  /* Theme toggle stays at the far right of the bar. */
+  .theme-toggle { flex: 0 0 auto; margin-left: auto; }
   .search-dropdown {
     /* Pin to right edge so it doesn't overflow off-screen */
     left: -8px;
@@ -8782,6 +8814,12 @@ body.lightbox-open {
   width: 100%;
   flex: 1;
   min-height: 200px;
+}
+/* When only the regular-season chart shows (no playoffs), give it a tall
+   minimum so it fills the page instead of sitting short. */
+.arc-playoff-card[hidden] ~ * .arc-regular-card svg,
+.arc-chart-stack:has(.arc-playoff-card[hidden]) .arc-regular-card svg {
+  min-height: 480px;
 }
 /* Top-left chart label so users can tell which segment is which at a
    glance. Mono uppercase muted — same vocabulary as the metric bar. */

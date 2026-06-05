@@ -34,6 +34,17 @@
 </head>
 <body>
 
+<!-- Boot loading overlay — covers the page while data loads + the first
+     render completes, so users never see half-calculated leaderboards shift
+     around. Removed by boot() right after the initial render(). -->
+<div class="app-loader" id="app-loader">
+  <div class="app-loader-inner">
+    <div class="app-loader-mark">Racecar Data</div>
+    <div class="app-loader-spinner" aria-hidden="true"></div>
+    <div class="app-loader-msg">Loading season data…</div>
+  </div>
+</div>
+
 <header class="topbar">
   <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Menu" aria-expanded="false">
     <span></span><span></span><span></span>
@@ -428,10 +439,12 @@
           <div class="card card-chart arc-regular-card">
             <div class="arc-chart-label" id="arc-reg-label">Regular Season</div>
             <svg id="arc-svg"></svg>
+            <div class="pc-tooltip arc-tooltip" id="arc-tooltip" hidden></div>
           </div>
           <div class="card card-chart arc-playoff-card" id="arc-playoff-card" hidden>
             <div class="arc-chart-label" id="arc-po-label">Playoffs</div>
             <svg id="arc-playoff-svg"></svg>
+            <div class="pc-tooltip arc-tooltip" id="arc-playoff-tooltip" hidden></div>
           </div>
         </div>
       </section>

@@ -1167,6 +1167,18 @@ window.dcDebug = {
   },
 };
 
+// Fade out + remove the boot loading overlay. Idempotent.
+function hideAppLoader() {
+  const el = document.getElementById("app-loader");
+  if (!el || el.hidden) return;
+  el.classList.add("app-loader-hide");
+  setTimeout(() => { el.hidden = true; }, 400);
+}
+// Safety net: never let the loader stick if boot throws or stalls. After 12s
+// (or on an uncaught error) force it away so the user is never stuck on it.
+setTimeout(hideAppLoader, 12000);
+window.addEventListener("error", () => setTimeout(hideAppLoader, 500));
+
 async function boot() {
   // Restore theme preference before any UI paints, so we never flash
   // the wrong palette. Defaults to light (the design system's home base).
@@ -1254,6 +1266,9 @@ async function boot() {
     history.replaceState(null, "", "#/standings");
   }
   render();
+  // First render done — the page is fully calculated and stable. Fade out the
+  // boot loading overlay so the user never saw leaderboards shifting mid-calc.
+  hideAppLoader();
   // Warm SEASON_CACHE during browser idle time so the all-time pages
   // and search bar feel instant when users click into them. We use
   // requestIdleCallback if available; otherwise a setTimeout fallback.
@@ -6952,9 +6967,48 @@ function renderArc() {
   }
 
   renderArcGrid();
+  wireArcHover();
 }
 
-// Compute standings at a specific cutoff round — race points only,
+// Rich hover tooltip for the cumulative-season dots — mirrors the projection
+// chase chart. Delegated + idempotent; attached once to each arc card.
+let _arcHoverWired = false;
+function wireArcHover() {
+  if (_arcHoverWired) return;
+  _arcHoverWired = true;
+  document.querySelectorAll(".arc-regular-card, .arc-playoff-card").forEach(card => {
+    const tip = card.querySelector(".arc-tooltip");
+    if (!tip) return;
+    const show = (e) => {
+      const hit = e.target.closest(".arc-hit");
+      if (!hit) return;
+      const d = hit.dataset;
+      const isWin = d.win === "1";
+      const finStr = d.finish ? `P${d.finish}` : "—";
+      const valLabel = d.metric === "position" ? "Std. pos" : "Cum. pts";
+      const valStr = d.metric === "position"
+        ? (d.pos ? `P${d.pos}` : "—")
+        : Number(d.cum).toLocaleString();
+      tip.innerHTML =
+        `<div class="pc-tip-driver">${escapeHTML(d.label)}${isWin ? ' <span class="pc-tip-win">★ WIN</span>' : ''}</div>` +
+        `<div class="pc-tip-row"><span>${escapeHTML(d.track || ("R" + d.round))}</span><span></span></div>` +
+        `<div class="pc-tip-row"><span>Finish</span><span>${finStr}</span></div>` +
+        `<div class="pc-tip-row"><span>${valLabel}</span><span>${valStr}</span></div>`;
+      tip.hidden = false;
+      // Position within the card, following the cursor but clamped inside.
+      const rect = card.getBoundingClientRect();
+      let lx = e.clientX - rect.left + 14;
+      let ty = e.clientY - rect.top + 14;
+      const tw = tip.offsetWidth || 160, th = tip.offsetHeight || 80;
+      if (lx + tw > rect.width) lx = e.clientX - rect.left - tw - 14;
+      if (ty + th > rect.height) ty = e.clientY - rect.top - th - 14;
+      tip.style.left = Math.max(4, lx) + "px";
+      tip.style.top = Math.max(4, ty) + "px";
+    };
+    card.addEventListener("mousemove", show);
+    card.addEventListener("mouseleave", () => { tip.hidden = true; });
+  });
+}
 // summed for all entities in the block. Used to determine the playoff
 // field for the playoffs chart.
 function computeStandingsAtCutoff(block, cutoffRound) {
@@ -7128,23 +7182,28 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
     if (current.length >= 2) segs.push(current);
     const polylines = segs.map(pts => `<polyline points="${pts.join(" ")}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round"/>`).join("");
 
-    // Hoverable dots at each round. A larger transparent hit-circle makes the
-    // point easy to hover; a native <title> shows that round's race result
-    // (track, finish, cumulative value) — matching the projection chart's
-    // hover-to-inspect behavior without extra JS plumbing.
+    // Hoverable dots at each round, styled like the projection chase chart:
+    // a larger transparent hit-circle for easy hover, a normal dot, and a
+    // bigger white-ringed dot on wins. data-* attributes feed the rich
+    // tooltip box (wired once in renderArc).
     const rowMap = raceRowByEntity[s.key] || {};
     const dots = s.values.map((v, i) => {
       if (v == null) return "";
       const rd = rounds[i];
       const row = rowMap[rd];
       const x = xScale(i), y = yScale(v);
+      const isWin = row && (row.finish === 1 || row.finish === "1");
+      const r = isWin ? 4.2 : 2.6;
+      const stroke = isWin ? "#fff" : "var(--bg)";
+      const sw = isWin ? 1.5 : 0.6;
       const trackName = row ? (prettyTrack(row.track_code, row.track) || row.track || `R${rd}`) : `R${rd}`;
-      const finStr = row && row.finish != null && row.finish !== "—" ? `P${row.finish}` : "DNS/—";
-      const valStr = isPosition ? `Rank ${v}` : `${Math.round(v)} pts`;
-      const tip = `${escapeHTML(s.label)} · R${rd} ${escapeHTML(trackName)}\nFinish ${finStr} · ${valStr}`;
-      return `<g class="arc-dot-hit">
-        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="transparent"><title>${tip}</title></circle>
-        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${s.color}" stroke="var(--bg)" stroke-width="0.6" pointer-events="none"/>
+      const finVal = row && row.finish != null && row.finish !== "—" ? row.finish : "";
+      return `<g class="arc-hit" data-label="${escapeHTML(s.label)}" data-round="${rd}" ` +
+        `data-track="${escapeHTML(trackName)}" data-finish="${escapeHTML(String(finVal))}" ` +
+        `data-cum="${Math.round(v)}" data-pos="${isPosition ? v : ""}" data-win="${isWin ? "1" : "0"}" ` +
+        `data-metric="${isPosition ? "position" : "points"}">
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9" fill="transparent"/>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${s.color}" stroke="${stroke}" stroke-width="${sw}" pointer-events="none"/>
       </g>`;
     }).join("");
 
@@ -27732,4 +27791,4 @@ function escapeHTML(s) {
   );
 }
 
-boot();
+boot().catch(err => { console.error("boot failed:", err); hideAppLoader(); });
