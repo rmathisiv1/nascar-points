@@ -13056,3 +13056,43 @@ body.lightbox-open {
   color: var(--muted);
   font-style: italic;
 }
+
+/* ============================================================================
+   MOBILE TABLES — plain page-scroll, NON-sticky headers. AUTHORITATIVE.
+   Supersedes the earlier sticky-header experiment, which pinned the column
+   header partway down the scroll box and hid the rank-1 row (standings) /
+   rank-2 row (projection), and bled the header past the card's rounded border.
+   On mobile, tables behave like a normal webpage: the page is the only vertical
+   scroller, the header scrolls away with the content, nothing is hidden, and
+   there is no nested card scroll. (Desktop is untouched — it keeps its sticky
+   headers and pane-scroll via the pointer:fine media queries.)
+   ============================================================================ */
+@media (max-width: 767.98px), (pointer: coarse) {
+  /* Column headers are NOT sticky on mobile. */
+  .data-table th {
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
+    box-shadow: none !important;
+  }
+  /* Exception: the wide all-time / records table keeps its frozen header — it
+     has its own horizontal+vertical scroll and needs the labels to stay put. */
+  .alltime-table thead th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1 !important;
+  }
+  /* Table cards flow in the page — not their own vertical scroller — so the
+     page scrolls as one and the last row is always reachable. clip on x (not
+     auto) avoids a stray horizontal scrollbar without becoming a scroller. */
+  #view-standings .card,
+  #view-form .card,
+  #view-playoffs .po-card,
+  .col-center .card.tab-table-fill {
+    max-height: none !important;
+    overflow-x: clip !important;
+    overflow-y: visible !important;
+  }
+  /* Standings: the 5 mobile columns fit, so no horizontal scroll. */
+  #view-standings .scrollable { overflow-x: clip !important; }
+}
