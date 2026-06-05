@@ -2976,7 +2976,7 @@ const SERIES_TOGGLE_VIEWS = [
 // toggle. Each page keeps its own "all"-capable filter; these helpers map the
 // view to its current value (for rendering the active button) and apply a
 // change. Extend both as more Data pages are migrated.
-const DATA_SERIES_VIEWS = ["trackstats", "drivers", "teams", "crewchiefs", "personnel"];
+const DATA_SERIES_VIEWS = ["trackstats", "drivers", "teams", "crewchiefs", "personnel", "pointscalc"];
 function dataSeriesFor(view) {
   if (view === "trackstats") return (STATE.trackStats && STATE.trackStats.series) || "all";
   if (view === "drivers" || view === "teams" || view === "crewchiefs") {
@@ -2984,6 +2984,7 @@ function dataSeriesFor(view) {
     return (st && st.series) || "all";
   }
   if (view === "personnel") return (STATE.personnel && STATE.personnel.series) || "all";
+  if (view === "pointscalc") return (STATE.pointscalc && STATE.pointscalc.series) || "NCS";
   return "all";
 }
 function setDataSeries(view, val) {
@@ -3008,6 +3009,13 @@ function setDataSeries(view, val) {
     if (st.series === val) return false;
     st.series = val;
     st.page = 0;
+    return true;
+  }
+  if (view === "pointscalc") {
+    const pc = STATE.pointscalc;
+    if (!pc || pc.series === val) return false;
+    pc.series = val;
+    pc.formatKey = null;   // new series → renderPointsCalc re-resolves the format
     return true;
   }
   return false;
@@ -3235,10 +3243,15 @@ function renderPageSeriesBar() {
     // Data pages: single top-right toggle WITH an "All" option, driving the
     // page's own filter (not the global STATE.series). data-dsrs marks these
     // so the click handler routes them to setDataSeries(), not applyPageSeries.
+    // Points Format Calc is single-series (NCS/NOS/NTS) — "all series"
+    // standings aren't a meaningful computation — so it omits "All".
     const cur = dataSeriesFor(v);
+    const opts = (v === "pointscalc")
+      ? [["NCS", "NCS"], ["NOS", "NOS"], ["NTS", "NTS"]]
+      : [["all", "All"], ["NCS", "NCS"], ["NOS", "NOS"], ["NTS", "NTS"]];
     right = `<span class="pgs-label">SERIES</span>` +
       `<div class="pgs-track" role="tablist" aria-label="Series">` +
-      [["all", "All"], ["NCS", "NCS"], ["NOS", "NOS"], ["NTS", "NTS"]].map(([val, lab]) =>
+      opts.map(([val, lab]) =>
         `<button type="button" class="pgs-btn${val === cur ? " on" : ""}" ` +
         `data-dsrs="${val}" data-series="${val}" role="tab" ` +
         `aria-selected="${val === cur ? "true" : "false"}">${lab}</button>`
@@ -27255,10 +27268,6 @@ function _pointsCalcControls(loadedYears, seriesCatalog) {
       <label class="pc-control">
         <span class="pc-control-label">Season</span>
         <select id="pc-season" class="pc-select">${yearOpts}</select>
-      </label>
-      <label class="pc-control">
-        <span class="pc-control-label">Series</span>
-        <select id="pc-series" class="pc-select">${seriesOpts}</select>
       </label>
       <label class="pc-control pc-control-format">
         <span class="pc-control-label">Format</span>
