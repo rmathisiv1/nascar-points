@@ -9463,7 +9463,11 @@ body.lightbox-open {
      so it can't pin on top of (and bleed through) the sticky row titles. */
   .standings-views-host {
     position: static;
-    margin: -6px -6px 6px;
+    /* No negative margins on mobile — the card is overflow:visible now (for
+       page-scroll), so negative margins would push the host's square corners
+       out past the card's rounded top corners (the "square color" poking out).
+       Sit inside the padding instead. */
+    margin: 0 0 6px;
   }
 }
 
