@@ -2976,9 +2976,14 @@ const SERIES_TOGGLE_VIEWS = [
 // toggle. Each page keeps its own "all"-capable filter; these helpers map the
 // view to its current value (for rendering the active button) and apply a
 // change. Extend both as more Data pages are migrated.
-const DATA_SERIES_VIEWS = ["trackstats"];
+const DATA_SERIES_VIEWS = ["trackstats", "drivers", "teams", "crewchiefs", "personnel"];
 function dataSeriesFor(view) {
   if (view === "trackstats") return (STATE.trackStats && STATE.trackStats.series) || "all";
+  if (view === "drivers" || view === "teams" || view === "crewchiefs") {
+    const st = ALLTIME_STATE[view];
+    return (st && st.series) || "all";
+  }
+  if (view === "personnel") return (STATE.personnel && STATE.personnel.series) || "all";
   return "all";
 }
 function setDataSeries(view, val) {
@@ -2988,6 +2993,21 @@ function setDataSeries(view, val) {
     ts.series = val;
     if (val !== "NCS") ts.gens.clear();   // gen chips are NCS-only
     ts.expandedSlug = null;
+    return true;
+  }
+  if (view === "drivers" || view === "teams" || view === "crewchiefs") {
+    const st = ALLTIME_STATE[view];
+    if (!st || st.series === val) return false;
+    st.series = val;
+    if (val !== "NCS" && st.gens) st.gens.clear();   // gen chips are NCS-only
+    st.page = 0;
+    return true;
+  }
+  if (view === "personnel") {
+    const st = STATE.personnel || (STATE.personnel = _personnelDefaults());
+    if (st.series === val) return false;
+    st.series = val;
+    st.page = 0;
     return true;
   }
   return false;
@@ -24047,13 +24067,6 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
         <button class="alltime-toggle-btn ${st.scope === "all" ? "active" : ""}" data-scope="all">All-time</button>
         <button class="alltime-toggle-btn ${st.scope === "current" ? "active" : ""}" data-scope="current">${currentSeason}</button>
       </div>
-      <div class="alltime-toggle-group">
-        <span class="alltime-toggle-label">Series</span>
-        <button class="alltime-series-btn ${st.series === "all" ? "active" : ""}" data-series="all">All</button>
-        <button class="alltime-series-btn ${st.series === "NCS" ? "active" : ""}" data-series="NCS">NCS</button>
-        <button class="alltime-series-btn ${st.series === "NOS" ? "active" : ""}" data-series="NOS">NOS</button>
-        <button class="alltime-series-btn ${st.series === "NTS" ? "active" : ""}" data-series="NTS">NTS</button>
-      </div>
       <span class="alltime-count muted">${totalCount} ${pageLabel.toLowerCase()}</span>
     </div>
     ${showGenChips ? `
@@ -24481,7 +24494,6 @@ function renderPersonnel() {
       <input type="search" class="alltime-search" id="alltime-search-personnel"
              placeholder="Search personnel\u2026" value="${escapeHTML(st.query || "")}"
              oninput="_personnelSearch(this)">
-      <div class="alltime-toggle-group"><span class="alltime-toggle-label">Series</span>${seriesBtns}</div>
       <button class="pers-filter-open" id="pers-filter-btn" onclick="personnelOpenFilter()">${nSel ? `Filters (${nSel})` : "Filters"}</button>
     </div>
     <div class="pers-active-row">
