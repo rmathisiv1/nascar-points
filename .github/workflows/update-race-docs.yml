@@ -1,0 +1,82 @@
+name: Update NASCAR Race Documents
+
+# Builds data/race_docs.json — per-race Jayski document set (entry list, pit
+# stalls, crew rosters, infraction report) for the app's race-page "Documents"
+# section. Default mode is --current: the just-finished + next race in every
+# series. Infraction reports are often posted Mon/Tue after the race, so we run
+# a little after the points refresh and again Tuesday as a catch.
+
+on:
+  schedule:
+    # All times UTC. EST is UTC−5 (no DST handling).
+    # Monday  8:00 AM EST = Monday  13:00 UTC  (just after the points refresh)
+    # Tuesday 8:00 AM EST = Tuesday 13:00 UTC  (catch late infraction reports)
+    - cron: '0 13 * * 1'
+    - cron: '0 13 * * 2'
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season to refresh'
+        required: false
+        default: '2026'
+      mode:
+        description: 'current = just-finished+next · upcoming = next only · all = full-season backfill'
+        required: false
+        default: 'current'
+      only:
+        description: 'Limit to series (NCS,NOS,NTS or subset). Blank = all.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      # --- Scrape race documents ---
+      # Non-fatal: a Jayski hiccup or a not-yet-posted infraction PDF shouldn't
+      # fail the workflow — it just means no new rows to commit this run.
+      - name: Run race-docs scraper
+        id: docs
+        continue-on-error: true
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+          MODE:   ${{ github.event.inputs.mode   || 'current' }}
+          ONLY:   ${{ github.event.inputs.only   || '' }}
+        run: |
+          ARGS="--year $SEASON --${MODE}"
+          if [ -n "$ONLY" ]; then ARGS="$ARGS --only \"$ONLY\""; fi
+          # --all backfill is slow/rate-limited; skip races already scraped.
+          if [ "$MODE" = "all" ]; then ARGS="$ARGS --skip-existing"; fi
+          echo "Running: python scripts/scrape_race_docs.py $ARGS"
+          eval python scripts/scrape_race_docs.py $ARGS \
+            --out "data/race_docs.json"
+
+      # --- Commit & push if changed ---
+      - name: Commit & push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add data/race_docs.json 2>/dev/null || true
+
+          if git diff --cached --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+
+          git diff --cached --stat
+          git commit -m "chore(data): weekly race-docs refresh [skip ci]"
+          git push
