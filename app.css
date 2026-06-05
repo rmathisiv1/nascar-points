@@ -4353,6 +4353,11 @@ a.driver-cell.profile-link:hover .car-tag {
     min-width: 0;
     max-width: 100%;
     overflow-x: auto;
+  }
+  /* Right-edge fade ONLY when the row overflows (long groups like Analytics).
+     JS adds .is-scrollable when scrollWidth > clientWidth, so a short group
+     that fits (e.g. Standings/Playoffs/Projection) shows no fade. */
+  .page-subnav .takeover-siblings.is-scrollable {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
             mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
   }

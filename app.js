@@ -4092,12 +4092,20 @@ function render() {
   syncMobileDropdowns();
   enhanceCollapsibleTables();   // collapse wide .m-collapse tables on mobile
 
-  // Make sure the active sub-nav tab is scrolled into view inside its
-  // (horizontally scrollable) row — otherwise on narrow screens the current
-  // page's tab (e.g. Personnel at the far right) can sit clipped off-edge.
-  const activeSib = document.querySelector(".page-subnav .takeover-sibling.active");
-  if (activeSib && activeSib.scrollIntoView) {
-    try { activeSib.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {}
+  // Sub-nav row: flag it scrollable only when it actually overflows, so the
+  // fade mask (CSS .is-scrollable) and the active-into-view scroll only apply
+  // to long groups (e.g. Analytics). A short group that fits shows no fade and
+  // doesn't get nudged.
+  const subnavRow = document.querySelector(".page-subnav .takeover-siblings");
+  if (subnavRow) {
+    const overflowing = subnavRow.scrollWidth > subnavRow.clientWidth + 1;
+    subnavRow.classList.toggle("is-scrollable", overflowing);
+    if (overflowing) {
+      const activeSib = subnavRow.querySelector(".takeover-sibling.active");
+      if (activeSib && activeSib.scrollIntoView) {
+        try { activeSib.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {}
+      }
+    }
   }
 }
 
