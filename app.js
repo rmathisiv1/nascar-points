@@ -12637,12 +12637,30 @@ function paintCrewChiefCareerHeatmap() {
 function renderHome() {
   const host = document.getElementById("home-host");
   if (!host) return;
-  // Home is always anchored to the LATEST loaded year. Even in Historical
-  // mode, the home page should orient to the live season — Historical
-  // users can use Schedule/Standings to dig into older years instead.
+  // Home is always anchored to the LATEST loaded year AND to Cup (NCS). Even
+  // if the user switched to NOS/NTS on another page right before clicking Home,
+  // the single-series sections here (hero, stat cards, storylines) must show
+  // Cup — the multi-series trios below already cover all three series. Force
+  // the series here defensively so home can never inherit NOS/NTS.
   const restoreCtx = sidePanelPresentContext();
+  if (STATE.series !== "NCS") {
+    STATE.series = "NCS";
+    if (STATE.mode === "present") STATE.lastPresentSeries = "NCS";
+    STATE.pageSeries = STATE.pageSeries || {};
+    const yrs = seasonsAvailableForSeries("NCS");
+    if (yrs.length > 0 && !yrs.includes(STATE.season)) STATE.season = yrs[0];
+    // Make sure the data block + topbar toggle match the forced series. If the
+    // current block isn't NCS, load it and re-render once it lands.
+    syncSeriesUIGlobal("NCS");
+    const block = SEASON_CACHE[STATE.season] && SEASON_CACHE[STATE.season]["NCS"];
+    if (block) {
+      STATE.data = block;
+    } else {
+      loadCurrentData().then(() => { if (STATE.view === "home") renderHome(); });
+    }
+  }
   const latestYear = STATE.season;
-  const series = STATE.series;
+  const series = "NCS";
 
   if (!STATE.data || !STATE.data.races) {
     host.innerHTML = `<div class="muted" style="padding:40px;text-align:center;">Loading season data…</div>`;
