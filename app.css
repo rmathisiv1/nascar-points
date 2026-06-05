@@ -4555,7 +4555,10 @@ a.driver-cell.profile-link:hover .car-tag {
   #view-playoffs .po-card:has(.po-table) {
     max-height: none;
     overflow-x: clip;
-    overflow-y: visible;
+    /* !important to beat `.scrollable { overflow-y: auto !important }` — that
+       rule was keeping the card a scroll container, so the sticky thead pinned
+       to the card instead of the viewport and hid the rank-1 (leader) row. */
+    overflow-y: visible !important;
   }
   /* col-center must not clip/scroll either, or it becomes the thead's sticky
      parent (which doesn't scroll) and the header scrolls away. visible = not a
