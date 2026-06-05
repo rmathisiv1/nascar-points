@@ -3220,7 +3220,7 @@ function renderPageSeriesBar() {
       `<div class="pgs-track" role="tablist" aria-label="Series">` +
       [["all", "All"], ["NCS", "NCS"], ["NOS", "NOS"], ["NTS", "NTS"]].map(([val, lab]) =>
         `<button type="button" class="pgs-btn${val === cur ? " on" : ""}" ` +
-        `data-dsrs="${val}" role="tab" ` +
+        `data-dsrs="${val}" data-series="${val}" role="tab" ` +
         `aria-selected="${val === cur ? "true" : "false"}">${lab}</button>`
       ).join("") + `</div>`;
   } else if (seriesScoped) {

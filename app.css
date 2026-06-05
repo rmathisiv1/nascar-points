@@ -13105,3 +13105,37 @@ body.lightbox-open {
   /* Standings: the 5 mobile columns fit, so no horizontal scroll. */
   #view-standings .scrollable { overflow-x: clip !important; }
 }
+
+/* ----------------------------------------------------------------------
+   Tracks (desktop): keep the filter toolbar + gen chips + the table's
+   column header pinned while only the table BODY scrolls. By default the
+   outer .scrollable card is the scroller, so the toolbar and header scroll
+   away and the (already position:sticky) thead is trapped by the table
+   wrap's overflow-x and can't pin. Here we hand vertical scrolling to the
+   table wrap: the toolbar + chips sit above it and stay put, and the thead
+   pins to the top of the scroll box. Desktop + fine-pointer only, so the
+   mobile single-page-scroll layout is left exactly as-is.
+   ---------------------------------------------------------------------- */
+@media (min-width: 768px) and (pointer: fine) {
+  #view-trackstats > .card.tab-chart-fill.scrollable {
+    overflow: hidden !important;   /* beat .scrollable { overflow-y: auto !important } */
+  }
+  #view-trackstats #trackstats-host {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #view-trackstats #trackstats-host > .ts-toolbar,
+  #view-trackstats #trackstats-host > .ts-gens {
+    flex: 0 0 auto;
+  }
+  #view-trackstats #trackstats-host > .alltime-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;                /* the only scroller now */
+    margin-top: 8px;
+  }
+  /* thead is already position:sticky; top:0 — keep it above the rows. */
+  #view-trackstats .alltime-table thead th { z-index: 2; }
+}
