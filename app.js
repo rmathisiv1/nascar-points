@@ -2971,6 +2971,28 @@ const SERIES_TOGGLE_VIEWS = [
   "trackstats", "compare",
 ];
 
+// Data pages use ONE series toggle in the top-right page header that includes
+// an "All" (combine-all-series) option, instead of a separate in-content
+// toggle. Each page keeps its own "all"-capable filter; these helpers map the
+// view to its current value (for rendering the active button) and apply a
+// change. Extend both as more Data pages are migrated.
+const DATA_SERIES_VIEWS = ["trackstats"];
+function dataSeriesFor(view) {
+  if (view === "trackstats") return (STATE.trackStats && STATE.trackStats.series) || "all";
+  return "all";
+}
+function setDataSeries(view, val) {
+  if (view === "trackstats") {
+    const ts = STATE.trackStats;
+    if (!ts || ts.series === val) return false;
+    ts.series = val;
+    if (val !== "NCS") ts.gens.clear();   // gen chips are NCS-only
+    ts.expandedSlug = null;
+    return true;
+  }
+  return false;
+}
+
 // Restore (or initialize) the active series for the current view from its
 // per-page memory. Pure state mutation — callers must run inside an async
 // context and reload data afterward (boot's loadCurrentData, or the
@@ -3189,6 +3211,18 @@ function renderPageSeriesBar() {
   let right = "";
   if (v === "race") {
     right = renderRaceSeriesBar();   // includes its own weekend-series buttons
+  } else if (DATA_SERIES_VIEWS.includes(v)) {
+    // Data pages: single top-right toggle WITH an "All" option, driving the
+    // page's own filter (not the global STATE.series). data-dsrs marks these
+    // so the click handler routes them to setDataSeries(), not applyPageSeries.
+    const cur = dataSeriesFor(v);
+    right = `<span class="pgs-label">SERIES</span>` +
+      `<div class="pgs-track" role="tablist" aria-label="Series">` +
+      [["all", "All"], ["NCS", "NCS"], ["NOS", "NOS"], ["NTS", "NTS"]].map(([val, lab]) =>
+        `<button type="button" class="pgs-btn${val === cur ? " on" : ""}" ` +
+        `data-dsrs="${val}" role="tab" ` +
+        `aria-selected="${val === cur ? "true" : "false"}">${lab}</button>`
+      ).join("") + `</div>`;
   } else if (seriesScoped) {
     const cur = STATE.series;
     right = `<span class="pgs-label">SERIES</span>` +
@@ -3372,6 +3406,11 @@ function wireUIControls() {
     const b = e.target.closest(".pgs-btn");
     if (!b) return;
     e.preventDefault();
+    if (b.dataset.dsrs != null) {
+      // Data-page toggle (All/NCS/NOS/NTS) — drives the page's own filter.
+      if (setDataSeries(STATE.view, b.dataset.dsrs)) render();
+      return;
+    }
     applyPageSeries(b.dataset.pgs);
   });
 
@@ -16207,7 +16246,6 @@ function renderTrackStats() {
     <div class="ts-toolbar">
       <select class="ts-track-select" id="ts-track-select">${trackOptions}</select>
       <input type="search" class="ts-search" id="ts-search" placeholder="Search drivers…" value="${escapeHTML(ts.search || "")}">
-      <div class="ts-srs-toggle">${seriesPills}</div>
       <label class="ts-min-starts">
         Min starts:
         <select id="ts-min-starts">
