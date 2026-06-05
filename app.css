@@ -124,7 +124,7 @@ html, body {
 /* Desktop: lock the whole app to the viewport so the body never scrolls — the
    topbar + metricbar stay pinned and only the inner panes scroll. The body is a
    flex column: chrome (topbar/metricbar/banner) + dashboard (fills) + footer. */
-@media (min-width: 768px) {
+@media (min-width: 768px) and (pointer: fine) {
   html { height: 100%; overflow: hidden; }
   body {
     height: 100vh;
@@ -145,7 +145,12 @@ html, body {
     overflow: hidden;
   }
 }
-body { overflow-x: hidden; }
+/* overflow-x:clip (not hidden) prevents horizontal overflow WITHOUT turning
+   <body> into a scroll container. `hidden` would compute overflow-y to auto,
+   making the mobile sticky topbar stick to the body's scrollport (which doesn't
+   scroll) instead of the viewport — so it scrolled away. `clip` keeps sticky
+   working. Supported in all 2026 browsers. */
+body { overflow-x: clip; }
 
 /* ========== BOOT LOADING OVERLAY ========== */
 .app-loader {
@@ -474,7 +479,7 @@ body { overflow-x: hidden; }
 /* Narrow desktop (above the mobile breakpoint but too tight for the full
    metrics row): switch the static bar into the same auto-scrolling ticker used
    on mobile, so the metrics never overlap / clip. */
-@media (min-width: 768px) and (max-width: 1200px) {
+@media (min-width: 768px) and (max-width: 1200px) and (pointer: fine) {
   .metricbar {
     overflow: hidden;
     position: relative;
@@ -3115,7 +3120,7 @@ td.neg { color: var(--neg); }
    44px / 48px. We can't blow up font size without breaking the panel
    head layout, but expanding padding gets us a workable hit area
    without changing typographic weight. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .toggle-group.mini button {
     padding: 8px 12px;
     font-size: 10px;
@@ -3511,7 +3516,7 @@ a.driver-cell.profile-link:hover .car-tag {
    the +17/-13 delta numbers were getting clipped at the viewport edge.
    Add a touch of right-padding inside the col-right scroll area, and
    ensure the delta cell doesn't get squeezed. */
-@media (min-width: 768px) {
+@media (min-width: 768px) and (pointer: fine) {
   .col-right .form-mini-delta {
     padding-right: 4px;
     flex-shrink: 0;
@@ -3527,7 +3532,7 @@ a.driver-cell.profile-link:hover .car-tag {
    so later "!important" rules still win — but anyone reading
    this can now see all mobile rules in one place.
    ============================================================ */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
 
   /* ---- Header ---- */
   .topbar {
@@ -3747,6 +3752,10 @@ a.driver-cell.profile-link:hover .car-tag {
     -webkit-overflow-scrolling: touch;     /* momentum scroll on iOS */
     overscroll-behavior: contain;          /* don't chain scroll to <body> */
     touch-action: pan-y;                   /* iOS: route vertical drags here */
+    /* Breathing room below the last link + clearance for the iOS home
+       indicator, so the bottom menu items aren't cut off / hard to tap.
+       Included in the scrollable region since this is the scroll container. */
+    padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
   }
   .mobile-nav[hidden] { display: none !important; }
   .mobile-nav-head {
@@ -5032,7 +5041,7 @@ a.rc-sched-winner:hover {
 }
 
 /* Mobile: stack columns, simplify schedule */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .rc-hero { padding: 14px 16px; }
   .rc-hero-track { font-size: 18px; }
   .rc-grid {
@@ -5274,7 +5283,7 @@ a.rc-sched-winner:hover {
 }
 
 /* Mobile: stack the 3-column track grid + render history as stacked cards */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   #track-host { max-width: 100%; }
   .tk-grid-3 { grid-template-columns: 1fr; }
   .tk-this-row.multi { grid-template-columns: 1fr; }
@@ -5872,7 +5881,7 @@ a.rc-sched-winner:hover {
 .tm-cc-body-wrap.tm-cc-single { grid-template-columns: 1fr; }
 .tm-cc-body-wrap.tm-cc-double { grid-template-columns: 1fr 1fr; }
 .tm-cc-body-wrap.tm-cc-triple { grid-template-columns: 1fr 1fr 1fr; }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .tm-cc-body-wrap.tm-cc-double,
   .tm-cc-body-wrap.tm-cc-triple { grid-template-columns: 1fr; }
 }
@@ -6356,7 +6365,7 @@ a.rc-sched-winner:hover {
 
 /* Mobile — search collapses but still works. The topbar is already tight on
    small screens so we hide the placeholder and rely on the icon. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   /* Mobile: search collapses to a tappable icon-only button until the
      user taps it, then it expands to a full-width input that overlays
      the topbar. Saves room for the brand + series toggle + mode picker. */
@@ -6464,7 +6473,7 @@ a.rc-sched-winner:hover {
 #cc-career-heatmap .ph-grid {
   grid-template-columns: 250px repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   #cc-career-heatmap .ph-grid {
     grid-template-columns: 200px repeat(var(--ph-cols, 36), minmax(18px, 1fr)) 38px;
   }
@@ -6606,7 +6615,7 @@ a.rc-sched-winner:hover {
 [data-theme="light"] .ph-cell.ph-down { background: rgba(180,60,50,0.18); color: #5a1a14; }
 [data-theme="light"] .ph-cell:hover   { outline: 1px solid rgba(0,0,0,0.3); }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .ph-grid {
     /* On mobile we want fixed cell widths so the grid stays readable;
        overflow-x on the host scrolls horizontally for long schedules. */
@@ -6731,7 +6740,7 @@ a.rc-sched-winner:hover {
 body.lightbox-open {
   overflow: hidden;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .race-lightbox {
     padding: 0;
   }
@@ -6783,7 +6792,7 @@ body.lightbox-open {
    Mobile: the reverse — see media query below. */
 .topbar-mode-sw-select { display: none; }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .topbar-mode-sw button {
     padding: 4px 8px;
     font-size: 10px;
@@ -6810,7 +6819,7 @@ body.lightbox-open {
   }
   .topbar-mode-sw button { display: none; }
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .topbar-mode-sw { gap: 0; padding: 0; background: none; border: 0; }
 }
 
@@ -6829,7 +6838,7 @@ body.lightbox-open {
 
 /* Mobile/narrow topbar: keep the wordmark visible since the logo is gone.
    Just shrink it slightly so it doesn't crowd the rest of the topbar. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .brand-name { font-size: 12px; }
 }
 
@@ -7036,7 +7045,7 @@ body.lightbox-open {
   font-weight: 500;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .tm-hero-champ {
     padding: 4px 8px;
     font-size: 10px;
@@ -7133,7 +7142,7 @@ body.lightbox-open {
   font-weight: 700;
   color: var(--text);
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .tm-stats-card-body { grid-template-columns: repeat(5, 1fr); gap: 4px; }
   .tm-stats-card-body .tm-stat .v { font-size: 13px; }
 }
@@ -7180,7 +7189,7 @@ body.lightbox-open {
 }
 
 /* Mobile: collapse to a single column grid so each year-row spans full width */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .profile-context-grid {
     grid-template-columns: 1fr;
     gap: 4px;
@@ -7326,7 +7335,7 @@ body.lightbox-open {
   color: var(--muted);
   margin-top: 1px;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .cc-series-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .cc-stat .v { font-size: 13px; }
 }
@@ -7391,7 +7400,7 @@ body.lightbox-open {
   opacity: 0.6;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .ph-team-pill {
     font-size: 8px;
     padding: 1px 4px;
@@ -7418,7 +7427,7 @@ body.lightbox-open {
   color: var(--text-2);
   letter-spacing: 0.02em;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .cc-hero-name { font-size: 19px; }
 }
 
@@ -8288,7 +8297,7 @@ body.lightbox-open {
    horizontal scroll. The dashboard collapses to a single column on
    mobile already, so the home grid inherits that single-column width
    and we just need to bring font sizes back to readable scale. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .home-host { padding: 12px 12px 24px; }
   .home-grid { gap: 12px; }
   .home-card { padding: 12px 14px; }
@@ -8378,7 +8387,7 @@ body.lightbox-open {
 
 /* Track Stats expandable detail row — on mobile, the inner table can
    overflow horizontally. Allow scroll on the wrap so it stays usable. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .ts-detail-wrap { padding: 10px 12px; overflow-x: auto; }
   .ts-detail-table { min-width: 480px; }
   .ts-detail-head { font-size: 10px; }
@@ -8470,14 +8479,14 @@ body.lightbox-open {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .ts-table { min-width: 900px; font-size: 11px; }
   .ts-table thead th { padding: 6px 8px; }
   .ts-table tbody td { padding: 4px 8px; }
 }
 
 /* All-time tables — preserve column readability on phones with horizontal scroll */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .alltime-table { min-width: 700px; font-size: 11px; }
   .alltime-table thead th { padding: 6px 8px; }
   .alltime-table tbody td { padding: 4px 8px; }
@@ -8490,7 +8499,7 @@ body.lightbox-open {
    position: sticky + explicit cell backgrounds (sticky cells must paint
    their own background or they show the scrolling cells underneath).
 */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   /* Track Stats — sticky # and Driver columns */
   .ts-table thead th:nth-child(1),
   .ts-table tbody td:nth-child(1) {
@@ -8574,7 +8583,7 @@ body.lightbox-open {
 
 /* Standings: collapse to essential columns on mobile so the user sees
    Pos / Driver / Wins / Total / Back without horizontal scroll. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   #standings-table .col-mobile-hide { display: none; }
   /* Don't let the driver cell hog all the horizontal space. The flex on
      .driver-cell makes it expand to fill row width; on mobile we cap it
@@ -8699,7 +8708,7 @@ body.lightbox-open {
 }
 
 /* Mobile: tighter columns, smaller name column, hide rank */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .stage-points-card { padding: 10px 12px; }
   .sp-row {
     grid-template-columns: 24px 28px 80px 1fr 38px;
@@ -8774,7 +8783,7 @@ body.lightbox-open {
 .ts-table thead th {
   z-index: 1;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .ts-year-range { font-size: 9px; }
   .ts-year-input { width: 50px; font-size: 10px; }
 }
@@ -8784,7 +8793,7 @@ body.lightbox-open {
    container. On narrow phones the grid would crush each round cell to
    sub-readable widths. Wrap the host so it scrolls horizontally and
    give the grid a min-width that keeps cells legible. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   #cc-career-heatmap,
   #profile-career-heatmap {
     overflow-x: auto;
@@ -8808,7 +8817,7 @@ body.lightbox-open {
 
 /* Crew chief profile season-by-season tables — the CC profile renders
    one or more wide tables that need horizontal scroll on phones too. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   #cc-host .profile-race-table,
   #cc-host table {
     min-width: 540px;
@@ -8839,7 +8848,7 @@ body.lightbox-open {
   white-space: nowrap;
   box-sizing: border-box;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .sp-team-tag { font-size: 9px; min-width: 32px; padding: 2px 4px; }
 }
 
@@ -8877,12 +8886,12 @@ body.lightbox-open {
 /* When only the regular-season chart shows (no playoffs), give it a tall
    minimum on DESKTOP so it fills the page. On mobile we let it size to its
    natural aspect (the page scrolls), avoiding big vertical dead space. */
-@media (min-width: 768px) {
+@media (min-width: 768px) and (pointer: fine) {
   .arc-chart-stack:has(.arc-playoff-card[hidden]) .arc-regular-card svg {
     min-height: 480px;
   }
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .arc-chart-stack svg { min-height: 0; height: auto; flex: none; }
   .arc-regular-card, .arc-playoff-card { flex: none; }
   .arc-chart-stack { flex: none; }
@@ -8910,7 +8919,7 @@ body.lightbox-open {
 /* When the playoffs card is hidden, the regular-season card grows to
    fill the available space rather than sitting at half height. */
 .arc-playoff-card[hidden] + * { display: none; }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .arc-chart-stack { gap: 8px; }
   .arc-chart-label { font-size: 9px; }
 }
@@ -8977,7 +8986,7 @@ body.lightbox-open {
 .rc-session-table tbody tr:first-child td {
   font-weight: 600;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .rc-session-table th,
   .rc-session-table td {
     padding: 5px 6px;
@@ -9065,7 +9074,7 @@ body.lightbox-open {
   color: var(--text);
   white-space: nowrap;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .rc-summary-strip { gap: 12px; }
   .rc-summary-v { font-size: 11px; }
   .rc-session-tab {
@@ -9147,7 +9156,7 @@ body.lightbox-open {
   font-style: italic;
   margin-top: 2px;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .home-weekend-card { padding: 10px 12px; }
   .hw-row {
     grid-template-columns: 36px 1fr;
@@ -9301,7 +9310,7 @@ body.lightbox-open {
   color: var(--muted);
   font-weight: 400;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .profile-notable-row {
     grid-template-columns: 70px 1fr auto;
     gap: 6px;
@@ -9378,7 +9387,7 @@ body.lightbox-open {
 .tt-m-val.hot  { color: #6fdd96; }
 .tt-m-val.cold { color: #f08c8c; }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .tt-row {
     grid-template-columns: 1fr;
     gap: 6px;
@@ -9434,7 +9443,7 @@ body.lightbox-open {
   border: 1px solid var(--tint-4);
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .standings-views { gap: 8px; }
   .standings-mfr-note { display: block; width: 100%; margin-left: 0; }
 }
@@ -9691,7 +9700,7 @@ body.lightbox-open {
   margin-bottom: 10px;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .tm-career-tiles {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px 14px;
@@ -9752,7 +9761,7 @@ body.lightbox-open {
   line-height: 1.4;
   justify-self: end;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   #view-team .view-head,
   #view-cc   .view-head {
     grid-template-columns: 1fr;
@@ -9778,7 +9787,7 @@ body.lightbox-open {
 }
 .topbar-historical[hidden] { display: none !important; }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .topbar-historical {
     display: flex;
     gap: 8px;
@@ -10233,7 +10242,7 @@ body.lightbox-open {
   border-color: var(--accent);
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .cmp-headers {
     grid-template-columns: 1fr 1fr;
   }
@@ -10649,7 +10658,7 @@ body.lightbox-open {
 }
 
 /* MOBILE: stack the two columns */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .rps-cols {
     grid-template-columns: 1fr;
     gap: 18px;
@@ -10849,7 +10858,7 @@ body.lightbox-open {
   padding: 0 14px 12px;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .cmp-chart-controls {
     padding: 8px 10px;
     gap: 6px;
@@ -10934,7 +10943,7 @@ body.lightbox-open {
   color: var(--text);
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .cmp-th-chip { gap: 4px; }
   .cmp-th-car { font-size: 9px; padding: 2px 4px; }
   .cmp-th-name { font-size: 11px; }
@@ -10998,7 +11007,7 @@ body.lightbox-open {
   white-space: nowrap;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .cmp-chart-legend {
     padding: 8px 10px 10px;
     gap: 4px;
@@ -11025,7 +11034,7 @@ body.lightbox-open {
 #compare-host {
   padding: 24px 24px 24px;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   #compare-host {
     padding: 14px 14px 14px;
   }
@@ -11048,7 +11057,7 @@ body.lightbox-open {
   color: var(--muted);
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   #view-compare .view-head {
     margin-bottom: 14px;
   }
@@ -11134,7 +11143,7 @@ body.lightbox-open {
   transition: none;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   /* On mobile, hover state isn't really a thing — but the grip should
      still be visible at full muted strength (not dim) since touch users
      can't preview interactivity by hovering. */
@@ -11230,7 +11239,7 @@ body.lightbox-open {
   opacity: 0.35 !important;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .cmp-spider-host {
     padding: 8px 4px;
   }
@@ -11255,7 +11264,7 @@ body.lightbox-open {
   gap: 6px;
   margin-left: auto;  /* push to the right edge of the flex header */
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   /* On mobile, let the toggle wrap below the title rather than overflow */
   .cmp-spider-fill-toggle {
     margin-left: 0;
@@ -11321,7 +11330,7 @@ body.lightbox-open {
 /* On mobile, tooltip is the same — pointer-events:none doesn't matter
    since we toggle on tap (not hover). But make sure it can't overflow
    the viewport horizontally. */
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .cmp-spider-tooltip {
     max-width: 240px;
     font-size: 11px;
@@ -11384,7 +11393,7 @@ body.lightbox-open {
   margin-left: 2px;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .profile-yoy-controls {
     margin-left: 0;
     margin-top: 6px;
@@ -11413,7 +11422,7 @@ body.lightbox-open {
   color: var(--muted);
   margin-left: 12px;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .po-views-note {
     display: block;
     margin-left: 0;
@@ -11617,7 +11626,7 @@ body.lightbox-open {
   border-radius: 2px;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .pc-controls {
     flex-direction: column;
     gap: 10px;
@@ -11789,7 +11798,7 @@ body.lightbox-open {
 }
 .pc-stats-range-input { -moz-appearance: textfield; }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .pc-stats-range {
     margin-left: 0;
     width: 100%;
@@ -11887,7 +11896,7 @@ body.lightbox-open {
   text-align: center;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .pc-stats-body {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -12244,7 +12253,7 @@ body.lightbox-open {
   flex-shrink: 0;
   align-self: center;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .tm-hero-card { padding: 14px 16px; }
   .tm-hero-card-stats { gap: 18px; }
   .tm-hero-stat-v { font-size: 20px; }
@@ -12294,7 +12303,7 @@ body.lightbox-open {
 .sd-bars .sp-rank { min-width: 18px; }
 .sd-bars .sp-name { min-width: 60px; max-width: 90px; }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) {
   .season-data-grid {
     grid-template-columns: 1fr;
   }
@@ -12348,7 +12357,7 @@ body.lightbox-open {
    ============================================================ */
 .m-collapse tr.mc-detail-row { display: none; }   /* never shown on desktop */
 
-@media (max-width: 767.98px) {
+@media (max-width: 767.98px), (pointer: coarse) {
   .m-collapse .mc-hide { display: none; }
 
   .m-collapse tbody tr.mc-row { cursor: pointer; }

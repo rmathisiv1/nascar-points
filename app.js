@@ -628,7 +628,7 @@ function wireSearch() {
   // On mobile the search field is narrow — the long placeholder gets cut off
   // mid-word, which looks tacky. Use a short one below the mobile breakpoint.
   const setSearchPlaceholder = () => {
-    if (window.matchMedia("(max-width: 767.98px)").matches) {
+    if (isMobile()) {
       input.placeholder = "Search…";
     } else {
       input.placeholder = "Search drivers, teams, crew chiefs, races…  (press /)";
@@ -1514,8 +1514,13 @@ async function resolveDriverRoute() {
 // A simple viewport check. Matches the CSS breakpoint (<768px). We don't
 // respond to resize dynamically — if someone rotates / resizes into the other
 // mode, a refresh reapplies. Keeps the code simpler and avoids fighting CSS.
+// Mobile check. Matches the CSS: a device is "mobile" if the viewport is
+// narrow (<768px) OR the primary pointer is coarse (phones/tablets in ANY
+// orientation — so landscape doesn't cross into desktop layout). A touchscreen
+// laptop with a trackpad reports pointer:fine, so it correctly stays desktop.
 function isMobile() {
-  return window.matchMedia("(max-width: 767.98px)").matches;
+  return window.matchMedia("(max-width: 767.98px)").matches
+      || window.matchMedia("(pointer: coarse)").matches;
 }
 
 // On mobile, if the URL hash is empty or points to the desktop landing tab,
@@ -5477,8 +5482,8 @@ function wireTrackHistoryRows() {
     const row = e.target.closest(".tk-hist-row");
     if (!row) return;
     const href = row.getAttribute("data-race-href");
-    const isMobile = window.matchMedia("(max-width: 767.98px)").matches;
-    if (!isMobile) {
+    const onMobile = isMobile();
+    if (!onMobile) {
       if (href) location.hash = href;
       return;
     }
