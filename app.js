@@ -3566,6 +3566,13 @@ function wireUIControls() {
     STATE.arc.userCleared = true;
     renderArc();
   });
+  document.getElementById("arc-top5")?.addEventListener("click", () => {
+    STATE.arc.selected.clear();
+    STATE.arc.userCleared = false;
+    const totals = computeSeasonTotals();
+    totals.slice(0, 5).forEach(t => STATE.arc.selected.add(entityKey(t)));
+    renderArc();
+  });
   document.getElementById("arc-top10")?.addEventListener("click", () => {
     STATE.arc.selected.clear();
     STATE.arc.userCleared = false;
@@ -4052,6 +4059,17 @@ function render() {
   // Safe to call on every render — idempotent via data-sig deduplication.
   syncMobileDropdowns();
   enhanceCollapsibleTables();   // collapse wide .m-collapse tables on mobile
+
+  // Make sure the active sub-nav tab is scrolled into view inside its
+  // (horizontally scrollable) row — otherwise on narrow screens the current
+  // page's tab (e.g. Personnel at the far right) can sit clipped off-edge.
+  const activeSib = document.querySelector(
+    ".profile-takeover:not([hidden]) .takeover-sibling.active, " +
+    ".takeover:not([hidden]) .takeover-sibling.active"
+  );
+  if (activeSib && activeSib.scrollIntoView) {
+    try { activeSib.scrollIntoView({ inline: "nearest", block: "nearest" }); } catch (e) {}
+  }
 }
 
 // ============================================================
@@ -7108,7 +7126,7 @@ function drawArcChart({ svgId, rounds, entities, selectedSet, metric, cumStartFr
   // page — a tall canvas. When stacked with the playoff chart, use the compact
   // height so both fit. `tall` is passed by renderArc for the single-chart case.
   const W = 980;
-  const H = tall ? (isMob ? 340 : 560) : (isMob ? 240 : 280);
+  const H = tall ? (isMob ? 440 : 560) : (isMob ? 260 : 280);
   const pad = isMob
     ? { top: 14, right: 12, bottom: 24, left: 36 }
     : { top: 14, right: 150, bottom: 24, left: 48 };
@@ -19922,7 +19940,8 @@ function renderTeamFilter(hostId, _stateKey, onToggle, getSelectedKeys, onClear)
     (teamCarsByCode[e.team_code] = teamCarsByCode[e.team_code] || []).push(e);
   });
 
-  const clearPill = `<span class="tf-pill tf-all" data-team="">Clear</span>`;
+  // No "Clear" pill here — the toolbar's overall Clear button handles
+  // deselecting everything, so a second clear control is redundant.
   const pills = codes.map(code => {
     const hex = orgColorForTeam(code) || "#9ca3af";
     const txt = contrastTextFor(hex);
@@ -19931,7 +19950,7 @@ function renderTeamFilter(hostId, _stateKey, onToggle, getSelectedKeys, onClear)
     const cls = allSelected ? "active" : "";
     return `<span class="tf-pill ${cls}" data-team="${escapeHTML(code)}" style="background:${hex};color:${txt}">${escapeHTML(code)}</span>`;
   }).join("");
-  host.innerHTML = clearPill + pills;
+  host.innerHTML = pills;
 
   host.querySelectorAll(".tf-pill").forEach(pill => {
     pill.addEventListener("click", () => {

@@ -935,12 +935,13 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .profile-takeover-head {
   flex-shrink: 0;
   /* Thin sub-nav row — minimal vertical footprint so it doesn't eat margins
-     on Standings/Playoffs and the Data pages. */
+     on Standings/Playoffs and the Data pages. Centered horizontally. */
   padding-bottom: 2px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 .profile-takeover #view-profile,
@@ -3818,9 +3819,20 @@ a.driver-cell.profile-link:hover .car-tag {
     background-repeat: no-repeat;
   }
 
-  /* Team filter: hide the pills entirely, only dropdown shows */
-  .team-filter .tf-pill { display: none; }
-  .team-filter { gap: 0; padding: 2px 0 6px; }
+  /* Team filter on mobile: show the colored pills (scroll horizontally if they
+     overflow) instead of a native dropdown — matches desktop. */
+  .team-filter .mobile-dd { display: none !important; }
+  .team-filter .tf-pill { display: inline-flex; }
+  .team-filter {
+    gap: 4px;
+    padding: 2px 0 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .team-filter::-webkit-scrollbar { height: 0; }
+  .team-filter .tf-pill { flex: 0 0 auto; }
 
   /* Toolbar spacing: let dropdowns breathe */
   .toolbar-slim {
@@ -6126,8 +6138,13 @@ a.rc-sched-winner:hover {
   align-items: center;
   gap: 4px;
   /* The back button was removed from the Data pages, so no left margin needed.
-     On narrow screens the row scrolls horizontally instead of being cut off. */
+     On narrow screens the row scrolls horizontally instead of being cut off.
+     min-width:0 + flex:1 lets this flex child actually shrink below its content
+     width so overflow-x:auto engages (without it the row just overflows and
+     gets clipped by the takeover's overflow:hidden). */
   margin-left: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -8840,6 +8857,7 @@ body.lightbox-open {
 @media (max-width: 767.98px) {
   .arc-chart-stack svg { min-height: 0; height: auto; flex: none; }
   .arc-regular-card, .arc-playoff-card { flex: none; }
+  .arc-chart-stack { flex: none; }
 }
 /* Top-left chart label so users can tell which segment is which at a
    glance. Mono uppercase muted — same vocabulary as the metric bar. */
