@@ -13136,6 +13136,17 @@ body.lightbox-open {
     overflow: auto;                /* the only scroller now */
     margin-top: 8px;
   }
-  /* thead is already position:sticky; top:0 — keep it above the rows. */
-  #view-trackstats .alltime-table thead th { z-index: 2; }
+  /* The table is .data-table.ts-table inside an inner .ts-table-wrap whose
+     overflow-x makes it a scroll container — that traps the (sticky) thead so
+     it pins to that inner wrap (which doesn't scroll vertically) instead of our
+     outer scroller. Un-trap the inner wrap (any horizontal scroll now happens
+     on .alltime-table-wrap) and pin the header to top:0 of the scroll box,
+     overriding the global top:78px page-scroll offset (which doesn't apply
+     here, since the table scrolls inside its own box on desktop). */
+  #view-trackstats .ts-table-wrap { overflow: visible; }
+  #view-trackstats .data-table.ts-table thead th {
+    top: 0 !important;
+    z-index: 6;
+    background: var(--card);   /* opaque so rows pass under, not through */
+  }
 }
