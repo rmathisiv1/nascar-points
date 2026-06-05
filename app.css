@@ -4217,7 +4217,9 @@ a.driver-cell.profile-link:hover .car-tag {
   /* ---- merged from previous block ---- */
 
   html, body {
-    overflow-x: hidden;
+    overflow-x: clip;   /* clip (not hidden) — does NOT create a scroll
+                           container, so the page scrolls naturally and the
+                           sticky topbar/thead pin to the viewport */
     max-width: 100vw;
   }
   .dashboard,
@@ -4538,20 +4540,27 @@ a.driver-cell.profile-link:hover .car-tag {
      a max-height scroll container; thead sticky to top:0 of that
      container, which is rock-solid regardless of page chrome height. */
   .data-table th {
-    top: 0 !important;            /* relative to the table's scroll parent */
-    z-index: 7;
-    background: var(--card) !important;
-    box-shadow: 0 1px 0 var(--border);
+    top: 78px !important;        /* below topbar (44) + metricbar (34) */
+    z-index: 8;
+    background: var(--card) !important;   /* opaque — rows pass under, not through */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
   }
-  /* Wrap every data-table on mobile in a scrollable card via the parent */
+  /* Table pages scroll as ONE page (not inside each card). The card must NOT
+     be a scroll container or it traps the last rows and re-breaks the sticky
+     topbar. overflow-x:clip kills the horizontal scrollbar without becoming a
+     scroller; overflow-y:visible lets the thead stick to the viewport. */
   .col-center .card.tab-table-fill,
   #view-form .card,
   #view-standings .card,
   #view-playoffs .po-card:has(.po-table) {
-    max-height: calc(100vh - 100px);
-    overflow-y: auto !important;
-    overflow-x: hidden;
+    max-height: none;
+    overflow-x: clip;
+    overflow-y: visible;
   }
+  /* col-center must not clip/scroll either, or it becomes the thead's sticky
+     parent (which doesn't scroll) and the header scrolls away. visible = not a
+     scroll container, so the thead sticks to the viewport. */
+  .col-center { overflow: visible; }
   /* Page title needs to sit ABOVE the scroll container so it doesn't get
      clipped. Already sticky at top:78. Tables scroll INSIDE their card. */
 
@@ -8610,10 +8619,10 @@ body.lightbox-open {
   #standings-table td:last-child {
     padding-right: 8px;
   }
-  /* Allow horizontal scroll on the wrapping card as a safety net so
-     the rightmost columns stay reachable if a phone is narrower than
-     expected (e.g. older small phones, side-by-side split view). */
-  #view-standings .scrollable { overflow-x: auto; }
+  /* No horizontal scroll on standings — it made the page feel sloppy and no
+     other table does it. The 5 mobile columns fit; the driver cell ellipsizes
+     to absorb any slack. clip (not hidden) so it isn't a scroll container. */
+  #view-standings .scrollable { overflow-x: clip; }
 }
 
 /* === STAGE POINTS — horizontal bar chart === */
@@ -9446,6 +9455,13 @@ body.lightbox-open {
 @media (max-width: 767.98px), (pointer: coarse) {
   .standings-views { gap: 8px; }
   .standings-mfr-note { display: block; width: 100%; margin-left: 0; }
+  /* Page-scroll model: the column-header thead is the only sticky element in
+     the table. The Driver/Owner/Manufacturer toggle scrolls away with the page
+     so it can't pin on top of (and bleed through) the sticky row titles. */
+  .standings-views-host {
+    position: static;
+    margin: -6px -6px 6px;
+  }
 }
 
 /* ============================================================================
