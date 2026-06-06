@@ -20671,6 +20671,176 @@ function wireRaceLightbox() {
   });
 }
 
+// ============================================================
+// RACE PAGE v5 helpers — scraped weekend schedule, predicted-finish
+// card, record book, and the shared all-races table.
+// ============================================================
+let STATE_SCHEDULE = null;
+let _scheduleAttempted = false;
+async function loadScheduleSessions() {
+  if (_scheduleAttempted) return STATE_SCHEDULE;
+  _scheduleAttempted = true;
+  try {
+    const r = await fetch("data/schedule.json");
+    if (r.ok) STATE_SCHEDULE = await r.json();
+  } catch (e) { /* no schedule data yet — non-fatal */ }
+  return STATE_SCHEDULE;
+}
+function _trkNameSlug(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
+function scheduleForRace(race, series) {
+  if (!STATE_SCHEDULE || !STATE_SCHEDULE.events || !race) return null;
+  const evs = Object.values(STATE_SCHEDULE.events);
+  const want = series || STATE.series;
+  if (race.date) {
+    const d1 = evs.find(e => e.event_date === race.date && (e.series || []).includes(want));
+    if (d1) return d1;
+    const d2 = evs.find(e => e.event_date === race.date);
+    if (d2) return d2;
+  }
+  const tslug = _trkNameSlug((typeof prettyTrack === "function" ? prettyTrack(race.track_code, race.track) : null) || race.track || "");
+  return evs.find(e => _trkNameSlug(e.track) === tslug && (e.series || []).includes(want))
+      || evs.find(e => _trkNameSlug(e.track) === tslug) || null;
+}
+function _sessDayTime(s) {
+  if (!s) return "";
+  const wd = s.day ? s.day.split(",")[0] : "";
+  const dd = wd ? wd.charAt(0) + wd.slice(1, 3).toLowerCase() : "";
+  return `${dd ? dd + " " : ""}${s.start || ""}`.trim();
+}
+function _renderSessionLine(ev, series) {
+  if (!ev || !ev.sessions) return "";
+  const want = series || STATE.series;
+  const pick = (type) => ev.sessions.find(s => s.type === type && (s.series || []).includes(want))
+                      || ev.sessions.find(s => s.type === type && s.national);
+  const parts = [];
+  const p = pick("practice"), q = pick("qualifying"), r = pick("race");
+  if (p) parts.push(`Practice <b>${escapeHTML(_sessDayTime(p))}</b>`);
+  if (q) parts.push(`Qualifying <b>${escapeHTML(_sessDayTime(q))}</b>`);
+  if (r) parts.push(`Race <b>${escapeHTML(_sessDayTime(r))}</b>`);
+  if (!parts.length) return "";
+  return `<div class="rcx-ses">${parts.join(" &nbsp;·&nbsp; ")}</div>`;
+}
+function _raceStatChips(race, ev, series) {
+  const want = series || STATE.series;
+  let laps = null, miles = null, stages = null;
+  if (ev && ev.sessions) {
+    const rs = ev.sessions.find(s => s.type === "race" && (s.series || []).includes(want))
+            || ev.sessions.find(s => s.type === "race");
+    if (rs) { laps = rs.laps; miles = rs.miles; stages = rs.stages; }
+  }
+  if (laps == null && race.laps != null) laps = race.laps;
+  const chips = [];
+  if (laps != null) chips.push(`<b>${laps}</b> laps`);
+  if (miles != null) chips.push(`<b>${Math.round(miles * 100) / 100}</b> mi`);
+  const typeStr = (typeof trackTypeLabel === "function") ? trackTypeLabel(race.track_code) : "";
+  if (typeStr) chips.push(escapeHTML(typeStr));
+  if (Array.isArray(stages) && stages.length) chips.push(`stages <b>${stages.join(" / ")}</b>`);
+  if (!chips.length) return "";
+  return `<div class="rcx-chips">${chips.map(c => `<span class="rcx-chip">${c}</span>`).join("")}</div>`;
+}
+function _renderPredictedFinishCard(series, trackCode) {
+  if (typeof _computeRacePredictions !== "function" || !trackCode) return "";
+  let pred;
+  try { pred = _computeRacePredictions(series, trackCode); } catch (e) { return ""; }
+  if (!pred || !pred.byFinish || !pred.byFinish.length) return "";
+  const useWin = pred.source === "entry_list";
+  const rows = pred.byFinish.slice(0, 6).map((p, i) => {
+    const car = (p.car != null) ? p.car : (p.entity && p.entity.car_number);
+    const carHex = colorFor(series, car);
+    const txt = contrastTextFor(carHex);
+    const hasWin = p.win_prob != null;
+    const val = hasWin ? `${Math.round(p.win_prob * 100)}%`
+              : (p.predicted_finish != null ? p.predicted_finish.toFixed(1) : "");
+    const hi = (hasWin && i < 2) ? " rcx-pred-hi" : "";
+    return `<div class="rcx-pred-row">
+      <span class="rcx-pred-rk">${i + 1}</span>
+      <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(car != null ? car : ""))}</span>
+      <a class="rcx-pred-nm profile-link" href="#/driver/${slugify(p.driverName || "")}">${escapeHTML(lastNameOf(p.driverName))}</a>
+      <span class="rcx-pred-v${hi}">${val}</span>
+    </div>`;
+  }).join("");
+  return `<div class="card rc-card">
+    <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${useWin ? "model · win %" : "model · proj"}</span></div>
+    <div class="rc-card-body">${rows}</div>
+    <div class="rcx-cardfoot"><a class="rcx-foot-link" href="#/projection">View full prediction →</a></div>
+  </div>`;
+}
+function _renderTopFinishCard(race) {
+  const res = (race.results || []).filter(d => d.finish_pos != null).sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 6);
+  if (!res.length) return "";
+  const rows = res.map(d => {
+    const carHex = colorFor(STATE.series, d.car_number);
+    const txt = contrastTextFor(carHex);
+    return `<div class="rcx-pred-row">
+      <span class="rcx-pred-rk">${d.finish_pos}</span>
+      <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number != null ? d.car_number : ""))}</span>
+      <a class="rcx-pred-nm profile-link" href="#/driver/${slugify(d.driver || "")}">${escapeHTML(lastNameOf(d.driver))}</a>
+      <span class="rcx-pred-v">${d.race_pts != null ? d.race_pts : ""}</span>
+    </div>`;
+  }).join("");
+  return `<div class="card rc-card">
+    <div class="rc-card-head"><span class="rc-card-title">Finish</span><span class="rc-card-sub">top 6 · pts</span></div>
+    <div class="rc-card-body">${rows}</div>
+  </div>`;
+}
+function _renderRecordBook(history) {
+  if (!history || !history.length) return `<div class="rc-empty">No history at this track.</div>`;
+  const rows = [];
+  rows.push(["Races run", String(history.length), ""]);
+  const cau = history.map(h => Number(h.cautions)).filter(n => Number.isFinite(n));
+  if (cau.length) rows.push(["Avg cautions", (cau.reduce((a, b) => a + b, 0) / cau.length).toFixed(1), ""]);
+  let qr = null;
+  history.forEach(h => (h.results || []).forEach(d => {
+    const t = Number(d.qual_time);
+    if (Number.isFinite(t) && t > 0 && (!qr || t < qr.t)) qr = { t, name: d.driver, year: h.year };
+  }));
+  if (qr) rows.push(["Qual record", `${lastNameOf(qr.name)} · ${qr.t.toFixed(2)}s`, String(qr.year)]);
+  let cf = null;
+  history.forEach(h => {
+    const m = parseFloat(String(h.margin_of_victory || "").replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(m) && m > 0 && (!cf || m < cf.m)) cf = { m, year: h.year };
+  });
+  if (cf) rows.push(["Closest finish", `${cf.m.toFixed(3)}s`, String(cf.year)]);
+  return rows.map(([k, v, s]) =>
+    `<div class="rcx-rec-row"><span class="rcx-rec-k">${escapeHTML(k)}</span><span class="rcx-rec-v">${escapeHTML(v)}${s ? `<span class="rcx-rec-s">${escapeHTML(s)}</span>` : ""}</span></div>`
+  ).join("");
+}
+function renderAllRacesTable(allRaces, currentRound, series) {
+  const ser = series || STATE.series;
+  const cellDriver = (d) => {
+    if (!d) return "";
+    const carHex = colorFor(ser, d.car_number);
+    const txt = contrastTextFor(carHex);
+    return `<span class="rcx-wn"><span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number != null ? d.car_number : ""))}</span><a class="profile-link" href="#/driver/${slugify(d.driver || "")}">${escapeHTML(lastNameOf(d.driver))}</a></span>`;
+  };
+  const rows = allRaces.slice().sort((a, b) => (b.round || 0) - (a.round || 0)).map(r => {
+    const hasRun = (r.results || []).length > 0;
+    const isCur = r.round === currentRound;
+    const trackName = (typeof prettyTrack === "function" ? prettyTrack(r.track_code, r.track) : null) || r.track || "TBD";
+    const nameLine = r.name ? `<span class="rcx-ar-sub">${escapeHTML(r.name)}</span>` : "";
+    const winner = hasRun ? (r.results || []).find(d => d.finish_pos === 1) : null;
+    const pole = hasRun ? (r.results || []).find(d => d.qual_pos === 1) : null;
+    const team = winner && winner.team_code ? `<span class="team-code">${escapeHTML(winner.team_code)}</span>` : "";
+    const mfr = winner && winner.manufacturer ? `<span class="rcx-mfr">${escapeHTML(winner.manufacturer)}</span>` : "";
+    const winCell = hasRun ? cellDriver(winner) : `<span class="rcx-ar-up">upcoming</span>`;
+    const cls = `rcx-ar-row${hasRun ? " run" : ""}${isCur ? " cur" : ""}`;
+    const href = hasRun ? `#/race/${r.round}` : "";
+    return `<tr class="${cls}"${href ? ` data-race-href="${href}"` : ""}>
+      <td class="rcx-ar-rd">R${r.round}</td>
+      <td><span class="rcx-ar-track">${escapeHTML(trackName)}</span>${nameLine}</td>
+      <td>${winCell}</td>
+      <td>${team}</td>
+      <td>${mfr}</td>
+      <td>${pole ? cellDriver(pole) : ""}</td>
+    </tr>`;
+  }).join("");
+  return `<table class="rc-result-table rcx-all-table">
+    <colgroup><col class="rcx-c-rd"><col><col><col class="rcx-c-tm"><col class="rcx-c-mfr"><col></colgroup>
+    <thead><tr><th>Rd</th><th>Race</th><th>Winner</th><th>Team</th><th>Mfr</th><th>Pole</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function renderRaceCenter() {
   const host = document.getElementById("race-host");
   try {
@@ -20780,6 +20950,9 @@ function _renderRaceCenterImpl() {
   if (!_raceDocsAttempted) {
     loadRaceDocs().then(() => { if (STATE.view === "race") renderRaceCenter(); });
   }
+  if (!_scheduleAttempted) {
+    loadScheduleSessions().then(() => { if (STATE.view === "race") renderRaceCenter(); });
+  }
 
   // ---- Hero
   const dateStr = nextRace.date ? formatRaceDate(nextRace.date) : "Date TBD";
@@ -20828,17 +21001,28 @@ function _renderRaceCenterImpl() {
   // ---- Unified race-page tabs. Landing tab is "Overview" (track history);
   // race results and the Jayski documents are revealed on click rather than
   // stacked into one long scroll.
+  const _sched = scheduleForRace(nextRace, STATE.series);
+  const sessionLineHTML = _renderSessionLine(_sched, STATE.series);
+  const predOrFinishCard = isUpcoming
+    ? _renderPredictedFinishCard(STATE.series, nextRace.track_code)
+    : _renderTopFinishCard(nextRace);
+  const recordHTML = _renderRecordBook(history);
+  const allRacesHTML = renderAllRacesTable(allRaces, nextRace.round, STATE.series);
   const overviewHTML = `
-    <div class="rc-grid">
+    ${sessionLineHTML}
+    <div class="rcx-cardrow">
       <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Last 5 Winners Here</span></div>
+        <div class="rc-card-head"><span class="rc-card-title">Winners Here</span><span class="rc-card-sub">last 5</span></div>
         <div class="rc-card-body">${winnersHTML}</div>
       </div>
+      ${predOrFinishCard}
       <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Hot at This Track</span><span class="rc-card-sub">avg finish · current FT cars</span></div>
-        <div class="rc-card-body">${hotHTML}</div>
+        <div class="rc-card-head"><span class="rc-card-title">Record Book</span><span class="rc-card-sub">${history.length} races</span></div>
+        <div class="rc-card-body">${recordHTML}</div>
       </div>
-    </div>`;
+    </div>
+    <div class="rcx-all-head"><span class="t">All Races Run · ${STATE.season}</span><span class="s">newest first</span></div>
+    ${allRacesHTML}`;
 
   const tabs = [{ key: "overview", label: "Overview", html: overviewHTML }];
   if (sessionsHTML) {
@@ -20866,26 +21050,40 @@ function _renderRaceCenterImpl() {
     `<button class="rdoc-tab${t.key === activeKey ? " is-active" : ""}" onclick="selectRaceTab('${t.key}')">` +
     `${escapeHTML(t.label)}</button>`).join("");
 
+  const titleStr = nextRace.name ? nextRace.name : trackStr;
+  const timeStr = nextRace.time || "";
+  const tvStr = nextRace.tv || "";
+  const chipsHTML = _raceStatChips(nextRace, _sched, STATE.series);
   host.innerHTML = `
     <div class="rc-hero">
-      <div class="rc-hero-badge">${heroBadge}</div>
-      <div class="rc-hero-track">R${nextRace.round} · ${nextRace.track_code ? `<a class="rc-track-link" href="#/track/${escapeHTML(nextRace.track_code)}">${escapeHTML(trackStr)}</a>` : escapeHTML(trackStr)}</div>
-      ${raceNameLine}
-      <div class="rc-hero-meta">
-        ${dateStr}${timeTV ? " · " + escapeHTML(timeTV) : ""} · ${seriesNameStr}${trackTypeStr ? ` · ${trackTypeStr}` : ""}
+      <div class="rcx-hero-row">
+        <div style="min-width:0;">
+          <div class="rc-hero-badge">${heroBadge}</div>
+          <div class="rcx-title">${escapeHTML(titleStr)}</div>
+          <div class="rcx-sub">${nextRace.track_code ? `<a class="rc-track-link" href="#/track/${escapeHTML(nextRace.track_code)}">${escapeHTML(trackStr)}</a>` : escapeHTML(trackStr)}</div>
+        </div>
+        <div class="rcx-when">${escapeHTML(seriesNameStr)} · R${nextRace.round}<br>${dateStr}${timeStr ? `<br><b>${escapeHTML(timeStr)}</b>${tvStr ? " · " + escapeHTML(tvStr) : ""}` : ""}</div>
       </div>
-      ${renderRaceSummaryStrip(nextRace)}
+      ${chipsHTML}
     </div>
 
     <div class="rc-tabbar">${tabBar}</div>
     <div class="rc-tabbody">${active.html}</div>
-
-    <div class="rc-jump-row">
-      ${(STATE.view === "historical")
-        ? `<a class="btn-ghost" href="#" onclick="historicalSelect('view','schedule');return false;">View full ${STATE.season} schedule →</a>`
-        : `<a class="btn-ghost" href="#/schedule">View full ${STATE.season} schedule →</a>`}
-    </div>
   `;
+
+  host.querySelectorAll(".rcx-ar-row[data-race-href]").forEach(tr => {
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return;
+      const href = tr.getAttribute("data-race-href");
+      if (!href) return;
+      if (STATE.view === "historical") {
+        const rd = parseInt(href.split("/").pop(), 10);
+        if (Number.isFinite(rd)) { STATE.historical.round = rd; STATE.historical.view = "race"; renderHistorical(); }
+      } else {
+        window.location.hash = href;
+      }
+    });
+  });
 }
 
 // ============================================================
