@@ -56,7 +56,7 @@ const STATE = {
   // Analytics → Track Stats: pick a track, see all-time driver stats there.
   // sortKey/sortDir control the table; gens/series are filters; minStarts
   // hides drivers with low samples (3+ default).
-  trackStats: { code: null, series: "all", gens: new Set(["g5", "g6", "g7"]), sortKey: "wins", sortDir: "desc", minStarts: 1, search: "", expandedSlug: null, yearStart: null, yearEnd: null },
+  trackStats: { code: null, series: "all", gens: new Set(["g5", "g6", "g7"]), sortKey: "wins", sortDir: "desc", minStarts: 1, search: "", expandedSlug: null, yearStart: null, yearEnd: null, page: 0, pageSize: 100 },
   // Race takeover state: which round is being shown. null = "latest race
   // in the loaded data" (the default — what the Race tab used to do).
   // Set from the #/race/<round> URL when a user clicks into a specific race.
@@ -2994,6 +2994,7 @@ function setDataSeries(view, val) {
     ts.series = val;
     if (val !== "NCS") ts.gens.clear();   // gen chips are NCS-only
     ts.expandedSlug = null;
+    ts.page = 0;
     return true;
   }
   if (view === "drivers" || view === "teams" || view === "crewchiefs") {
@@ -16151,6 +16152,15 @@ function renderTrackStats() {
     return dir * (av - bv);
   });
 
+  // ---- Pagination (fixed 100/page; see resolvePageSize) ----
+  const tsSz = resolvePageSize(ts.pageSize);
+  const tsPaged = tsSz !== Infinity;
+  const tsPageCount = tsPaged ? Math.max(1, Math.ceil(rows.length / tsSz)) : 1;
+  if (ts.page >= tsPageCount) ts.page = tsPageCount - 1;
+  if (ts.page < 0) ts.page = 0;
+  const tsStartIdx = tsPaged ? ts.page * tsSz : 0;
+  const pageRows = tsPaged ? rows.slice(tsStartIdx, tsStartIdx + tsSz) : rows;
+
   // ---- UI ----
   const trackOptions = tracks.map(t =>
     `<option value="${t.code}" ${t.code === ts.code ? "selected" : ""}>${escapeHTML(t.name)}</option>`
@@ -16209,10 +16219,10 @@ function renderTrackStats() {
         <th class="ts-th num" data-sort="totalPts">Total Pts${sortAttr("totalPts")}</th>
       </tr></thead>
       <tbody>
-        ${rows.map((r, i) => {
+        ${pageRows.map((r, i) => {
           const isExpanded = ts.expandedSlug === r.slug;
           const mainRow = `<tr class="ts-row ${isExpanded ? "expanded" : ""}" data-slug="${escapeHTML(r.slug)}">
-            <td class="num alltime-rank-cell">${i + 1}</td>
+            <td class="num alltime-rank-cell">${tsStartIdx + i + 1}</td>
             <td><span class="ts-expand-caret">${isExpanded ? "▾" : "▸"}</span> <span class="ts-row-name">${escapeHTML(r.name)}</span></td>
             <td class="num">${r.starts}</td>
             <td class="num ${r.wins > 0 ? "hot" : ""}">${r.wins}</td>
@@ -16295,12 +16305,27 @@ function renderTrackStats() {
       <span class="alltime-count muted">${rows.length} drivers</span>
     </div>
     ${genChipsHTML}
+    <div class="alltime-pag alltime-pag-top">
+      <button class="alltime-pag-btn" data-ts-pag="prev" ${ts.page === 0 ? "disabled" : ""}>← Prev</button>
+      <span class="alltime-pag-status">Page ${ts.page + 1} of ${tsPageCount}</span>
+      <button class="alltime-pag-btn" data-ts-pag="next" ${ts.page >= tsPageCount - 1 ? "disabled" : ""}>Next →</button>
+    </div>
     <div class="card alltime-table-wrap" style="margin-top:8px;">${tableHTML}</div>
   `;
 
   // ---- Wire ----
   const sel = document.getElementById("ts-track-select");
-  if (sel) sel.addEventListener("change", () => { ts.code = sel.value; ts.expandedSlug = null; renderTrackStats(); });
+  if (sel) sel.addEventListener("change", () => { ts.code = sel.value; ts.expandedSlug = null; ts.page = 0; renderTrackStats(); });
+  // Pagination (top pager)
+  host.querySelectorAll("[data-ts-pag]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const dir = btn.getAttribute("data-ts-pag");
+      if (dir === "prev" && ts.page > 0) ts.page--;
+      else if (dir === "next") ts.page++;
+      ts.expandedSlug = null;
+      renderTrackStats();
+    });
+  });
   host.querySelectorAll(".ts-srs-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       ts.series = btn.getAttribute("data-srs");
@@ -16325,6 +16350,7 @@ function renderTrackStats() {
   const minSel = document.getElementById("ts-min-starts");
   if (minSel) minSel.addEventListener("change", () => {
     ts.minStarts = Number(minSel.value);
+    ts.page = 0;
     renderTrackStats();
   });
   // Year-range inputs — debounced so typing "2010" doesn't fire 4 renders.
@@ -16339,6 +16365,7 @@ function renderTrackStats() {
       ts.yearStart = (Number.isFinite(s) && s >= 1949) ? s : null;
       ts.yearEnd = (Number.isFinite(e) && e >= 1949) ? e : null;
       ts.expandedSlug = null;
+      ts.page = 0;
       renderTrackStats();
     }, 350);
   };
@@ -16349,6 +16376,7 @@ function renderTrackStats() {
     ts.yearStart = null;
     ts.yearEnd = null;
     ts.expandedSlug = null;
+    ts.page = 0;
     renderTrackStats();
   });
   const searchInput = document.getElementById("ts-search");
@@ -16356,6 +16384,7 @@ function renderTrackStats() {
     let dbnc = null;
     searchInput.addEventListener("input", e => {
       ts.search = e.target.value;
+      ts.page = 0;
       clearTimeout(dbnc);
       dbnc = setTimeout(() => {
         const sel = searchInput.selectionStart;
@@ -16374,6 +16403,7 @@ function renderTrackStats() {
       if (!col) return;
       if (ts.sortKey === col) ts.sortDir = ts.sortDir === "asc" ? "desc" : "asc";
       else { ts.sortKey = col; ts.sortDir = col === "name" ? "asc" : "desc"; }
+      ts.page = 0;
       renderTrackStats();
     });
   });
