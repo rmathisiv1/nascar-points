@@ -3332,19 +3332,18 @@ function raceWeekendSeries() {
 }
 
 function renderRaceSeriesBar() {
-  const back = `<a href="#" class="takeover-back pgs-back" onclick="takeoverBack(event)">← Back</a>`;
   const weekend = raceWeekendSeries();
   // If we can't resolve (data for other series not loaded yet, or no match),
   // just show the current series so the bar isn't empty.
   if (!weekend.length) {
-    return back + `<div class="pgs-track"><button class="pgs-btn on" disabled>${STATE.series}</button></div>`;
+    return `<div class="pgs-track"><button class="pgs-btn on" disabled>${STATE.series}</button></div>`;
   }
   const btns = weekend.map(w =>
     `<button type="button" class="pgs-btn${w.series === STATE.series ? " on" : ""}" ` +
     `onclick="selectRaceSeries('${w.series}', ${w.round})" role="tab" ` +
     `aria-selected="${w.series === STATE.series ? "true" : "false"}">${w.series}</button>`
   ).join("");
-  return back + `<div class="pgs-track" role="tablist" aria-label="Series at this track">${btns}</div>`;
+  return `<div class="pgs-track" role="tablist" aria-label="Series at this track">${btns}</div>`;
 }
 
 // Switch the race page to another series' race AT THE SAME TRACK (its own round).
@@ -23991,25 +23990,13 @@ const NASCAR_GENERATIONS = [
 ];
 const ALLTIME_PAGE_SIZE = 50;
 
-// Shared rows-per-page control for the Data table pages. "all" = show every
-// row (no paging). Default 100 keeps the big lists (Drivers/Personnel) snappy
-// while still letting the user pick "All" for the full scroll.
-const ROWS_PER_PAGE_OPTS = [50, 100, 250, "all"];
+// Page size for the Data table pages (Drivers/Teams/Crew Chiefs/Tracks/
+// Personnel). "all" = no paging. resolvePageSize maps the stored value to a
+// usable size; pages are fixed at 100 today.
 function resolvePageSize(ps) {
   if (ps === "all") return Infinity;
   const n = Number(ps);
   return n > 0 ? n : 100;
-}
-function rowsPerPageSelect(id, current, onChangeAttr) {
-  const cur = (current == null) ? 100 : current;
-  const oc = onChangeAttr ? ` onchange="${onChangeAttr}"` : "";
-  return `<label class="rows-per-page-ctl"><span class="alltime-toggle-label">Rows</span>` +
-    `<select id="${id}" class="rows-per-page-select"${oc}>` +
-    ROWS_PER_PAGE_OPTS.map(o => {
-      const val = (o === "all") ? "all" : String(o);
-      const lab = (o === "all") ? "All" : String(o);
-      return `<option value="${val}"${String(cur) === val ? " selected" : ""}>${lab}</option>`;
-    }).join("") + `</select></label>`;
 }
 
 // Generic sortable table renderer for all-time pages. Pass:
@@ -24352,12 +24339,6 @@ function _finishMapFor(year, series, date, track) {
 
 function _personnelDefaults() {
   return { query: "", series: "all", positions: [], teams: [], teamPopupSeries: "all", sort: "races", page: 0, pageSize: 100, open: {}, filterOpen: false };
-}
-function personnelSetPageSize(val) {
-  STATE.personnel = STATE.personnel || _personnelDefaults();
-  STATE.personnel.pageSize = (val === "all") ? "all" : Number(val);
-  STATE.personnel.page = 0;
-  _renderPersonnelList();
 }
 function setPersonnelFilter(kind, val) {
   STATE.personnel = STATE.personnel || _personnelDefaults();

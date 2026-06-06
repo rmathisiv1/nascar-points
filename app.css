@@ -1081,6 +1081,8 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   color: var(--text);
   background: var(--card);
 }
+/* Race page: back link sits at the top of the content, just below the title. */
+.race-back-link { display: inline-block; margin: 0 0 2px -4px; }
 
 /* Page footer */
 .footer {
@@ -13205,23 +13207,4 @@ body.lightbox-open {
   #view-personnel .alltime-table thead th {
     top: 0 !important; z-index: 6; background: var(--card);
   }
-}
-
-/* Rows-per-page selector — shared across the Data table pages. Sits in the
-   toolbar next to the other controls; styled to match .alltime-toggle-label
-   + a compact themed <select>. */
-.rows-per-page-ctl {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.rows-per-page-select {
-  padding: 5px 8px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  font-family: var(--sans);
-  cursor: pointer;
 }
