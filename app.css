@@ -13108,44 +13108,34 @@ body.lightbox-open {
 }
 
 /* ----------------------------------------------------------------------
-   Tracks (desktop): keep the filter toolbar + gen chips + the table's
-   column header pinned while only the table BODY scrolls. By default the
-   outer .scrollable card is the scroller, so the toolbar and header scroll
-   away and the (already position:sticky) thead is trapped by the table
-   wrap's overflow-x and can't pin. Here we hand vertical scrolling to the
-   table wrap: the toolbar + chips sit above it and stay put, and the thead
-   pins to the top of the scroll box. Desktop + fine-pointer only, so the
-   mobile single-page-scroll layout is left exactly as-is.
+   Tracks (desktop): now a plain .view like the other four Data pages, so it
+   shares their pinned-toolbar / scrolling-body behavior. The only extra is
+   that its table nests in an inner .ts-table-wrap whose overflow-x traps the
+   (sticky) thead — so we un-trap that and pin the .ts-table header to the
+   scroll-box top. Desktop + fine-pointer only; mobile page-scroll untouched.
    ---------------------------------------------------------------------- */
 @media (min-width: 768px) and (pointer: fine) {
-  #view-trackstats > .card.tab-chart-fill.scrollable {
-    overflow: hidden !important;   /* beat .scrollable { overflow-y: auto !important } */
+  #view-trackstats:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden !important;   /* the table wrap scrolls now, not the view */
   }
-  #view-trackstats #trackstats-host {
+  #view-trackstats:not([hidden]) > .view-head { flex: 0 0 auto; }
+  #trackstats-host {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
   }
-  #view-trackstats #trackstats-host > .view-sub,
-  #view-trackstats #trackstats-host > .ts-toolbar,
-  #view-trackstats #trackstats-host > .ts-gens,
-  #view-trackstats #trackstats-host > .alltime-pag {
-    flex: 0 0 auto;
-  }
-  #view-trackstats #trackstats-host > .alltime-table-wrap {
+  #trackstats-host > .alltime-table-wrap {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;                /* the only scroller now */
     margin-top: 8px;
   }
-  /* The table is .data-table.ts-table inside an inner .ts-table-wrap whose
-     overflow-x makes it a scroll container — that traps the (sticky) thead so
-     it pins to that inner wrap (which doesn't scroll vertically) instead of our
-     outer scroller. Un-trap the inner wrap (any horizontal scroll now happens
-     on .alltime-table-wrap) and pin the header to top:0 of the scroll box,
-     overriding the global top:78px page-scroll offset (which doesn't apply
-     here, since the table scrolls inside its own box on desktop). */
+  #trackstats-host > :not(.alltime-table-wrap) { flex: 0 0 auto; }
   #view-trackstats .ts-table-wrap { overflow: visible; }
   #view-trackstats .data-table.ts-table thead th {
     top: 0 !important;

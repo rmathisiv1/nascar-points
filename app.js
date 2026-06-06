@@ -16286,8 +16286,9 @@ function renderTrackStats() {
   `;
 
   const tsYearsLoaded = Object.keys(SEASON_CACHE).length;
+  const tsSubEl = document.getElementById("trackstats-sub");
+  if (tsSubEl) tsSubEl.textContent = `Driver stats by track across ${tsYearsLoaded} season${tsYearsLoaded === 1 ? "" : "s"} of data`;
   host.innerHTML = `
-    <div class="view-sub ts-sub">Driver stats by track across ${tsYearsLoaded} season${tsYearsLoaded === 1 ? "" : "s"} of data</div>
     <div class="ts-toolbar">
       <select class="ts-track-select" id="ts-track-select">${trackOptions}</select>
       <input type="search" class="ts-search" id="ts-search" placeholder="Search drivers…" value="${escapeHTML(ts.search || "")}">
