@@ -13227,13 +13227,13 @@ body.lightbox-open {
 .rcx-ses b { color: var(--text); font-weight: 600; }
 .rcx-cardrow { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 12px; margin-bottom: 14px; }
 .rcx-pred-row { display: flex; align-items: center; gap: 8px; padding: 4px 7px; font-size: 12px; }
-.rcx-pred-rk { font-family: var(--mono); font-size: 10px; color: var(--dim); width: 14px; text-align: right; }
+.rcx-pred-rk { font-family: var(--mono); font-size: 10px; color: var(--dim); min-width: 14px; text-align: right; }
 .rcx-pred-nm { flex: 1; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rcx-pred-v { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .rcx-pred-v.rcx-pred-hi { color: var(--accent); font-weight: 600; }
 .rcx-cardfoot { padding: 6px 13px 9px; border-top: 1px solid var(--tint-1); }
 .rcx-foot-link { font-family: var(--serif); font-style: italic; font-size: 11px; color: var(--accent); }
-.rcx-rec-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 7px; font-size: 11.5px; }
+.rcx-rec-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 7px; font-size: 12px; }
 .rcx-rec-k { color: var(--muted); }
 .rcx-rec-v { text-align: right; color: var(--text); }
 .rcx-rec-s { display: block; font-family: var(--mono); font-size: 9px; color: var(--dim); }

@@ -20841,6 +20841,68 @@ function renderAllRacesTable(allRaces, currentRound, series) {
   </table>`;
 }
 
+// Last-5 winners at this track, rendered in the SAME compact row format as the
+// Predicted Finish / Finish card so the three overview cards match.
+function _renderWinnersHere(history, series) {
+  const ser = series || STATE.series;
+  const withWin = (history || []).map(h => {
+    const w = (h.results || []).find(d => d.finish_pos === 1);
+    return w ? { h, w } : null;
+  }).filter(Boolean).slice(0, 5);
+  if (!withWin.length) return `<div class="rc-empty">No prior winners on file.</div>`;
+  return withWin.map(({ h, w }) => {
+    const hex = colorFor(ser, w.car_number);
+    const txt = contrastTextFor(hex);
+    return `<div class="rcx-pred-row">
+      <span class="rcx-pred-rk">${h.year}</span>
+      <span class="car-tag" style="background:${hex};color:${txt}">${escapeHTML(String(w.car_number != null ? w.car_number : ""))}</span>
+      <a class="rcx-pred-nm profile-link" href="#/driver/${slugify(w.driver || "")}">${escapeHTML(lastNameOf(w.driver))}</a>
+    </div>`;
+  }).join("");
+}
+
+// All races at THIS track across loaded years — identical markup to the Track
+// page's history table (Year/Round/Winner/Team/Mfr/Pole) so the two match and
+// the shared wireTrackHistoryRows() click handler drives both.
+function renderTrackHistoryTable(history, series) {
+  const fallback = series || STATE.series;
+  const completed = (history || []).filter(h => (h.results || []).some(d => d.finish_pos === 1));
+  if (!completed.length) return `<div class="rc-empty">No history at this track in loaded years.</div>`;
+  const drvCell = (d, ser) => {
+    if (!d) return `<span class="muted">—</span>`;
+    const hex = colorFor(ser, d.car_number);
+    const txt = contrastTextFor(hex);
+    return `<a class="profile-link rc-result-name" href="#/driver/${slugify(d.driver || "")}"><span class="car-tag" style="background:${hex};color:${txt}">${escapeHTML(String(d.car_number != null ? d.car_number : ""))}</span><span>${escapeHTML(lastNameOf(d.driver))}</span></a>`;
+  };
+  const rows = completed.map(h => {
+    const ser = h.series || fallback;
+    const winner = (h.results || []).find(d => d.finish_pos === 1);
+    const pole = (h.results || []).find(d => d.start_pos === 1);
+    const raceHref = `#/race/${h.round}?_y=${h.year}&_s=${ser}`;
+    const wTeamCode = winner
+      ? (winner.team_code || (typeof teamCodeFromName === "function" ? teamCodeFromName(winner.team, SERIES_TO_KEY[ser], winner.car_number) : ""))
+      : "";
+    const tHTML = wTeamCode
+      ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}">${escapeHTML(wTeamCode)}</a>`
+      : `<span class="muted">—</span>`;
+    const wMfr = winner ? ((typeof manufacturerName === "function") ? manufacturerName(winner.manufacturer) : winner.manufacturer) : "";
+    const mHTML = wMfr ? escapeHTML(wMfr) : `<span class="muted">—</span>`;
+    return `<tr class="profile-link tk-hist-row" data-race-href="${raceHref}" style="cursor:pointer;" title="View race results">
+      <td data-label="Year">${h.year}</td>
+      <td class="num" data-label="Round">R${h.round}</td>
+      <td data-label="Winner">${drvCell(winner, ser)}</td>
+      <td data-label="Team">${tHTML}</td>
+      <td class="tk-col-mfr-cell" data-label="Mfr">${mHTML}</td>
+      <td class="tk-col-pole-cell" data-label="Pole">${drvCell(pole, ser)}</td>
+    </tr>`;
+  }).join("");
+  return `<table class="rc-result-table tk-history-table">
+    <colgroup><col class="tk-col-yr"><col class="tk-col-rd"><col><col class="tk-col-team"><col class="tk-col-mfr"><col class="tk-col-pole"></colgroup>
+    <thead><tr><th>Year</th><th class="num">Round</th><th>Winner</th><th>Team</th><th class="tk-col-mfr-head">Mfr</th><th class="tk-col-pole-head">Pole</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function renderRaceCenter() {
   const host = document.getElementById("race-host");
   try {
@@ -21007,13 +21069,14 @@ function _renderRaceCenterImpl() {
     ? _renderPredictedFinishCard(STATE.series, nextRace.track_code)
     : _renderTopFinishCard(nextRace);
   const recordHTML = _renderRecordBook(history);
-  const allRacesHTML = renderAllRacesTable(allRaces, nextRace.round, STATE.series);
+  const winnersBody = _renderWinnersHere(history, STATE.series);
+  const trackHistHTML = renderTrackHistoryTable(history, STATE.series);
   const overviewHTML = `
     ${sessionLineHTML}
     <div class="rcx-cardrow">
       <div class="card rc-card">
         <div class="rc-card-head"><span class="rc-card-title">Winners Here</span><span class="rc-card-sub">last 5</span></div>
-        <div class="rc-card-body">${winnersHTML}</div>
+        <div class="rc-card-body">${winnersBody}</div>
       </div>
       ${predOrFinishCard}
       <div class="card rc-card">
@@ -21021,8 +21084,8 @@ function _renderRaceCenterImpl() {
         <div class="rc-card-body">${recordHTML}</div>
       </div>
     </div>
-    <div class="rcx-all-head"><span class="t">All Races Run · ${STATE.season}</span><span class="s">newest first</span></div>
-    ${allRacesHTML}`;
+    <div class="rcx-all-head"><span class="t">All Races at ${escapeHTML(trackStr)}</span><span class="s">newest first</span></div>
+    ${trackHistHTML}`;
 
   const tabs = [{ key: "overview", label: "Overview", html: overviewHTML }];
   if (sessionsHTML) {
@@ -21071,19 +21134,7 @@ function _renderRaceCenterImpl() {
     <div class="rc-tabbody">${active.html}</div>
   `;
 
-  host.querySelectorAll(".rcx-ar-row[data-race-href]").forEach(tr => {
-    tr.addEventListener("click", (e) => {
-      if (e.target.closest("a")) return;
-      const href = tr.getAttribute("data-race-href");
-      if (!href) return;
-      if (STATE.view === "historical") {
-        const rd = parseInt(href.split("/").pop(), 10);
-        if (Number.isFinite(rd)) { STATE.historical.round = rd; STATE.historical.view = "race"; renderHistorical(); }
-      } else {
-        window.location.hash = href;
-      }
-    });
-  });
+  if (typeof wireTrackHistoryRows === "function") wireTrackHistoryRows();
 }
 
 // ============================================================
