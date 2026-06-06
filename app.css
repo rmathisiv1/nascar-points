@@ -13126,8 +13126,10 @@ body.lightbox-open {
     flex: 1 1 auto;
     min-height: 0;
   }
+  #view-trackstats #trackstats-host > .view-sub,
   #view-trackstats #trackstats-host > .ts-toolbar,
-  #view-trackstats #trackstats-host > .ts-gens {
+  #view-trackstats #trackstats-host > .ts-gens,
+  #view-trackstats #trackstats-host > .alltime-pag {
     flex: 0 0 auto;
   }
   #view-trackstats #trackstats-host > .alltime-table-wrap {

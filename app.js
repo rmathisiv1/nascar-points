@@ -16285,7 +16285,9 @@ function renderTrackStats() {
     </div>
   `;
 
+  const tsYearsLoaded = Object.keys(SEASON_CACHE).length;
   host.innerHTML = `
+    <div class="view-sub ts-sub">Driver stats by track across ${tsYearsLoaded} season${tsYearsLoaded === 1 ? "" : "s"} of data</div>
     <div class="ts-toolbar">
       <select class="ts-track-select" id="ts-track-select">${trackOptions}</select>
       <input type="search" class="ts-search" id="ts-search" placeholder="Search drivers…" value="${escapeHTML(ts.search || "")}">
@@ -24564,6 +24566,7 @@ function renderPersonnel() {
              placeholder="Search personnel\u2026" value="${escapeHTML(st.query || "")}"
              oninput="_personnelSearch(this)">
       <button class="pers-filter-open" id="pers-filter-btn" onclick="personnelOpenFilter()">${nSel ? `Filters (${nSel})` : "Filters"}</button>
+      <span class="alltime-count muted" id="personnel-count"></span>
     </div>
     <div class="pers-active-row">
       <span class="pers-hint">Click a name for the breakdown \u00b7 click Races / Top 5 / Wins to sort \u00b7 team shown is where they ran most this season.</span>
@@ -24659,7 +24662,7 @@ function _renderPersonnelList() {
 
   const pag = `<div class="alltime-pag">
       <button class="alltime-pag-btn" ${page === 0 ? "disabled" : ""} onclick="personnelPage(-1)">\u2190 Prev</button>
-      <span class="alltime-pag-status">${paged ? `Page ${page + 1} of ${pageCount} \u00b7 ${total.toLocaleString()} people` : `Showing all ${total.toLocaleString()} people`}</span>
+      <span class="alltime-pag-status">Page ${page + 1} of ${pageCount}</span>
       <button class="alltime-pag-btn" ${(!paged || page >= pageCount - 1) ? "disabled" : ""} onclick="personnelPage(1)">Next \u2192</button>
     </div>`;
 
@@ -24681,6 +24684,8 @@ function _renderPersonnelList() {
         <tbody>${body}</tbody>
       </table>
     </div>` : `<div class="rc-empty">No people match.</div>`;
+  const pcEl = document.getElementById("personnel-count");
+  if (pcEl) pcEl.textContent = `${total.toLocaleString()} people`;
 }
 
 function renderAllTimeDrivers() {
