@@ -7725,8 +7725,9 @@ body.lightbox-open {
   cursor: pointer;
 }
 .ts-search {
-  flex: 0 1 200px;
-  min-width: 140px;
+  flex: 1;
+  max-width: 320px;
+  min-width: 180px;
   padding: 6px 10px;
   background: var(--bg-2);
   border: 1px solid var(--border);

@@ -16182,7 +16182,7 @@ function renderTrackStats() {
 
   const genChipsHTML = showGenChips ? `
     <div class="ts-gens">
-      <span class="ts-gens-label">Gen:</span>
+      <span class="ts-gens-label">Generation:</span>
       <button class="ts-gen-chip ${ts.gens.size === 0 ? "active" : ""}" data-gen="__all__">All</button>
       ${visibleGens.map(g => {
         const label = g.year_end >= 9999 ? `${g.label} (${g.year_start}+)` : `${g.label} (${g.year_start}–${g.year_end})`;
@@ -24568,9 +24568,6 @@ function renderPersonnel() {
       <button class="pers-filter-open" id="pers-filter-btn" onclick="personnelOpenFilter()">${nSel ? `Filters (${nSel})` : "Filters"}</button>
       <span class="alltime-count muted" id="personnel-count"></span>
     </div>
-    <div class="pers-active-row">
-      <span class="pers-hint">Click a name for the breakdown \u00b7 click Races / Top 5 / Wins to sort \u00b7 team shown is where they ran most this season.</span>
-    </div>
     <div id="personnel-list"></div>
 
     <div class="pers-modal-wrap${st.filterOpen ? " open" : ""}" id="pers-modal-wrap">
@@ -24660,7 +24657,7 @@ function _renderPersonnelList() {
     return main + detail;
   }).join("");
 
-  const pag = `<div class="alltime-pag">
+  const pag = `<div class="alltime-pag alltime-pag-top">
       <button class="alltime-pag-btn" ${page === 0 ? "disabled" : ""} onclick="personnelPage(-1)">\u2190 Prev</button>
       <span class="alltime-pag-status">Page ${page + 1} of ${pageCount}</span>
       <button class="alltime-pag-btn" ${(!paged || page >= pageCount - 1) ? "disabled" : ""} onclick="personnelPage(1)">Next \u2192</button>
