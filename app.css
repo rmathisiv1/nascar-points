@@ -1082,7 +1082,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   background: var(--card);
 }
 /* Race page: back link sits at the top of the content, just below the title. */
-.race-back-link { display: inline-block; margin: 0 0 2px -4px; }
+.race-back-link { display: inline-block; margin: -2px 0 0 -4px; }
 
 /* Page footer */
 .footer {

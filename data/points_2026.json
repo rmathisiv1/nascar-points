@@ -1,6 +1,6 @@
 {
   "season": 2026,
-  "generated_at": "2026-06-01T12:57:14Z",
+  "generated_at": "2026-06-06T16:32:14Z",
   "source": "racing-reference.info",
   "series": {
     "NCS": {
@@ -25245,7 +25245,7 @@
             {
               "driver": "Chase Elliott",
               "car_number": "9",
-              "team": "Rick Hendrick",
+              "team": "NAPA Auto Parts ( Rick Hendrick )",
               "team_code": "HMS",
               "manufacturer": "CHV",
               "start_pos": 29,
@@ -26045,7 +26045,7 @@
             {
               "driver": "Kyle Larson",
               "car_number": "5",
-              "team": "Rick Hendrick",
+              "team": "HendrickCars.com ( Rick Hendrick )",
               "team_code": "HMS",
               "manufacturer": "CHV",
               "start_pos": 5,
@@ -26395,7 +26395,7 @@
             {
               "driver": "William Byron",
               "car_number": "24",
-              "team": "Rick Hendrick",
+              "team": "Raptor ( Rick Hendrick )",
               "team_code": "HMS",
               "manufacturer": "CHV",
               "start_pos": 8,
@@ -26545,7 +26545,7 @@
             {
               "driver": "Alex Bowman",
               "car_number": "48",
-              "team": "Rick Hendrick",
+              "team": "Ally ( Rick Hendrick )",
               "team_code": "HMS",
               "manufacturer": "CHV",
               "start_pos": 19,
@@ -28433,8 +28433,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "OVERPLAY ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "OVERPLAY ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 30,
               "finish_pos": 22,
@@ -30307,8 +30307,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 31,
               "finish_pos": 21,
@@ -32831,8 +32831,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 13,
               "finish_pos": 33,
@@ -34205,8 +34205,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 27,
               "finish_pos": 22,
@@ -36279,8 +36279,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "3Dimensional.com ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "3Dimensional.com ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 19,
               "finish_pos": 25,
@@ -38353,8 +38353,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "3-Dimensional Services ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "3-Dimensional Services ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 31,
               "finish_pos": 28,
@@ -40327,8 +40327,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 30,
               "finish_pos": 29,
@@ -42451,8 +42451,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "3-Dimensional Services ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "3-Dimensional Services ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 23,
               "finish_pos": 33,
@@ -44475,8 +44475,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 25,
               "finish_pos": 35,
@@ -46249,8 +46249,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing Group ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing Group ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 35,
               "finish_pos": 32,
@@ -47023,8 +47023,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing Group ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing Group ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 31,
               "finish_pos": 10,
@@ -50197,8 +50197,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "3Dimensional.com ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "3Dimensional.com ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 19,
               "finish_pos": 35,
@@ -50821,8 +50821,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 35,
               "finish_pos": 9,
@@ -52895,8 +52895,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing Group ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing Group ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 26,
               "finish_pos": 12,
@@ -55019,8 +55019,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Purple Hearts and Homes ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Purple Hearts and Homes ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 16,
               "finish_pos": 16,
@@ -57643,8 +57643,8 @@
             {
               "driver": "Austin Green",
               "car_number": "87",
-              "team": "Peterson Racing Group / 3Dimensional.com ( Wayne Peterson )",
-              "team_code": "WPR",
+              "team": "Peterson Racing Group / 3Dimensional.com ( Doug Peterson )",
+              "team_code": null,
               "manufacturer": "CHV",
               "start_pos": 14,
               "finish_pos": 30,
@@ -78561,7 +78561,7 @@
           "date": "2026-06-06",
           "track": "Michigan",
           "track_code": "MCH",
-          "name": "NCTS Race at Michigan",
+          "name": "DQS Solutions and Staffing 250",
           "time": "1:30 PM",
           "tv": "FS1",
           "track_length": 0.0,

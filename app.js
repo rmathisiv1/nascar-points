@@ -3387,6 +3387,21 @@ function takeoverBack(e) {
   location.hash = `#/${prev}`;
 }
 
+// Back handler for the Race page specifically. The shared takeoverBack
+// preserves the ORIGINAL takeover origin (so home→schedule→race keeps
+// prevHash=home), which sends Back to the home page instead of the schedule
+// the user actually came from. Real browser-back returns them to wherever
+// they were — schedule, standings, or another race — which is what's expected.
+function raceBack(e) {
+  if (e) e.preventDefault();
+  if (STATE.view === "historical" && STATE.historical && STATE.historical.view === "race") {
+    historicalSelect("view", "schedule");
+    return;
+  }
+  if (window.history.length > 1) window.history.back();
+  else location.hash = "#/schedule";
+}
+
 // Toggle handler: record the choice for THIS page, then apply. Reuses
 // applySeriesChangeGlobal for the heavy lifting (clamp season, load data,
 // reset cache, repopulate pickers, render). If the page is already on that
@@ -20744,7 +20759,7 @@ function _renderPredictedFinishCard(series, trackCode) {
   try { pred = _computeRacePredictions(series, trackCode); } catch (e) { return ""; }
   if (!pred || !pred.byFinish || !pred.byFinish.length) return "";
   const useWin = pred.source === "entry_list";
-  const rows = pred.byFinish.slice(0, 6).map((p, i) => {
+  const rows = pred.byFinish.slice(0, 5).map((p, i) => {
     const car = (p.car != null) ? p.car : (p.entity && p.entity.car_number);
     const carHex = colorFor(series, car);
     const txt = contrastTextFor(carHex);
@@ -20766,7 +20781,7 @@ function _renderPredictedFinishCard(series, trackCode) {
   </div>`;
 }
 function _renderTopFinishCard(race) {
-  const res = (race.results || []).filter(d => d.finish_pos != null).sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 6);
+  const res = (race.results || []).filter(d => d.finish_pos != null).sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 5);
   if (!res.length) return "";
   const rows = res.map(d => {
     const carHex = colorFor(STATE.series, d.car_number);
@@ -20779,7 +20794,7 @@ function _renderTopFinishCard(race) {
     </div>`;
   }).join("");
   return `<div class="card rc-card">
-    <div class="rc-card-head"><span class="rc-card-title">Finish</span><span class="rc-card-sub">top 6 · pts</span></div>
+    <div class="rc-card-head"><span class="rc-card-title">Finish</span><span class="rc-card-sub">top 5 · pts</span></div>
     <div class="rc-card-body">${rows}</div>
   </div>`;
 }
@@ -20787,20 +20802,38 @@ function _renderRecordBook(history) {
   if (!history || !history.length) return `<div class="rc-empty">No history at this track.</div>`;
   const rows = [];
   rows.push(["Races run", String(history.length), ""]);
-  const cau = history.map(h => Number(h.cautions)).filter(n => Number.isFinite(n));
-  if (cau.length) rows.push(["Avg cautions", (cau.reduce((a, b) => a + b, 0) / cau.length).toFixed(1), ""]);
+  // Most wins / most poles by driver across loaded years.
+  const winCount = {}, poleCount = {};
+  history.forEach(h => {
+    const w = (h.results || []).find(d => d.finish_pos === 1);
+    if (w && w.driver) winCount[w.driver] = (winCount[w.driver] || 0) + 1;
+    const p = (h.results || []).find(d => d.start_pos === 1);
+    if (p && p.driver) poleCount[p.driver] = (poleCount[p.driver] || 0) + 1;
+  });
+  const topWin = Object.entries(winCount).sort((a, b) => b[1] - a[1])[0];
+  if (topWin) rows.push(["Most wins", `${lastNameOf(topWin[0])} · ${topWin[1]}`, ""]);
+  const topPole = Object.entries(poleCount).sort((a, b) => b[1] - a[1])[0];
+  if (topPole) rows.push(["Most poles", `${lastNameOf(topPole[0])} · ${topPole[1]}`, ""]);
+  // Qualifying record (fastest qual lap) across loaded years.
   let qr = null;
   history.forEach(h => (h.results || []).forEach(d => {
     const t = Number(d.qual_time);
     if (Number.isFinite(t) && t > 0 && (!qr || t < qr.t)) qr = { t, name: d.driver, year: h.year };
   }));
   if (qr) rows.push(["Qual record", `${lastNameOf(qr.name)} · ${qr.t.toFixed(2)}s`, String(qr.year)]);
+  // Closest finish (smallest margin of victory).
   let cf = null;
   history.forEach(h => {
     const m = parseFloat(String(h.margin_of_victory || "").replace(/[^0-9.]/g, ""));
     if (Number.isFinite(m) && m > 0 && (!cf || m < cf.m)) cf = { m, year: h.year };
   });
   if (cf) rows.push(["Closest finish", `${cf.m.toFixed(3)}s`, String(cf.year)]);
+  // Avg lead changes / cautions — only when actually populated (a flat 0 just
+  // means the field isn't filled in, so hide it rather than show 0).
+  const lc = history.map(h => Number(h.lead_changes)).filter(n => Number.isFinite(n) && n > 0);
+  if (lc.length) rows.push(["Avg lead changes", String(Math.round(lc.reduce((a, b) => a + b, 0) / lc.length)), ""]);
+  const cau = history.map(h => Number(h.cautions)).filter(n => Number.isFinite(n) && n > 0);
+  if (cau.length) rows.push(["Avg cautions", (cau.reduce((a, b) => a + b, 0) / cau.length).toFixed(1), ""]);
   return rows.map(([k, v, s]) =>
     `<div class="rcx-rec-row"><span class="rcx-rec-k">${escapeHTML(k)}</span><span class="rcx-rec-v">${escapeHTML(v)}${s ? `<span class="rcx-rec-s">${escapeHTML(s)}</span>` : ""}</span></div>`
   ).join("");
@@ -21036,7 +21069,7 @@ function _renderRaceCenterImpl() {
     heroBadge = isUpcoming ? "UPCOMING" : "MOST RECENT";
   }
 
-  if (sub) sub.textContent = `${STATE.season} ${seriesNameStr} · ${trackStr} · ${dateStr}`;
+  if (sub) sub.textContent = "";
 
   // ---- Track history (last 5 winners + hot at track) — uses cached prior years
   const history = collectTrackHistory(nextRace.track_code, STATE.series);
@@ -21075,12 +21108,12 @@ function _renderRaceCenterImpl() {
     ${sessionLineHTML}
     <div class="rcx-cardrow">
       <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Winners Here</span><span class="rc-card-sub">last 5</span></div>
+        <div class="rc-card-head"><span class="rc-card-title">Winners</span><span class="rc-card-sub">last 5</span></div>
         <div class="rc-card-body">${winnersBody}</div>
       </div>
       ${predOrFinishCard}
       <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Record Book</span><span class="rc-card-sub">${history.length} races</span></div>
+        <div class="rc-card-head"><span class="rc-card-title">Track Stats</span><span class="rc-card-sub">${history.length} races</span></div>
         <div class="rc-card-body">${recordHTML}</div>
       </div>
     </div>
@@ -21125,7 +21158,7 @@ function _renderRaceCenterImpl() {
           <div class="rcx-title">${escapeHTML(titleStr)}</div>
           <div class="rcx-sub">${nextRace.track_code ? `<a class="rc-track-link" href="#/track/${escapeHTML(nextRace.track_code)}">${escapeHTML(trackStr)}</a>` : escapeHTML(trackStr)}</div>
         </div>
-        <div class="rcx-when">${escapeHTML(seriesNameStr)} · R${nextRace.round}<br>${dateStr}${timeStr ? `<br><b>${escapeHTML(timeStr)}</b>${tvStr ? " · " + escapeHTML(tvStr) : ""}` : ""}</div>
+        <div class="rcx-when">${STATE.season} ${escapeHTML(seriesNameStr)} · R${nextRace.round}<br>${dateStr}${timeStr ? `<br><b>${escapeHTML(timeStr)}</b>${tvStr ? " · " + escapeHTML(tvStr) : ""}` : ""}</div>
       </div>
       ${chipsHTML}
     </div>
