@@ -332,23 +332,16 @@ def _pdf_links(html):
     return re.findall(r'https?://[^\s"\'<>]+?\.pdf', html or "", re.I)
 
 
-def discover_schedule_pdf(series, year, track, race_date=None, verbose=False):
-    """Resolve the race page, then find the EventSchedule PDF two ways:
-      1) a direct *EventSchedule*.pdf link on the race page, or
-      2) a 'schedule' resource link -> its page -> the *EventSchedule*.pdf.
-    Returns a URL or None. (Not unit-tested here — validate live.)"""
-    try:
-        from scrape_jayski_entry import discover_race_page
-    except Exception:
-        return None
-    if _get is None:
-        return None
-    track = _alias_track(track)
-    page = discover_race_page(series, year, track, verbose=verbose, race_date=race_date)
-    if not page:
+def _pdf_from_page(page):
+    """Given a Jayski race-page (or schedule-resource) URL, return its
+    EventSchedule PDF URL, or None. Two-step search:
+      1) a direct *EventSchedule*.pdf link on the page, or
+      2) a 'schedule' link -> its target page -> the *EventSchedule*.pdf.
+    (Not unit-tested here — validate live.)"""
+    if _get is None or not page:
         return None
     html = _get(page) or ""
-    # 1) direct EventSchedule PDF on the race page.
+    # 1) direct EventSchedule PDF on the page.
     for p in _pdf_links(html):
         if "eventschedule" in p.lower():
             return p
@@ -370,6 +363,24 @@ def discover_schedule_pdf(series, year, track, race_date=None, verbose=False):
                 return p
         time.sleep(0.5)
     return None
+
+
+def discover_schedule_pdf(series, year, track, race_date=None, verbose=False):
+    """Resolve the race page, then find the EventSchedule PDF two ways:
+      1) a direct *EventSchedule*.pdf link on the race page, or
+      2) a 'schedule' resource link -> its page -> the *EventSchedule*.pdf.
+    Returns a URL or None. (Not unit-tested here — validate live.)"""
+    try:
+        from scrape_jayski_entry import discover_race_page
+    except Exception:
+        return None
+    if _get is None:
+        return None
+    track = _alias_track(track)
+    page = discover_race_page(series, year, track, verbose=verbose, race_date=race_date)
+    if not page:
+        return None
+    return _pdf_from_page(page)
 
 
 def load_calendar(year, store_path):
@@ -400,7 +411,7 @@ def _fetch(url):
 
 def main():
     ap = argparse.ArgumentParser(description="Scrape Jayski EventSchedule PDFs.")
-    ap.add_argument("urls", nargs="*", help="EventSchedule PDF URL(s)")
+    ap.add_argument("urls", nargs="*", help="EventSchedule PDF or race-page URL(s)")
     ap.add_argument("--discover", nargs=3, metavar=("SERIES", "YEAR", "TRACK"),
                     help="discover the PDF from a single race weekend")
     ap.add_argument("--date", help="race date YYYY-MM-DD (disambiguates discover)")
@@ -457,6 +468,25 @@ def main():
     if not urls:
         ap.print_help()
         sys.exit(1)
+
+    # Positional args may be EventSchedule PDF URLs OR race-page URLs. Resolve
+    # any non-PDF (a race page) to its EventSchedule PDF first, so the user can
+    # paste the easy-to-find race page instead of hunting for the PDF link.
+    resolved = []
+    for u in urls:
+        if u.split("?")[0].lower().endswith(".pdf"):
+            resolved.append(u)
+            continue
+        pdf = _pdf_from_page(u)
+        if pdf:
+            print(f"from-page: {u}\n       -> {pdf}", file=sys.stderr)
+            resolved.append(pdf)
+        else:
+            print(f"from-page: no EventSchedule PDF found on {u}", file=sys.stderr)
+    urls = resolved
+    if not urls:
+        print("nothing to parse.", file=sys.stderr)
+        sys.exit(2)
 
     # Parse each unique PDF once (shared-venue series resolve to the same URL).
     seen = set()
