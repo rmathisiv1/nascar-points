@@ -20706,6 +20706,7 @@ function scheduleForRace(race, series) {
   if (!STATE_SCHEDULE || !STATE_SCHEDULE.events || !race) return null;
   const evs = Object.values(STATE_SCHEDULE.events);
   const want = series || STATE.series;
+  // 1) Exact event_date (preferring a series match) — the common case.
   if (race.date) {
     const d1 = evs.find(e => e.event_date === race.date && (e.series || []).includes(want));
     if (d1) return d1;
@@ -20713,8 +20714,27 @@ function scheduleForRace(race, series) {
     if (d2) return d2;
   }
   const tslug = _trkNameSlug((typeof prettyTrack === "function" ? prettyTrack(race.track_code, race.track) : null) || race.track || "");
-  return evs.find(e => _trkNameSlug(e.track) === tslug && (e.series || []).includes(want))
-      || evs.find(e => _trkNameSlug(e.track) === tslug) || null;
+  const sameTrack = evs.filter(e => _trkNameSlug(e.track) === tslug);
+  // 2) Closest event_date within a few days. Absorbs the common 1-day offset
+  //    between the calendar's race date and the EventSchedule's event date,
+  //    and — since two weekends at the same track are months apart — picks the
+  //    correct one of a dual-date track (Atlanta, Bristol, Richmond, ...).
+  if (race.date && sameTrack.length) {
+    const rd = Date.parse(race.date);
+    if (Number.isFinite(rd)) {
+      const within = sameTrack
+        .map(e => ({ e, dd: Math.abs(Date.parse(e.event_date) - rd) }))
+        .filter(x => Number.isFinite(x.dd) && x.dd <= 4 * 86400000)
+        .sort((a, b) => a.dd - b.dd);
+      if (within.length) {
+        const ser = within.find(x => (x.e.series || []).includes(want));
+        return (ser || within[0]).e;
+      }
+    }
+  }
+  // 3) Fall back to a single unambiguous track match only.
+  if (sameTrack.length === 1) return sameTrack[0];
+  return sameTrack.find(e => (e.series || []).includes(want)) || sameTrack[0] || null;
 }
 function _sessDayTime(s) {
   if (!s) return "";
