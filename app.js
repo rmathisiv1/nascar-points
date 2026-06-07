@@ -14759,12 +14759,12 @@ function _renderUpcomingBand(year, series) {
       <div class="hhb-right"></div></div>`;
   }
   const dateStr = nextRace.date || "";
-  let cnum = "—", cunit = "", csub = `R${nextRace.round}`;
+  let cnum = "—", cunit = "", csub = `R${nextRace.round}`, cword = false;
   if (dateStr) {
     const days = Math.ceil((new Date(dateStr + "T00:00:00").getTime() - Date.now()) / 86400000);
     if (days > 1) { cnum = String(days); cunit = "days"; csub = `until R${nextRace.round}`; }
     else if (days === 1) { cnum = "1"; cunit = "day"; csub = `until R${nextRace.round}`; }
-    else if (days === 0) { cnum = "Today"; cunit = ""; csub = `R${nextRace.round}`; }
+    else if (days === 0) { cnum = "Today"; cunit = ""; csub = `R${nextRace.round}`; cword = true; }
   }
   const trackName = prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD";
   const trackType = trackTypeFor(nextRace.track_code);
@@ -14796,7 +14796,7 @@ function _renderUpcomingBand(year, series) {
   const trackHref = `#/race/${nextRace.round}?_y=${year}&_s=${encodeURIComponent(series)}`;
   return `<div class="home-hero-band" style="border-left-color:${accent};">
     <div class="hhb-count">
-      <div class="hhb-num-line"><span class="hhb-num">${cnum}</span>${cunit ? `<span class="hhb-unit">${cunit}</span>` : ""}</div>
+      <div class="hhb-num-line"><span class="hhb-num${cword ? " hhb-num-word" : ""}">${cnum}</span>${cunit ? `<span class="hhb-unit">${cunit}</span>` : ""}</div>
       <div class="hhb-sub">${csub}</div>
     </div>
     <div class="hhb-mid">
