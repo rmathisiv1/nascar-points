@@ -363,12 +363,16 @@ body { overflow-x: clip; }
 }
 .page-series-bar[hidden] { display: none; }
 
-/* On narrow web viewports the 15% side rails get too cramped to read, so drop
-   them and let the center fill the width. Below 768px the mobile query handles
-   it; this covers the awkward 768–1150px desktop range. */
-@media (min-width: 768px) and (max-width: 1150px) {
+/* As the window narrows the side rails get too cramped to read. Drop the
+   right rail (power rankings — it needs the most width) first, then the left
+   rail (standings). Below 768px the mobile query handles everything. */
+@media (max-width: 1300px) {
+  .dashboard { grid-template-columns: minmax(170px, 17%) minmax(0, 1fr); }
+  .col-right { display: none; }
+}
+@media (max-width: 1050px) {
   .dashboard { grid-template-columns: minmax(0, 1fr); }
-  .col-left, .col-right { display: none; }
+  .col-left { display: none; }
 }
 .pgs-track {
   display: inline-flex;
@@ -4713,15 +4717,13 @@ a.driver-cell.profile-link:hover .car-tag {
   min-width: 0;
 }
 #view-race .view-head {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
+  display: none;
 }
 /* The race sub-line is now empty (track/date live in the hero), so collapse
    it rather than leaving a dead gap between the Back link and the hero. */
 #view-race .view-sub:empty { display: none; }
 /* Race page: pull the header divider and Back link tight to the hero. */
-.page-series-bar.page-hd.pb-race { margin-bottom: 4px; }
+.page-series-bar.page-hd.pb-race { padding-bottom: 6px; margin-bottom: 6px; }
 #race-takeover { padding-top: 2px; }
 .rc-hero::before {
   content: "";
@@ -12727,7 +12729,6 @@ body.lightbox-open {
 /* Give the page title room to breathe — away from the series row above and the
    first card below (the title was crowding both lines). */
 #view-track .view-head,
-#view-race .view-head,
 #view-schedule .view-head {
   padding: 18px 4px 16px;
   margin-bottom: 8px;
@@ -13243,9 +13244,27 @@ body.lightbox-open {
 .rcx-cardrow { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 12px; margin-bottom: 14px; }
 /* Two-column overview: big Top-10 Finish/Predicted on the left, Winners +
    Track Stats stacked on the right. Unifies the pre-race and post-race pages. */
-.rcx-overview { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; margin-bottom: 14px; align-items: start; }
+.rcx-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; align-items: start; }
 .rcx-ov-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .rcx-ov-main { min-width: 0; }
+/* Shared Finish / Predicted-Finish table so completed and upcoming races read
+   the same. Left-aligned pos + driver, right-aligned numeric columns. */
+.rcx-fin-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rcx-fin-table th {
+  font-family: var(--mono); font-size: 9px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+  text-align: right; padding: 3px 7px 5px; border-bottom: 1px solid var(--border);
+}
+.rcx-fin-table th:nth-child(1), .rcx-fin-table th:nth-child(2) { text-align: left; }
+.rcx-fin-table td { padding: 5px 7px; border-bottom: 1px solid var(--tint-1); }
+.rcx-fin-table tr:last-child td { border-bottom: none; }
+.rcx-fin-pos { font-family: var(--mono); font-size: 10px; color: var(--dim); width: 20px; }
+.rcx-fin-drv { white-space: nowrap; }
+.rcx-fin-drv .car-tag { margin-right: 7px; vertical-align: middle; }
+.rcx-fin-drv a { color: var(--text); text-decoration: none; }
+.rcx-fin-drv a:hover { color: var(--accent); }
+.rcx-fin-n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.rcx-fin-pts { color: var(--text); font-weight: 600; }
 .rcx-pred-row { display: flex; align-items: center; gap: 8px; padding: 4px 7px; font-size: 12px; }
 .rcx-pred-rk { font-family: var(--mono); font-size: 10px; color: var(--dim); min-width: 14px; text-align: right; }
 .rcx-pred-nm { flex: 1; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -3349,6 +3349,7 @@ function renderRaceSeriesBar() {
   }
   const btns = weekend.map(w =>
     `<button type="button" class="pgs-btn${w.series === STATE.series ? " on" : ""}" ` +
+    `data-series="${w.series}" ` +
     `onclick="selectRaceSeries('${w.series}', ${w.round})" role="tab" ` +
     `aria-selected="${w.series === STATE.series ? "true" : "false"}">${w.series}</button>`
   ).join("");
@@ -20839,19 +20840,28 @@ function _renderPredictedFinishCard(series, trackCode, race) {
     const carHex = colorFor(series, car);
     const txt = contrastTextFor(carHex);
     const hasWin = p.win_prob != null;
-    const val = hasWin ? `${Math.round(p.win_prob * 100)}%`
-              : (p.predicted_finish != null ? p.predicted_finish.toFixed(1) : "");
-    const hi = (hasWin && i < 2) ? " rcx-pred-hi" : "";
-    return `<div class="rcx-pred-row">
-      <span class="rcx-pred-rk">${i + 1}</span>
-      <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(car != null ? car : ""))}</span>
-      <a class="rcx-pred-nm profile-link" href="#/driver/${slugify(p.driverName || "")}">${escapeHTML(lastNameOf(p.driverName))}</a>
-      <span class="rcx-pred-v${hi}">${val}</span>
-    </div>`;
+    const projVal = hasWin ? `${Math.round(p.win_prob * 100)}%`
+              : (p.predicted_finish != null ? p.predicted_finish.toFixed(1) : "—");
+    const ptsVal = (p.predicted_total_pts != null) ? Math.round(p.predicted_total_pts) : "—";
+    const t5 = (p.top5_odds != null) ? (p.top5_odds > 0 ? "+" + p.top5_odds : String(p.top5_odds))
+             : (p.top5_prob != null ? `${Math.round(p.top5_prob * 100)}%` : "—");
+    const hi = (hasWin && i < 2) ? " rcx-fin-pts" : "";
+    return `<tr>
+      <td class="rcx-fin-pos">${i + 1}</td>
+      <td class="rcx-fin-drv"><span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(car != null ? car : ""))}</span><a class="profile-link" href="#/driver/${slugify(p.driverName || "")}">${escapeHTML(lastNameOf(p.driverName))}</a></td>
+      <td class="rcx-fin-n${hi}">${projVal}</td>
+      <td class="rcx-fin-n">${ptsVal}</td>
+      <td class="rcx-fin-n">${t5}</td>
+    </tr>`;
   }).join("");
   return `<div class="card rc-card">
-    <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${gridOn ? "post-qual" : "model"} · ${useWin ? "win %" : "proj"}</span></div>
-    <div class="rc-card-body">${rows}</div>
+    <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${gridOn ? "post-qual" : "model"}</span></div>
+    <div class="rc-card-body">
+      <table class="rcx-fin-table">
+        <thead><tr><th>Pos</th><th>Driver</th><th>${useWin ? "Win" : "Proj"}</th><th>Pts</th><th>Top 5</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
     <div class="rcx-cardfoot"><a class="rcx-foot-link" href="#/projection">View full prediction →</a></div>
   </div>`;
 }
@@ -20861,16 +20871,24 @@ function _renderTopFinishCard(race) {
   const rows = res.map(d => {
     const carHex = colorFor(STATE.series, d.car_number);
     const txt = contrastTextFor(carHex);
-    return `<div class="rcx-pred-row">
-      <span class="rcx-pred-rk">${d.finish_pos}</span>
-      <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number != null ? d.car_number : ""))}</span>
-      <a class="rcx-pred-nm profile-link" href="#/driver/${slugify(d.driver || "")}">${escapeHTML(lastNameOf(d.driver))}</a>
-      <span class="rcx-pred-v">${d.race_pts != null ? d.race_pts : ""}</span>
-    </div>`;
+    const stg = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
+    return `<tr>
+      <td class="rcx-fin-pos">${d.finish_pos}</td>
+      <td class="rcx-fin-drv"><span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number != null ? d.car_number : ""))}</span><a class="profile-link" href="#/driver/${slugify(d.driver || "")}">${escapeHTML(lastNameOf(d.driver))}</a></td>
+      <td class="rcx-fin-n">${d.start_pos != null ? d.start_pos : "—"}</td>
+      <td class="rcx-fin-n">${d.laps_led || 0}</td>
+      <td class="rcx-fin-n">${stg || 0}</td>
+      <td class="rcx-fin-n rcx-fin-pts">${d.race_pts != null ? d.race_pts : "—"}</td>
+    </tr>`;
   }).join("");
   return `<div class="card rc-card">
-    <div class="rc-card-head"><span class="rc-card-title">Finish</span><span class="rc-card-sub">top 10 · pts</span></div>
-    <div class="rc-card-body">${rows}</div>
+    <div class="rc-card-head"><span class="rc-card-title">Finish</span><span class="rc-card-sub">top 10</span></div>
+    <div class="rc-card-body">
+      <table class="rcx-fin-table">
+        <thead><tr><th>Pos</th><th>Driver</th><th>St</th><th>Led</th><th>Stg</th><th>Pts</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
   </div>`;
 }
 function _renderRecordBook(history) {
