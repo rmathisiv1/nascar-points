@@ -240,8 +240,19 @@ def run_manual(args):
     print(f"\n# wrote {args.season} {series} R{args.round} ({len(entries)} cars) -> {args.out}")
 
 
+def _round_map(all_races):
+    """Map race_id -> round (1..N) over the season's POINTS races, ordered by
+    date. The feed has no round field; race_type_id==1 marks points races
+    (==2 exhibition: Clash/All-Star, ==3 qualifying: the Daytona Duels)."""
+    pts = [r for r in all_races
+           if r.get("race_type_id") == 1 and not r.get("is_qualifying_race")
+           and _race_date(r)]
+    pts.sort(key=lambda r: _race_date(r))
+    return {r.get("race_id"): i + 1 for i, r in enumerate(pts)}
+
+
 def run_discover(args):
-    print(f"# scrape_lineup discover v4 — season={args.season} "
+    print(f"# scrape_lineup discover v5 — season={args.season} "
           f"round={args.round} series={args.series or 'all'}")
     index = fetch_json(f"{CACHER}/{args.season}/race_list_basic.json")
     if not index:
@@ -253,24 +264,30 @@ def run_discover(args):
         if args.series and args.series.upper() != code:
             continue
         all_races = index.get(f"series_{series_id}", []) or []
+        rmap = _round_map(all_races)
+        # type_id distribution — confirms which id is the points race
+        from collections import Counter
+        dist = Counter(r.get("race_type_id") for r in all_races)
+        print(f"# [{code}] series_{series_id}: {len(all_races)} races, "
+              f"{len(rmap)} points races (rounds 1..{len(rmap)}); "
+              f"race_type_id counts: {dict(dist)}")
         if args.round is not None:
-            races = [r for r in all_races if _round_of(r) == args.round]
+            races = [r for r in all_races if rmap.get(r.get("race_id")) == args.round]
         else:
             races = target_races(index, series_id, run_mode)
-        print(f"# [{code}] series_{series_id}: {len(all_races)} races in index, "
-              f"{len(races)} matched filter")
         if all_races and not races:
             s = all_races[0]
-            print(f"#   no match — first race keys: {sorted(s.keys())}; "
-                  f"_round_of(first)={_round_of(s)}")
+            print(f"#   no match for round {args.round} — "
+                  f"sample rounds: {sorted(v for v in rmap.values())[:6]}…")
         for r in races:
             track = r.get("track_name", "")
             race_d = _race_date(r)
-            rnd = args.round if args.round is not None else _round_of(r)
+            rnd = rmap.get(r.get("race_id"))
             if not track or race_d is None or rnd is None:
                 print(f"#   skipping race: track={track!r} date={race_d} round={rnd} "
-                      f"(keys: {sorted(r.keys())})")
+                      f"type_id={r.get('race_type_id')} qual={r.get('is_qualifying_race')}")
                 continue
+            print(f"# [{code}] R{rnd} {track} ({race_d}) — resolving STARTROW…")
             try:
                 url, data = discover_startrow(code, args.season, track, race_d)
             except Exception as e:
