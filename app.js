@@ -3314,6 +3314,11 @@ const SUBNAV_GROUPS = [
     items: [["drivers", "Drivers"], ["teams", "Teams"], ["trackstats", "Tracks"],
             ["crewchiefs", "Crew Chiefs"], ["personnel", "Personnel"], ["pointscalc", "Points Format Calc"]] },
 ];
+// Scroll the (desktop) races sub-nav strip left/right via the flanking arrows.
+function _scrollRaceSubnav(dir) {
+  const el = document.querySelector("#page-series-bar .page-subnav-races .takeover-siblings");
+  if (el && el.scrollBy) el.scrollBy({ left: dir * 220, behavior: "smooth" });
+}
 function pageSubNav(view) {
   // Race page: a scrollable strip of every race this season as "R## TRK" pills,
   // styled exactly like the Data/Analytics sub-navs, with the current race
@@ -3326,7 +3331,7 @@ function pageSubNav(view) {
       const tc = r.track_code || "—";
       return `<a href="#/race/${r.round}" class="takeover-sibling${r.round === cur ? " active" : ""}" data-race-round="${r.round}">R${r.round} ${escapeHTML(tc)}</a>`;
     }).join("");
-    return `<div class="page-subnav page-subnav-races"><div class="takeover-siblings">${links}</div></div>`;
+    return `<div class="page-subnav page-subnav-races"><button type="button" class="subnav-arrow" aria-label="Scroll races left" onclick="_scrollRaceSubnav(-1)">‹</button><div class="takeover-siblings">${links}</div><button type="button" class="subnav-arrow" aria-label="Scroll races right" onclick="_scrollRaceSubnav(1)">›</button></div>`;
   }
   const group = SUBNAV_GROUPS.find(g => g.views.includes(view));
   if (!group) return "";
@@ -20855,13 +20860,21 @@ function _renderPredictedFinishCard(series, trackCode, race) {
   let pred;
   try { pred = _computeRacePredictions(series, trackCode, race); } catch (e) { return ""; }
   if (!pred || !pred.byFinish || !pred.byFinish.length) return "";
-  const useWin = pred.source === "entry_list";
   const gridOn = pred.gridApplied > 0;
+  const oddsLabel = (typeof _oddsColLabel === "function") ? _oddsColLabel(pred) : "ODDS";
+  const oddsHead = oddsLabel === "TOP 5" ? "T5 ODDS" : (oddsLabel === "WIN" ? "WIN" : "ODDS");
   const rows = pred.byFinish.slice(0, 10).map((p, i) => _renderMiniPredRow(p, i, series)).join("");
+  // "View full prediction" goes to the track page, which renders the full-field
+  // prediction (renderRacePredictionSection) — NOT #/projection, which is the
+  // championship points projection. data-series-set opens it in this series.
+  const trackHref = `#/track/${encodeURIComponent(trackCode)}`;
   return `<div class="card rc-card">
     <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${gridOn ? "post-qual" : "model"}</span></div>
-    <div class="rc-card-body hpt-col">${rows}</div>
-    <div class="rcx-cardfoot"><a class="rcx-foot-link" href="#/projection">View full prediction →</a></div>
+    <div class="hpt-col">
+      <div class="hpt-table-head"><span></span><span></span><span></span><span class="rps-col-label">FIN</span><span class="rps-col-label">${oddsHead}</span></div>
+      <div class="rps-list">${rows}</div>
+    </div>
+    <div class="rcx-cardfoot"><a class="rcx-foot-link" href="${trackHref}" data-series-page="track" data-series-set="${series}">View full prediction →</a></div>
   </div>`;
 }
 function _renderTopFinishCard(race) {

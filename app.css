@@ -1094,7 +1094,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   background: var(--card);
 }
 /* Race page: back link sits at the top of the content, just below the title. */
-.race-back-link { display: inline-block; margin: 0 0 6px -4px; }
+.race-back-link { display: inline-block; margin: 4px 0 6px -4px; }
 
 /* Page footer */
 .footer {
@@ -4725,8 +4725,17 @@ a.driver-cell.profile-link:hover .car-tag {
 /* Race page: pull the header divider and Back link tight to the hero. */
 .page-series-bar.page-hd.pb-padbottom { padding-bottom: 6px; }
 /* Races sub-nav: one scrollable row of R## TRK pills (36 races won't fit). */
-.page-subnav-races .takeover-siblings { overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.page-subnav-races { gap: 4px; align-items: center; }
+.page-subnav-races .takeover-siblings { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .page-subnav-races .takeover-siblings::-webkit-scrollbar { display: none; }
+.subnav-arrow {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 14px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--muted);
+  transition: color 0.1s, background 0.1s;
+}
+.subnav-arrow:hover { color: var(--text); background: var(--tint-1); }
+@media (max-width: 767.98px), (pointer: coarse) { .subnav-arrow { display: none; } }
 #race-takeover { padding-top: 2px; }
 .rc-hero::before {
   content: "";
