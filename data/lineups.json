@@ -6,7 +6,7 @@
         "track": "Michigan International Speedway",
         "race_name": "FireKeepers Casino 400",
         "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/6/12615_STARTROW.pdf",
-        "scraped_at": "2026-06-07T17:54:11+00:00",
+        "scraped_at": "2026-06-07T18:10:06+00:00",
         "entries": [
           {
             "pos": 1,
@@ -303,6 +303,508 @@
             "qual_speed": 0.0,
             "manufacturer": "Ford",
             "driver_raw": "Josh Berry Motorcraft/Quick Lane"
+          }
+        ]
+      }
+    },
+    "NOS": {
+      "16": {
+        "track_code": "",
+        "track": "Nashville Superspeedway",
+        "race_name": "Sports Illustrated Resorts 250",
+        "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/5/30/16-noaps-2026-lineuo.pdf",
+        "scraped_at": "2026-06-07T18:11:18+00:00",
+        "entries": [
+          {
+            "pos": 2,
+            "car": "21",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Austin Hill 1-800-PACK-RAT"
+          },
+          {
+            "pos": 3,
+            "car": "17",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Corey Day HendrickCars.com"
+          },
+          {
+            "pos": 4,
+            "car": "1",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Carson Kvapil Jarrett Logistics"
+          },
+          {
+            "pos": 5,
+            "car": "18",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Toyota",
+            "driver_raw": "William Sawalich Starkey"
+          },
+          {
+            "pos": 6,
+            "car": "88",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Kyle Larson(i) HendrickCars.com"
+          },
+          {
+            "pos": 7,
+            "car": "39",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ryan Sieg SciAps"
+          },
+          {
+            "pos": 8,
+            "car": "8",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sammy Smith Pilot"
+          },
+          {
+            "pos": 9,
+            "car": "99",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Parker Retzlaff FUNKAWAY"
+          },
+          {
+            "pos": 10,
+            "car": "0",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Garrett Smithley Knight Fire"
+          },
+          {
+            "pos": 11,
+            "car": "91",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Mason Maggio ControlAltProtect"
+          },
+          {
+            "pos": 12,
+            "car": "96",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Anthony Alfredo VaVia"
+          },
+          {
+            "pos": 13,
+            "car": "26",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Toyota",
+            "driver_raw": "Dean Thompson MCM Transportation"
+          },
+          {
+            "pos": 14,
+            "car": "87",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Austin Green 3Dimensional.com"
+          },
+          {
+            "pos": 15,
+            "car": "92",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Leland Honeyman Jr(i) DPR Construction"
+          },
+          {
+            "pos": 16,
+            "car": "48",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Patrick Staropoli # Syfovre"
+          },
+          {
+            "pos": 17,
+            "car": "7",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Justin Allgaier BRANDT/Precision Build/Trademark"
+          },
+          {
+            "pos": 18,
+            "car": "45",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Lavar Scott # Urban Affairs Coalition"
+          },
+          {
+            "pos": 19,
+            "car": "27",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Jeb Burton Beretta/PH Outdoors"
+          },
+          {
+            "pos": 20,
+            "car": "28",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Kyle Sieg Sustainachem"
+          },
+          {
+            "pos": 21,
+            "car": "31",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Blaine Perkins WERNER"
+          },
+          {
+            "pos": 22,
+            "car": "53",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "David Starr Alarm Tech"
+          },
+          {
+            "pos": 23,
+            "car": "44",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Brennan Poole Macc Door Systems"
+          },
+          {
+            "pos": 24,
+            "car": "00",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sheldon Creed Ollie's"
+          },
+          {
+            "pos": 25,
+            "car": "32",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Rajah Caruth HendrickCars.com"
+          },
+          {
+            "pos": 26,
+            "car": "02",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ryan Ellis Tablo TV"
+          },
+          {
+            "pos": 27,
+            "car": "54",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Toyota",
+            "driver_raw": "Taylor Gray Operation 300"
+          },
+          {
+            "pos": 28,
+            "car": "07",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Josh Bilicki Graphics 615"
+          },
+          {
+            "pos": 29,
+            "car": "20",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Toyota",
+            "driver_raw": "Brandon Jones Menards/Atlas"
+          },
+          {
+            "pos": 30,
+            "car": "55",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Joey Gase Bcarestoration.com"
+          },
+          {
+            "pos": 32,
+            "car": "42",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Logan Bearden T3 Vodka"
+          },
+          {
+            "pos": 33,
+            "car": "19",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Toyota",
+            "driver_raw": "Brent Crews # YoungLife"
+          },
+          {
+            "pos": 34,
+            "car": "41",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sam Mayer Audibel"
+          },
+          {
+            "pos": 35,
+            "car": "24",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Toyota",
+            "driver_raw": "Harrison Burton Jesse Gerhard Memorial Fdn/Bulovas"
+          },
+          {
+            "pos": 36,
+            "car": "35",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Dawson Cram Denver Dirt"
+          },
+          {
+            "pos": 37,
+            "car": "38",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Ford",
+            "driver_raw": "JJ Yeley Carolina Land & Grading/Mike Efaw's"
+          },
+          {
+            "pos": 38,
+            "car": "33",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Cleetus McFarland Tommy's Express Car Wash"
+          }
+        ]
+      }
+    },
+    "NTS": {
+      "12": {
+        "track_code": "",
+        "track": "Michigan International Speedway",
+        "race_name": "DQS Solutions & Staffing 250 powered by",
+        "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/6/32612_STARTROW.pdf",
+        "scraped_at": "2026-06-07T18:11:46+00:00",
+        "entries": [
+          {
+            "pos": 1,
+            "car": "88",
+            "qual_time": 39.257,
+            "qual_speed": 183.407,
+            "manufacturer": "Ford",
+            "driver_raw": "Ty Majeski Ideal Door/Menards"
+          },
+          {
+            "pos": 2,
+            "car": "62",
+            "qual_time": 39.332,
+            "qual_speed": 183.057,
+            "manufacturer": "Toyota",
+            "driver_raw": "Christopher Bell(i) Halmar Infrastructure"
+          },
+          {
+            "pos": 3,
+            "car": "38",
+            "qual_time": 39.35,
+            "qual_speed": 182.973,
+            "manufacturer": "Ford",
+            "driver_raw": "Chandler Smith Everglades Isle"
+          },
+          {
+            "pos": 4,
+            "car": "34",
+            "qual_time": 39.365,
+            "qual_speed": 182.904,
+            "manufacturer": "Ford",
+            "driver_raw": "Layne Riggs BKB Bare Knuckles Boxing"
+          },
+          {
+            "pos": 5,
+            "car": "7",
+            "qual_time": 39.383,
+            "qual_speed": 182.82,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Connor Mosack Friends of Jacklyn Foundation"
+          },
+          {
+            "pos": 6,
+            "car": "77",
+            "qual_time": 39.432,
+            "qual_speed": 182.593,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Carson Hocevar(i) Zeigler Auto Group"
+          },
+          {
+            "pos": 7,
+            "car": "13",
+            "qual_time": 39.434,
+            "qual_speed": 182.584,
+            "manufacturer": "Ford",
+            "driver_raw": "Cole Butcher # Atlantic Tilt Load"
+          },
+          {
+            "pos": 8,
+            "car": "17",
+            "qual_time": 39.456,
+            "qual_speed": 182.482,
+            "manufacturer": "Toyota",
+            "driver_raw": "Giovanni Ruggiero JBL"
+          },
+          {
+            "pos": 9,
+            "car": "98",
+            "qual_time": 39.508,
+            "qual_speed": 182.242,
+            "manufacturer": "Ford",
+            "driver_raw": "Jake Garcia Quanta/Curb Records"
+          },
+          {
+            "pos": 10,
+            "car": "5",
+            "qual_time": 39.523,
+            "qual_speed": 182.172,
+            "manufacturer": "Toyota",
+            "driver_raw": "Spencer Davis Ruud/Surf USA Mobile"
+          },
+          {
+            "pos": 11,
+            "car": "9",
+            "qual_time": 39.527,
+            "qual_speed": 182.154,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Grant Enfinger Grant County Mulch/Ed's Equipment"
+          },
+          {
+            "pos": 12,
+            "car": "52",
+            "qual_time": 39.541,
+            "qual_speed": 182.089,
+            "manufacturer": "Toyota",
+            "driver_raw": "Stewart Friesen Halmar International"
+          },
+          {
+            "pos": 13,
+            "car": "18",
+            "qual_time": 39.555,
+            "qual_speed": 182.025,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Tyler Ankrum LIUNA"
+          },
+          {
+            "pos": 15,
+            "car": "45",
+            "qual_time": 39.56,
+            "qual_speed": 182.002,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ross Chastain(i) DQS Solutions & Staffing"
+          },
+          {
+            "pos": 16,
+            "car": "26",
+            "qual_time": 39.577,
+            "qual_speed": 181.924,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Dawson Sutton Rackley Roofing"
+          },
+          {
+            "pos": 17,
+            "car": "11",
+            "qual_time": 39.584,
+            "qual_speed": 181.892,
+            "manufacturer": "Toyota",
+            "driver_raw": "Kaden Honeycutt Safelite"
+          },
+          {
+            "pos": 19,
+            "car": "42",
+            "qual_time": 39.602,
+            "qual_speed": 181.809,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ricky Stenhouse Jr.(i) Precision Vehicle Logistics"
+          },
+          {
+            "pos": 20,
+            "car": "91",
+            "qual_time": 39.625,
+            "qual_speed": 181.703,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Christian Eckes Adaptive One Calipers"
+          },
+          {
+            "pos": 23,
+            "car": "1",
+            "qual_time": 39.691,
+            "qual_speed": 181.401,
+            "manufacturer": "Toyota",
+            "driver_raw": "Corey Heim Celsius"
+          },
+          {
+            "pos": 24,
+            "car": "19",
+            "qual_time": 39.83,
+            "qual_speed": 180.768,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Daniel Hemric Cloyes Rotomaster"
+          },
+          {
+            "pos": 26,
+            "car": "20",
+            "qual_time": 39.869,
+            "qual_speed": 180.591,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Daniel Dye Champion Container"
+          },
+          {
+            "pos": 27,
+            "car": "81",
+            "qual_time": 39.949,
+            "qual_speed": 180.23,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Kris Wright iHeartRadio"
+          },
+          {
+            "pos": 28,
+            "car": "76",
+            "qual_time": 39.956,
+            "qual_speed": 180.198,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Spencer Boyd Desnuda Organic Tequila"
+          },
+          {
+            "pos": 31,
+            "car": "33",
+            "qual_time": 40.101,
+            "qual_speed": 179.547,
+            "manufacturer": "Ford",
+            "driver_raw": "Frankie Muniz Morgan & Morgan"
           }
         ]
       }
