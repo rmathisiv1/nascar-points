@@ -5681,8 +5681,8 @@ function _td(v) { return escapeHTML(v == null || v === "" ? "—" : String(v)); 
 // infractions) as [{ key, label, count, html }]. The entry list's team and
 // crew-chief columns are enriched from the roster doc when the entry sheet
 // itself omits them. Returns [] when no docs exist for the race.
-function raceDocTabs(race) {
-  const rec = getRaceDocs(STATE.season, STATE.series, race);
+function raceDocTabs(race, year, series) {
+  const rec = getRaceDocs(year || STATE.season, series || STATE.series, race);
   if (!rec || !rec.docs) return [];
   const docs = rec.docs;
 
@@ -12888,8 +12888,8 @@ function renderHome() {
     });
   }
 
-  // ----- Section 1: hero row (next race + last race) -----
-  const heroHTML = renderHomeHero(latestYear, series);
+  // ----- Section 1: hero row — all three series' next race -----
+  const heroHTML = renderHomeHeroTrio(latestYear);
 
   // ----- Section 2: three-series mini standings -----
   const standingsHTML = renderHomeStandingsTrio(latestYear);
@@ -14698,6 +14698,73 @@ function predictDriverForRace(driverName, series, trackCode, actualStart) {
 
 // Renders the hero row: a countdown card on the left for the next race,
 // and a recap card on the right for the most recent completed race.
+// Three-series hero: one compact upcoming-race card per series (NCS | NOS |
+// NTS), each with the next session times and the race time. Replaces the
+// single-series countdown + last-race recap so the top of Home covers all
+// three series in roughly the same vertical space.
+function renderHomeHeroTrio(year) {
+  const seriesList = ["NCS", "NOS", "NTS"];
+  const cards = seriesList.map(srs => {
+    const block = (SEASON_CACHE[year] && SEASON_CACHE[year][srs])
+      || (srs === STATE.series ? STATE.data : null);
+    const races = (block && block.races) ? block.races.slice() : [];
+    races.sort((a, b) => (a.round || 0) - (b.round || 0));
+    const isDone = r => (r.results || []).some(d => d.finish_pos === 1);
+    const nextRace = races.find(r => !isDone(r)) || null;
+
+    if (!races.length) {
+      return `<div class="home-card home-hero3-card">
+        <div class="home-card-label">${srs}</div>
+        <div class="home-hero3-track muted">Loading…</div></div>`;
+    }
+    if (!nextRace) {
+      return `<div class="home-card home-hero3-card">
+        <div class="home-card-label">${srs} · season complete</div>
+        <div class="home-hero3-track">No upcoming races</div>
+        <div class="home-hero3-meta">See the schedule for next season.</div></div>`;
+    }
+
+    const trackName = prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD";
+    const dateStr = nextRace.date || "";
+    let cd = "";
+    if (dateStr) {
+      const days = Math.ceil((new Date(dateStr + "T00:00:00").getTime() - Date.now()) / 86400000);
+      cd = days > 1 ? `in ${days} days` : days === 1 ? "tomorrow" : days === 0 ? "today" : "";
+    }
+    const raceTime = nextRace.time || "";
+    const dateTime = [dateStr ? formatLongDate(dateStr) : "", raceTime ? escapeHTML(raceTime) : ""]
+      .filter(Boolean).join(" · ");
+    const sched = (typeof scheduleForRace === "function") ? scheduleForRace(nextRace, srs) : null;
+    const sessionLine = (typeof _renderSessionLine === "function") ? _renderSessionLine(sched, srs) : "";
+    const lastWinnerHTML = computeLastWinnerAtTrack(nextRace.track_code, srs);
+    const trackKingHTML = computeTrackKing(nextRace.track_code, srs);
+
+    let linkHTML = "";
+    const lu = (typeof lineupForRace === "function") ? lineupForRace(nextRace, srs) : null;
+    if (lu) {
+      const sl = lineupLink(nextRace, srs, "lineup");
+      const ql = lineupLink(nextRace, srs, "qual");
+      linkHTML = `<div class="home-hero3-entry">${sl}${ql ? ` <span class="home-hero-entry-sep">·</span> ${ql}` : ""}</div>`;
+    } else {
+      const el = entryListLink(nextRace, srs, true);
+      if (el) linkHTML = `<div class="home-hero3-entry">${el}</div>`;
+    }
+    const raceHref = `#/race/${nextRace.round}?_y=${year}&_s=${srs}`;
+    return `<div class="home-card home-hero3-card">
+      <div class="home-card-label">UPCOMING ${srs}${cd ? ` · ${cd}` : ""}</div>
+      <a class="home-hero3-track" href="${raceHref}">${escapeHTML(trackName)}</a>
+      ${dateTime ? `<div class="home-hero3-meta">${dateTime}</div>` : ""}
+      ${sessionLine}
+      <div class="home-hero3-facts">
+        ${lastWinnerHTML ? `<div class="home-hero3-fact"><span class="k">Last winner</span> ${lastWinnerHTML}</div>` : ""}
+        ${trackKingHTML ? `<div class="home-hero3-fact"><span class="k">Track king</span> ${trackKingHTML}</div>` : ""}
+      </div>
+      ${linkHTML}
+    </div>`;
+  }).join("");
+  return `<div class="home-hero-row home-hero-trio">${cards}</div>`;
+}
+
 function renderHomeHero(year, series) {
   // Use allRacesSorted because racesSorted filters OUT upcoming races —
   // and we need upcoming races to compute the next-race countdown. The
@@ -20808,6 +20875,29 @@ async function openRaceLightbox(year, series, round) {
     ? renderRaceResultsTable(race, { series, season: year, allRaces: races })
     : `<div class="rc-empty">This race hasn't been run yet.</div>`;
 
+  // Documents archived for this race (entry list, pit stalls, crew rosters,
+  // infractions). Pre-rendered into toggle panes so the user can flip files
+  // without leaving the pop-up. Empty for races with no archived docs.
+  let docsHTML = "";
+  try {
+    const docTabs = raceDocTabs(race, year, series);
+    if (docTabs.length) {
+      const btns = docTabs.map((t, i) =>
+        `<button class="${i === 0 ? "on" : ""}" data-doc="${t.key}">${escapeHTML(t.label)}` +
+        `${t.count ? ` <span class="lb-doc-n">${t.count}</span>` : ""}</button>`).join("");
+      const panes = docTabs.map((t, i) =>
+        `<div class="lb-doc-pane" data-doc="${t.key}"${i === 0 ? "" : " hidden"}>${t.html}</div>`).join("");
+      docsHTML = `
+        <div class="lb-docs">
+          <div class="lb-docs-head">Race files</div>
+          <div class="toggle-group mini lb-doc-toggle" role="tablist" aria-label="Race files">${btns}</div>
+          ${panes}
+        </div>`;
+    }
+  } catch (err) {
+    console.warn("lightbox docs failed:", err);
+  }
+
   body.innerHTML = `
     <div class="rc-hero" style="border-left:4px solid var(--accent);">
       <div class="rc-hero-badge">${badge}</div>
@@ -20818,6 +20908,7 @@ async function openRaceLightbox(year, series, round) {
       </div>
     </div>
     ${resultsHTML}
+    ${docsHTML}
   `;
   // No need to wire inner links — the global hashchange listener
   // automatically closes the lightbox when any navigation happens.
@@ -20850,6 +20941,18 @@ function wireRaceLightbox() {
     if (e.key === "Escape" && STATE.lightbox && STATE.lightbox.open) {
       closeRaceLightbox();
     }
+  });
+  // Race-files toggle inside the lightbox: swap the visible document pane.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".lb-doc-toggle button");
+    if (!btn) return;
+    const wrap = btn.closest(".lb-docs");
+    if (!wrap) return;
+    const key = btn.dataset.doc;
+    wrap.querySelectorAll(".lb-doc-toggle button")
+      .forEach(b => b.classList.toggle("on", b === btn));
+    wrap.querySelectorAll(".lb-doc-pane")
+      .forEach(p => { p.hidden = (p.dataset.doc !== key); });
   });
 }
 
@@ -21021,11 +21124,26 @@ function _trackPerformers(history, scope) {
   const ftDrivers = new Set(
     ftEntities.map(e => normalizeDriverName(e.primaryDriver || e.driver || "")).filter(Boolean)
   );
+  // Map normalized current FT driver -> entity, for resolving a sensible car#.
+  const ftByNorm = {};
+  ftEntities.forEach(e => {
+    const k = normalizeDriverName(e.primaryDriver || e.driver || "");
+    if (k) ftByNorm[k] = e;
+  });
+  // A driver's pill car#: if they're a current full-timer use their CURRENT car
+  // (so "Gibbs" reads as #54, not whatever number a stray history row carried);
+  // otherwise use the car they appeared in most often.
+  const resolveCar = (norm, counts, fallback) => {
+    const e = ftByNorm[norm];
+    if (e && e.car_number != null) return e.car_number;
+    const ranked = Object.entries(counts || {}).sort((a, b) => b[1] - a[1]);
+    return ranked.length ? Number(ranked[0][0]) : fallback;
+  };
   const reride = (byKey) => {
     if (!current) return;
     Object.keys(byKey).forEach(key => {
-      const e = ftEntities.find(x => normalizeDriverName(x.primaryDriver || x.driver || "") === key);
-      if (e) { byKey[key].car = e.car_number; byKey[key].driver = e.primaryDriver || e.driver || byKey[key].driver; }
+      const e = ftByNorm[key];
+      if (e) byKey[key].driver = e.primaryDriver || e.driver || byKey[key].driver;
     });
   };
 
@@ -21035,9 +21153,11 @@ function _trackPerformers(history, scope) {
     if (!w) return;
     const norm = normalizeDriverName(w.driver || "");
     if (current && !ftDrivers.has(norm)) return;
-    if (!winsByDriver[norm]) winsByDriver[norm] = { car: w.car_number, driver: w.driver, wins: 0 };
+    if (!winsByDriver[norm]) winsByDriver[norm] = { car: w.car_number, driver: w.driver, wins: 0, _cc: {} };
     winsByDriver[norm].wins++;
+    if (w.car_number != null) winsByDriver[norm]._cc[w.car_number] = (winsByDriver[norm]._cc[w.car_number] || 0) + 1;
   });
+  Object.entries(winsByDriver).forEach(([norm, c]) => { c.car = resolveCar(norm, c._cc, c.car); });
   reride(winsByDriver);
   const topWins = Object.values(winsByDriver).sort((a, b) => b.wins - a.wins).slice(0, 5);
 
@@ -21047,11 +21167,12 @@ function _trackPerformers(history, scope) {
       if (d.finish_pos == null) return;
       const norm = normalizeDriverName(d.driver || "");
       if (current && !ftDrivers.has(norm)) return;
-      if (!finsByDriver[norm]) finsByDriver[norm] = { car: d.car_number, driver: d.driver, fins: [] };
+      if (!finsByDriver[norm]) finsByDriver[norm] = { car: d.car_number, driver: d.driver, fins: [], _cc: {} };
       finsByDriver[norm].fins.push(d.finish_pos);
-      finsByDriver[norm].car = d.car_number;
+      if (d.car_number != null) finsByDriver[norm]._cc[d.car_number] = (finsByDriver[norm]._cc[d.car_number] || 0) + 1;
     });
   });
+  Object.entries(finsByDriver).forEach(([norm, c]) => { c.car = resolveCar(norm, c._cc, c.car); });
   reride(finsByDriver);
   const minStarts = current ? 1 : 3;
   const topAvg = Object.values(finsByDriver)
@@ -22417,7 +22538,24 @@ function renderTrackPage() {
   // page is venue history/stats, not a prediction surface.
   const trackPredictionHTML = "";
 
+  const heroSub = trackTypeStr || "NASCAR venue";
+  const heroWhen = `${escapeHTML(seriesLabel(tSeries, STATE.season))}`
+    + `<br>${history.length} race${history.length === 1 ? "" : "s"}`
+    + (earliestYear ? `<br>since ${earliestYear}` : "");
+  const heroHTML = `
+    <div class="rc-hero">
+      <div class="rcx-hero-row">
+        <div style="min-width:0;">
+          <div class="rc-hero-badge">TRACK</div>
+          <div class="rcx-title">${escapeHTML(trackName)}</div>
+          <div class="rcx-sub">${escapeHTML(heroSub)}</div>
+        </div>
+        <div class="rcx-when">${heroWhen}</div>
+      </div>
+    </div>`;
+
   host.innerHTML = `
+    ${heroHTML}
     <div class="rc-grid tk-grid-3">
       <div class="card rc-card">
         <div class="rc-card-head">

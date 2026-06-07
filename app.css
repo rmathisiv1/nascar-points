@@ -6815,6 +6815,11 @@ a.rc-sched-winner:hover {
 body.lightbox-open {
   overflow: hidden;
 }
+/* Race files block inside the results lightbox. */
+.lb-docs { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.lb-docs-head { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--text); margin-bottom: 10px; }
+.lb-doc-toggle { flex-wrap: wrap; margin-bottom: 14px; }
+.lb-doc-n { opacity: 0.55; font-size: 0.85em; margin-left: 2px; }
 @media (max-width: 767.98px), (pointer: coarse) {
   .race-lightbox {
     padding: 0;
@@ -7962,6 +7967,36 @@ body.lightbox-open {
 }
 @media (max-width: 720px) {
   .home-hero-row { grid-template-columns: 1fr; }
+}
+/* Three-series hero: equal thirds, each a compact upcoming-race card. */
+.home-hero-trio { grid-template-columns: repeat(3, 1fr); }
+.home-hero3-card { display: flex; flex-direction: column; gap: 5px; }
+.home-hero3-track {
+  font-family: var(--sans);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.08;
+  color: var(--text);
+  text-decoration: none;
+}
+.home-hero3-track:hover { color: var(--accent); }
+.home-hero3-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.home-hero3-card .rcx-ses { font-size: 11px; margin-top: 1px; }
+.home-hero3-facts { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.home-hero3-fact { font-size: 11.5px; color: var(--text-2); }
+.home-hero3-fact .k {
+  display: inline-block;
+  min-width: 70px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.home-hero3-entry { margin-top: 4px; font-size: 12.5px; }
+@media (max-width: 860px) {
+  .home-hero-trio { grid-template-columns: 1fr; }
 }
 .home-hero-card {
   display: flex;
@@ -12546,21 +12581,21 @@ body.lightbox-open {
 .rdoc-rosters {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 8px;
+  gap: 6px;
   padding: 8px 8px 4px;
 }
 .rdoc-roster {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card-hi);
-  padding: 9px 11px;
+  padding: 7px 11px;
 }
 .rdoc-roster-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 .rdoc-roster-head .rdoc-car {
   font-family: var(--mono);
@@ -12594,9 +12629,9 @@ body.lightbox-open {
 .rdoc-roster-pit {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
-  margin-top: 7px;
-  padding-top: 7px;
+  gap: 2px 12px;
+  margin-top: 5px;
+  padding-top: 5px;
   border-top: 1px dashed var(--border);
 }
 .rdoc-pit { font-size: 10.5px; color: var(--text); white-space: nowrap; }
@@ -12606,7 +12641,7 @@ body.lightbox-open {
   font-weight: 700;
   color: var(--muted);
 }
-.rdoc-roster-full { margin-top: 7px; }
+.rdoc-roster-full { margin-top: 5px; }
 .rdoc-roster-full > summary {
   cursor: pointer;
   font-size: 10px;
@@ -12767,29 +12802,14 @@ body.lightbox-open {
 
 /* Give the page title room to breathe — away from the series row above and the
    first card below (the title was crowding both lines). */
-#view-track .view-head,
 #view-schedule .view-head {
   padding: 18px 4px 16px;
   margin-bottom: 8px;
 }
-/* Track page carries its own large title in the body (page-bar title is
-   suppressed for it), like the profile/team pages. Back link sits tight
-   above it instead of floating in an empty band. */
-#view-track .view-head {
-  padding: 2px 4px 14px;
-  margin-bottom: 6px;
-}
-#view-track .view-head h1 {
-  display: block;
-  font-family: var(--serif);
-  font-size: 30px;
-  font-weight: 600;
-  line-height: 1.05;
-  letter-spacing: -0.015em;
-  color: var(--text);
-  margin: 0 0 4px;
-}
-#view-track .track-back-link { margin: 6px 0 6px -4px; }
+/* Track page carries a grand hero card in the body, so its plain title/sub
+   block is collapsed — only the Back link above the hero remains. */
+#view-track .view-head { display: none; }
+#view-track .track-back-link { margin: 6px 0 8px -4px; }
 
 /* ============================================================
    PERSONNEL DATABASE — toolbar + Filter popup + sortable table.
