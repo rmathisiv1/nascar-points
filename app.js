@@ -14753,11 +14753,15 @@ function _renderUpcomingBand(year, series) {
   const accent = _homeSeriesAccent(series);
   const nextRace = allRacesSorted().find(r => !(r.results || []).some(d => d.finish_pos === 1)) || null;
   if (!nextRace) {
+    const spineBg0 = series === "NCS" ? "#b8860b" : series === "NTS" ? "#b3322c" : accent;
     return `<div class="home-hero-band" style="border-left-color:${accent};">
+      <div class="hhb-spine" style="background:${spineBg0};"><span>${series}</span></div>
+      <div class="hhb-body">
       <div class="hhb-count"><div class="hhb-num-line"><span class="hhb-num">—</span></div><div class="hhb-sub">done</div></div>
       <div class="hhb-mid"><div class="hhb-title"><span class="hhb-series" style="color:${accent};">${series}</span></div>
       <div class="hhb-meta">Season complete</div></div>
-      <div class="hhb-right"></div></div>`;
+      <div class="hhb-right"></div>
+      </div></div>`;
   }
   const dateStr = nextRace.date || "";
   let cnum = "—", cunit = "", csub = `R${nextRace.round}`, cword = false;
@@ -14781,7 +14785,7 @@ function _renderUpcomingBand(year, series) {
   const facts = [];
   if (lastWinnerHTML) facts.push(`<span class="k">Last winner</span> ${lastWinnerHTML}`);
   if (trackKingHTML) facts.push(`<span class="k">Track king</span> ${trackKingHTML}`);
-  const factsHTML = facts.length ? `<div class="hhb-facts">${facts.join(' <span class="dot">·</span> ')}</div>` : "";
+  const factsHTML = `<div class="hhb-facts">${facts.length ? facts.join(' <span class="dot">·</span> ') : ""}</div>`;
   // Action links: after qualifying (lineup exists) → Lineup + Practice results;
   // before that → Entry list (only if the entry list has been archived).
   const lu = (typeof lineupForRace === "function") ? lineupForRace(nextRace, series) : null;
@@ -14795,7 +14799,10 @@ function _renderUpcomingBand(year, series) {
     if (hasEntry) boxes = _homeLinkBox(nextRace.round, year, series, "entry", "Entry list →");
   }
   const trackHref = `#/race/${nextRace.round}?_y=${year}&_s=${encodeURIComponent(series)}`;
+  const spineBg = series === "NCS" ? "#b8860b" : series === "NTS" ? "#b3322c" : accent;
   return `<div class="home-hero-band" style="border-left-color:${accent};">
+    <div class="hhb-spine" style="background:${spineBg};"><span>${series}</span></div>
+    <div class="hhb-body">
     <div class="hhb-count">
       <div class="hhb-num-line"><span class="hhb-num${cword ? " hhb-num-word" : ""}">${cnum}</span>${cunit ? `<span class="hhb-unit">${cunit}</span>` : ""}</div>
       <div class="hhb-sub">${csub}</div>
@@ -14807,7 +14814,8 @@ function _renderUpcomingBand(year, series) {
     </div>
     <div class="hhb-right">
       ${sesHTML}
-      ${boxes ? `<div class="hhb-boxes">${boxes}</div>` : ""}
+      <div class="hhb-boxes">${boxes}</div>
+    </div>
     </div>
   </div>`;
 }
