@@ -363,17 +363,6 @@ body { overflow-x: clip; }
 }
 .page-series-bar[hidden] { display: none; }
 
-/* As the window narrows the side rails get too cramped to read. Drop the
-   right rail (power rankings — it needs the most width) first, then the left
-   rail (standings). Below 768px the mobile query handles everything. */
-@media (max-width: 1300px) {
-  .dashboard { grid-template-columns: minmax(170px, 17%) minmax(0, 1fr); }
-  .col-right { display: none; }
-}
-@media (max-width: 1050px) {
-  .dashboard { grid-template-columns: minmax(0, 1fr); }
-  .col-left { display: none; }
-}
 .pgs-track {
   display: inline-flex;
   background: var(--card);
@@ -612,6 +601,20 @@ body { overflow-x: clip; }
   overflow: hidden;
 }
 
+/* As the window narrows the side rails get too cramped to read. Drop the
+   right rail (power rankings — needs the most width) first, then the left
+   rail (standings). Placed AFTER the base .dashboard/.col rules so they win
+   the cascade (media queries don't add specificity — source order does).
+   Below 768px the mobile query takes over. */
+@media (max-width: 1300px) {
+  .dashboard { grid-template-columns: minmax(170px, 17%) minmax(0, 1fr); }
+  .col-right { display: none; }
+}
+@media (max-width: 1050px) {
+  .dashboard { grid-template-columns: minmax(0, 1fr); }
+  .col-left { display: none; }
+}
+
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -781,8 +784,10 @@ body { overflow-x: clip; }
   gap: 2px;
   /* Lives on the top bar as an inline group, sized to its tabs so the search
      box + theme toggle sit immediately to its right (Historical is just the
-     last tab, after Data). */
-  flex: 0 1 auto;
+     last tab, after Data). 0 0 auto: never shrink below its tabs — otherwise
+     the tabs (overflow:visible) spill over and overlap the search box as the
+     window narrows. The search (flex 1 1) yields the space instead. */
+  flex: 0 0 auto;
   min-width: 0;
   padding: 0;
   border-bottom: 0;
@@ -1094,7 +1099,26 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   background: var(--card);
 }
 /* Race page: back link sits at the top of the content, just below the title. */
+/* Race page: the back affordance now lives at the left of the races sub-nav,
+   so the standalone link (and its dead row) is suppressed in the takeover. */
 .race-back-link { display: inline-block; margin: 4px 0 6px -4px; }
+#race-takeover .race-back-link { display: none; }
+.subnav-back {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 20px; padding: 0; margin-right: 2px; line-height: 1; font-size: 15px;
+  text-decoration: none; color: var(--muted); border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.subnav-back:hover { color: var(--text); background: var(--tint-1); }
+/* "View full prediction" expander on the race-page predicted card. */
+.rcx-fullpred { border-top: 1px solid var(--tint-1); margin-top: 4px; }
+.rcx-fullpred > summary {
+  list-style: none; cursor: pointer; padding: 7px 0 3px;
+  font-family: var(--serif); font-style: italic; font-size: 11px; color: var(--accent);
+}
+.rcx-fullpred > summary::-webkit-details-marker { display: none; }
+.rcx-fullpred > summary::marker { content: ""; }
+.rcx-fullpred[open] > summary { color: var(--muted); }
 
 /* Page footer */
 .footer {
@@ -6263,6 +6287,7 @@ a.rc-sched-winner:hover {
 .topbar-search {
   position: relative;
   flex: 1 1 auto;
+  min-width: 0;
   max-width: 420px;
   margin: 0 0 0 14px;
 }

@@ -3331,7 +3331,7 @@ function pageSubNav(view) {
       const tc = r.track_code || "—";
       return `<a href="#/race/${r.round}" class="takeover-sibling${r.round === cur ? " active" : ""}" data-race-round="${r.round}">R${r.round} ${escapeHTML(tc)}</a>`;
     }).join("");
-    return `<div class="page-subnav page-subnav-races"><button type="button" class="subnav-arrow" aria-label="Scroll races left" onclick="_scrollRaceSubnav(-1)">‹</button><div class="takeover-siblings">${links}</div><button type="button" class="subnav-arrow" aria-label="Scroll races right" onclick="_scrollRaceSubnav(1)">›</button></div>`;
+    return `<div class="page-subnav page-subnav-races"><a href="#" class="subnav-back" onclick="raceBack(event)" aria-label="Back" title="Back">←</a><button type="button" class="subnav-arrow" aria-label="Scroll races left" onclick="_scrollRaceSubnav(-1)">‹</button><div class="takeover-siblings">${links}</div><button type="button" class="subnav-arrow" aria-label="Scroll races right" onclick="_scrollRaceSubnav(1)">›</button></div>`;
   }
   const group = SUBNAV_GROUPS.find(g => g.views.includes(view));
   if (!group) return "";
@@ -20952,18 +20952,18 @@ function _renderPredictedFinishCard(series, trackCode, race) {
   const gridOn = pred.gridApplied > 0;
   const oddsLabel = (typeof _oddsColLabel === "function") ? _oddsColLabel(pred) : "ODDS";
   const oddsHead = oddsLabel === "TOP 5" ? "T5 ODDS" : (oddsLabel === "WIN" ? "WIN" : "ODDS");
-  const rows = pred.byFinish.slice(0, 10).map((p, i) => _renderMiniPredRow(p, i, series)).join("");
-  // "View full prediction" goes to the track page, which renders the full-field
-  // prediction (renderRacePredictionSection) — NOT #/projection, which is the
-  // championship points projection. data-series-set opens it in this series.
-  const trackHref = `#/track/${encodeURIComponent(trackCode)}`;
+  const top = pred.byFinish.slice(0, 10).map((p, i) => _renderMiniPredRow(p, i, series)).join("");
+  // The full field lives here on the race page — "View full prediction" expands
+  // rows 11..N inline (same format), rather than sending you to the track page.
+  const rest = pred.byFinish.slice(10).map((p, i) => _renderMiniPredRow(p, i + 10, series)).join("");
+  const total = pred.byFinish.length;
   return `<div class="card rc-card">
     <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${gridOn ? "post-qual" : "model"}</span></div>
     <div class="hpt-col">
       <div class="hpt-table-head"><span></span><span></span><span></span><span class="rps-col-label">FIN</span><span class="rps-col-label">${oddsHead}</span></div>
-      <div class="rps-list">${rows}</div>
+      <div class="rps-list">${top}</div>
+      ${rest ? `<details class="rcx-fullpred"><summary>View full prediction · ${total} drivers →</summary><div class="rps-list">${rest}</div></details>` : ""}
     </div>
-    <div class="rcx-cardfoot"><a class="rcx-foot-link" href="${trackHref}" data-series-page="track" data-series-set="${series}">View full prediction →</a></div>
   </div>`;
 }
 function _renderTopFinishCard(race) {
@@ -22478,26 +22478,9 @@ function renderTrackPage() {
   // For the Track page we want a similar block IF this track has an
   // upcoming race anywhere in the schedule (loaded current season only —
   // historical years don't have an "upcoming race" semantically).
-  let trackPredictionHTML = "";
-  const upcomingAtTrack = (STATE.data?.races || [])
-    .filter(r => r.track_code === code)
-    .filter(r => !(r.results || []).some(d => d.finish_pos === 1));
-  const nextAtTrack = upcomingAtTrack[0];
-  if (nextAtTrack) {
-    // Force STATE.series to tSeries temporarily so getDriverRaceHistory
-    // and the entity list reflect the track-page's series view. Without
-    // this, predictions would be biased toward STATE.series even when the
-    // user is viewing this track in a different series.
-    // Note: _computeRacePredictions/_computeTrackPerformers read STATE.series
-    // implicitly via allEntities/SEASON_CACHE. We pass tSeries explicitly.
-    trackPredictionHTML = renderRacePredictionSection({
-      series: tSeries,
-      trackCode: code,
-      trackName: trackName,
-      roundNum: nextAtTrack.round,
-      headerStyle: "track",
-    });
-  }
+  // The full-field predicted finish lives on the RACE page only — the track
+  // page is venue history/stats, not a prediction surface.
+  const trackPredictionHTML = "";
 
   host.innerHTML = `
     ${renderTrackThisSeason(history)}
