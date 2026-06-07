@@ -3233,6 +3233,7 @@ function renderPageSeriesBar() {
   }
   bar.hidden = false;
   bar.classList.add("page-hd");
+  bar.classList.toggle("pb-race", v === "race");
 
   const seriesScoped = SERIES_TOGGLE_VIEWS.includes(v);
 
@@ -20787,7 +20788,7 @@ function _renderPredictedFinishCard(series, trackCode) {
   try { pred = _computeRacePredictions(series, trackCode); } catch (e) { return ""; }
   if (!pred || !pred.byFinish || !pred.byFinish.length) return "";
   const useWin = pred.source === "entry_list";
-  const rows = pred.byFinish.slice(0, 5).map((p, i) => {
+  const rows = pred.byFinish.slice(0, 10).map((p, i) => {
     const car = (p.car != null) ? p.car : (p.entity && p.entity.car_number);
     const carHex = colorFor(series, car);
     const txt = contrastTextFor(carHex);
@@ -20809,7 +20810,7 @@ function _renderPredictedFinishCard(series, trackCode) {
   </div>`;
 }
 function _renderTopFinishCard(race) {
-  const res = (race.results || []).filter(d => d.finish_pos != null).sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 5);
+  const res = (race.results || []).filter(d => d.finish_pos != null).sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 10);
   if (!res.length) return "";
   const rows = res.map(d => {
     const carHex = colorFor(STATE.series, d.car_number);
@@ -20822,7 +20823,7 @@ function _renderTopFinishCard(race) {
     </div>`;
   }).join("");
   return `<div class="card rc-card">
-    <div class="rc-card-head"><span class="rc-card-title">Finish</span><span class="rc-card-sub">top 5 · pts</span></div>
+    <div class="rc-card-head"><span class="rc-card-title">Finish</span><span class="rc-card-sub">top 10 · pts</span></div>
     <div class="rc-card-body">${rows}</div>
   </div>`;
 }
@@ -21134,15 +21135,19 @@ function _renderRaceCenterImpl() {
   const trackHistHTML = renderTrackHistoryTable(history, STATE.series);
   const overviewHTML = `
     ${sessionLineHTML}
-    <div class="rcx-cardrow">
-      <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Winners</span><span class="rc-card-sub">last 5</span></div>
-        <div class="rc-card-body">${winnersBody}</div>
+    <div class="rcx-overview">
+      <div class="rcx-ov-main">
+        ${predOrFinishCard}
       </div>
-      ${predOrFinishCard}
-      <div class="card rc-card">
-        <div class="rc-card-head"><span class="rc-card-title">Track Stats</span><span class="rc-card-sub">${history.length} races</span></div>
-        <div class="rc-card-body">${recordHTML}</div>
+      <div class="rcx-ov-side">
+        <div class="card rc-card">
+          <div class="rc-card-head"><span class="rc-card-title">Winners</span><span class="rc-card-sub">last 5</span></div>
+          <div class="rc-card-body">${winnersBody}</div>
+        </div>
+        <div class="card rc-card">
+          <div class="rc-card-head"><span class="rc-card-title">Track Stats</span><span class="rc-card-sub">${history.length} races</span></div>
+          <div class="rc-card-body">${recordHTML}</div>
+        </div>
       </div>
     </div>
     <div class="rcx-all-head"><span class="t">All Races at ${escapeHTML(trackStr)}</span><span class="s">newest first</span></div>
@@ -21161,7 +21166,16 @@ function _renderRaceCenterImpl() {
 
   // Reset the active tab when the race changes; otherwise keep the user's
   // choice across the background-data re-renders.
-  if (_raceTabRound !== nextRace.round) { _raceTab = "overview"; _raceTabRound = nextRace.round; }
+  if (_raceTabRound !== nextRace.round) {
+    _raceTab = "overview";
+    _raceTabRound = nextRace.round;
+    // New race opened — jump the scroll container back to the top so it's
+    // obvious the page changed (otherwise you stay scrolled at the table row
+    // you just clicked and can't tell anything happened).
+    const _ve = document.getElementById("view-race");
+    if (_ve) _ve.scrollTop = 0;
+    if (typeof window !== "undefined" && window.scrollTo) window.scrollTo(0, 0);
+  }
   // A link elsewhere (e.g. home "View entry list →") can request a specific
   // tab on arrival; honor it once if that tab exists this render.
   if (_pendingRaceTab && tabs.some(t => t.key === _pendingRaceTab)) {

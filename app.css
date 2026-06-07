@@ -362,6 +362,14 @@ body { overflow-x: clip; }
   flex-shrink: 0;
 }
 .page-series-bar[hidden] { display: none; }
+
+/* On narrow web viewports the 15% side rails get too cramped to read, so drop
+   them and let the center fill the width. Below 768px the mobile query handles
+   it; this covers the awkward 768–1150px desktop range. */
+@media (min-width: 768px) and (max-width: 1150px) {
+  .dashboard { grid-template-columns: minmax(0, 1fr); }
+  .col-left, .col-right { display: none; }
+}
 .pgs-track {
   display: inline-flex;
   background: var(--card);
@@ -4712,6 +4720,9 @@ a.driver-cell.profile-link:hover .car-tag {
 /* The race sub-line is now empty (track/date live in the hero), so collapse
    it rather than leaving a dead gap between the Back link and the hero. */
 #view-race .view-sub:empty { display: none; }
+/* Race page: pull the header divider and Back link tight to the hero. */
+.page-series-bar.page-hd.pb-race { margin-bottom: 4px; }
+#race-takeover { padding-top: 2px; }
 .rc-hero::before {
   content: "";
   position: absolute;
@@ -13230,9 +13241,11 @@ body.lightbox-open {
 .rcx-ses { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 2px 0 13px; }
 .rcx-ses b { color: var(--text); font-weight: 600; }
 .rcx-cardrow { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 12px; margin-bottom: 14px; }
-/* Equal-height cards: let each card body grow and space its rows evenly so the
-   three cards' rows line up instead of clumping at the top with a gap. */
-.rcx-cardrow .rc-card-body { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; }
+/* Two-column overview: big Top-10 Finish/Predicted on the left, Winners +
+   Track Stats stacked on the right. Unifies the pre-race and post-race pages. */
+.rcx-overview { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; margin-bottom: 14px; align-items: start; }
+.rcx-ov-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rcx-ov-main { min-width: 0; }
 .rcx-pred-row { display: flex; align-items: center; gap: 8px; padding: 4px 7px; font-size: 12px; }
 .rcx-pred-rk { font-family: var(--mono); font-size: 10px; color: var(--dim); min-width: 14px; text-align: right; }
 .rcx-pred-nm { flex: 1; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -13261,5 +13274,6 @@ body.lightbox-open {
 .rcx-all-table .rcx-c-mfr { width: 84px; }
 @media (max-width: 767.98px), (pointer: coarse) {
   .rcx-cardrow { grid-template-columns: 1fr; }
+  .rcx-overview { grid-template-columns: 1fr; }
   .rcx-title { font-size: 21px; }
 }
