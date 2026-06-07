@@ -12772,6 +12772,24 @@ body.lightbox-open {
   padding: 18px 4px 16px;
   margin-bottom: 8px;
 }
+/* Track page carries its own large title in the body (page-bar title is
+   suppressed for it), like the profile/team pages. Back link sits tight
+   above it instead of floating in an empty band. */
+#view-track .view-head {
+  padding: 2px 4px 14px;
+  margin-bottom: 6px;
+}
+#view-track .view-head h1 {
+  display: block;
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+#view-track .track-back-link { margin: 6px 0 6px -4px; }
 
 /* ============================================================
    PERSONNEL DATABASE — toolbar + Filter popup + sortable table.

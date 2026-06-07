@@ -241,9 +241,12 @@ def run_manual(args):
 
 
 def run_discover(args):
+    print(f"# scrape_lineup discover v4 — season={args.season} "
+          f"round={args.round} series={args.series or 'all'}")
     index = fetch_json(f"{CACHER}/{args.season}/race_list_basic.json")
     if not index:
         raise SystemExit(f"Could not load schedule index for {args.season}.")
+    print(f"# index top-level keys: {sorted(index.keys())[:12]}")
     run_mode = "upcoming" if args.upcoming else "current"
     wrote = 0
     for series_id, code in SERIES_ID_TO_CODE.items():
@@ -254,11 +257,19 @@ def run_discover(args):
             races = [r for r in all_races if _round_of(r) == args.round]
         else:
             races = target_races(index, series_id, run_mode)
+        print(f"# [{code}] series_{series_id}: {len(all_races)} races in index, "
+              f"{len(races)} matched filter")
+        if all_races and not races:
+            s = all_races[0]
+            print(f"#   no match — first race keys: {sorted(s.keys())}; "
+                  f"_round_of(first)={_round_of(s)}")
         for r in races:
             track = r.get("track_name", "")
             race_d = _race_date(r)
             rnd = args.round if args.round is not None else _round_of(r)
             if not track or race_d is None or rnd is None:
+                print(f"#   skipping race: track={track!r} date={race_d} round={rnd} "
+                      f"(keys: {sorted(r.keys())})")
                 continue
             try:
                 url, data = discover_startrow(code, args.season, track, race_d)

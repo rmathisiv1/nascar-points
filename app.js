@@ -3273,16 +3273,13 @@ function renderPageSeriesBar() {
   // Entity pages (profile/team/cc) carry their own rich title in the body, so
   // the generic label is suppressed for them — the header still shows so the
   // divider/toggle line stays consistent, just without a duplicate title.
-  const suppressTitle = ["profile", "team", "cc"].includes(v);
+  const suppressTitle = ["profile", "team", "cc", "track"].includes(v);
   let title = suppressTitle ? "" : pageTitleLabel(v);
   // On a race page, show "R## Track" instead of the generic "Race Center".
   if (v === "race" && STATE.race && STATE.race.round != null && STATE.data) {
     const rr = (STATE.data.races || []).find(x => x.round === STATE.race.round);
     const tn = rr ? (prettyTrack(rr.track_code, rr.track) || rr.track) : null;
     if (tn) title = `R${STATE.race.round} ${tn}`;
-  } else if (v === "track" && STATE.track && STATE.track.code) {
-    const tn = prettyTrack(STATE.track.code, null) || STATE.track.code;
-    if (tn) title = tn;
   }
   const titleHTML = `<span class="page-hd-title">${escapeHTML(title)}</span>`;
 
@@ -5627,23 +5624,42 @@ function wireTrackHistoryRows() {
   if (_tkHistWired) return;
   _tkHistWired = true;
   document.addEventListener("click", (e) => {
+    // Inner links (driver/team pills) navigate normally.
+    if (e.target.closest("a")) return;
     const row = e.target.closest(".tk-hist-row");
     if (!row) return;
-    const href = row.getAttribute("data-race-href");
-    const onMobile = isMobile();
-    if (!onMobile) {
-      if (href) location.hash = href;
-      return;
-    }
-    // Mobile: a tap on a link inside the row still navigates; otherwise toggle.
-    if (e.target.closest("a")) return;
-    const wasOpen = row.classList.contains("tk-row-open");
-    row.classList.toggle("tk-row-open");
-    // If it was already open, a second tap on the (now-visible) row navigates.
-    if (wasOpen && href) location.hash = href;
+    const href = row.getAttribute("data-race-href") || "";
+    const m = href.match(/#\/race\/(\d+)\?_y=(\d+)&_s=(NCS|NOS|NTS)/);
+    if (!m) { if (href) location.hash = href; return; }
+    e.preventDefault();
+    // Show the race in a results pop-up rather than swapping the whole
+    // page over to that year — keeps the user anchored on the track/race
+    // they're looking at.
+    openRaceLightbox(parseInt(m[2], 10), m[3], parseInt(m[1], 10));
   });
 }
 wireTrackHistoryRows();
+
+// Race-page Most Wins / Best Avg cards each carry a 2026↔all-time toggle.
+// Both scopes are pre-rendered into hidden panes; the toggle just swaps which
+// pane shows (no re-render). One delegated listener covers every card.
+let _perfWired = false;
+function wirePerfToggles() {
+  if (_perfWired) return;
+  _perfWired = true;
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".perf-toggle button");
+    if (!btn) return;
+    const card = btn.closest(".rc-card");
+    if (!card) return;
+    const scope = btn.dataset.scope;
+    card.querySelectorAll(".perf-toggle button")
+      .forEach(b => b.classList.toggle("on", b === btn));
+    card.querySelectorAll(".perf-pane")
+      .forEach(p => { p.hidden = (p.dataset.scope !== scope); });
+  });
+}
+wirePerfToggles();
 
 const _DOC_LABELS = { entry: "Entry List", pitstall: "Pit Stalls",
                       roster: "Crew Rosters", infraction: "Infractions" };
@@ -21383,8 +21399,8 @@ function _renderRaceCenterImpl() {
   const predOrFinishCard = isUpcoming
     ? _renderPredictedFinishCard(STATE.series, nextRace.track_code, nextRace)
     : _renderTopFinishCard(nextRace);
-  const winnersBody = _renderWinnersHere(history, STATE.series);
-  const perf = _trackPerformers(history, "current");
+  const perfCur = _trackPerformers(history, "current");
+  const perfAll = _trackPerformers(history, "all");
   const trackHistHTML = renderTrackHistoryTable(history, STATE.series);
   const overviewHTML = `
     ${sessionLineHTML}
@@ -21394,12 +21410,30 @@ function _renderRaceCenterImpl() {
       </div>
       <div class="rcx-ov-side">
         <div class="card rc-card">
-          <div class="rc-card-head"><span class="rc-card-title">Most Wins Here</span><span class="rc-card-sub">${STATE.season} drivers</span></div>
-          <div class="rc-card-body">${perf.winsHTML}</div>
+          <div class="rc-card-head">
+            <span class="rc-card-title">Most Wins Here</span>
+            <div class="toggle-group mini perf-toggle" role="tablist" aria-label="Scope">
+              <button class="on" data-scope="current">${STATE.season}</button>
+              <button data-scope="all">all-time</button>
+            </div>
+          </div>
+          <div class="rc-card-body">
+            <div class="perf-pane" data-scope="current">${perfCur.winsHTML}</div>
+            <div class="perf-pane" data-scope="all" hidden>${perfAll.winsHTML}</div>
+          </div>
         </div>
         <div class="card rc-card">
-          <div class="rc-card-head"><span class="rc-card-title">Best Avg Finish</span><span class="rc-card-sub">${STATE.season} drivers</span></div>
-          <div class="rc-card-body">${perf.avgHTML}</div>
+          <div class="rc-card-head">
+            <span class="rc-card-title">Best Avg Finish</span>
+            <div class="toggle-group mini perf-toggle" role="tablist" aria-label="Scope">
+              <button class="on" data-scope="current">${STATE.season}</button>
+              <button data-scope="all">all-time</button>
+            </div>
+          </div>
+          <div class="rc-card-body">
+            <div class="perf-pane" data-scope="current">${perfCur.avgHTML}</div>
+            <div class="perf-pane" data-scope="all" hidden>${perfAll.avgHTML}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -22365,7 +22399,7 @@ function renderTrackPage() {
     ? `data back to ${earliestYear}`
     : "Loading history…";
   if (sub) {
-    sub.textContent = `${trackName} · ${dataRangeText}`;
+    sub.textContent = dataRangeText;
   }
 
   // All-time leaderboards (Most Wins, Best Avg, Manufacturer) come from the
@@ -22408,13 +22442,8 @@ function renderTrackPage() {
       </div>
     </div>
 
-    <div class="card rc-card rc-card-wide">
-      <div class="rc-card-head">
-        <span class="rc-card-title">All Races at ${escapeHTML(trackName)}</span>
-        <span class="rc-card-sub">newest first</span>
-      </div>
-      <div class="rc-card-body" style="padding:0;">${renderTrackHistoryTable(history, tSeries)}</div>
-    </div>
+    <div class="rcx-all-head"><span class="t">All Races at ${escapeHTML(trackName)}</span><span class="s">newest first</span></div>
+    ${renderTrackHistoryTable(history, tSeries)}
   `;
 }
 
