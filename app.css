@@ -7969,23 +7969,51 @@ body.lightbox-open {
 @media (max-width: 720px) {
   .home-hero-row { grid-template-columns: 1fr; }
 }
-/* Three-series hero: the original upcoming pane, scaled to fit three equal
-   columns. Same structure (countdown | divider | info), just smaller. */
-.home-hero-trio { grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.home-hero-trio .home-hero-card { gap: 12px; }
-.home-hero-trio .home-hero-countdown { flex: 0 0 66px; padding-right: 12px; }
-.home-hero-trio .home-hero-countdown-line { gap: 5px; }
-.home-hero-trio .home-hero-countdown-num { font-size: 30px; }
-.home-hero-trio .home-hero-countdown-word { font-size: 16px; }
-.home-hero-trio .home-hero-countdown-sub { font-size: 10px; margin-top: 5px; }
-.home-hero-trio .home-hero-track-name { font-size: 19px; margin-bottom: 4px; }
-.home-hero-trio .home-hero-track-meta { font-size: 12px; }
-.home-hero-trio .rcx-ses { font-size: 11px; margin-top: 4px; }
-.home-hero-trio .home-hero-track-row { gap: 14px; margin-top: 10px; }
-.home-hero-trio .home-hero-track-fact .v { font-size: 12.5px; }
-.home-hero-trio .home-hero-entry { margin-top: 8px; font-size: 12.5px; }
+/* Home top: two side-by-side boxes (upcoming | podium), each split into three
+   horizontal bands by full-width dividers. */
+.home-top-row { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+.home-hero-box { flex: 3 1 520px; padding: 0; overflow: hidden; }
+.home-pod-box { flex: 2 1 360px; padding: 0; overflow: hidden; }
+.home-top-row .home-card { padding: 0; }
+.home-band-div { border-top: 1px solid var(--border); }
+.home-top-row .dot { color: var(--dim); margin: 0 1px; }
+
+.home-hero-band { display: flex; align-items: stretch; padding: 10px 16px; border-left: 4px solid var(--accent); }
+.hhb-count { flex: 0 0 104px; min-width: 0; overflow: hidden; box-sizing: border-box; padding-right: 14px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; }
+.hhb-num-line { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.hhb-num { font-size: 21px; font-weight: 700; line-height: 1; color: var(--text); }
+.hhb-unit { font-size: 13px; font-weight: 600; color: var(--text); }
+.hhb-sub { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; color: var(--dim); text-transform: uppercase; margin-top: 3px; }
+.hhb-mid { flex: 1; min-width: 0; padding: 0 14px; display: flex; flex-direction: column; justify-content: center; }
+.hhb-title { display: flex; align-items: baseline; gap: 6px; }
+.hhb-series { font-size: 13px; font-weight: 700; letter-spacing: .03em; }
+.hhb-track { font-size: 17px; font-weight: 700; color: var(--text); text-decoration: none; }
+.hhb-track:hover { color: var(--accent-2); }
+.hhb-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.hhb-facts { font-size: 11.5px; color: var(--text); margin-top: 2px; }
+.hhb-facts .k { color: var(--dim); }
+.hhb-right { flex: 0 0 214px; box-sizing: border-box; padding-left: 14px; border-left: 1px solid var(--border); text-align: right; display: flex; flex-direction: column; justify-content: center; }
+.hhb-ses { font-size: 11px; color: var(--dim); }
+.hhb-ses b { font-weight: 600; color: var(--text); }
+.hhb-boxes { margin-top: 7px; display: flex; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
+.home-band-link { display: inline-block; font-size: 11px; white-space: nowrap; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; background: var(--tint-1); text-decoration: none; }
+.home-band-link:hover { background: var(--tint-2); border-color: var(--accent); }
+
+.home-pod-band { padding: 10px 16px; border-left: 4px solid var(--accent); }
+.hpb-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hpb-h-left { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.hpb-series { font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+.hpb-r { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.hpb-track { font-size: 13.5px; font-weight: 600; color: var(--text); text-decoration: none; }
+.hpb-track:hover { color: var(--accent-2); }
+.hpb-date { font-size: 10.5px; color: var(--dim); white-space: nowrap; }
+.hpb-podium { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; }
+.hpb-pos { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text); text-decoration: none; }
+.hpb-pos:hover .hpb-name { color: var(--accent-2); }
+.hpb-medal { width: 17px; height: 17px; border-radius: 50%; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.hpb-car { font-family: var(--mono); font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 5px; flex: 0 0 auto; }
 @media (max-width: 860px) {
-  .home-hero-trio { grid-template-columns: 1fr; }
+  .home-hero-box, .home-pod-box { flex: 1 1 100%; }
 }
 .home-hero-card {
   display: flex;

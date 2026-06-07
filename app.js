@@ -14717,32 +14717,48 @@ function predictDriverForRace(driverName, series, trackCode, actualStart) {
 
 
 
-// Renders the hero row: a countdown card on the left for the next race,
-// and a recap card on the right for the most recent completed race.
-// Three-series hero: the SAME upcoming-race pane we always had (big countdown
-// + track info + last winner / track king + entry link), rendered once per
-// series and laid out as three equal vertical columns. Same panes, just split
-// three ways. Each card adds the session-times line + race time.
-function _renderUpcomingHeroCard(year, series) {
-  // Runs inside _withSeriesContext, so allRacesSorted()/computeLastWinnerAtTrack
-  // resolve against this series.
-  const races = allRacesSorted();
-  const nextRace = races.find(r => !(r.results || []).some(d => d.finish_pos === 1)) || null;
+// Home top: two side-by-side boxes, each split into three horizontal bands
+// (NCS / NOS / NTS) by full-width dividers. Left box = next race per series
+// (countdown · race info · session times + action links). Right box = the
+// previous race podium (top three) per series.
+function _homeSeriesAccent(series) {
+  return series === "NOS" ? "#2e7d32" : series === "NTS" ? "#c62828" : "#d4a017";
+}
+function _homeLinkBox(round, year, series, tab, label) {
+  const href = `#/race/${round}?_y=${year}&_s=${encodeURIComponent(series)}`;
+  return `<a class="home-band-link" href="${href}" onclick="_pendingRaceTab='${tab}';">${label}</a>`;
+}
+// Practice + qualifying day/times only (race time lives in the meta line).
+function _homeSessionTimes(ev, series) {
+  if (!ev || !ev.sessions) return "";
+  const want = series || STATE.series;
+  const pick = (type) => ev.sessions.find(s => s.type === type && (s.series || []).includes(want))
+                      || ev.sessions.find(s => s.type === type && s.national);
+  const p = pick("practice"), q = pick("qualifying");
+  const parts = [];
+  if (p) parts.push(`Practice <b>${escapeHTML(_sessDayTime(p))}</b>`);
+  if (q) parts.push(`Qual <b>${escapeHTML(_sessDayTime(q))}</b>`);
+  if (!parts.length) return "";
+  return `<div class="hhb-ses">${parts.join(' <span class="dot">·</span> ')}</div>`;
+}
+
+function _renderUpcomingBand(year, series) {
+  const accent = _homeSeriesAccent(series);
+  const nextRace = allRacesSorted().find(r => !(r.results || []).some(d => d.finish_pos === 1)) || null;
   if (!nextRace) {
-    return `<div class="home-card home-hero-card">
-      <div class="home-hero-info">
-        <div class="home-card-label">${series} · SEASON COMPLETE</div>
-        <div class="home-hero-track-name">No upcoming races</div>
-        <div class="home-hero-track-meta">See the schedule for next season's calendar.</div>
-      </div></div>`;
+    return `<div class="home-hero-band" style="border-left-color:${accent};">
+      <div class="hhb-count"><div class="hhb-num-line"><span class="hhb-num">—</span></div><div class="hhb-sub">done</div></div>
+      <div class="hhb-mid"><div class="hhb-title"><span class="hhb-series" style="color:${accent};">${series}</span></div>
+      <div class="hhb-meta">Season complete</div></div>
+      <div class="hhb-right"></div></div>`;
   }
   const dateStr = nextRace.date || "";
-  let countdownNum = "—", countdownUnit = "", countdownText = `R${nextRace.round}`;
+  let cnum = "—", cunit = "", csub = `R${nextRace.round}`;
   if (dateStr) {
     const days = Math.ceil((new Date(dateStr + "T00:00:00").getTime() - Date.now()) / 86400000);
-    if (days > 1) { countdownNum = String(days); countdownUnit = "days"; countdownText = `until R${nextRace.round}`; }
-    else if (days === 1) { countdownNum = "1"; countdownUnit = "day"; countdownText = `until R${nextRace.round}`; }
-    else if (days === 0) { countdownNum = "Race"; countdownUnit = "today"; countdownText = `R${nextRace.round}`; }
+    if (days > 1) { cnum = String(days); cunit = "days"; csub = `until R${nextRace.round}`; }
+    else if (days === 1) { cnum = "1"; cunit = "day"; csub = `until R${nextRace.round}`; }
+    else if (days === 0) { cnum = "Today"; cunit = ""; csub = `R${nextRace.round}`; }
   }
   const trackName = prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD";
   const trackType = trackTypeFor(nextRace.track_code);
@@ -14752,49 +14768,92 @@ function _renderUpcomingHeroCard(year, series) {
   if (nextRace.tv) timeBits.push(nextRace.tv);
   const metaStr = [dateStr ? formatLongDate(dateStr) : "", timeBits.join(" · "), typeLabel].filter(Boolean).join(" · ");
   const sched = (typeof scheduleForRace === "function") ? scheduleForRace(nextRace, series) : null;
-  const sessionLine = (typeof _renderSessionLine === "function") ? _renderSessionLine(sched, series) : "";
+  const sesHTML = _homeSessionTimes(sched, series);
   const lastWinnerHTML = computeLastWinnerAtTrack(nextRace.track_code, series);
   const trackKingHTML = computeTrackKing(nextRace.track_code, series);
-  let linkHTML = "";
+  const facts = [];
+  if (lastWinnerHTML) facts.push(`<span class="k">Last winner</span> ${lastWinnerHTML}`);
+  if (trackKingHTML) facts.push(`<span class="k">Track king</span> ${trackKingHTML}`);
+  const factsHTML = facts.length ? `<div class="hhb-facts">${facts.join(' <span class="dot">·</span> ')}</div>` : "";
+  // Action links: after qualifying (lineup exists) → Lineup + Practice results;
+  // before that → Entry list (only if the entry list has been archived).
   const lu = (typeof lineupForRace === "function") ? lineupForRace(nextRace, series) : null;
+  let boxes = "";
   if (lu) {
-    const sl = lineupLink(nextRace, series, "lineup");
-    const ql = lineupLink(nextRace, series, "qual");
-    linkHTML = `<div class="home-hero-entry">${sl}${ql ? ` <span class="home-hero-entry-sep">·</span> ${ql}` : ""}</div>`;
+    boxes = _homeLinkBox(nextRace.round, year, series, "lineup", "Lineup →")
+          + _homeLinkBox(nextRace.round, year, series, "practice", "Practice results →");
   } else {
-    const el = entryListLink(nextRace, series, true);
-    if (el) linkHTML = `<div class="home-hero-entry">${el}</div>`;
+    const rec = (typeof getRaceDocs === "function") ? getRaceDocs(year, series, nextRace) : null;
+    const hasEntry = rec && rec.docs && rec.docs.entry && Array.isArray(rec.docs.entry.rows) && rec.docs.entry.rows.length;
+    if (hasEntry) boxes = _homeLinkBox(nextRace.round, year, series, "entry", "Entry list →");
   }
-  return `<div class="home-card home-hero-card">
-    <div class="home-hero-countdown">
-      <div class="home-hero-countdown-line">
-        <span class="home-hero-countdown-num">${countdownNum}</span>
-        <span class="home-hero-countdown-word">${countdownUnit}</span>
-      </div>
-      <div class="home-hero-countdown-sub">${countdownText}</div>
+  const trackHref = `#/race/${nextRace.round}?_y=${year}&_s=${encodeURIComponent(series)}`;
+  return `<div class="home-hero-band" style="border-left-color:${accent};">
+    <div class="hhb-count">
+      <div class="hhb-num-line"><span class="hhb-num">${cnum}</span>${cunit ? `<span class="hhb-unit">${cunit}</span>` : ""}</div>
+      <div class="hhb-sub">${csub}</div>
     </div>
-    <div class="home-hero-info">
-      <div class="home-card-label">UPCOMING ${series}</div>
-      <a class="home-hero-track-name" href="#/race/${nextRace.round}?_y=${year}&_s=${series}">${escapeHTML(trackName)}</a>
-      ${metaStr ? `<div class="home-hero-track-meta">${escapeHTML(metaStr)}</div>` : ""}
-      ${sessionLine}
-      <div class="home-hero-track-row">
-        ${lastWinnerHTML ? `<div class="home-hero-track-fact"><span class="k">Last winner</span><span class="v">${lastWinnerHTML}</span></div>` : ""}
-        ${trackKingHTML ? `<div class="home-hero-track-fact"><span class="k">Track king</span><span class="v">${trackKingHTML}</span></div>` : ""}
-      </div>
-      ${linkHTML}
+    <div class="hhb-mid">
+      <div class="hhb-title"><span class="hhb-series" style="color:${accent};">${series}</span><span class="dot">·</span><a class="hhb-track" href="${trackHref}">${escapeHTML(trackName)}</a></div>
+      ${metaStr ? `<div class="hhb-meta">${escapeHTML(metaStr)}</div>` : ""}
+      ${factsHTML}
+    </div>
+    <div class="hhb-right">
+      ${sesHTML}
+      ${boxes ? `<div class="hhb-boxes">${boxes}</div>` : ""}
     </div>
   </div>`;
 }
 
-function renderHomeHeroTrio(year) {
-  const cards = ["NCS", "NOS", "NTS"].map(series => {
-    const card = _withSeriesContext(year, series, () => _renderUpcomingHeroCard(year, series));
-    return card || `<div class="home-card home-hero-card">
-      <div class="home-hero-info"><div class="home-card-label">${series}</div>
-      <div class="home-hero-track-name muted">Loading…</div></div></div>`;
+function _renderPodiumBand(year, series) {
+  const accent = _homeSeriesAccent(series);
+  const completed = allRacesSorted().filter(r => (r.results || []).some(d => d.finish_pos === 1));
+  const last = completed.length ? completed[completed.length - 1] : null;
+  if (!last) {
+    return `<div class="home-pod-band" style="border-left-color:${accent};">
+      <div class="hpb-head"><div class="hpb-h-left"><span class="hpb-series" style="color:${accent};">${series}</span><span class="dot">·</span><span class="hpb-track muted">No races yet</span></div></div></div>`;
+  }
+  const top3 = (last.results || []).filter(d => d.finish_pos >= 1 && d.finish_pos <= 3)
+    .sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 3);
+  const trackName = prettyTrack(last.track_code, last.track) || last.track || "";
+  const dd = last.date ? new Date(last.date + "T00:00:00") : null;
+  const dateStr = dd ? dd.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+  const medalBg = ["#f1e3b8", "#e6e3da", "#ecdac4"];
+  const medalTx = ["#7a5a12", "#5f5e5a", "#86541f"];
+  const dHref = `#/race/${last.round}?_y=${year}&_s=${encodeURIComponent(series)}`;
+  const items = top3.map((d, i) => {
+    const car = d.car_number;
+    const hex = (typeof colorFor === "function" && colorFor(series, car)) || "#888";
+    const txt = (typeof contrastTextFor === "function") ? contrastTextFor(hex) : "#fff";
+    const nm = (d.driver || "").trim().split(/\s+/).slice(-1)[0] || "";
+    return `<a class="hpb-pos" href="${dHref}">
+      <span class="hpb-medal" style="background:${medalBg[i]};color:${medalTx[i]};">${d.finish_pos}</span>
+      <span class="hpb-car" style="background:${hex};color:${txt};">${escapeHTML(String(car))}</span>
+      <span class="hpb-name">${escapeHTML(nm)}</span></a>`;
   }).join("");
-  return `<div class="home-hero-row home-hero-trio">${cards}</div>`;
+  return `<div class="home-pod-band" style="border-left-color:${accent};">
+    <div class="hpb-head">
+      <div class="hpb-h-left"><span class="hpb-series" style="color:${accent};">${series}</span><span class="dot">·</span><span class="hpb-r">R${last.round}</span><a class="hpb-track" href="${dHref}">${escapeHTML(trackName)}</a></div>
+      ${dateStr ? `<span class="hpb-date">${escapeHTML(dateStr)}</span>` : ""}
+    </div>
+    <div class="hpb-podium">${items}</div>
+  </div>`;
+}
+
+function renderHomeHeroTrio(year) {
+  const SERIES = ["NCS", "NOS", "NTS"];
+  const up = SERIES.map(s =>
+    _withSeriesContext(year, s, () => _renderUpcomingBand(year, s)) ||
+    `<div class="home-hero-band"><div class="hhb-mid"><div class="hhb-title">${s}</div><div class="hhb-meta muted">Loading…</div></div></div>`
+  ).join('<div class="home-band-div"></div>');
+  const pod = SERIES.map(s =>
+    _withSeriesContext(year, s, () => _renderPodiumBand(year, s)) ||
+    `<div class="home-pod-band"><div class="hpb-head"><div class="hpb-h-left">${s}</div></div></div>`
+  ).join('<div class="home-band-div"></div>');
+  return `<div class="home-top-row">
+    <div class="home-card home-hero-box">${up}</div>
+    <div class="home-card home-pod-box">${pod}</div>
+  </div>`;
 }
 
 function renderHomeHero(year, series) {
