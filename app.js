@@ -21057,7 +21057,7 @@ async function loadScheduleSessions() {
   if (_scheduleAttempted) return STATE_SCHEDULE;
   _scheduleAttempted = true;
   try {
-    const r = await fetch("data/schedule.json");
+    const r = await fetch("data/schedule.json?v=" + Date.now(), { cache: "no-store" });
     if (r.ok) STATE_SCHEDULE = await r.json();
   } catch (e) { /* no schedule data yet — non-fatal */ }
   return STATE_SCHEDULE;
@@ -21096,6 +21096,17 @@ function scheduleForRace(race, series) {
     if (d1) return d1;
     const d2 = evs.find(e => e.event_date === race.date);
     if (d2) return d2;
+  }
+  // 1.5) Match by the wanted series' RACE-session date. On multi-series
+  //      weekends each series races a different day, so the calendar's
+  //      per-series race date won't equal the event's headline event_date
+  //      (which is usually the Cup day) and the track name may be styled
+  //      differently ("San Diego" vs "San Diego Street Course"). The event's
+  //      own race session for that series carries the correct day.
+  if (race.date) {
+    const bySess = evs.find(e => (e.sessions || []).some(s =>
+      s.type === "race" && s.date === race.date && (s.series || []).includes(want)));
+    if (bySess) return bySess;
   }
   const tslug = _trkNameSlug((typeof prettyTrack === "function" ? prettyTrack(race.track_code, race.track) : null) || race.track || "");
   const sameTrack = evs.filter(e => _trkNameSlug(e.track) === tslug);
