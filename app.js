@@ -14330,11 +14330,11 @@ function renderHomePredictionTrio(year) {
     // handler in wireUIControls reads data-series-page + data-series-set and
     // sets STATE.pageSeries[that view] before navigation, so the track page
     // opens in the matching series rather than whatever it last remembered.
-    const trackHref = `#/track/${encodeURIComponent(computed.trackCode)}`;
+    const raceHref = `#/race/${computed.round}?_y=${year}&_s=${encodeURIComponent(series)}`;
     return `<div class="home-card hpt-col">
       <div class="hpt-head">
-        <span class="hpt-title"><span class="hhb-series" style="color:${_homeSeriesAccent(series)};">${series}</span><span class="dot">·</span><span class="hhb-track">${escapeHTML(computed.trackName)}</span></span>
-        <a class="hpt-race profile-link" href="${trackHref}" data-series-page="track" data-series-set="${series}">R${computed.round} →</a>
+        <span class="hpt-title"><span class="hhb-series" style="color:${_homeSeriesAccent(series)};">${series}</span><span class="hhb-track">${escapeHTML(computed.trackName)}</span></span>
+        <a class="hpt-race" href="${raceHref}">R${computed.round} →</a>
       </div>
       <div class="hpt-table-head">
         <span></span><span></span><span></span>
@@ -14799,14 +14799,14 @@ function _renderUpcomingBand(year, series) {
     <div class="hhb-count">
       <div class="hhb-num-line"><span class="hhb-num${cword ? " hhb-num-word" : ""}">${cnum}</span>${cunit ? `<span class="hhb-unit">${cunit}</span>` : ""}</div>
       <div class="hhb-sub">${csub}</div>
-      ${sesHTML}
     </div>
     <div class="hhb-mid">
-      <div class="hhb-title"><span class="hhb-series" style="color:${accent};">${series}</span><span class="dot">·</span><a class="hhb-track" href="${trackHref}">${escapeHTML(trackName)}</a></div>
+      <div class="hhb-title"><span class="hhb-series" style="color:${accent};">${series}</span><a class="hhb-track" href="${trackHref}">${escapeHTML(trackName)}</a></div>
       ${metaStr ? `<div class="hhb-meta">${escapeHTML(metaStr)}</div>` : ""}
       ${factsHTML}
     </div>
     <div class="hhb-right">
+      ${sesHTML}
       ${boxes ? `<div class="hhb-boxes">${boxes}</div>` : ""}
     </div>
   </div>`;
@@ -14818,7 +14818,7 @@ function _renderPodiumBand(year, series) {
   const last = completed.length ? completed[completed.length - 1] : null;
   if (!last) {
     return `<div class="home-pod-band" style="border-left-color:${accent};">
-      <div class="hpb-head"><div class="hpb-h-left"><span class="hpb-series" style="color:${accent};">${series}</span><span class="dot">·</span><span class="hpb-track muted">No races yet</span></div></div></div>`;
+      <div class="hpb-head"><div class="hpb-h-left"><span class="hpb-series" style="color:${accent};">${series}</span><span class="hpb-track muted">No races yet</span></div></div></div>`;
   }
   const top3 = (last.results || []).filter(d => d.finish_pos >= 1 && d.finish_pos <= 3)
     .sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 3);
@@ -14840,7 +14840,7 @@ function _renderPodiumBand(year, series) {
   }).join("");
   return `<div class="home-pod-band" style="border-left-color:${accent};">
     <div class="hpb-head">
-      <div class="hpb-h-left"><span class="hpb-series" style="color:${accent};">${series}</span><span class="dot">·</span><span class="hpb-r">R${last.round}</span><a class="hpb-track" href="${dHref}">${escapeHTML(trackName)}</a></div>
+      <div class="hpb-h-left"><span class="hpb-series" style="color:${accent};">${series}</span><span class="hpb-rt"><span class="hpb-r">R${last.round}</span> <a class="hpb-track" href="${dHref}">${escapeHTML(trackName)}</a></span></div>
       ${dateStr ? `<span class="hpb-date">${escapeHTML(dateStr)}</span>` : ""}
     </div>
     <div class="hpb-podium">${items}</div>
