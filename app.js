@@ -12899,7 +12899,25 @@ function _computeTrackPerformers(series, trackCode) {
 //   2. Fallback: all full-time CARS (90%-of-races), each represented by its
 //      current driver (predominant, or most-recent if predominant is inactive).
 // Returns sorted arrays for stage-points (DESC) and finish (ASC).
-function _computeRacePredictions(series, trackCode) {
+// Map a not-yet-run race's qualified grid → {byDriver, byCar, count}, or null.
+// Feeds the ACTUAL starting position into the finish model once qualifying is
+// in (start_pos present, no finishes yet). For a completed race we return null
+// — the model is a pre-race tool, not a post-race rationalizer.
+function _gridStartsForRace(race) {
+  if (!race || !Array.isArray(race.results) || !race.results.length) return null;
+  if (race.results.some(d => d.finish_pos != null)) return null;   // already run
+  const byDriver = new Map(), byCar = new Map();
+  for (const d of race.results) {
+    if (d.start_pos != null && d.start_pos > 0) {
+      if (d.driver) byDriver.set(normalizeDriverName(d.driver), d.start_pos);
+      if (d.car_number != null) byCar.set(String(d.car_number), d.start_pos);
+    }
+  }
+  if (!byDriver.size && !byCar.size) return null;
+  return { byDriver, byCar, count: Math.max(byDriver.size, byCar.size) };
+}
+
+function _computeRacePredictions(series, trackCode, race) {
   const entryList = (typeof getEntryList === "function")
     ? getEntryList(series, trackCode) : null;
 
@@ -12956,9 +12974,15 @@ function _computeRacePredictions(series, trackCode) {
       }));
   }
 
+  const grid = _gridStartsForRace(race);
   const predictions = roster.map(r => {
     if (!r.driverName) return null;
-    const pred = predictDriverForRace(r.driverName, series, trackCode);
+    let aStart = null;
+    if (grid) {
+      aStart = grid.byDriver.get(normalizeDriverName(r.driverName));
+      if (aStart == null && r.car != null) aStart = grid.byCar.get(String(r.car));
+    }
+    const pred = predictDriverForRace(r.driverName, series, trackCode, aStart);
     if (!pred) return null;
     return { entity: r.entity, driverName: r.driverName,
              win_prob: r.win_prob, top5_prob: r.top5_prob, top5_odds: r.top5_odds,
@@ -12976,6 +13000,7 @@ function _computeRacePredictions(series, trackCode) {
     byStage: [...predictions].sort((a, b) => b.predicted_stage_pts - a.predicted_stage_pts),
     total: predictions.length,
     source: (entryList && entryList.length) ? "entry_list" : "full_time",
+    gridApplied: grid ? grid.count : 0,
   };
 }
 
@@ -13861,7 +13886,9 @@ function renderRacePredictionSection(opts) {
   const ttypeLabel = ttype ? TRACK_TYPE_LABELS[ttype] : "";
 
   const performers = _computeTrackPerformers(series, trackCode);
-  const predictions = _computeRacePredictions(series, trackCode);
+  const predRace = (roundNum != null && typeof allRacesSorted === "function")
+    ? (allRacesSorted().find(r => r.round === roundNum) || null) : null;
+  const predictions = _computeRacePredictions(series, trackCode, predRace);
   const oddsLabel = _oddsColLabel(predictions);
 
   // If we have NO performers AND no predictions, render nothing — common
@@ -14147,7 +14174,7 @@ function renderHomePredictionTrio(year) {
       const races = allRacesSorted();
       const nextRace = races.find(r => !(r.results || []).some(d => d.finish_pos === 1));
       if (!nextRace || !nextRace.track_code) return null;
-      const preds = _computeRacePredictions(series, nextRace.track_code);
+      const preds = _computeRacePredictions(series, nextRace.track_code, nextRace);
       if (!preds || !preds.byFinish.length) return null;
       // Render rows INSIDE the context so colorFor / entity lookups resolve
       // against this series, not the page's active one.
@@ -14211,7 +14238,7 @@ function renderHomePredictionTrio(year) {
 //
 // Stage points use a simpler 3-signal blend (track + type + season pace),
 // because variance is lower than finish position.
-function predictDriverForRace(driverName, series, trackCode) {
+function predictDriverForRace(driverName, series, trackCode, actualStart) {
   if (!driverName || !trackCode) return null;
   const ttype = trackType(trackCode);
 
@@ -14401,6 +14428,17 @@ function predictDriverForRace(driverName, series, trackCode) {
     { name: "qual_track",    label: "Qual · this track",    w: 0.10, val: trackQual },
     { name: "pace_form",     label: "Pace form (last 5)",   w: 0.15, val: paceForm },
   ];
+  // Post-qualifying: the ACTUAL starting position for THIS race is a far better
+  // qualifying read than the driver's historical track qual, so retire the
+  // historical qual signal and blend in the real grid spot. ~30% nominal weight
+  // (≈25% effective after renormalization) — qualifying matters, but a fast car
+  // that qualified poorly still tends to drive forward, so pace stays dominant.
+  // Tunable: the 0.30 below.
+  if (actualStart != null && actualStart > 0) {
+    const qh = signals.find(s => s.name === "qual_track");
+    if (qh) qh.val = null;
+    signals.push({ name: "actual_start", label: `Qualified P${actualStart}`, w: 0.30, val: actualStart });
+  }
   const avail = signals.filter(s => s.val != null);
   if (avail.length === 0) return null;
 
@@ -14439,6 +14477,13 @@ function predictDriverForRace(driverName, series, trackCode) {
       { name: "recent_here",   label: "Recent finishes here",     w: 0.30, val: draftRecentHere },
       { name: "qual_track",    label: "Qual · this track",        w: 0.20, val: trackQual },
     ];
+    if (actualStart != null && actualStart > 0) {
+      const qh = draftSignals.find(s => s.name === "qual_track");
+      if (qh) qh.val = null;
+      // Lower weight at plate tracks — the qualified grid gets scrambled by the
+      // draft, so it's informative but not as strong as at a pace track.
+      draftSignals.push({ name: "actual_start", label: `Qualified P${actualStart}`, w: 0.20, val: actualStart });
+    }
     const dAvail = draftSignals.filter(s => s.val != null);
     if (dAvail.length) {
       const dSum = dAvail.reduce((s, x) => s + x.w, 0);
@@ -20782,12 +20827,13 @@ function _raceStatChips(race, ev, series) {
   if (!chips.length) return "";
   return `<div class="rcx-chips">${chips.map(c => `<span class="rcx-chip">${c}</span>`).join("")}</div>`;
 }
-function _renderPredictedFinishCard(series, trackCode) {
+function _renderPredictedFinishCard(series, trackCode, race) {
   if (typeof _computeRacePredictions !== "function" || !trackCode) return "";
   let pred;
-  try { pred = _computeRacePredictions(series, trackCode); } catch (e) { return ""; }
+  try { pred = _computeRacePredictions(series, trackCode, race); } catch (e) { return ""; }
   if (!pred || !pred.byFinish || !pred.byFinish.length) return "";
   const useWin = pred.source === "entry_list";
+  const gridOn = pred.gridApplied > 0;
   const rows = pred.byFinish.slice(0, 10).map((p, i) => {
     const car = (p.car != null) ? p.car : (p.entity && p.entity.car_number);
     const carHex = colorFor(series, car);
@@ -20804,7 +20850,7 @@ function _renderPredictedFinishCard(series, trackCode) {
     </div>`;
   }).join("");
   return `<div class="card rc-card">
-    <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${useWin ? "model · win %" : "model · proj"}</span></div>
+    <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${gridOn ? "post-qual" : "model"} · ${useWin ? "win %" : "proj"}</span></div>
     <div class="rc-card-body">${rows}</div>
     <div class="rcx-cardfoot"><a class="rcx-foot-link" href="#/projection">View full prediction →</a></div>
   </div>`;
@@ -21128,7 +21174,7 @@ function _renderRaceCenterImpl() {
   const _sched = scheduleForRace(nextRace, STATE.series);
   const sessionLineHTML = _renderSessionLine(_sched, STATE.series);
   const predOrFinishCard = isUpcoming
-    ? _renderPredictedFinishCard(STATE.series, nextRace.track_code)
+    ? _renderPredictedFinishCard(STATE.series, nextRace.track_code, nextRace)
     : _renderTopFinishCard(nextRace);
   const recordHTML = _renderRecordBook(history);
   const winnersBody = _renderWinnersHere(history, STATE.series);
