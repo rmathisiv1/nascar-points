@@ -7972,13 +7972,13 @@ body.lightbox-open {
 /* Home top: two side-by-side boxes (upcoming | podium), each split into three
    horizontal bands by full-width dividers. */
 .home-top-row { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
-.home-hero-box { flex: 3 1 520px; padding: 0; overflow: hidden; }
-.home-pod-box { flex: 2 1 360px; padding: 0; overflow: hidden; }
+.home-hero-box { flex: 3 1 520px; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.home-pod-box { flex: 2 1 360px; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 .home-top-row .home-card { padding: 0; }
 .home-band-div { border-top: 1px solid var(--border); }
 .home-top-row .dot { color: var(--dim); margin: 0 1px; }
 
-.home-hero-band { display: flex; align-items: stretch; padding: 10px 16px; border-left: 4px solid var(--accent); }
+.home-hero-band { display: flex; align-items: stretch; padding: 10px 16px; border-left: 4px solid var(--accent); flex: 1; }
 .hhb-count { flex: 0 0 104px; min-width: 0; overflow: hidden; box-sizing: border-box; padding-right: 14px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; }
 .hhb-num-line { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
 .hhb-num { font-size: 21px; font-weight: 700; line-height: 1; color: var(--text); }
@@ -7999,7 +7999,7 @@ body.lightbox-open {
 .home-band-link { display: inline-block; font-size: 11px; white-space: nowrap; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; background: var(--tint-1); text-decoration: none; }
 .home-band-link:hover { background: var(--tint-2); border-color: var(--accent); }
 
-.home-pod-band { padding: 10px 16px; border-left: 4px solid var(--accent); }
+.home-pod-band { padding: 10px 16px; border-left: 4px solid var(--accent); flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .hpb-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .hpb-h-left { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .hpb-series { font-size: 12px; font-weight: 700; letter-spacing: .03em; }

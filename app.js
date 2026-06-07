@@ -12881,6 +12881,12 @@ function renderHome() {
     loadRaceDocs().then(() => { if (STATE.view === "home") renderHome(); });
     loadLineups().then(() => { if (STATE.view === "home") renderHome(); });
   }
+  // The scraped weekend schedule (practice/qual session times) was previously
+  // only fetched on the race page, so the home hero bands showed no session
+  // times. Pull it here too and re-render when it lands.
+  if (!_scheduleAttempted && typeof loadScheduleSessions === "function") {
+    loadScheduleSessions().then(() => { if (STATE.view === "home") renderHome(); });
+  }
 
   // Lazily pull lap-time pace data (current + 2 prior years) so the
   // prediction model's pace signals have data. Only fires on the home view,
