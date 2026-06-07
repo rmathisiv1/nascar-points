@@ -7979,7 +7979,7 @@ body.lightbox-open {
 .home-top-row .dot { color: var(--dim); margin: 0 1px; }
 
 .home-hero-band { display: flex; align-items: stretch; padding: 10px 16px; border-left: 4px solid var(--accent); flex: 1; }
-.hhb-count { flex: 0 0 104px; min-width: 0; overflow: hidden; box-sizing: border-box; padding-right: 14px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; }
+.hhb-count { flex: 0 0 158px; min-width: 0; overflow: hidden; box-sizing: border-box; padding-right: 14px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; }
 .hhb-num-line { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
 .hhb-num { font-size: 21px; font-weight: 700; line-height: 1; color: var(--text); }
 .hhb-num-word { font-size: 16px; }
@@ -7993,9 +7993,9 @@ body.lightbox-open {
 .hhb-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .hhb-facts { font-size: 11.5px; color: var(--text); margin-top: 2px; }
 .hhb-facts .k { color: var(--dim); }
-.hhb-right { flex: 0 0 214px; box-sizing: border-box; padding-left: 14px; border-left: 1px solid var(--border); text-align: right; display: flex; flex-direction: column; justify-content: center; }
-.hhb-ses { font-size: 11px; color: var(--dim); }
-.hhb-ses-line { white-space: nowrap; line-height: 1.45; }
+.hhb-right { flex: 0 0 200px; box-sizing: border-box; padding-left: 14px; border-left: 1px solid var(--border); text-align: right; display: flex; flex-direction: column; justify-content: center; }
+.hhb-ses { font-size: 12px; color: var(--dim); margin-top: 7px; }
+.hhb-ses-line { white-space: nowrap; line-height: 1.3; }
 .hhb-ses b { font-weight: 600; color: var(--text); }
 .hhb-boxes { margin-top: 7px; display: flex; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
 .home-band-link { display: inline-block; font-size: 11px; white-space: nowrap; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; background: var(--tint-1); text-decoration: none; }
@@ -8207,6 +8207,7 @@ body.lightbox-open {
   flex-wrap: wrap;
 }
 .hpt-series { font-family: var(--serif); font-size: 18px; font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
+.hpt-title { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
 .hpt-race {
   font-size: 11px;
   color: var(--accent-2, var(--accent));
@@ -8268,9 +8269,9 @@ body.lightbox-open {
   margin-bottom: 8px;
 }
 .home-standings-label {
-  font-family: var(--serif);
-  font-size: 18px;
-  font-weight: 600;
+  font-family: var(--sans);
+  font-size: 17px;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text);
   text-transform: none;

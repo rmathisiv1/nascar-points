@@ -14321,7 +14321,7 @@ function renderHomePredictionTrio(year) {
     });
     if (!computed) {
       return `<div class="home-card hpt-col">
-        <div class="hpt-head"><span class="hpt-series">${series}</span></div>
+        <div class="hpt-head"><span class="hpt-title"><span class="hhb-series" style="color:${_homeSeriesAccent(series)};">${series}</span></span></div>
         <div class="muted" style="font-size:12px;padding:12px 4px;">No upcoming race or data loaded.</div>
       </div>`;
     }
@@ -14333,8 +14333,8 @@ function renderHomePredictionTrio(year) {
     const trackHref = `#/track/${encodeURIComponent(computed.trackCode)}`;
     return `<div class="home-card hpt-col">
       <div class="hpt-head">
-        <span class="hpt-series">${series}</span>
-        <a class="hpt-race profile-link" href="${trackHref}" data-series-page="track" data-series-set="${series}">R${computed.round} · ${escapeHTML(computed.trackName)} →</a>
+        <span class="hpt-title"><span class="hhb-series" style="color:${_homeSeriesAccent(series)};">${series}</span><span class="dot">·</span><span class="hhb-track">${escapeHTML(computed.trackName)}</span></span>
+        <a class="hpt-race profile-link" href="${trackHref}" data-series-page="track" data-series-set="${series}">R${computed.round} →</a>
       </div>
       <div class="hpt-table-head">
         <span></span><span></span><span></span>
@@ -14730,6 +14730,7 @@ function predictDriverForRace(driverName, series, trackCode, actualStart) {
 function _homeSeriesAccent(series) {
   return series === "NOS" ? "#2e7d32" : series === "NTS" ? "#c62828" : "#d4a017";
 }
+const SERIES_FULL_NAME = { NCS: "Cup Series", NOS: "O'Reilly Series", NTS: "Craftsman Truck Series" };
 function _homeLinkBox(round, year, series, tab, label) {
   const href = `#/race/${round}?_y=${year}&_s=${encodeURIComponent(series)}`;
   return `<a class="home-band-link" href="${href}" onclick="_pendingRaceTab='${tab}';">${label}</a>`;
@@ -14798,6 +14799,7 @@ function _renderUpcomingBand(year, series) {
     <div class="hhb-count">
       <div class="hhb-num-line"><span class="hhb-num${cword ? " hhb-num-word" : ""}">${cnum}</span>${cunit ? `<span class="hhb-unit">${cunit}</span>` : ""}</div>
       <div class="hhb-sub">${csub}</div>
+      ${sesHTML}
     </div>
     <div class="hhb-mid">
       <div class="hhb-title"><span class="hhb-series" style="color:${accent};">${series}</span><span class="dot">·</span><a class="hhb-track" href="${trackHref}">${escapeHTML(trackName)}</a></div>
@@ -14805,7 +14807,6 @@ function _renderUpcomingBand(year, series) {
       ${factsHTML}
     </div>
     <div class="hhb-right">
-      ${sesHTML}
       ${boxes ? `<div class="hhb-boxes">${boxes}</div>` : ""}
     </div>
   </div>`;
@@ -15074,11 +15075,11 @@ function renderHomeStandingsTrio(year) {
   return ["NCS", "NOS", "NTS"].map(s => {
     const block = yearBlock[s];
     if (!block || !block.races) {
-      return `<div class="home-card home-standings-card"><div class="home-standings-label">${s}</div><div class="muted" style="font-size:12px;padding:8px 0;">No data</div></div>`;
+      return `<div class="home-card home-standings-card"><div class="home-standings-label" style="color:${_homeSeriesAccent(s)};">${SERIES_FULL_NAME[s] || s}</div><div class="muted" style="font-size:12px;padding:8px 0;">No data</div></div>`;
     }
     const top5 = computeStandingsForBlock(block).slice(0, 5);
     if (top5.length === 0) {
-      return `<div class="home-card home-standings-card"><div class="home-standings-label">${s}</div><div class="muted" style="font-size:12px;padding:8px 0;">Season hasn't started</div></div>`;
+      return `<div class="home-card home-standings-card"><div class="home-standings-label" style="color:${_homeSeriesAccent(s)};">${SERIES_FULL_NAME[s] || s}</div><div class="muted" style="font-size:12px;padding:8px 0;">Season hasn't started</div></div>`;
     }
     const leader = top5[0];
     const leaderTotal = leader.total;
@@ -15097,7 +15098,7 @@ function renderHomeStandingsTrio(year) {
     }).join("");
     return `<div class="home-card home-standings-card">
       <div class="home-standings-head">
-        <span class="home-standings-label">${s}</span>
+        <span class="home-standings-label" style="color:${_homeSeriesAccent(s)};">${SERIES_FULL_NAME[s] || s}</span>
         <a class="home-standings-link" href="#/standings?series=${s}">Full →</a>
       </div>
       ${rows}
