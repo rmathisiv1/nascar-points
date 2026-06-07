@@ -3331,7 +3331,7 @@ function pageSubNav(view) {
       const tc = r.track_code || "—";
       return `<a href="#/race/${r.round}" class="takeover-sibling${r.round === cur ? " active" : ""}" data-race-round="${r.round}">R${r.round} ${escapeHTML(tc)}</a>`;
     }).join("");
-    return `<div class="page-subnav page-subnav-races"><a href="#" class="subnav-back" onclick="raceBack(event)" aria-label="Back" title="Back">←</a><button type="button" class="subnav-arrow" aria-label="Scroll races left" onclick="_scrollRaceSubnav(-1)">‹</button><div class="takeover-siblings">${links}</div><button type="button" class="subnav-arrow" aria-label="Scroll races right" onclick="_scrollRaceSubnav(1)">›</button></div>`;
+    return `<div class="page-subnav page-subnav-races"><a href="#" class="subnav-back" onclick="raceBack(event)" aria-label="Back" title="Back">← Back</a><button type="button" class="subnav-arrow" aria-label="Scroll races left" onclick="_scrollRaceSubnav(-1)">‹</button><div class="takeover-siblings">${links}</div><button type="button" class="subnav-arrow" aria-label="Scroll races right" onclick="_scrollRaceSubnav(1)">›</button></div>`;
   }
   const group = SUBNAV_GROUPS.find(g => g.views.includes(view));
   if (!group) return "";
@@ -20992,6 +20992,85 @@ function _renderTopFinishCard(race) {
     </div>
   </div>`;
 }
+// Track-performer leaderboards used by BOTH the race-page overview (scope
+// "current" = this season's full-timers) and the track page (scope "all" =
+// all-time, min 3 starts). Self-contained: resolves the current full-time
+// roster itself. Returns ready-to-drop card bodies.
+function _trackPerformers(history, scope) {
+  const current = scope === "current";
+  const ftEntities = (typeof allEntities === "function") ? allEntities().filter(isFullTime) : [];
+  const ftDrivers = new Set(
+    ftEntities.map(e => normalizeDriverName(e.primaryDriver || e.driver || "")).filter(Boolean)
+  );
+  const reride = (byKey) => {
+    if (!current) return;
+    Object.keys(byKey).forEach(key => {
+      const e = ftEntities.find(x => normalizeDriverName(x.primaryDriver || x.driver || "") === key);
+      if (e) { byKey[key].car = e.car_number; byKey[key].driver = e.primaryDriver || e.driver || byKey[key].driver; }
+    });
+  };
+
+  const winsByDriver = {};
+  history.forEach(h => {
+    const w = (h.results || []).find(d => d.finish_pos === 1);
+    if (!w) return;
+    const norm = normalizeDriverName(w.driver || "");
+    if (current && !ftDrivers.has(norm)) return;
+    if (!winsByDriver[norm]) winsByDriver[norm] = { car: w.car_number, driver: w.driver, wins: 0 };
+    winsByDriver[norm].wins++;
+  });
+  reride(winsByDriver);
+  const topWins = Object.values(winsByDriver).sort((a, b) => b.wins - a.wins).slice(0, 5);
+
+  const finsByDriver = {};
+  history.forEach(h => {
+    (h.results || []).forEach(d => {
+      if (d.finish_pos == null) return;
+      const norm = normalizeDriverName(d.driver || "");
+      if (current && !ftDrivers.has(norm)) return;
+      if (!finsByDriver[norm]) finsByDriver[norm] = { car: d.car_number, driver: d.driver, fins: [] };
+      finsByDriver[norm].fins.push(d.finish_pos);
+      finsByDriver[norm].car = d.car_number;
+    });
+  });
+  reride(finsByDriver);
+  const minStarts = current ? 1 : 3;
+  const topAvg = Object.values(finsByDriver)
+    .filter(c => c.fins.length >= minStarts)
+    .map(c => ({ ...c, avg: c.fins.reduce((s, x) => s + x, 0) / c.fins.length, n: c.fins.length }))
+    .sort((a, b) => a.avg - b.avg).slice(0, 5);
+
+  const manuWins = {};
+  history.forEach(h => {
+    const w = (h.results || []).find(d => d.finish_pos === 1);
+    if (w && w.manufacturer) manuWins[w.manufacturer] = (manuWins[w.manufacturer] || 0) + 1;
+  });
+  const manuRanked = Object.entries(manuWins).sort((a, b) => b[1] - a[1]);
+
+  const winsHTML = topWins.length ? topWins.map(c => {
+    const hex = colorFor(STATE.series, c.car), txt = contrastTextFor(hex);
+    return `<a class="rc-winner-row profile-link" href="#/car/${c.car}">
+      <span class="car-tag" style="background:${hex};color:${txt}">${c.car}</span>
+      <span class="rc-winner-name">${escapeHTML(lastNameOf(c.driver))}</span>
+      <span class="rc-hot-avg">${c.wins}</span></a>`;
+  }).join("") : `<div class="rc-empty">No ${current ? STATE.season + " full-time " : ""}wins here.</div>`;
+
+  const avgHTML = topAvg.length ? topAvg.map(c => {
+    const hex = colorFor(STATE.series, c.car), txt = contrastTextFor(hex);
+    return `<a class="rc-hot-row profile-link" href="#/car/${c.car}">
+      <span class="car-tag" style="background:${hex};color:${txt}">${c.car}</span>
+      <span class="rc-hot-name">${escapeHTML(lastNameOf(c.driver))}</span>
+      <span class="rc-hot-avg">${c.avg.toFixed(1)}<span class="rc-hot-n"> ·${c.n}v</span></span></a>`;
+  }).join("") : `<div class="rc-empty">Not enough history${current ? " for current full-timers" : ""}.</div>`;
+
+  const manuHTML = manuRanked.length ? manuRanked.map(([m, w]) => `
+    <div class="tk-manu-row">
+      <span class="tk-manu-name">${escapeHTML(manufacturerName(m))}</span>
+      <span class="tk-manu-bar"><span class="tk-manu-fill" style="width:${(w / manuRanked[0][1] * 100).toFixed(0)}%"></span></span>
+      <span class="tk-manu-count">${w}</span></div>`).join("") : `<div class="rc-empty">No manufacturer data.</div>`;
+
+  return { winsHTML, avgHTML, manuHTML, minStarts };
+}
 function _renderRecordBook(history) {
   if (!history || !history.length) return `<div class="rc-empty">No history at this track.</div>`;
   const rows = [];
@@ -21245,6 +21324,9 @@ function _renderRaceCenterImpl() {
   if (!_lineupsAttempted) {
     loadLineups().then(() => { if (STATE.view === "race") renderRaceCenter(); });
   }
+  if (!_entryListAttempted) {
+    loadEntryList().then(() => { if (STATE.view === "race") renderRaceCenter(); });
+  }
 
   // ---- Hero
   const dateStr = nextRace.date ? formatRaceDate(nextRace.date) : "Date TBD";
@@ -21298,8 +21380,8 @@ function _renderRaceCenterImpl() {
   const predOrFinishCard = isUpcoming
     ? _renderPredictedFinishCard(STATE.series, nextRace.track_code, nextRace)
     : _renderTopFinishCard(nextRace);
-  const recordHTML = _renderRecordBook(history);
   const winnersBody = _renderWinnersHere(history, STATE.series);
+  const perf = _trackPerformers(history, "current");
   const trackHistHTML = renderTrackHistoryTable(history, STATE.series);
   const overviewHTML = `
     ${sessionLineHTML}
@@ -21313,8 +21395,12 @@ function _renderRaceCenterImpl() {
           <div class="rc-card-body">${winnersBody}</div>
         </div>
         <div class="card rc-card">
-          <div class="rc-card-head"><span class="rc-card-title">Track Stats</span><span class="rc-card-sub">${history.length} races</span></div>
-          <div class="rc-card-body">${recordHTML}</div>
+          <div class="rc-card-head"><span class="rc-card-title">Most Wins Here</span><span class="rc-card-sub">${STATE.season} drivers</span></div>
+          <div class="rc-card-body">${perf.winsHTML}</div>
+        </div>
+        <div class="card rc-card">
+          <div class="rc-card-head"><span class="rc-card-title">Best Avg Finish</span><span class="rc-card-sub">${STATE.season} drivers</span></div>
+          <div class="rc-card-body">${perf.avgHTML}</div>
         </div>
       </div>
     </div>
@@ -22300,11 +22386,9 @@ function renderTrackPage() {
     currentDriverByCar[e.car_number] = e.primaryDriver || e.driver || "";
   });
 
-  // Track scope: "current" filters to drivers who are currently
-  // full-time (so legends like Earnhardt are excluded — only people who
-  // could win this weekend appear). "all" disables that filter so
-  // historical greats are surfaced.
-  const tScope = (STATE.track && STATE.track.scopeView) || "current";
+  // Track page leaderboards are all-time (Most Wins moved to the race page;
+  // the race page covers current full-timers). min 3 starts for Best Avg.
+  const tScope = "all";
 
   // ---- Most wins — optionally filtered to current-FT drivers ----
   const winsByDriver = {};
@@ -22483,26 +22567,23 @@ function renderTrackPage() {
   const trackPredictionHTML = "";
 
   host.innerHTML = `
-    ${renderTrackThisSeason(history)}
-    ${trackPredictionHTML}
-
     <div class="rc-grid tk-grid-3">
       <div class="card rc-card">
         <div class="rc-card-head">
-          <span class="rc-card-title">Most Wins Here</span>
-          <div class="toggle-group mini" id="track-scope-toggle">
-            <button class="${tScope === "current" ? "on" : ""}" data-scope="current">${STATE.season} drivers</button>
-            <button class="${tScope === "all" ? "on" : ""}" data-scope="all">All-time</button>
-          </div>
+          <span class="rc-card-title">Track Stats</span>
+          <span class="rc-card-sub">${history.length} races</span>
         </div>
-        <div class="rc-card-body">${winsHTML}</div>
+        <div class="rc-card-body">${_renderRecordBook(history)}</div>
       </div>
       <div class="card rc-card">
         <div class="rc-card-head">
           <span class="rc-card-title">Best Avg Finish</span>
-          <span class="rc-card-sub">${tScope === "current" ? STATE.season + " drivers" : "all-time"}${tScope === "all" ? ` · ${minStarts}+ starts` : ""}</span>
+          <span class="rc-card-sub">all-time · ${minStarts}+ races</span>
         </div>
-        <div class="rc-card-body">${avgHTML}</div>
+        <div class="rc-card-body">
+          <div class="rcx-card-desc">Every driver in our data, min ${minStarts} starts at this track.</div>
+          ${avgHTML}
+        </div>
       </div>
       <div class="card rc-card">
         <div class="rc-card-head">
@@ -22538,15 +22619,6 @@ function renderTrackPage() {
     const newSeries = btn.dataset.srs;
     if (!newSeries || newSeries === tSeries) return;
     applyPageSeries(newSeries);
-  });
-  // Wire the scope toggle (Most Wins / Best Avg Finish: current FT vs all-time)
-  document.getElementById("track-scope-toggle")?.addEventListener("click", (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-    const newScope = btn.dataset.scope;
-    if (!newScope || newScope === tScope) return;
-    STATE.track.scopeView = newScope;
-    renderTrackPage();
   });
 }
 

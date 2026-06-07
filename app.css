@@ -1105,7 +1105,8 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
 #race-takeover .race-back-link { display: none; }
 .subnav-back {
   flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 20px; padding: 0; margin-right: 2px; line-height: 1; font-size: 15px;
+  height: 20px; padding: 0 8px; margin-right: 4px; line-height: 1;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; white-space: nowrap;
   text-decoration: none; color: var(--muted); border-radius: 4px;
   transition: color 0.1s, background 0.1s;
 }
@@ -12904,6 +12905,7 @@ body.lightbox-open {
 .rc-hero-entry { margin-top: 10px; }
 .home-hero-entry { margin-top: 10px; }
 .home-hero-entry-sep { color: var(--dim); margin: 0 3px; }
+.rcx-card-desc { font-size: 11px; color: var(--muted); padding: 0 7px 7px; line-height: 1.4; }
 
 /* Power-ranking movers in the metric bar (replaces hot/cold points) */
 .metric-move {
