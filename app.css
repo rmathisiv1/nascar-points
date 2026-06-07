@@ -12878,6 +12878,7 @@ body.lightbox-open {
 .entry-list-link:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .rc-hero-entry { margin-top: 10px; }
 .home-hero-entry { margin-top: 10px; }
+.home-hero-entry-sep { color: var(--dim); margin: 0 3px; }
 
 /* Power-ranking movers in the metric bar (replaces hot/cold points) */
 .metric-move {

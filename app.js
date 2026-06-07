@@ -5583,6 +5583,19 @@ function entryListLink(race, series, compact) {
   return `<a class="entry-list-link" href="${href}" onclick="_pendingRaceTab='entry';">${label}</a>`;
 }
 let _pendingRaceTab = null;
+// Link to the race page's Starting Lineup tab once the STARTROW is scraped.
+// kind "qual" relabels it "Qualifying →" — same tab, since the lineup carries
+// the qualifying times. Returns "" when no lineup is in yet.
+function lineupLink(race, series, kind) {
+  const s = series || STATE.series;
+  if (typeof lineupForRace !== "function" || !lineupForRace(race, s)) return "";
+  const label = kind === "qual" ? "Qualifying →" : "Starting lineup →";
+  if (STATE.view === "race") {
+    return `<a class="entry-list-link" href="#" onclick="selectRaceTab('lineup');return false;">${label}</a>`;
+  }
+  const href = `#/race/${race.round}?_y=${STATE.season}&_s=${encodeURIComponent(s)}`;
+  return `<a class="entry-list-link" href="${href}" onclick="_pendingRaceTab='lineup';">${label}</a>`;
+}
 // Active top-level tab on the race page + the round it belongs to. Reset to
 // "overview" whenever the viewed round changes (see renderRaceCenter). These
 // were inadvertently dropped during an earlier edit, which made the race
@@ -5793,19 +5806,48 @@ function _rdocPitVisual(rows, drv) {
 
 // Starting lineup from a completed race's results — grid by start position,
 // with qualifying position alongside (they differ after penalties).
+// Driver name for a car from our roster (consistent with every other view).
+function _lineupDriverName(car) {
+  try {
+    if (typeof allEntities === "function") {
+      const e = allEntities().find(x => String(x.car_number) === String(car));
+      if (e && (e.primaryDriver || e.driver)) return e.primaryDriver || e.driver;
+    }
+  } catch (_) {}
+  return "";
+}
+// Starting lineup. Post-race it comes from results (start_pos + qual_pos);
+// pre-race it comes from the scraped STARTROW (data/lineups.json) with the
+// qualifying time, so the tab is live as soon as qualifying is done.
 function raceLineupTab(race) {
   const grid = ((race && race.results) || [])
     .filter(d => d.start_pos != null && d.start_pos > 0)
     .slice().sort((a, b) => a.start_pos - b.start_pos);
-  if (!grid.length) return null;
-  const body = grid.map(d => `<tr>
+  if (grid.length) {
+    const body = grid.map(d => `<tr>
       <td class="rdoc-pos">${d.start_pos}</td>
       <td class="rdoc-cd">${_carDriverCell(d.car_number, d.driver)}</td>
       <td class="rdoc-pos">${d.qual_pos != null && d.qual_pos > 0 ? "P" + d.qual_pos : "—"}</td></tr>`).join("");
-  const html = `<div class="rdoc-body"><div class="table-scroll"><table class="data-table rdoc-table rdoc-narrow">
+    const html = `<div class="rdoc-body"><div class="table-scroll"><table class="data-table rdoc-table rdoc-narrow">
       <thead><tr><th>Start</th><th>Car / Driver</th><th>Qual</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
-  return { key: "lineup", label: "Starting Lineup", html };
+    return { key: "lineup", label: "Starting Lineup", html };
+  }
+  const lu = (typeof lineupForRace === "function") ? lineupForRace(race, STATE.series) : null;
+  if (lu && Array.isArray(lu.entries) && lu.entries.length) {
+    const body = lu.entries.slice().sort((a, b) => (a.pos || 0) - (b.pos || 0)).map(e => {
+      const t = (e.qual_time && e.qual_time > 0) ? e.qual_time.toFixed(3) : "—";
+      return `<tr>
+        <td class="rdoc-pos">${e.pos}</td>
+        <td class="rdoc-cd">${_carDriverCell(e.car, _lineupDriverName(e.car))}</td>
+        <td class="rdoc-pos">${t}</td></tr>`;
+    }).join("");
+    const html = `<div class="rdoc-body"><div class="table-scroll"><table class="data-table rdoc-table rdoc-narrow">
+      <thead><tr><th>Start</th><th>Car / Driver</th><th>Qual Time</th></tr></thead>
+      <tbody>${body}</tbody></table></div></div>`;
+    return { key: "lineup", label: "Starting Lineup", html };
+  }
+  return null;
 }
 
 // Driver + owner championship points AS OF this race's round: rank, car/driver,
@@ -12809,6 +12851,7 @@ function renderHome() {
   // hero can show an "Entry list ↗" link. Re-render when it lands.
   if (!_raceDocsAttempted) {
     loadRaceDocs().then(() => { if (STATE.view === "home") renderHome(); });
+    loadLineups().then(() => { if (STATE.view === "home") renderHome(); });
   }
 
   // Lazily pull lap-time pace data (current + 2 prior years) so the
@@ -12931,14 +12974,28 @@ function _computeTrackPerformers(series, trackCode) {
 // Feeds the ACTUAL starting position into the finish model once qualifying is
 // in (start_pos present, no finishes yet). For a completed race we return null
 // — the model is a pre-race tool, not a post-race rationalizer.
-function _gridStartsForRace(race) {
-  if (!race || !Array.isArray(race.results) || !race.results.length) return null;
-  if (race.results.some(d => d.finish_pos != null)) return null;   // already run
+function _gridStartsForRace(race, series) {
+  if (!race) return null;
+  const hasResults = Array.isArray(race.results) && race.results.length;
+  if (hasResults && race.results.some(d => d.finish_pos != null)) return null;   // already run
   const byDriver = new Map(), byCar = new Map();
-  for (const d of race.results) {
-    if (d.start_pos != null && d.start_pos > 0) {
-      if (d.driver) byDriver.set(normalizeDriverName(d.driver), d.start_pos);
-      if (d.car_number != null) byCar.set(String(d.car_number), d.start_pos);
+  // 1) start_pos already on the result rows (honored if present).
+  if (hasResults) {
+    for (const d of race.results) {
+      if (d.start_pos != null && d.start_pos > 0) {
+        if (d.driver) byDriver.set(normalizeDriverName(d.driver), d.start_pos);
+        if (d.car_number != null) byCar.set(String(d.car_number), d.start_pos);
+      }
+    }
+  }
+  // 2) Scraped STARTROW lineup (data/lineups.json) — the usual pre-race source.
+  //    Matched by car number, which the model resolves to the entered driver.
+  if (!byCar.size) {
+    const lu = (typeof lineupForRace === "function") ? lineupForRace(race, series) : null;
+    if (lu && Array.isArray(lu.entries)) {
+      for (const e of lu.entries) {
+        if (e.pos != null && e.pos > 0 && e.car != null) byCar.set(String(e.car), e.pos);
+      }
     }
   }
   if (!byDriver.size && !byCar.size) return null;
@@ -13002,7 +13059,7 @@ function _computeRacePredictions(series, trackCode, race) {
       }));
   }
 
-  const grid = _gridStartsForRace(race);
+  const grid = _gridStartsForRace(race, series);
   const predictions = roster.map(r => {
     if (!r.driverName) return null;
     let aStart = null;
@@ -14712,7 +14769,16 @@ function renderHomeHero(year, series) {
             ${lastWinnerHTML ? `<div class="home-hero-track-fact"><span class="k">Last winner</span><span class="v">${lastWinnerHTML}</span></div>` : ""}
             ${trackKingHTML ? `<div class="home-hero-track-fact"><span class="k">Track king</span><span class="v">${trackKingHTML}</span></div>` : ""}
           </div>
-          ${(() => { const el = entryListLink(nextRace, series, true); return el ? `<div class="home-hero-entry">${el}</div>` : ""; })()}
+          ${(() => {
+            const lu = (typeof lineupForRace === "function") ? lineupForRace(nextRace, series) : null;
+            if (lu) {
+              const sl = lineupLink(nextRace, series, "lineup");
+              const ql = lineupLink(nextRace, series, "qual");
+              return `<div class="home-hero-entry">${sl}${ql ? ` <span class="home-hero-entry-sep">·</span> ${ql}` : ""}</div>`;
+            }
+            const el = entryListLink(nextRace, series, true);
+            return el ? `<div class="home-hero-entry">${el}</div>` : "";
+          })()}
         </div>
       </div>
     `;
@@ -20783,6 +20849,29 @@ async function loadScheduleSessions() {
   } catch (e) { /* no schedule data yet — non-fatal */ }
   return STATE_SCHEDULE;
 }
+// Scraped STARTROW starting lineups (data/lineups.json from scrape_lineup.py),
+// keyed season → series → round. Loaded lazily like the schedule; no-store so a
+// fresh weekend's qualifying lands without a hard refresh.
+let STATE_LINEUPS = null;
+let _lineupsAttempted = false;
+async function loadLineups() {
+  if (_lineupsAttempted) return STATE_LINEUPS;
+  _lineupsAttempted = true;
+  try {
+    const r = await fetch("data/lineups.json?v=" + Date.now(), { cache: "no-store" });
+    if (r.ok) STATE_LINEUPS = await r.json();
+  } catch (e) { /* no lineup data yet — non-fatal */ }
+  return STATE_LINEUPS;
+}
+function lineupForRace(race, series) {
+  if (!STATE_LINEUPS || !race || race.round == null) return null;
+  const season = String(STATE.season != null ? STATE.season : (race.season || ""));
+  const bySeason = STATE_LINEUPS[season];
+  if (!bySeason) return null;
+  const bySer = bySeason[series || STATE.series];
+  if (!bySer) return null;
+  return bySer[String(race.round)] || null;
+}
 function _trkNameSlug(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
 function scheduleForRace(race, series) {
   if (!STATE_SCHEDULE || !STATE_SCHEDULE.events || !race) return null;
@@ -21152,6 +21241,9 @@ function _renderRaceCenterImpl() {
   }
   if (!_scheduleAttempted) {
     loadScheduleSessions().then(() => { if (STATE.view === "race") renderRaceCenter(); });
+  }
+  if (!_lineupsAttempted) {
+    loadLineups().then(() => { if (STATE.view === "race") renderRaceCenter(); });
   }
 
   // ---- Hero
