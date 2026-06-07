@@ -14741,11 +14741,11 @@ function _homeSessionTimes(ev, series) {
   const pick = (type) => ev.sessions.find(s => s.type === type && (s.series || []).includes(want))
                       || ev.sessions.find(s => s.type === type && s.national);
   const p = pick("practice"), q = pick("qualifying");
-  const parts = [];
-  if (p) parts.push(`Practice <b>${escapeHTML(_sessDayTime(p))}</b>`);
-  if (q) parts.push(`Qual <b>${escapeHTML(_sessDayTime(q))}</b>`);
-  if (!parts.length) return "";
-  return `<div class="hhb-ses">${parts.join(' <span class="dot">·</span> ')}</div>`;
+  const lines = [];
+  if (p) lines.push(`<div class="hhb-ses-line">Practice <b>${escapeHTML(_sessDayTime(p))}</b></div>`);
+  if (q) lines.push(`<div class="hhb-ses-line">Qual <b>${escapeHTML(_sessDayTime(q))}</b></div>`);
+  if (!lines.length) return "";
+  return `<div class="hhb-ses">${lines.join("")}</div>`;
 }
 
 function _renderUpcomingBand(year, series) {
