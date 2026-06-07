@@ -1,0 +1,47 @@
+name: update-lineups
+
+# Auto-discover the STARTROW starting lineup once qualifying posts it. The
+# scraper is self-gating: it probes for {docid}_STARTROW.pdf and no-ops when it
+# isn't up yet, so running hourly on race weekends just grabs the grid on the
+# first pass after qualifying and quietly does nothing otherwise. Cheap.
+on:
+  schedule:
+    # Hourly, Friday–Sunday (UTC). Covers Sat-evening qualifying for Sun races
+    # and Sat-morning qualifying for Sat races, with margin.
+    - cron: "0 * * * 5,6,0"
+  workflow_dispatch: {}   # manual "Run workflow" button
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-lineups
+  cancel-in-progress: false
+
+jobs:
+  lineups:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Discover + scrape STARTROW lineups
+        run: python scripts/scrape_lineup.py --current
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ -n "$(git status --porcelain data/lineups.json)" ]]; then
+            git add data/lineups.json
+            git commit -m "Auto: starting lineups ($(date -u +%Y-%m-%dT%H:%MZ))"
+            git push
+          else
+            echo "No lineup changes — nothing to commit."
+          fi

@@ -3275,10 +3275,13 @@ function renderPageSeriesBar() {
   // divider/toggle line stays consistent, just without a duplicate title.
   const suppressTitle = ["profile", "team", "cc"].includes(v);
   let title = suppressTitle ? "" : pageTitleLabel(v);
-  // On a race page, show the track name instead of the generic "Race Center".
+  // On a race page, show "R## Track" instead of the generic "Race Center".
   if (v === "race" && STATE.race && STATE.race.round != null && STATE.data) {
     const rr = (STATE.data.races || []).find(x => x.round === STATE.race.round);
     const tn = rr ? (prettyTrack(rr.track_code, rr.track) || rr.track) : null;
+    if (tn) title = `R${STATE.race.round} ${tn}`;
+  } else if (v === "track" && STATE.track && STATE.track.code) {
+    const tn = prettyTrack(STATE.track.code, null) || STATE.track.code;
     if (tn) title = tn;
   }
   const titleHTML = `<span class="page-hd-title">${escapeHTML(title)}</span>`;
@@ -21049,7 +21052,7 @@ function _trackPerformers(history, scope) {
 
   const winsHTML = topWins.length ? topWins.map(c => {
     const hex = colorFor(STATE.series, c.car), txt = contrastTextFor(hex);
-    return `<a class="rc-winner-row profile-link" href="#/car/${c.car}">
+    return `<a class="rc-winner-row profile-link" href="#/driver/${slugify(c.driver || "")}">
       <span class="car-tag" style="background:${hex};color:${txt}">${c.car}</span>
       <span class="rc-winner-name">${escapeHTML(lastNameOf(c.driver))}</span>
       <span class="rc-hot-avg">${c.wins}</span></a>`;
@@ -21057,7 +21060,7 @@ function _trackPerformers(history, scope) {
 
   const avgHTML = topAvg.length ? topAvg.map(c => {
     const hex = colorFor(STATE.series, c.car), txt = contrastTextFor(hex);
-    return `<a class="rc-hot-row profile-link" href="#/car/${c.car}">
+    return `<a class="rc-hot-row profile-link" href="#/driver/${slugify(c.driver || "")}">
       <span class="car-tag" style="background:${hex};color:${txt}">${c.car}</span>
       <span class="rc-hot-name">${escapeHTML(lastNameOf(c.driver))}</span>
       <span class="rc-hot-avg">${c.avg.toFixed(1)}<span class="rc-hot-n"> ·${c.n}v</span></span></a>`;
@@ -21390,10 +21393,6 @@ function _renderRaceCenterImpl() {
         ${predOrFinishCard}
       </div>
       <div class="rcx-ov-side">
-        <div class="card rc-card">
-          <div class="rc-card-head"><span class="rc-card-title">Winners</span><span class="rc-card-sub">last 5</span></div>
-          <div class="rc-card-body">${winnersBody}</div>
-        </div>
         <div class="card rc-card">
           <div class="rc-card-head"><span class="rc-card-title">Most Wins Here</span><span class="rc-card-sub">${STATE.season} drivers</span></div>
           <div class="rc-card-body">${perf.winsHTML}</div>
@@ -22366,196 +22365,14 @@ function renderTrackPage() {
     ? `data back to ${earliestYear}`
     : "Loading history…";
   if (sub) {
-    sub.textContent = `${trackTypeStr ? trackTypeStr + " · " : ""}${dataRangeText}`;
+    sub.textContent = `${trackName} · ${dataRangeText}`;
   }
 
-  // Build maps for current-season full-time entities. We need both:
-  //   - currentFtDrivers: a Set of normalized current driver names (for filtering
-  //     "Best Avg Finish" — we only want to count finishes BY a current FT driver,
-  //     not by some other driver who happened to drive that car number years ago)
-  //   - currentDriverByCar: car# → current driver name (for displaying the
-  //     CURRENT driver of a car when showing Most Wins, in case the historical
-  //     winner of #19 was Truex but Briscoe drives it now)
-  const currentFtEntities = allEntities().filter(isFullTime);
-  const currentFtDrivers = new Set(
-    currentFtEntities.map(e => normalizeDriverName(e.primaryDriver || e.driver || ""))
-      .filter(Boolean)
-  );
-  const currentDriverByCar = {};
-  currentFtEntities.forEach(e => {
-    currentDriverByCar[e.car_number] = e.primaryDriver || e.driver || "";
-  });
-
-  // Track page leaderboards are all-time (Most Wins moved to the race page;
-  // the race page covers current full-timers). min 3 starts for Best Avg.
-  const tScope = "all";
-
-  // ---- Most wins — optionally filtered to current-FT drivers ----
-  const winsByDriver = {};
-  history.forEach(h => {
-    const w = (h.results || []).find(d => d.finish_pos === 1);
-    if (!w) return;
-    const norm = normalizeDriverName(w.driver || "");
-    if (tScope === "current" && !currentFtDrivers.has(norm)) return;
-    if (!winsByDriver[norm]) {
-      winsByDriver[norm] = { car: w.car_number, driver: w.driver, wins: 0, years: [] };
-    }
-    winsByDriver[norm].wins++;
-    winsByDriver[norm].years.push(h.year);
-  });
-  // For current-scope rows, override car# + driver name with current ride
-  if (tScope === "current") {
-    Object.keys(winsByDriver).forEach(key => {
-      const entity = currentFtEntities.find(
-        e => normalizeDriverName(e.primaryDriver || e.driver || "") === key
-      );
-      if (entity) {
-        winsByDriver[key].car = entity.car_number;
-        winsByDriver[key].driver = entity.primaryDriver || entity.driver || winsByDriver[key].driver;
-      }
-    });
-  }
-  const topWins = Object.values(winsByDriver).sort((a, b) => b.wins - a.wins).slice(0, 5);
-
-  // ---- Best avg finish — same scope filter ----
-  const finsByDriver = {};
-  history.forEach(h => {
-    (h.results || []).forEach(d => {
-      if (d.finish_pos == null) return;
-      const norm = normalizeDriverName(d.driver || "");
-      if (tScope === "current" && !currentFtDrivers.has(norm)) return;
-      const key = norm;
-      if (!finsByDriver[key]) {
-        finsByDriver[key] = { car: d.car_number, driver: d.driver, fins: [] };
-      }
-      finsByDriver[key].fins.push(d.finish_pos);
-      finsByDriver[key].car = d.car_number;
-    });
-  });
-  // In current-scope, point pills at the CURRENT ride
-  if (tScope === "current") {
-    Object.keys(finsByDriver).forEach(key => {
-      const entity = currentFtEntities.find(
-        e => normalizeDriverName(e.primaryDriver || e.driver || "") === key
-      );
-      if (entity) {
-        finsByDriver[key].car = entity.car_number;
-        finsByDriver[key].driver = entity.primaryDriver || entity.driver || finsByDriver[key].driver;
-      }
-    });
-  }
-  // Require a minimum of 3 starts when in all-time scope so a one-off
-  // P1 finish doesn't dominate the avg leaderboard
-  const minStarts = tScope === "current" ? 1 : 3;
-  const topAvg = Object.values(finsByDriver)
-    .filter(c => c.fins.length >= minStarts)
-    .map(c => ({ ...c, avg: c.fins.reduce((s, x) => s + x, 0) / c.fins.length, n: c.fins.length }))
-    .sort((a, b) => a.avg - b.avg)
-    .slice(0, 5);
-
-  // ---- Manufacturer wins (across all loaded history) ----
-  const manuWins = {};
-  history.forEach(h => {
-    const w = (h.results || []).find(d => d.finish_pos === 1);
-    if (!w || !w.manufacturer) return;
-    manuWins[w.manufacturer] = (manuWins[w.manufacturer] || 0) + 1;
-  });
-  const manuRanked = Object.entries(manuWins).sort((a, b) => b[1] - a[1]);
-
-  // ---- HTML ----
-  const winsHTML = topWins.length ? topWins.map(c => {
-    const carHex = colorFor(STATE.series, c.car);
-    const txt = contrastTextFor(carHex);
-    return `<a class="rc-winner-row profile-link" href="#/car/${c.car}">
-      <span class="car-tag" style="background:${carHex};color:${txt}">${c.car}</span>
-      <span class="rc-winner-name">${escapeHTML(lastNameOf(c.driver))}</span>
-      <span class="rc-hot-avg">${c.wins}</span>
-    </a>`;
-  }).join("") : `<div class="rc-empty">No wins by current ${STATE.season} full-time drivers.</div>`;
-
-  const avgHTML = topAvg.length ? topAvg.map(c => {
-    const carHex = colorFor(STATE.series, c.car);
-    const txt = contrastTextFor(carHex);
-    return `<a class="rc-hot-row profile-link" href="#/car/${c.car}">
-      <span class="car-tag" style="background:${carHex};color:${txt}">${c.car}</span>
-      <span class="rc-hot-name">${escapeHTML(lastNameOf(c.driver))}</span>
-      <span class="rc-hot-avg">${c.avg.toFixed(1)}<span class="rc-hot-n"> ·${c.n}v</span></span>
-    </a>`;
-  }).join("") : `<div class="rc-empty">No prior visits for current ${STATE.season} full-time drivers.</div>`;
-
-  const manuHTML = manuRanked.length ? manuRanked.map(([m, w]) => `
-    <div class="tk-manu-row">
-      <span class="tk-manu-name">${escapeHTML(manufacturerName(m))}</span>
-      <span class="tk-manu-bar"><span class="tk-manu-fill" style="width:${(w / manuRanked[0][1] * 100).toFixed(0)}%"></span></span>
-      <span class="tk-manu-count">${w}</span>
-    </div>
-  `).join("") : `<div class="rc-empty">No manufacturer data available.</div>`;
-
-  // Full results history table — every race at this track in cached years.
-  // Columns: Year | Round | Winner | Team | Mfr | Pole. Winner / Team / Mfr
-  // are grouped tightly together (a thin divider after Mfr separates them
-  // from the Pole column) so it's clear those three attributes belong to
-  // the winner, not the pole sitter.
-  // Filter to completed races only — rows with no finishers are
-  // upcoming/scheduled (e.g. 2026 R17 at Pocono before it's run) and
-  // would render as a row of em-dashes that adds no info.
-  const completedHistory = history.filter(h =>
-    (h.results || []).some(d => d.finish_pos === 1)
-  );
-  const histTableHTML = completedHistory.length ? `
-    <table class="rc-result-table tk-history-table">
-      <colgroup>
-        <col class="tk-col-yr"><col class="tk-col-rd">
-        <col><col class="tk-col-team"><col class="tk-col-mfr"><col class="tk-col-pole">
-      </colgroup>
-      <thead><tr>
-        <th>Year</th>
-        <th class="num">Round</th>
-        <th>Winner</th>
-        <th>Team</th>
-        <th class="tk-col-mfr-head">Mfr</th>
-        <th class="tk-col-pole-head">Pole</th>
-      </tr></thead>
-      <tbody>
-        ${completedHistory.map(h => {
-          const winner = (h.results || []).find(d => d.finish_pos === 1);
-          const pole   = (h.results || []).find(d => d.start_pos === 1);
-          const seriesForRow = h.series || tSeries;
-          const raceHref = `#/race/${h.round}?_y=${h.year}&_s=${seriesForRow}`;
-          const wDrvSlug = winner ? slugify(winner.driver || "") : "";
-          const pDrvSlug = pole ? slugify(pole.driver || "") : "";
-          const wHTML = winner ? `
-            <a class="profile-link rc-result-name" href="#/driver/${wDrvSlug}">
-              <span class="car-tag" style="background:${colorFor(seriesForRow, winner.car_number)};color:${contrastTextFor(colorFor(seriesForRow, winner.car_number))}">${winner.car_number}</span>
-              <span>${escapeHTML(lastNameOf(winner.driver))}</span>
-            </a>` : `<span class="muted">—</span>`;
-          // Winner's team — prefer explicit team_code; fall back to name lookup.
-          const wTeamCode = winner
-            ? (winner.team_code
-              || teamCodeFromName(winner.team, SERIES_TO_KEY[seriesForRow], winner.car_number))
-            : "";
-          const tHTML = wTeamCode
-            ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}">${escapeHTML(wTeamCode)}</a>`
-            : `<span class="muted">—</span>`;
-          const wMfr = winner ? manufacturerName(winner.manufacturer) : "";
-          const mHTML = wMfr ? escapeHTML(wMfr) : `<span class="muted">—</span>`;
-          const pHTML = pole ? `
-            <a class="profile-link rc-result-name" href="#/driver/${pDrvSlug}">
-              <span class="car-tag" style="background:${colorFor(seriesForRow, pole.car_number)};color:${contrastTextFor(colorFor(seriesForRow, pole.car_number))}">${pole.car_number}</span>
-              <span>${escapeHTML(lastNameOf(pole.driver))}</span>
-            </a>` : `<span class="muted">—</span>`;
-          return `<tr class="profile-link tk-hist-row" data-race-href="${raceHref}" style="cursor:pointer;" title="View race results">
-            <td data-label="Year">${h.year}</td>
-            <td class="num" data-label="Round">R${h.round}</td>
-            <td data-label="Winner">${wHTML}</td>
-            <td data-label="Team">${tHTML}</td>
-            <td class="tk-col-mfr-cell" data-label="Mfr">${mHTML}</td>
-            <td class="tk-col-pole-cell" data-label="Pole">${pHTML}</td>
-          </tr>`;
-        }).join("")}
-      </tbody>
-    </table>
-  ` : `<div class="rc-empty">No history at this track in loaded years.</div>`;
+  // All-time leaderboards (Most Wins, Best Avg, Manufacturer) come from the
+  // shared helper, which links each row to the DRIVER profile rather than the
+  // car# (a car link resolves to whoever drives that number today, so a
+  // historical "Gibbs" row would wrongly point at Reddick's current #45).
+  const { winsHTML, avgHTML, manuHTML, minStarts } = _trackPerformers(history, "all");
 
   // ----- Predictions for the next race at this track, when applicable -----
   // The home page shows predictions for the very next race on the schedule.
@@ -22577,13 +22394,10 @@ function renderTrackPage() {
       </div>
       <div class="card rc-card">
         <div class="rc-card-head">
-          <span class="rc-card-title">Best Avg Finish</span>
-          <span class="rc-card-sub">all-time · ${minStarts}+ races</span>
+          <span class="rc-card-title">Most Wins</span>
+          <span class="rc-card-sub">all-time</span>
         </div>
-        <div class="rc-card-body">
-          <div class="rcx-card-desc">Every driver in our data, min ${minStarts} starts at this track.</div>
-          ${avgHTML}
-        </div>
+        <div class="rc-card-body">${winsHTML}</div>
       </div>
       <div class="card rc-card">
         <div class="rc-card-head">
@@ -22597,29 +22411,11 @@ function renderTrackPage() {
     <div class="card rc-card rc-card-wide">
       <div class="rc-card-head">
         <span class="rc-card-title">All Races at ${escapeHTML(trackName)}</span>
-        <div class="rc-card-controls">
-          <div class="toggle-group mini" id="track-series-toggle" role="tablist" aria-label="Series filter">
-            <button class="${tSeries === "NCS" ? "on" : ""}" data-srs="NCS">NCS</button>
-            <button class="${tSeries === "NOS" ? "on" : ""}" data-srs="NOS">NOS</button>
-            <button class="${tSeries === "NTS" ? "on" : ""}" data-srs="NTS">NTS</button>
-          </div>
-          <span class="rc-card-sub">newest first</span>
-        </div>
+        <span class="rc-card-sub">newest first</span>
       </div>
-      <div class="rc-card-body" style="padding:0;">${histTableHTML}</div>
+      <div class="rc-card-body" style="padding:0;">${renderTrackHistoryTable(history, tSeries)}</div>
     </div>
   `;
-
-  // Wire the in-table series toggle. Routes through applyPageSeries so it
-  // sets BOTH STATE.series and STATE.track.seriesView — keeping it in sync
-  // with the top page toggle (no more "toggle says NOS, winner shows NCS").
-  document.getElementById("track-series-toggle")?.addEventListener("click", (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-    const newSeries = btn.dataset.srs;
-    if (!newSeries || newSeries === tSeries) return;
-    applyPageSeries(newSeries);
-  });
 }
 
 // Render the "this season's winner at this track" hero card. If multiple races

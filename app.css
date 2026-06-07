@@ -1103,6 +1103,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
    so the standalone link (and its dead row) is suppressed in the takeover. */
 .race-back-link { display: inline-block; margin: 4px 0 6px -4px; }
 #race-takeover .race-back-link { display: none; }
+.track-back-link { display: inline-block; margin: 4px 0 6px -4px; }
 .subnav-back {
   flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
   height: 20px; padding: 0 8px; margin-right: 4px; line-height: 1;
