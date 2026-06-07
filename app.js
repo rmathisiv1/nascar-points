@@ -13055,11 +13055,21 @@ function _computeRacePredictions(series, trackCode, race) {
       };
     });
   } else {
-    // Fallback (no entry list): full-time car roster, with charter-continuation
-    // overrides applied — a car whose number changed mid-season (a charter
-    // taken over by a new number after a driver left/retired) is handled so the
-    // retired car drops out and its continuation is surfaced even if its own
-    // start count hasn't yet crossed the full-time threshold.
+    // Fallback (no entry list): only genuinely full-time DRIVERS of this
+    // series. We can't assume a part-time/crossover entrant (e.g. a Cup
+    // regular running a one-off Truck race) is in the field without an entry
+    // list — so we filter on per-DRIVER start counts, not just full-time cars.
+    // A full-time car driven by a rotating cast of part-timers is excluded;
+    // a car whose primary driver ran the season is kept.
+    const seasonRaces = racesSorted();
+    const ftThreshold = seasonRaces.length < 10
+      ? seasonRaces.length - 1
+      : Math.ceil(seasonRaces.length * 0.9);
+    const driverStarts = {};
+    seasonRaces.forEach(r => (r.results || []).forEach(d => {
+      const k = normalizeDriverName(d.driver || "");
+      if (k) driverStarts[k] = (driverStarts[k] || 0) + 1;
+    }));
     const cont = CHARTER_CONTINUATIONS[series] || {};
     const retiredCars = new Set(Object.keys(cont));            // e.g. "8"
     const promotedCars = new Set(Object.values(cont));         // e.g. "33"
@@ -13068,7 +13078,9 @@ function _computeRacePredictions(series, trackCode, race) {
         const car = String(e.car_number);
         if (retiredCars.has(car)) return false;                // drop the retired car
         if (promotedCars.has(car)) return true;                // always include the continuation
-        return isFullTime(e);
+        // Keep only cars whose primary driver ran a full-time schedule.
+        const drv = normalizeDriverName(e.primaryDriver || e.driver || "");
+        return (driverStarts[drv] || 0) >= ftThreshold;
       })
       .map(e => ({
         driverName: e.primaryDriver || e.driver,
