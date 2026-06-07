@@ -3233,7 +3233,6 @@ function renderPageSeriesBar() {
   }
   bar.hidden = false;
   bar.classList.add("page-hd");
-  bar.classList.toggle("pb-race", v === "race");
 
   const seriesScoped = SERIES_TOGGLE_VIEWS.includes(v);
 
@@ -3285,9 +3284,19 @@ function renderPageSeriesBar() {
   const titleHTML = `<span class="page-hd-title">${escapeHTML(title)}</span>`;
 
   const subnav = pageSubNav(v);
+  // Pages with a sub-nav get their toggle breathing room from that row; pages
+  // without one (e.g. schedule, profiles) need a matching bottom pad so the
+  // series toggle doesn't sit flush against the divider. Keeps the toggle
+  // margin consistent across every page.
+  bar.classList.toggle("pb-padbottom", !subnav);
   bar.innerHTML =
     `<div class="page-hd-row">${titleHTML}<div class="page-hd-right">${right}</div></div>` +
     subnav;
+  // Bring the current race's pill into view in the (scrollable) races sub-nav.
+  if (v === "race") {
+    const a = bar.querySelector(".page-subnav-races .takeover-sibling.active");
+    if (a && a.scrollIntoView) { try { a.scrollIntoView({ inline: "center", block: "nearest" }); } catch (e) {} }
+  }
 }
 
 // In-page sub-nav: pages that belong to a group (Standings/Playoffs/Projection,
@@ -3306,6 +3315,19 @@ const SUBNAV_GROUPS = [
             ["crewchiefs", "Crew Chiefs"], ["personnel", "Personnel"], ["pointscalc", "Points Format Calc"]] },
 ];
 function pageSubNav(view) {
+  // Race page: a scrollable strip of every race this season as "R## TRK" pills,
+  // styled exactly like the Data/Analytics sub-navs, with the current race
+  // highlighted. Lets you hop between races without going back to the schedule.
+  if (view === "race") {
+    const cur = STATE.race && STATE.race.round;
+    const races = (typeof allRacesSorted === "function") ? allRacesSorted() : [];
+    if (!races.length) return "";
+    const links = races.map(r => {
+      const tc = r.track_code || "—";
+      return `<a href="#/race/${r.round}" class="takeover-sibling${r.round === cur ? " active" : ""}" data-race-round="${r.round}">R${r.round} ${escapeHTML(tc)}</a>`;
+    }).join("");
+    return `<div class="page-subnav page-subnav-races"><div class="takeover-siblings">${links}</div></div>`;
+  }
   const group = SUBNAV_GROUPS.find(g => g.views.includes(view));
   if (!group) return "";
   const links = group.items.map(([v, label]) =>
@@ -14677,7 +14699,7 @@ function renderHomeHero(year, series) {
         </div>
         <div class="home-hero-info">
           <div class="home-card-label">UPCOMING ${series}</div>
-          <a class="home-hero-track-name" href="#/track/${nextRace.track_code}">${escapeHTML(trackName)}</a>
+          <a class="home-hero-track-name" href="#/race/${nextRace.round}">${escapeHTML(trackName)}</a>
           <div class="home-hero-track-meta">
             ${dateStr ? formatLongDate(dateStr) : ""}${startTimeStr ? ` · ${escapeHTML(startTimeStr)}` : ""}${typeLabel ? ` · ${typeLabel}` : ""}${trackInfoStr ? ` · ${escapeHTML(trackInfoStr)}` : ""}
           </div>
@@ -20835,33 +20857,10 @@ function _renderPredictedFinishCard(series, trackCode, race) {
   if (!pred || !pred.byFinish || !pred.byFinish.length) return "";
   const useWin = pred.source === "entry_list";
   const gridOn = pred.gridApplied > 0;
-  const rows = pred.byFinish.slice(0, 10).map((p, i) => {
-    const car = (p.car != null) ? p.car : (p.entity && p.entity.car_number);
-    const carHex = colorFor(series, car);
-    const txt = contrastTextFor(carHex);
-    const hasWin = p.win_prob != null;
-    const projVal = hasWin ? `${Math.round(p.win_prob * 100)}%`
-              : (p.predicted_finish != null ? p.predicted_finish.toFixed(1) : "—");
-    const ptsVal = (p.predicted_total_pts != null) ? Math.round(p.predicted_total_pts) : "—";
-    const t5 = (p.top5_odds != null) ? (p.top5_odds > 0 ? "+" + p.top5_odds : String(p.top5_odds))
-             : (p.top5_prob != null ? `${Math.round(p.top5_prob * 100)}%` : "—");
-    const hi = (hasWin && i < 2) ? " rcx-fin-pts" : "";
-    return `<tr>
-      <td class="rcx-fin-pos">${i + 1}</td>
-      <td class="rcx-fin-drv"><span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(car != null ? car : ""))}</span><a class="profile-link" href="#/driver/${slugify(p.driverName || "")}">${escapeHTML(lastNameOf(p.driverName))}</a></td>
-      <td class="rcx-fin-n${hi}">${projVal}</td>
-      <td class="rcx-fin-n">${ptsVal}</td>
-      <td class="rcx-fin-n">${t5}</td>
-    </tr>`;
-  }).join("");
+  const rows = pred.byFinish.slice(0, 10).map((p, i) => _renderMiniPredRow(p, i, series)).join("");
   return `<div class="card rc-card">
     <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${gridOn ? "post-qual" : "model"}</span></div>
-    <div class="rc-card-body">
-      <table class="rcx-fin-table">
-        <thead><tr><th>Pos</th><th>Driver</th><th>${useWin ? "Win" : "Proj"}</th><th>Pts</th><th>Top 5</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    <div class="rc-card-body hpt-col">${rows}</div>
     <div class="rcx-cardfoot"><a class="rcx-foot-link" href="#/projection">View full prediction →</a></div>
   </div>`;
 }

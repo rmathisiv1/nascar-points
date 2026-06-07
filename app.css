@@ -4723,7 +4723,10 @@ a.driver-cell.profile-link:hover .car-tag {
    it rather than leaving a dead gap between the Back link and the hero. */
 #view-race .view-sub:empty { display: none; }
 /* Race page: pull the header divider and Back link tight to the hero. */
-.page-series-bar.page-hd.pb-race { padding-bottom: 6px; margin-bottom: 6px; }
+.page-series-bar.page-hd.pb-padbottom { padding-bottom: 6px; }
+/* Races sub-nav: one scrollable row of R## TRK pills (36 races won't fit). */
+.page-subnav-races .takeover-siblings { overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.page-subnav-races .takeover-siblings::-webkit-scrollbar { display: none; }
 #race-takeover { padding-top: 2px; }
 .rc-hero::before {
   content: "";
