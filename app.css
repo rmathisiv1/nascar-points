@@ -1082,7 +1082,7 @@ tr.row-selected td:first-child { box-shadow: inset 2px 0 var(--accent); }
   background: var(--card);
 }
 /* Race page: back link sits at the top of the content, just below the title. */
-.race-back-link { display: inline-block; margin: -2px 0 0 -4px; }
+.race-back-link { display: inline-block; margin: 0 0 6px -4px; }
 
 /* Page footer */
 .footer {
@@ -4707,7 +4707,11 @@ a.driver-cell.profile-link:hover .car-tag {
 #view-race .view-head {
   width: 100%;
   max-width: 100%;
+  margin: 0;
 }
+/* The race sub-line is now empty (track/date live in the hero), so collapse
+   it rather than leaving a dead gap between the Back link and the hero. */
+#view-race .view-sub:empty { display: none; }
 .rc-hero::before {
   content: "";
   position: absolute;
@@ -13226,6 +13230,9 @@ body.lightbox-open {
 .rcx-ses { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 2px 0 13px; }
 .rcx-ses b { color: var(--text); font-weight: 600; }
 .rcx-cardrow { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 12px; margin-bottom: 14px; }
+/* Equal-height cards: let each card body grow and space its rows evenly so the
+   three cards' rows line up instead of clumping at the top with a gap. */
+.rcx-cardrow .rc-card-body { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; }
 .rcx-pred-row { display: flex; align-items: center; gap: 8px; padding: 4px 7px; font-size: 12px; }
 .rcx-pred-rk { font-family: var(--mono); font-size: 10px; color: var(--dim); min-width: 14px; text-align: right; }
 .rcx-pred-nm { flex: 1; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

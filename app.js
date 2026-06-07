@@ -1391,14 +1391,14 @@ async function handleRaceDeepLink() {
   delete STATE.race.deepLinkYear;
   delete STATE.race.deepLinkSeries;
 
-  if (STATE.mode === "present" && (y !== STATE.season || s !== STATE.series)) {
-    // Rewrite URL back to plain race route so reloading doesn't re-trigger
-    // and the back button has a stable history entry.
-    history.replaceState(null, "", `#/race/${round}`);
-    await openRaceLightbox(y, s, round);
-    return "lightbox";
-  }
-  if (STATE.mode === "historical" && (y !== STATE.season || s !== STATE.series)) {
+  if (y !== STATE.season || s !== STATE.series) {
+    // Switch context to the linked (year, series) and render the FULL race
+    // page for that year — users want the full page, not a quick-view modal.
+    // In Historical mode we rewrite the URL to a plain route (the season
+    // picker persists the year). In Present mode we KEEP the ?_y/_s suffix:
+    // the Present-mode season invariant would otherwise snap the season back
+    // to the latest on the next navigation/reload, so the suffix is what
+    // re-pins the correct year for this race.
     STATE.season = y;
     STATE.series = s;
     STATE.throughRound = null;
@@ -1413,7 +1413,9 @@ async function handleRaceDeepLink() {
     if (seriesSel && seriesSel.value !== s) seriesSel.value = s;
     const sel = document.getElementById("season-picker");
     if (sel) sel.value = String(y);
-    history.replaceState(null, "", `#/race/${round}`);
+    if (STATE.mode === "historical") {
+      history.replaceState(null, "", `#/race/${round}`);
+    }
     return "switched";
   }
   return null;
@@ -3272,7 +3274,13 @@ function renderPageSeriesBar() {
   // the generic label is suppressed for them — the header still shows so the
   // divider/toggle line stays consistent, just without a duplicate title.
   const suppressTitle = ["profile", "team", "cc"].includes(v);
-  const title = suppressTitle ? "" : pageTitleLabel(v);
+  let title = suppressTitle ? "" : pageTitleLabel(v);
+  // On a race page, show the track name instead of the generic "Race Center".
+  if (v === "race" && STATE.race && STATE.race.round != null && STATE.data) {
+    const rr = (STATE.data.races || []).find(x => x.round === STATE.race.round);
+    const tn = rr ? (prettyTrack(rr.track_code, rr.track) || rr.track) : null;
+    if (tn) title = tn;
+  }
   const titleHTML = `<span class="page-hd-title">${escapeHTML(title)}</span>`;
 
   const subnav = pageSubNav(v);
@@ -22006,22 +22014,20 @@ function renderSchedulePage() {
       if (e.target.closest("a")) return;   // let track / winner / race-name links propagate
       const round = parseInt(row.dataset.round, 10);
       if (!Number.isFinite(round)) return;
-      const isCompleted = row.classList.contains("run");
-      // Only navigate for completed races. Upcoming races have no race-
-      // results page to show; clicking the row should do nothing (the
-      // track link and race-name link inside the row are still clickable
-      // and handle their own navigation).
-      if (isCompleted) {
-        // In the Historical browser, keep the user inside the historical page:
-        // open the race as the historical sub-view (control bar stays pinned)
-        // instead of navigating away to the global race route.
-        if (STATE.view === "historical") {
-          STATE.historical.round = round;
-          STATE.historical.view = "race";
-          renderHistorical();
-        } else {
-          window.location.hash = `#/race/${round}`;
-        }
+      // Synthetic placeholder rounds (padded beyond the known schedule) have
+      // no race page to show — skip those. Everything else, completed OR
+      // upcoming, navigates: the race page now has a full upcoming view
+      // (session times, predicted finish, track history, entry list).
+      if (row.classList.contains("synthetic")) return;
+      // In the Historical browser, keep the user inside the historical page:
+      // open the race as the historical sub-view (control bar stays pinned)
+      // instead of navigating away to the global race route.
+      if (STATE.view === "historical") {
+        STATE.historical.round = round;
+        STATE.historical.view = "race";
+        renderHistorical();
+      } else {
+        window.location.hash = `#/race/${round}`;
       }
     });
   });
