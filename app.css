@@ -6816,9 +6816,10 @@ body.lightbox-open {
   overflow: hidden;
 }
 /* Race files block inside the results lightbox. */
-.lb-docs { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
-.lb-docs-head { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--text); margin-bottom: 10px; }
-.lb-doc-toggle { flex-wrap: wrap; margin-bottom: 14px; }
+.lb-tabbar { display: flex; gap: 2px; flex-wrap: wrap; margin: 20px 0 16px; border-bottom: 1px solid var(--border); }
+.lb-tab { appearance: none; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 8px 12px; font-family: var(--sans); font-size: 13.5px; color: var(--muted); cursor: pointer; }
+.lb-tab:hover { color: var(--text); }
+.lb-tab.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 .lb-doc-n { opacity: 0.55; font-size: 0.85em; margin-left: 2px; }
 @media (max-width: 767.98px), (pointer: coarse) {
   .race-lightbox {
@@ -7968,33 +7969,21 @@ body.lightbox-open {
 @media (max-width: 720px) {
   .home-hero-row { grid-template-columns: 1fr; }
 }
-/* Three-series hero: equal thirds, each a compact upcoming-race card. */
-.home-hero-trio { grid-template-columns: repeat(3, 1fr); }
-.home-hero3-card { display: flex; flex-direction: column; gap: 5px; }
-.home-hero3-track {
-  font-family: var(--sans);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.08;
-  color: var(--text);
-  text-decoration: none;
-}
-.home-hero3-track:hover { color: var(--accent); }
-.home-hero3-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.home-hero3-card .rcx-ses { font-size: 11px; margin-top: 1px; }
-.home-hero3-facts { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
-.home-hero3-fact { font-size: 11.5px; color: var(--text-2); }
-.home-hero3-fact .k {
-  display: inline-block;
-  min-width: 70px;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.home-hero3-entry { margin-top: 4px; font-size: 12.5px; }
+/* Three-series hero: the original upcoming pane, scaled to fit three equal
+   columns. Same structure (countdown | divider | info), just smaller. */
+.home-hero-trio { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.home-hero-trio .home-hero-card { gap: 12px; }
+.home-hero-trio .home-hero-countdown { flex: 0 0 66px; padding-right: 12px; }
+.home-hero-trio .home-hero-countdown-line { gap: 5px; }
+.home-hero-trio .home-hero-countdown-num { font-size: 30px; }
+.home-hero-trio .home-hero-countdown-word { font-size: 16px; }
+.home-hero-trio .home-hero-countdown-sub { font-size: 10px; margin-top: 5px; }
+.home-hero-trio .home-hero-track-name { font-size: 19px; margin-bottom: 4px; }
+.home-hero-trio .home-hero-track-meta { font-size: 12px; }
+.home-hero-trio .rcx-ses { font-size: 11px; margin-top: 4px; }
+.home-hero-trio .home-hero-track-row { gap: 14px; margin-top: 10px; }
+.home-hero-trio .home-hero-track-fact .v { font-size: 12.5px; }
+.home-hero-trio .home-hero-entry { margin-top: 8px; font-size: 12.5px; }
 @media (max-width: 860px) {
   .home-hero-trio { grid-template-columns: 1fr; }
 }
@@ -12581,21 +12570,22 @@ body.lightbox-open {
 .rdoc-rosters {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 6px;
-  padding: 8px 8px 4px;
+  gap: 5px;
+  padding: 6px 6px 3px;
 }
 .rdoc-roster {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card-hi);
-  padding: 7px 11px;
+  padding: 5px 9px 6px;
 }
 .rdoc-roster-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  line-height: 1.2;
 }
 .rdoc-roster-head .rdoc-car {
   font-family: var(--mono);
@@ -12613,13 +12603,14 @@ body.lightbox-open {
 .rdoc-roster-roles {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  font-size: 11.5px;
+  gap: 0;
+  font-size: 11px;
+  line-height: 1.32;
   color: var(--text);
 }
 .rdoc-roster-roles label {
   display: inline-block;
-  min-width: 64px;
+  min-width: 54px;
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -12629,19 +12620,20 @@ body.lightbox-open {
 .rdoc-roster-pit {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
-  margin-top: 5px;
-  padding-top: 5px;
+  gap: 0 10px;
+  margin-top: 3px;
+  padding-top: 3px;
   border-top: 1px dashed var(--border);
+  line-height: 1.34;
 }
-.rdoc-pit { font-size: 10.5px; color: var(--text); white-space: nowrap; }
+.rdoc-pit { font-size: 9.5px; color: var(--text); white-space: nowrap; }
 .rdoc-pit b {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 700;
   color: var(--muted);
 }
-.rdoc-roster-full { margin-top: 5px; }
+.rdoc-roster-full { margin-top: 3px; }
 .rdoc-roster-full > summary {
   cursor: pointer;
   font-size: 10px;
@@ -12809,7 +12801,7 @@ body.lightbox-open {
 /* Track page carries a grand hero card in the body, so its plain title/sub
    block is collapsed — only the Back link above the hero remains. */
 #view-track .view-head { display: none; }
-#view-track .track-back-link { margin: 6px 0 8px -4px; }
+.page-subnav-back { justify-content: flex-start; }
 
 /* ============================================================
    PERSONNEL DATABASE — toolbar + Filter popup + sortable table.

@@ -3273,13 +3273,16 @@ function renderPageSeriesBar() {
   // Entity pages (profile/team/cc) carry their own rich title in the body, so
   // the generic label is suppressed for them — the header still shows so the
   // divider/toggle line stays consistent, just without a duplicate title.
-  const suppressTitle = ["profile", "team", "cc", "track"].includes(v);
+  const suppressTitle = ["profile", "team", "cc"].includes(v);
   let title = suppressTitle ? "" : pageTitleLabel(v);
   // On a race page, show "R## Track" instead of the generic "Race Center".
   if (v === "race" && STATE.race && STATE.race.round != null && STATE.data) {
     const rr = (STATE.data.races || []).find(x => x.round === STATE.race.round);
     const tn = rr ? (prettyTrack(rr.track_code, rr.track) || rr.track) : null;
     if (tn) title = `R${STATE.race.round} ${tn}`;
+  } else if (v === "track" && STATE.track && STATE.track.code) {
+    const tn = prettyTrack(STATE.track.code, null) || STATE.track.code;
+    if (tn) title = tn;
   }
   const titleHTML = `<span class="page-hd-title">${escapeHTML(title)}</span>`;
 
@@ -3332,6 +3335,12 @@ function pageSubNav(view) {
       return `<a href="#/race/${r.round}" class="takeover-sibling${r.round === cur ? " active" : ""}" data-race-round="${r.round}">R${r.round} ${escapeHTML(tc)}</a>`;
     }).join("");
     return `<div class="page-subnav page-subnav-races"><a href="#" class="subnav-back" onclick="raceBack(event)" aria-label="Back" title="Back">← Back</a><button type="button" class="subnav-arrow" aria-label="Scroll races left" onclick="_scrollRaceSubnav(-1)">‹</button><div class="takeover-siblings">${links}</div><button type="button" class="subnav-arrow" aria-label="Scroll races right" onclick="_scrollRaceSubnav(1)">›</button></div>`;
+  }
+  // Track page: a thin row holding just the Back affordance, in the same
+  // position the race page puts its Back link — so it never floats alone in
+  // an empty band.
+  if (view === "track") {
+    return `<div class="page-subnav page-subnav-back"><a href="#" class="subnav-back" onclick="raceBack(event)" aria-label="Back" title="Back">← Back</a></div>`;
   }
   const group = SUBNAV_GROUPS.find(g => g.views.includes(view));
   if (!group) return "";
@@ -14710,69 +14719,80 @@ function predictDriverForRace(driverName, series, trackCode, actualStart) {
 
 // Renders the hero row: a countdown card on the left for the next race,
 // and a recap card on the right for the most recent completed race.
-// Three-series hero: one compact upcoming-race card per series (NCS | NOS |
-// NTS), each with the next session times and the race time. Replaces the
-// single-series countdown + last-race recap so the top of Home covers all
-// three series in roughly the same vertical space.
-function renderHomeHeroTrio(year) {
-  const seriesList = ["NCS", "NOS", "NTS"];
-  const cards = seriesList.map(srs => {
-    const block = (SEASON_CACHE[year] && SEASON_CACHE[year][srs])
-      || (srs === STATE.series ? STATE.data : null);
-    const races = (block && block.races) ? block.races.slice() : [];
-    races.sort((a, b) => (a.round || 0) - (b.round || 0));
-    const isDone = r => (r.results || []).some(d => d.finish_pos === 1);
-    const nextRace = races.find(r => !isDone(r)) || null;
-
-    if (!races.length) {
-      return `<div class="home-card home-hero3-card">
-        <div class="home-card-label">${srs}</div>
-        <div class="home-hero3-track muted">Loading…</div></div>`;
-    }
-    if (!nextRace) {
-      return `<div class="home-card home-hero3-card">
-        <div class="home-card-label">${srs} · season complete</div>
-        <div class="home-hero3-track">No upcoming races</div>
-        <div class="home-hero3-meta">See the schedule for next season.</div></div>`;
-    }
-
-    const trackName = prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD";
-    const dateStr = nextRace.date || "";
-    let cd = "";
-    if (dateStr) {
-      const days = Math.ceil((new Date(dateStr + "T00:00:00").getTime() - Date.now()) / 86400000);
-      cd = days > 1 ? `in ${days} days` : days === 1 ? "tomorrow" : days === 0 ? "today" : "";
-    }
-    const raceTime = nextRace.time || "";
-    const dateTime = [dateStr ? formatLongDate(dateStr) : "", raceTime ? escapeHTML(raceTime) : ""]
-      .filter(Boolean).join(" · ");
-    const sched = (typeof scheduleForRace === "function") ? scheduleForRace(nextRace, srs) : null;
-    const sessionLine = (typeof _renderSessionLine === "function") ? _renderSessionLine(sched, srs) : "";
-    const lastWinnerHTML = computeLastWinnerAtTrack(nextRace.track_code, srs);
-    const trackKingHTML = computeTrackKing(nextRace.track_code, srs);
-
-    let linkHTML = "";
-    const lu = (typeof lineupForRace === "function") ? lineupForRace(nextRace, srs) : null;
-    if (lu) {
-      const sl = lineupLink(nextRace, srs, "lineup");
-      const ql = lineupLink(nextRace, srs, "qual");
-      linkHTML = `<div class="home-hero3-entry">${sl}${ql ? ` <span class="home-hero-entry-sep">·</span> ${ql}` : ""}</div>`;
-    } else {
-      const el = entryListLink(nextRace, srs, true);
-      if (el) linkHTML = `<div class="home-hero3-entry">${el}</div>`;
-    }
-    const raceHref = `#/race/${nextRace.round}?_y=${year}&_s=${srs}`;
-    return `<div class="home-card home-hero3-card">
-      <div class="home-card-label">UPCOMING ${srs}${cd ? ` · ${cd}` : ""}</div>
-      <a class="home-hero3-track" href="${raceHref}">${escapeHTML(trackName)}</a>
-      ${dateTime ? `<div class="home-hero3-meta">${dateTime}</div>` : ""}
+// Three-series hero: the SAME upcoming-race pane we always had (big countdown
+// + track info + last winner / track king + entry link), rendered once per
+// series and laid out as three equal vertical columns. Same panes, just split
+// three ways. Each card adds the session-times line + race time.
+function _renderUpcomingHeroCard(year, series) {
+  // Runs inside _withSeriesContext, so allRacesSorted()/computeLastWinnerAtTrack
+  // resolve against this series.
+  const races = allRacesSorted();
+  const nextRace = races.find(r => !(r.results || []).some(d => d.finish_pos === 1)) || null;
+  if (!nextRace) {
+    return `<div class="home-card home-hero-card">
+      <div class="home-hero-info">
+        <div class="home-card-label">${series} · SEASON COMPLETE</div>
+        <div class="home-hero-track-name">No upcoming races</div>
+        <div class="home-hero-track-meta">See the schedule for next season's calendar.</div>
+      </div></div>`;
+  }
+  const dateStr = nextRace.date || "";
+  let countdownNum = "—", countdownUnit = "", countdownText = `R${nextRace.round}`;
+  if (dateStr) {
+    const days = Math.ceil((new Date(dateStr + "T00:00:00").getTime() - Date.now()) / 86400000);
+    if (days > 1) { countdownNum = String(days); countdownUnit = "days"; countdownText = `until R${nextRace.round}`; }
+    else if (days === 1) { countdownNum = "1"; countdownUnit = "day"; countdownText = `until R${nextRace.round}`; }
+    else if (days === 0) { countdownNum = "Race"; countdownUnit = "today"; countdownText = `R${nextRace.round}`; }
+  }
+  const trackName = prettyTrack(nextRace.track_code, nextRace.track) || nextRace.track || "TBD";
+  const trackType = trackTypeFor(nextRace.track_code);
+  const typeLabel = trackType ? (trackTypeLabel(trackType).charAt(0).toUpperCase() + trackTypeLabel(trackType).slice(1)) : "";
+  const timeBits = [];
+  if (nextRace.time) timeBits.push(nextRace.time);
+  if (nextRace.tv) timeBits.push(nextRace.tv);
+  const metaStr = [dateStr ? formatLongDate(dateStr) : "", timeBits.join(" · "), typeLabel].filter(Boolean).join(" · ");
+  const sched = (typeof scheduleForRace === "function") ? scheduleForRace(nextRace, series) : null;
+  const sessionLine = (typeof _renderSessionLine === "function") ? _renderSessionLine(sched, series) : "";
+  const lastWinnerHTML = computeLastWinnerAtTrack(nextRace.track_code, series);
+  const trackKingHTML = computeTrackKing(nextRace.track_code, series);
+  let linkHTML = "";
+  const lu = (typeof lineupForRace === "function") ? lineupForRace(nextRace, series) : null;
+  if (lu) {
+    const sl = lineupLink(nextRace, series, "lineup");
+    const ql = lineupLink(nextRace, series, "qual");
+    linkHTML = `<div class="home-hero-entry">${sl}${ql ? ` <span class="home-hero-entry-sep">·</span> ${ql}` : ""}</div>`;
+  } else {
+    const el = entryListLink(nextRace, series, true);
+    if (el) linkHTML = `<div class="home-hero-entry">${el}</div>`;
+  }
+  return `<div class="home-card home-hero-card">
+    <div class="home-hero-countdown">
+      <div class="home-hero-countdown-line">
+        <span class="home-hero-countdown-num">${countdownNum}</span>
+        <span class="home-hero-countdown-word">${countdownUnit}</span>
+      </div>
+      <div class="home-hero-countdown-sub">${countdownText}</div>
+    </div>
+    <div class="home-hero-info">
+      <div class="home-card-label">UPCOMING ${series}</div>
+      <a class="home-hero-track-name" href="#/race/${nextRace.round}?_y=${year}&_s=${series}">${escapeHTML(trackName)}</a>
+      ${metaStr ? `<div class="home-hero-track-meta">${escapeHTML(metaStr)}</div>` : ""}
       ${sessionLine}
-      <div class="home-hero3-facts">
-        ${lastWinnerHTML ? `<div class="home-hero3-fact"><span class="k">Last winner</span> ${lastWinnerHTML}</div>` : ""}
-        ${trackKingHTML ? `<div class="home-hero3-fact"><span class="k">Track king</span> ${trackKingHTML}</div>` : ""}
+      <div class="home-hero-track-row">
+        ${lastWinnerHTML ? `<div class="home-hero-track-fact"><span class="k">Last winner</span><span class="v">${lastWinnerHTML}</span></div>` : ""}
+        ${trackKingHTML ? `<div class="home-hero-track-fact"><span class="k">Track king</span><span class="v">${trackKingHTML}</span></div>` : ""}
       </div>
       ${linkHTML}
-    </div>`;
+    </div>
+  </div>`;
+}
+
+function renderHomeHeroTrio(year) {
+  const cards = ["NCS", "NOS", "NTS"].map(series => {
+    const card = _withSeriesContext(year, series, () => _renderUpcomingHeroCard(year, series));
+    return card || `<div class="home-card home-hero-card">
+      <div class="home-hero-info"><div class="home-card-label">${series}</div>
+      <div class="home-hero-track-name muted">Loading…</div></div></div>`;
   }).join("");
   return `<div class="home-hero-row home-hero-trio">${cards}</div>`;
 }
@@ -20887,28 +20907,21 @@ async function openRaceLightbox(year, series, round) {
     ? renderRaceResultsTable(race, { series, season: year, allRaces: races })
     : `<div class="rc-empty">This race hasn't been run yet.</div>`;
 
-  // Documents archived for this race (entry list, pit stalls, crew rosters,
-  // infractions). Pre-rendered into toggle panes so the user can flip files
-  // without leaving the pop-up. Empty for races with no archived docs.
-  let docsHTML = "";
-  try {
-    const docTabs = raceDocTabs(race, year, series);
-    if (docTabs.length) {
-      const btns = docTabs.map((t, i) =>
-        `<button class="${i === 0 ? "on" : ""}" data-doc="${t.key}">${escapeHTML(t.label)}` +
-        `${t.count ? ` <span class="lb-doc-n">${t.count}</span>` : ""}</button>`).join("");
-      const panes = docTabs.map((t, i) =>
-        `<div class="lb-doc-pane" data-doc="${t.key}"${i === 0 ? "" : " hidden"}>${t.html}</div>`).join("");
-      docsHTML = `
-        <div class="lb-docs">
-          <div class="lb-docs-head">Race files</div>
-          <div class="toggle-group mini lb-doc-toggle" role="tablist" aria-label="Race files">${btns}</div>
-          ${panes}
-        </div>`;
-    }
-  } catch (err) {
-    console.warn("lightbox docs failed:", err);
-  }
+  // Tabbed view: Results + each archived document (entry list, pit stalls,
+  // crew rosters, infractions). One tab visible at a time — no long scroll.
+  // Races with no archived docs just show Results (no tab bar).
+  let docTabs = [];
+  try { docTabs = raceDocTabs(race, year, series); }
+  catch (err) { console.warn("lightbox docs failed:", err); }
+  const lbTabs = [{ key: "results", label: "Results", html: resultsHTML }]
+    .concat(docTabs.map(t => ({ key: t.key, label: t.label, count: t.count, html: t.html })));
+  const tabBar = lbTabs.length > 1
+    ? `<div class="lb-tabbar" role="tablist">` + lbTabs.map((t, i) =>
+        `<button class="lb-tab${i === 0 ? " on" : ""}" data-lbtab="${t.key}">${escapeHTML(t.label)}` +
+        `${t.count ? ` <span class="lb-doc-n">${t.count}</span>` : ""}</button>`).join("") + `</div>`
+    : "";
+  const tabPanes = lbTabs.map((t, i) =>
+    `<div class="lb-tab-pane" data-lbtab="${t.key}"${i === 0 ? "" : " hidden"}>${t.html}</div>`).join("");
 
   body.innerHTML = `
     <div class="rc-hero" style="border-left:4px solid var(--accent);">
@@ -20919,8 +20932,8 @@ async function openRaceLightbox(year, series, round) {
         ${race.race_name ? ` · <span class="muted">"${escapeHTML(race.race_name)}"</span>` : ""}
       </div>
     </div>
-    ${resultsHTML}
-    ${docsHTML}
+    ${tabBar}
+    ${tabPanes}
   `;
   // No need to wire inner links — the global hashchange listener
   // automatically closes the lightbox when any navigation happens.
@@ -20954,17 +20967,17 @@ function wireRaceLightbox() {
       closeRaceLightbox();
     }
   });
-  // Race-files toggle inside the lightbox: swap the visible document pane.
+  // Lightbox tab bar (Results + each race file): swap the visible pane.
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".lb-doc-toggle button");
+    const btn = e.target.closest(".lb-tabbar .lb-tab");
     if (!btn) return;
-    const wrap = btn.closest(".lb-docs");
-    if (!wrap) return;
-    const key = btn.dataset.doc;
-    wrap.querySelectorAll(".lb-doc-toggle button")
+    const body = btn.closest("#race-lightbox-body");
+    if (!body) return;
+    const key = btn.dataset.lbtab;
+    body.querySelectorAll(".lb-tabbar .lb-tab")
       .forEach(b => b.classList.toggle("on", b === btn));
-    wrap.querySelectorAll(".lb-doc-pane")
-      .forEach(p => { p.hidden = (p.dataset.doc !== key); });
+    body.querySelectorAll(".lb-tab-pane")
+      .forEach(p => { p.hidden = (p.dataset.lbtab !== key); });
   });
 }
 
