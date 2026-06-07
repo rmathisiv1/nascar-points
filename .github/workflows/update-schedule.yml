@@ -1,0 +1,66 @@
+name: Update NASCAR Weekend Schedule
+
+# Pulls the per-weekend EventSchedule PDFs (practice / qualifying / race session
+# times) into data/schedule.json. Jayski publishes each weekend's PDF roughly
+# 1-2 weeks ahead, so we re-check the upcoming weekends every day and pick up
+# new ones as they appear. `--upcoming` skips the archived season so each run
+# only touches the next ~10-15 weekends (fast + polite to Cloudflare).
+
+on:
+  schedule:
+    # Daily at 11:00 UTC (~6 AM EST / 7 AM EDT).
+    - cron: '0 11 * * *'
+    # Extra passes across the race weekend in case sessions get revised.
+    - cron: '0 13 * * 5'   # Friday
+    - cron: '0 13 * * 6'   # Saturday
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season to refresh'
+        required: false
+        default: '2026'
+      full:
+        description: 'Scrape the WHOLE season (not just upcoming)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Scrape weekend schedules
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+          FULL:   ${{ github.event.inputs.full   || 'false' }}
+        run: |
+          if [ "$FULL" = "true" ]; then
+            python scripts/scrape_schedule.py --season "$SEASON" --out "data/schedule.json"
+          else
+            python scripts/scrape_schedule.py --season "$SEASON" --upcoming --out "data/schedule.json"
+          fi
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/schedule.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No schedule changes."
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "chore(data): refresh weekend schedule [skip ci]"
+          git push

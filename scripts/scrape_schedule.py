@@ -417,6 +417,9 @@ def main():
     ap.add_argument("--date", help="race date YYYY-MM-DD (disambiguates discover)")
     ap.add_argument("--season", type=int, metavar="YEAR",
                     help="discover + scrape every weekend from data/points_<YEAR>.json")
+    ap.add_argument("--upcoming", action="store_true",
+                    help="with --season: only weekends from ~2 days ago onward "
+                         "(skips the archived season — fast enough for a daily job)")
     ap.add_argument("--out", help="store path (default ../data/schedule.json)")
     ap.add_argument("--dump", action="store_true",
                     help="print parsed JSON, do not write the store")
@@ -445,6 +448,16 @@ def main():
             sys.exit(2)
         print(f"season {args.season}: {len(cal)} race weekends across NCS/NOS/NTS",
               file=sys.stderr)
+        if args.upcoming:
+            cutoff = _dt.date.today() - _dt.timedelta(days=2)
+            def _cal_date(s):
+                try:
+                    return _dt.date.fromisoformat(str(s)[:10])
+                except Exception:
+                    return None
+            cal = [c for c in cal if (_cal_date(c[2]) and _cal_date(c[2]) >= cutoff)]
+            print(f"  --upcoming: {len(cal)} weekend(s) on/after {cutoff.isoformat()}",
+                  file=sys.stderr)
         misses = []
         for code, track, date, rnd in cal:
             try:
