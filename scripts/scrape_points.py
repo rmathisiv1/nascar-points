@@ -1355,7 +1355,7 @@ def discover_races(series_code: str, season: int) -> list[dict]:
 
     soup = BeautifulSoup(html, "html.parser")
     race_results_pattern = re.compile(
-        rf"/race-results/{season}_([^/]+)/{cfg_code}(?:/|$)"
+        rf"/race-results/{season}[-_]([^/]+)/{cfg_code}(?:/|$)"
     )
 
     races: list[dict] = []
