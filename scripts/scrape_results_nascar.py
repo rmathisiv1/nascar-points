@@ -50,30 +50,32 @@ except Exception:
     def resolve_team_code(sponsor_owner, series_key=None, car_number=None):
         return None
 
-# NASCAR's feed uses TEAM names ("Joe Gibbs Racing"); team_codes.py is keyed
-# mostly on OWNER-PERSON names ("Joe Gibbs"). This supplement bridges the gap,
-# mapping NASCAR's team-name strings to the codes already used in the app.
-# Anything not resolved here OR by team_codes is logged so it can be added.
-NASCAR_TEAM_TO_CODE = {
-    "Joe Gibbs Racing": "JGR",
-    "Hendrick Motorsports": "HMS",
-    "Team Penske": "PEN",
-    "Richard Childress Racing": "RCR",
-    "23XI Racing": "23XI",
-    "Trackhouse Racing": "THR",
-    "RFK Racing": "RFK",
-    "Front Row Motorsports": "FRM",
-    "Wood Brothers Racing": "WBR",
-    "Spire Motorsports": "SPI",
-    "Kaulig Racing": "KR",
-    "Legacy Motor Club": "LMC",
-    "Haas Factory Team": "HAAS",
-    "Rick Ware Racing": "RWR",
-    "Hyak Motorsports": "HYAK",
-    "HYAK Motorsports": "HYAK",
+# Seed a small hardcoded core (used only if colors.json can't be read); at
+# runtime this is merged with every team in data/colors.json so the map stays
+# in sync with the app's own team list. Keys are lower-cased team names.
+TEAM_NAME_TO_CODE = {name.lower(): code for name, code in {
+    "Joe Gibbs Racing": "JGR", "Hendrick Motorsports": "HMS", "Team Penske": "PEN",
+    "Richard Childress Racing": "RCR", "23XI Racing": "23XI", "Trackhouse Racing": "THR",
+    "RFK Racing": "RFK", "Front Row Motorsports": "FRM", "Wood Brothers Racing": "WBR",
+    "Spire Motorsports": "SPI", "Kaulig Racing": "KR", "Legacy Motor Club": "LMC",
+    "Haas Factory Team": "HAAS", "Rick Ware Racing": "RWR", "HYAK Motorsports": "HYAK",
     "JR Motorsports": "JRM",
-}
+}.items()}
 UNRESOLVED_TEAMS = set()
+
+
+def load_colors_team_map(path):
+    """Build {team_full_name_lower: code} from the app's colors.json teams map."""
+    try:
+        blob = json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    out = {}
+    for code, info in (blob.get("teams") or {}).items():
+        name = (info or {}).get("full_name")
+        if name and name.strip():
+            out[name.strip().lower()] = code
+    return out
 
 
 def team_code_for(team_name, owner, series_code, car):
@@ -82,7 +84,7 @@ def team_code_for(team_name, owner, series_code, car):
         if not cand:
             continue
         cand = cand.strip()
-        code = NASCAR_TEAM_TO_CODE.get(cand) or resolve_team_code(
+        code = TEAM_NAME_TO_CODE.get(cand.lower()) or resolve_team_code(
             cand, series_key=series_code, car_number=car)
         if code:
             return code
@@ -337,6 +339,16 @@ def main():
 
     payload = json.loads(out.read_text(encoding="utf-8"))
     series_blob = payload.get("series") or {}
+
+    # Merge the app's own team list (data/colors.json) so name->code stays in
+    # sync with what the UI uses — adding a team there makes it resolve here.
+    colors_map = load_colors_team_map(out.parent / "colors.json")
+    if colors_map:
+        TEAM_NAME_TO_CODE.update(colors_map)
+        print(f"loaded {len(colors_map)} team names from colors.json", file=sys.stderr)
+    else:
+        print("NOTE: colors.json not found next to points file — using built-in "
+              "team map only.", file=sys.stderr)
 
     race_list = fetch_json(f"{CACHER}/{args.season}/race_list_basic.json")
     if not race_list:
