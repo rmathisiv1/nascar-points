@@ -21158,6 +21158,53 @@ function _renderSessionLine(ev, series) {
   if (!parts.length) return "";
   return `<div class="rcx-ses">${parts.join(" &nbsp;·&nbsp; ")}</div>`;
 }
+function _schedSeriesTag(code) {
+  const known = { NCS: "#d4a017", NOS: "#2e7d32", NTS: "#c62828" };
+  const c = known[code];
+  if (c) return `<span class="rsch-tag" style="color:${c}; border-color:${c};">${escapeHTML(code)}</span>`;
+  return `<span class="rsch-tag rsch-tag-alt">${escapeHTML(code)}</span>`;
+}
+const _SCHED_SES_LABEL = { practice: "Practice", "final-practice": "Final Practice",
+  qualifying: "Qualifying", "heat": "Heat", "duel": "Duel", "last-chance": "Last Chance",
+  race: "Race" };
+// "Schedule" tab — the entire event weekend (every session, every series)
+// grouped by day, drawn from the matched schedule.json event.
+function raceScheduleTab(race) {
+  const ev = (typeof scheduleForRace === "function") ? scheduleForRace(race, STATE.series) : null;
+  if (!ev || !Array.isArray(ev.sessions) || !ev.sessions.length) return null;
+  const KEEP = { practice: 1, "final-practice": 1, qualifying: 1, heat: 1, duel: 1, "last-chance": 1, race: 1 };
+  const sess = ev.sessions.filter(s => KEEP[s.type]).sort((a, b) => {
+    const da = a.date || "", db = b.date || "";
+    if (da !== db) return da < db ? -1 : 1;
+    const ta = a.start_24 || "", tb = b.start_24 || "";
+    return ta < tb ? -1 : ta > tb ? 1 : 0;
+  });
+  if (!sess.length) return null;
+  const groups = [];
+  let cur = null;
+  for (const s of sess) {
+    const key = s.date || s.day || "";
+    if (!cur || cur.key !== key) { cur = { key, date: s.date, day: s.day, rows: [] }; groups.push(cur); }
+    cur.rows.push(s);
+  }
+  const titleCase = (str) => (str || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  const dayHTML = groups.map(g => {
+    const dayName = g.date && typeof formatLongDate === "function" ? formatLongDate(g.date) : titleCase(g.day);
+    const rows = g.rows.map(s => {
+      const label = _SCHED_SES_LABEL[s.type] || titleCase((s.type || "").replace(/-/g, " "));
+      const codes = (s.series && s.series.length) ? s.series : (s.other_series || []);
+      const tags = codes.map(_schedSeriesTag).join("");
+      return `<div class="rsch-row">
+        <span class="rsch-time">${escapeHTML(s.start || "")}</span>
+        <span class="rsch-type">${escapeHTML(label)}</span>
+        <span class="rsch-tags">${tags}</span>
+      </div>`;
+    }).join("");
+    return `<div class="rsch-day"><div class="rsch-day-h">${escapeHTML(dayName)}</div>${rows}</div>`;
+  }).join("");
+  return { key: "schedule", label: "Schedule",
+    html: `<div class="rsch">${dayHTML}</div>` };
+}
 function _raceStatChips(race, ev, series) {
   const want = series || STATE.series;
   let laps = null, miles = null, stages = null;
@@ -21675,6 +21722,9 @@ function _renderRaceCenterImpl() {
   if (sessionsHTML) {
     tabs.push({ key: "results", label: isUpcoming ? "Sessions" : "Race Results", html: sessionsHTML });
   }
+  let scheduleTab = null;
+  try { scheduleTab = raceScheduleTab(nextRace); } catch (e) { console.warn("schedule tab failed:", e); }
+  if (scheduleTab) tabs.push(scheduleTab);
   let lineupTab = null, pointsTab = null;
   try { lineupTab = raceLineupTab(nextRace); } catch (e) { console.warn("lineup tab failed:", e); }
   if (lineupTab) tabs.push(lineupTab);
