@@ -1,0 +1,79 @@
+name: Update NASCAR Results (NASCAR feed)
+
+# Fills completed-race results into data/points_<season>.json from NASCAR's own
+# cf.nascar.com feed. Unlike the Racing-Reference points scraper, this source
+# does NOT block GitHub's cloud IPs, so it runs reliably here — no local machine
+# needed. It only adds results to races that just ran; it never rebuilds the
+# schedule, and standings are summed by the frontend from race_pts.
+#
+# This replaces the *results* half of the old local update.ps1 / update-points.yml.
+# (Driver bios are separate and still RR-based — refresh those locally if needed.)
+
+on:
+  schedule:
+    # UTC. EST = UTC-5 / EDT = UTC-4 (labels assume EDT, summer).
+    - cron: '0 11 * * 0'   # Sun  7:00 AM EDT — Saturday races
+    - cron: '0 11 * * 1'   # Mon  7:00 AM EDT — main: Sunday races
+    - cron: '0 16 * * 1'   # Mon 12:00 PM EDT — retry
+    - cron: '0 11 * * 2'   # Tue  7:00 AM EDT — Monday postponements
+    - cron: '0 14 * * 6'   # Sat 10:00 AM EDT — Friday Truck races
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season to refresh'
+        required: false
+        default: '2026'
+      only:
+        description: 'Series (NCS,NOS,NTS or subset)'
+        required: false
+        default: 'NCS,NOS,NTS'
+      force:
+        description: 'Refill races that already have results'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-results
+  cancel-in-progress: false
+
+jobs:
+  results:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Fill results from NASCAR feed
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+          ONLY:   ${{ github.event.inputs.only   || 'NCS,NOS,NTS' }}
+          FORCE:  ${{ github.event.inputs.force  || 'false' }}
+        run: |
+          ARGS="--season \"$SEASON\" --only \"$ONLY\" --out \"data/points_${SEASON}.json\""
+          if [ "$FORCE" = "true" ]; then ARGS="$ARGS --force"; fi
+          eval python scripts/scrape_results_nascar.py $ARGS
+
+      - name: Commit & push if changed
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "data/points_${SEASON}.json" 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No results changes."
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "chore(results): NASCAR-feed refresh ${SEASON} [skip ci]"
+          git push
