@@ -537,15 +537,29 @@ def parse_race(race_url: str, series_code: str, round_num: int,
             # Modern pages have "pos", "driver", "pts". Old pages (pre-1972)
             # may lack "pts" entirely. We accept any table that has "pos" +
             # "driver" + at least one more racing column (laps, st, #, led).
-            if "pos" in headers and "driver" in headers:
+            if ("pos" in headers or "fin" in headers) and "driver" in headers:
                 if ("pts" in headers or "laps" in headers or "st" in headers
-                        or "#" in headers or "led" in headers):
+                        or "#" in headers or "led" in headers or "car" in headers):
                     results_table = tbl
                     break
     if results_table is None:
-        # Race hasn't been run yet — return the race with empty results.
-        # The frontend uses (r.results || []).length === 0 to detect upcoming
-        # races and shows the schedule entry with date + track populated.
+        # No results table found. This is EITHER a genuinely upcoming race OR a
+        # parse failure on an old-format page. Distinguish by DATE — only a
+        # future date is truly "upcoming". A PAST race with no parseable table
+        # is a silent data gap (exactly what hid decades of early results, e.g.
+        # Petty's missing 1960s wins). Surface it loudly instead of pretending
+        # it hasn't run; we still return the schedule stub so the race stays in
+        # the calendar, but the log makes the gap visible.
+        is_future = True  # if we can't read the date, assume upcoming (safe)
+        try:
+            if race.date:
+                is_future = datetime.fromisoformat(race.date).date() >= datetime.now().date()
+        except Exception:
+            pass
+        if (not is_future) and race.date:
+            print(f"  ! [{series_code} R{round_num}] PAST race has no parseable "
+                  f"results table ({race.date} {race.track}) — parse failure, "
+                  f"NOT upcoming.", file=sys.stderr)
         if race.date or race.track:
             return race
         return None
@@ -578,7 +592,14 @@ def parse_race(race_url: str, series_code: str, round_num: int,
         tds = tr.find_all(["td", "th"])
         if len(tds) < 5:
             continue
-        pos = to_int(cell(tds, "Pos"))
+        # Finishing position: modern RR pages header it "Pos"; older (pre-~1972)
+        # pages use "Fin". As a last resort fall back to column 0 — RR result
+        # tables are always finish-ordered with the finishing position first.
+        # Without the "Fin"/col-0 fallback, every old-page row got pos=None and
+        # was skipped, leaving results=[] (which then looked like an unrun race).
+        pos = to_int(cell(tds, "Pos", "Fin"))
+        if pos is None and tds:
+            pos = to_int(tds[0].get_text(strip=True))
         if pos is None:
             continue
         start = to_int(cell(tds, "St"))
@@ -1373,6 +1394,12 @@ def discover_races(series_code: str, season: int) -> list[dict]:
         if date_text:
             try:
                 d = datetime.strptime(date_text, "%m/%d/%y").date()
+                # Python's %y pivots 00-68 -> 2000-2068, so pre-1969 seasons come
+                # out a century too high (11/04/62 -> 2062). A Cup season spans
+                # roughly Nov of the prior year through the season year, so any
+                # parsed year beyond the season is off by exactly 100.
+                if d.year > season:
+                    d = d.replace(year=d.year - 100)
                 iso_date = d.isoformat()
             except ValueError:
                 iso_date = date_text
