@@ -27092,6 +27092,7 @@ function _ownerizeProj(proj) {
     const gain = driverProj - driverCur;            // future race points (identical for the car)
     return {
       ...d,
+      name: `#${d.car_number}`,                // owner view is car-centric, no driver names
       current_pts: ownerCur,
       current_wins: o ? (o.wins || 0) : d.current_wins,
       projected_reg_total: ownerCur + gain,
@@ -27161,22 +27162,20 @@ function _buildProjectionHTML(proj) {
     </div>
 
     <div class="proj-view proj-view-owner" hidden>
-      ${_renderProjectionTopContenders(topContenders, proj)}
+      ${_renderProjectionTopContenders(topContenders.map(d => ({ ...d, name: `#${d.car_number}` })), proj)}
 
       ${_renderProjectionChart(_ownerizeProj(proj))}
 
       ${_renderProjectionOwnerTable(_ownerizeProj(proj))}
 
       ${chaseTraces.length > 0
-        ? _renderProjectionChaseChart(chaseDrivers, proj, chaseTraces)
-          + _renderProjectionChaseTable(chaseDrivers, proj, chaseTraces)
+        ? _renderProjectionChaseChart(chaseDrivers.map(d => ({ ...d, name: `#${d.car_number}` })), proj, chaseTraces.map(t => ({ ...t, name: `#${t.car_number}` })))
+          + _renderProjectionChaseTable(chaseDrivers.map(d => ({ ...d, name: `#${d.car_number}` })), proj, chaseTraces.map(t => ({ ...t, name: `#${t.car_number}` })))
         : ""}
     </div>
 
     <div class="proj-view proj-view-mfr" hidden>
       ${_renderProjectionMfrContenders(proj, chaseTraces)}
-
-      ${_renderProjectionMfrChart(proj, chaseTraces)}
 
       ${_renderProjectionMfrTable(proj, chaseTraces)}
     </div>
@@ -27662,7 +27661,6 @@ function _renderProjectionOwnerTable(proj) {
           <thead><tr>
             <th class="num">#</th>
             <th>Car</th>
-            <th>Driver</th>
             <th>Team</th>
             <th class="num">Current Pts</th>
             <th class="num">Proj Pts</th>
@@ -27685,11 +27683,6 @@ function _renderProjectionOwnerTable(proj) {
                 <td class="num">${i + 1}</td>
                 <td>
                   <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
-                </td>
-                <td>
-                  <a class="profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
-                    ${escapeHTML(d.name)}
-                  </a>
                 </td>
                 <td>${escapeHTML(d.team_code || "")}</td>
                 <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
@@ -27817,71 +27810,6 @@ function _renderProjectionMfrContenders(proj, traces) {
             </div>
           `;
         }).join("")}
-      </div>
-    </section>
-  `;
-}
-
-// Manufacturer title-odds bar chart — bar length is the chance the champion
-// comes from each make (the same champ% the cards and table are ranked by), so
-// the whole manufacturer view tells one consistent story. Trailing label shows
-// avg points/car (matching the table) for context. We deliberately do NOT plot
-// SUMMED points here: that just rewards whoever fields the most cars and put
-// Chevrolet on top while the title odds had Toyota on top — the mismatch.
-function _renderProjectionMfrChart(proj, traces) {
-  const mfrs = _aggregateMfrProj(proj, _champMapFromTraces(traces))
-    .sort((a, b) => b.champ_pct_sum - a.champ_pct_sum);
-  if (!mfrs.length) return "";
-
-  const barH = 30;
-  const gap = 6;
-  const leftPad = 140;
-  const rightPad = 160;
-  const chartW = 920;
-  const chartH = mfrs.length * (barH + gap) + 30;
-  const maxPct = Math.max(...mfrs.map(m => m.champ_pct_sum), 0.01);
-
-  const bars = mfrs.map((m, i) => {
-    const y = i * (barH + gap) + 15;
-    const hex = _mfrColor(m.code);
-    const pct = m.champ_pct_sum * 100;
-    const barW = Math.max((m.champ_pct_sum / maxPct) * (chartW - leftPad - rightPad), 2);
-
-    return `
-      <g>
-        <text x="18" y="${y + barH / 2 + 4}" text-anchor="start"
-              style="font-family:var(--mono);font-size:12px;font-weight:700;fill:var(--muted);">
-          P${i + 1}
-        </text>
-        <text x="${leftPad - 12}" y="${y + barH / 2 + 4}" text-anchor="end"
-              style="font-family:var(--serif);font-size:14px;fill:var(--text-2);">
-          ${escapeHTML(m.name)}
-        </text>
-        <rect x="${leftPad}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="${hex}" fill-opacity="0.85"/>
-        <rect x="${leftPad}" y="${y}" width="4" height="${barH}" rx="1" fill="${hex}"/>
-        <text x="${leftPad + 10}" y="${y + barH / 2 + 4}"
-              style="font-family:var(--mono);font-size:11px;font-weight:700;fill:var(--text);">
-          ${pct.toFixed(1)}%
-        </text>
-        <text x="${leftPad + barW + 8}" y="${y + barH / 2 + 4}"
-              style="font-family:var(--mono);font-size:11px;fill:var(--muted);">
-          ${m.avg_proj_pts.toLocaleString()} avg pts · ${m.cars.length} cars
-        </text>
-      </g>
-    `;
-  }).join("");
-
-  return `
-    <section class="proj-section">
-      <div class="proj-section-head">
-        <div class="ed-kicker">manufacturer battle</div>
-        <h2 class="ed-hero ed-hero-sm">Projected title odds by make</h2>
-        <div class="ed-byline">Chance the champion comes from each manufacturer · avg points per car shown for context</div>
-      </div>
-      <div class="proj-chart-host" style="overflow-x:auto;">
-        <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;max-width:${chartW}px;height:auto;display:block;">
-          ${bars}
-        </svg>
       </div>
     </section>
   `;
