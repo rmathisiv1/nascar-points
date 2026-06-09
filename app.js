@@ -16600,7 +16600,12 @@ function renderTrackStats() {
       top5Pct: s.starts > 0 ? (s.top5 / s.starts) * 100 : null,
       top10Pct: s.starts > 0 ? (s.top10 / s.starts) * 100 : null,
       avgPts: s.starts > 0 ? s.totalPts / s.starts : null,
-      avgStagePts: s.starts > 0 ? (s.stagePts || 0) / s.starts : null,
+      avgStagePts: (() => {
+        // Stages only exist 2017+. Averaging over all-era starts buries a
+        // long career under pre-2017 zeros, so average over stage-era starts.
+        const se = d.races.filter(r => r.year >= 2017);
+        return se.length ? se.reduce((a, r) => a + (r.stagePts || 0), 0) / se.length : null;
+      })(),
     };
   }).filter(r => r.starts >= ts.minStarts);
 
