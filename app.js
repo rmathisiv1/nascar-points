@@ -9754,6 +9754,56 @@ function countTeamChampionships(teamCode) {
   return { total: byYear.length, byYear };
 }
 
+// Builds a championship-count index for an all-time page in ONE pass over the
+// loaded seasons, so each table row is a cheap lookup instead of re-walking the
+// cache. Key per stateKey: drivers -> driver slug; teams -> team_code of the
+// champion's dominant car; crewchiefs -> slug of the champion's dominant CC.
+function _buildChampIndex(stateKey) {
+  const idx = new Map();
+  const bump = (k) => { if (k != null && k !== "") idx.set(k, (idx.get(k) || 0) + 1); };
+  const seriesList = ["NCS", "NOS", "NTS"];
+  Object.keys(SEASON_CACHE).map(Number).forEach(year => {
+    const blocks = SEASON_CACHE[year];
+    if (!blocks) return;
+    seriesList.forEach(sCode => {
+      const block = blocks[sCode];
+      const champ = block && block.final_standings && block.final_standings[0];
+      if (!champ || !champ.driver) return;
+      if (stateKey === "drivers") { bump(slugify(champ.driver)); return; }
+      // teams / crewchiefs: resolve the champion's dominant car / crew chief
+      const champNorm = slugify(champ.driver);
+      const carStarts = {}, ccStarts = {};
+      (block.races || []).forEach(race => {
+        (race.results || []).forEach(d => {
+          if (!d.driver || slugify(d.driver) !== champNorm) return;
+          if (d.car_number != null) carStarts[d.car_number] = (carStarts[d.car_number] || 0) + 1;
+          if (d.crew_chief) ccStarts[d.crew_chief] = (ccStarts[d.crew_chief] || 0) + 1;
+        });
+      });
+      const dominant = (obj) => {
+        let key = null, max = 0;
+        for (const [k, n] of Object.entries(obj)) if (n > max) { key = k; max = n; }
+        return key;
+      };
+      if (stateKey === "teams") {
+        const car = dominant(carStarts);
+        if (car == null) return;
+        let carTeam = null;
+        (block.races || []).some(race => {
+          const hit = (race.results || []).find(d => String(d.car_number) === String(car));
+          if (hit && hit.team_code) { carTeam = hit.team_code; return true; }
+          return false;
+        });
+        bump(carTeam);
+      } else if (stateKey === "crewchiefs") {
+        const cc = dominant(ccStarts);
+        if (cc) bump(slugify(cc));
+      }
+    });
+  });
+  return idx;
+}
+
 function driverCareerYears(driverSlug) {
   const out = [];
   Object.keys(SEASON_CACHE).map(Number).sort((a, b) => b - a).forEach(year => {
@@ -16550,6 +16600,7 @@ function renderTrackStats() {
       top5Pct: s.starts > 0 ? (s.top5 / s.starts) * 100 : null,
       top10Pct: s.starts > 0 ? (s.top10 / s.starts) * 100 : null,
       avgPts: s.starts > 0 ? s.totalPts / s.starts : null,
+      avgStagePts: s.starts > 0 ? (s.stagePts || 0) / s.starts : null,
     };
   }).filter(r => r.starts >= ts.minStarts);
 
@@ -16632,7 +16683,7 @@ function renderTrackStats() {
         <th class="ts-th num" data-sort="avgStart">Avg St${sortAttr("avgStart")}</th>
         <th class="ts-th num" data-sort="avgFin">Avg Fin${sortAttr("avgFin")}</th>
         <th class="ts-th num" data-sort="lapsLed">Laps Led${sortAttr("lapsLed")}</th>
-        <th class="ts-th num" data-sort="stagePts">Stage Pts${sortAttr("stagePts")}</th>
+        <th class="ts-th num" data-sort="avgStagePts">Avg Stage Pts${sortAttr("avgStagePts")}</th>
         <th class="ts-th num" data-sort="avgPts">Avg Pts${sortAttr("avgPts")}</th>
         <th class="ts-th num" data-sort="totalPts">Total Pts${sortAttr("totalPts")}</th>
       </tr></thead>
@@ -16653,7 +16704,7 @@ function renderTrackStats() {
             <td class="num">${r.avgStart != null ? r.avgStart.toFixed(1) : "—"}</td>
             <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
             <td class="num">${r.lapsLed.toLocaleString()}</td>
-            <td class="num">${r.stagePts}</td>
+            <td class="num">${r.avgStagePts != null ? r.avgStagePts.toFixed(1) : "—"}</td>
             <td class="num">${r.avgPts != null ? r.avgPts.toFixed(1) : "—"}</td>
             <td class="num">${r.totalPts}</td>
           </tr>`;
@@ -24784,6 +24835,7 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
   const st = ALLTIME_STATE[stateKey];
   const search = (st.search || "").trim().toLowerCase();
   const currentSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]) || STATE.season;
+  const champIndex = _buildChampIndex(stateKey);
 
   // Fold each record by active filters; drop those with no matching years
   let visible = rawRecs.map(rec => {
@@ -24793,6 +24845,7 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
       slug: rec.slug,
       code: rec.code,
       name: rec.name,
+      champs: champIndex.get(stateKey === "teams" ? rec.code : rec.slug) || 0,
       ...folded,
     };
   }).filter(Boolean);
@@ -24834,9 +24887,9 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
     <th class="alltime-th" data-sort="name">Name${sortAttr("name")}</th>
     <th class="alltime-th num" data-sort="starts">Starts${sortAttr("starts")}</th>
     <th class="alltime-th num" data-sort="wins">Wins${sortAttr("wins")}</th>
+    <th class="alltime-th num" data-sort="champs">Champs${sortAttr("champs")}</th>
     <th class="alltime-th num" data-sort="winPct">Win %${sortAttr("winPct")}</th>
     <th class="alltime-th num" data-sort="top5">T5${sortAttr("top5")}</th>
-    <th class="alltime-th num" data-sort="top5Pct">T5 %${sortAttr("top5Pct")}</th>
     <th class="alltime-th num" data-sort="top10">T10${sortAttr("top10")}</th>
     <th class="alltime-th num" data-sort="avgFin">Avg Fin${sortAttr("avgFin")}</th>
     <th class="alltime-th num" data-sort="lapsLed">Laps Led${sortAttr("lapsLed")}</th>
@@ -24854,9 +24907,9 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
       <td>${nameCell}</td>
       <td class="num">${r.starts || 0}</td>
       <td class="num ${r.wins > 0 ? "hot" : ""}">${r.wins || 0}</td>
+      <td class="num ${r.champs > 0 ? "hot" : ""}">${r.champs || 0}</td>
       <td class="num">${r.winPct != null ? r.winPct.toFixed(1) + "%" : "—"}</td>
       <td class="num">${r.top5 || 0}</td>
-      <td class="num">${r.top5Pct != null ? r.top5Pct.toFixed(1) + "%" : "—"}</td>
       <td class="num">${r.top10 || 0}</td>
       <td class="num">${r.avgFin != null ? r.avgFin.toFixed(1) : "—"}</td>
       <td class="num">${(r.lapsLed || 0).toLocaleString()}</td>
