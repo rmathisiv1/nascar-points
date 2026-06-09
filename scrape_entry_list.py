@@ -312,8 +312,10 @@ def entries_from_weekend_feed(season, series_id, race_id):
 
 def merge_odds(entries, odds_entries):
     """Layer win/top-5 odds onto NASCAR-native entries, joined by driver_id then
-    name. Mutates and returns `entries`; odds-only drivers are appended so a
-    late add the feed missed still shows."""
+    name. Mutates and returns `entries`. Odds-only drivers the book lists but
+    NASCAR's field does NOT are ignored — the weekend-feed entry list is the
+    authoritative field, so a speculative book entry (e.g. JJ Yeley) shouldn't
+    appear as an entered car."""
     if not odds_entries:
         return entries
     by_id = {e["driver_id"]: e for e in entries if e.get("driver_id") is not None}
@@ -321,8 +323,7 @@ def merge_odds(entries, odds_entries):
     for o in odds_entries:
         tgt = by_id.get(o.get("driver_id")) or by_name.get((o.get("driver") or "").strip().lower())
         if tgt is None:
-            entries.append(o)            # in odds but not the entry feed — keep it
-            continue
+            continue                     # in odds but not NASCAR's field — skip
         for k in ("win_prob", "top5_prob", "top5_odds"):
             if o.get(k) is not None:
                 tgt[k] = o[k]

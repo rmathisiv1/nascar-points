@@ -14985,9 +14985,13 @@ function _renderUpcomingBand(year, series) {
     boxes = _homeLinkBox(nextRace.round, year, series, "lineup", "Lineup →")
           + _homeLinkBox(nextRace.round, year, series, "practice", "Practice results →");
   } else {
+    // Entry list link: prefer the NASCAR-native list (data/entry_list.json),
+    // fall back to the older Jayski entry doc.
+    const hasNative = (typeof getEntryList === "function") &&
+      ((getEntryList(series, nextRace.track_code) || []).length > 0);
     const rec = (typeof getRaceDocs === "function") ? getRaceDocs(year, series, nextRace) : null;
     const hasEntry = rec && rec.docs && rec.docs.entry && Array.isArray(rec.docs.entry.rows) && rec.docs.entry.rows.length;
-    if (hasEntry) boxes = _homeLinkBox(nextRace.round, year, series, "entry", "Entry list →");
+    if (hasNative || hasEntry) boxes = _homeLinkBox(nextRace.round, year, series, "entry", "Entry list →");
   }
   const trackHref = `#/race/${nextRace.round}?_y=${year}&_s=${encodeURIComponent(series)}`;
   const spineBg = series === "NCS" ? "#b8860b" : series === "NTS" ? "#b3322c" : accent;
@@ -21508,7 +21512,7 @@ function _renderEntryListCard(series, trackCode) {
   if (typeof getEntryList !== "function" || !trackCode) return "";
   const list = getEntryList(series, trackCode);
   if (!list || !list.length) return "";
-  const rows = list.slice().sort((a, b) => {
+  const rows = list.filter(e => e.car != null).slice().sort((a, b) => {
     const ca = parseInt(a.car, 10), cb = parseInt(b.car, 10);
     return (isNaN(ca) ? 9999 : ca) - (isNaN(cb) ? 9999 : cb);
   }).map(e => {
