@@ -27162,7 +27162,7 @@ function _buildProjectionHTML(proj) {
     </div>
 
     <div class="proj-view proj-view-owner" hidden>
-      ${_renderProjectionTopContenders(topContenders.map(d => ({ ...d, name: `#${d.car_number}` })), proj)}
+      ${_renderProjectionTopContenders(topContenders, proj, true)}
 
       ${_renderProjectionChart(_ownerizeProj(proj))}
 
@@ -27170,12 +27170,14 @@ function _buildProjectionHTML(proj) {
 
       ${chaseTraces.length > 0
         ? _renderProjectionChaseChart(chaseDrivers.map(d => ({ ...d, name: `#${d.car_number}` })), proj, chaseTraces.map(t => ({ ...t, name: `#${t.car_number}` })))
-          + _renderProjectionChaseTable(chaseDrivers.map(d => ({ ...d, name: `#${d.car_number}` })), proj, chaseTraces.map(t => ({ ...t, name: `#${t.car_number}` })))
+          + _renderProjectionChaseTable(chaseDrivers, proj, chaseTraces, true)
         : ""}
     </div>
 
     <div class="proj-view proj-view-mfr" hidden>
       ${_renderProjectionMfrContenders(proj, chaseTraces)}
+
+      ${_renderProjectionMfrChart(proj, chaseTraces)}
 
       ${_renderProjectionMfrTable(proj, chaseTraces)}
     </div>
@@ -27586,7 +27588,7 @@ function _renderProjectionChaseChart(chaseDrivers, proj, traces) {
   `;
 }
 
-function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
+function _renderProjectionChaseTable(chaseDrivers, proj, traces, carOnly) {
   if (!traces || traces.length === 0) return "";
   // Sort by chase points (descending). champPct is already derived from these
   // same points in _computeChaseTraces, so order, points, and % all agree.
@@ -27605,7 +27607,7 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
           <thead><tr>
             <th class="num">#</th>
             <th class="num">Seed</th>
-            <th>Driver</th>
+            <th>${carOnly ? "Car" : "Driver"}</th>
             <th class="num">Chase Pts</th>
             <th class="num">From Leader</th>
             <th class="num">Champ %</th>
@@ -27621,10 +27623,12 @@ function _renderProjectionChaseTable(chaseDrivers, proj, traces) {
                 <td class="num">${i + 1}</td>
                 <td class="num">${d.seed}</td>
                 <td>
-                  <a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
+                  ${carOnly
+                    ? `<span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>`
+                    : `<a class="driver-cell profile-link" href="#/driver/${encodeURIComponent(d.slug)}">
                     <span class="car-tag" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
                     <span>${escapeHTML(d.name)}</span>
-                  </a>
+                  </a>`}
                 </td>
                 <td class="num">${Math.round(d.finalPts).toLocaleString()}</td>
                 <td class="num">${fromLeader}</td>
@@ -27761,6 +27765,7 @@ function _aggregateMfrProj(proj, champBySlug) {
   const list = Array.from(mfrs.values());
   list.forEach(m => {
     m.avg_proj_pts = m.cars.length ? Math.round(m.total_proj_pts / m.cars.length) : 0;
+    m.avg_current_pts = m.cars.length ? Math.round(m.total_current_pts / m.cars.length) : 0;
   });
   return list;
 }
@@ -27815,11 +27820,78 @@ function _renderProjectionMfrContenders(proj, traces) {
   `;
 }
 
+// Manufacturer projected-points bar chart — bars are AVERAGE projected points
+// per car (not summed: summed just rewards whoever fields the most cars). Solid
+// = current avg, light = projected avg. Sorted by projected avg, same as the
+// standings table below, so the chart and table agree. (The cards above rank by
+// title odds — a separate stat, exactly like the driver view's champ% cards vs
+// its points-standings chart.)
+function _renderProjectionMfrChart(proj, traces) {
+  const mfrs = _aggregateMfrProj(proj, _champMapFromTraces(traces))
+    .sort((a, b) => b.avg_proj_pts - a.avg_proj_pts);
+  if (!mfrs.length) return "";
+
+  const barH = 30;
+  const gap = 8;
+  const leftPad = 150;
+  const rightPad = 150;
+  const chartW = 920;
+  const chartH = mfrs.length * (barH + gap) + 30;
+  const maxPts = Math.max(...mfrs.map(m => m.avg_proj_pts), 1);
+
+  const bars = mfrs.map((m, i) => {
+    const y = i * (barH + gap) + 15;
+    const hex = _mfrColor(m.code);
+    const fullBarW = Math.max((m.avg_proj_pts / maxPts) * (chartW - leftPad - rightPad), 2);
+    const curBarW = Math.max((m.avg_current_pts / maxPts) * (chartW - leftPad - rightPad), 2);
+
+    return `
+      <g>
+        <text x="18" y="${y + barH / 2 + 4}" text-anchor="start"
+              style="font-family:var(--mono);font-size:12px;font-weight:700;fill:var(--muted);">
+          P${i + 1}
+        </text>
+        <text x="${leftPad - 12}" y="${y + barH / 2 + 4}" text-anchor="end"
+              style="font-family:var(--serif);font-size:14px;fill:var(--text-2);">
+          ${escapeHTML(m.name)}
+        </text>
+        <rect x="${leftPad}" y="${y}" width="${fullBarW}" height="${barH}" rx="3"
+              fill="${hex}" fill-opacity="0.30" stroke="${hex}" stroke-width="1"/>
+        <rect x="${leftPad}" y="${y}" width="${curBarW}" height="${barH}" rx="3" fill="${hex}" fill-opacity="0.85"/>
+        <rect x="${leftPad}" y="${y}" width="4" height="${barH}" rx="1" fill="${hex}"/>
+        <text x="${leftPad + 10}" y="${y + barH / 2 + 4}"
+              style="font-family:var(--mono);font-size:10px;fill:var(--text);opacity:0.85;">
+          ${m.avg_current_pts.toLocaleString()}
+        </text>
+        <text x="${leftPad + fullBarW + 8}" y="${y + barH / 2 + 4}"
+              style="font-family:var(--mono);font-size:11px;fill:var(--muted);">
+          ${m.avg_proj_pts.toLocaleString()} avg pts · ${m.cars.length} cars
+        </text>
+      </g>
+    `;
+  }).join("");
+
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">manufacturer battle</div>
+        <h2 class="ed-hero ed-hero-sm">Projected manufacturer points</h2>
+        <div class="ed-byline">Average projected points per car · solid = current, light = projected</div>
+      </div>
+      <div class="proj-chart-host" style="overflow-x:auto;">
+        <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;max-width:${chartW}px;height:auto;display:block;">
+          ${bars}
+        </svg>
+      </div>
+    </section>
+  `;
+}
+
 // Manufacturer projection table — aggregates by manufacturer code.
 // Shows projected wins, top 5s, avg projected finish, playoff representation.
 function _renderProjectionMfrTable(proj, traces) {
   const sorted = _aggregateMfrProj(proj, _champMapFromTraces(traces))
-    .sort((a, b) => b.champ_pct_sum - a.champ_pct_sum);
+    .sort((a, b) => b.avg_proj_pts - a.avg_proj_pts);
 
   return `
     <section class="proj-section">
@@ -27864,7 +27936,7 @@ function _renderProjectionMfrTable(proj, traces) {
   `;
 }
 
-function _renderProjectionTopContenders(top, proj) {
+function _renderProjectionTopContenders(top, proj, carOnly) {
   if (!top.length) return "";
   return `
     <section class="proj-section">
@@ -27884,7 +27956,7 @@ function _renderProjectionTopContenders(top, proj) {
               <div class="proj-contender-rank">${i + 1}</div>
               <div class="proj-contender-name-row">
                 <span class="proj-contender-car" style="background:${carHex};color:${txt}">${escapeHTML(String(d.car_number))}</span>
-                <a class="proj-contender-name profile-link" href="#/driver/${encodeURIComponent(d.slug)}">${escapeHTML(d.name)}</a>
+                ${carOnly ? "" : `<a class="proj-contender-name profile-link" href="#/driver/${encodeURIComponent(d.slug)}">${escapeHTML(d.name)}</a>`}
               </div>
               <div class="proj-contender-bigpct">${pct.toFixed(1)}<span class="proj-pct-symbol">%</span></div>
               <div class="proj-contender-sub">championship</div>
