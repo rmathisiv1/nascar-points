@@ -27197,8 +27197,6 @@ function _buildProjectionHTML(proj) {
     </div>
 
     <div class="proj-view proj-view-mfr" hidden>
-      ${_renderProjectionMfrContenders(proj, chaseTraces)}
-
       ${_renderProjectionMfrChart(proj, chaseTraces)}
 
       ${_renderProjectionMfrTable(proj, chaseTraces)}
@@ -27821,45 +27819,6 @@ function _champMapFromTraces(traces) {
   return m;
 }
 
-// Manufacturer "championship picture" — mirrors the driver contender cards but
-// for makes. % is the chance the champion comes from that manufacturer (sum of
-// its cars' mutually-exclusive championship probabilities).
-function _renderProjectionMfrContenders(proj, traces) {
-  const mfrs = _aggregateMfrProj(proj, _champMapFromTraces(traces))
-    .sort((a, b) => b.champ_pct_sum - a.champ_pct_sum);
-  if (!mfrs.length) return "";
-  return `
-    <section class="proj-section">
-      <div class="proj-section-head">
-        <div class="ed-kicker">manufacturer battle</div>
-        <h2 class="ed-hero ed-hero-sm">Championship picture</h2>
-      </div>
-      <div class="proj-contender-row">
-        ${mfrs.map((m, i) => {
-          const hex = _mfrColor(m.code);
-          const txt = contrastTextFor(hex);
-          const pct = m.champ_pct_sum * 100;
-          const isLeader = i === 0;
-          return `
-            <div class="proj-contender ${isLeader ? "proj-contender-leader" : ""}">
-              <div class="proj-contender-rank">${i + 1}</div>
-              <div class="proj-contender-name-row">
-                <span class="proj-contender-car" style="background:${hex};color:${txt}">${escapeHTML(m.code)}</span>
-                <span class="proj-contender-name">${escapeHTML(m.name)}</span>
-              </div>
-              <div class="proj-contender-bigpct">${pct.toFixed(1)}<span class="proj-pct-symbol">%</span></div>
-              <div class="proj-contender-sub">title from this make</div>
-              <div class="proj-contender-bar">
-                <div class="proj-contender-bar-fill" style="width:${Math.min(100, pct).toFixed(1)}%"></div>
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    </section>
-  `;
-}
-
 // Manufacturer projected-points bar chart — uses REAL NASCAR manufacturer
 // points (best finisher of each make per race, the same scale as the Standings →
 // Manufacturer page), so current totals match that page exactly. Solid = current,
@@ -27948,12 +27907,9 @@ function _renderProjectionMfrTable(proj, traces) {
             <th class="num">Mfr Pts</th>
             <th class="num">Proj Mfr Pts</th>
             <th class="num">Playoff Cars</th>
-            <th class="num">Champ %</th>
-            <th>Best Driver</th>
           </tr></thead>
           <tbody>
             ${sorted.map((m, i) => {
-              const champPct = (m.champ_pct_sum * 100);
               return `<tr>
                 <td class="num">${i + 1}</td>
                 <td>${escapeHTML(m.name)}</td>
@@ -27962,8 +27918,6 @@ function _renderProjectionMfrTable(proj, traces) {
                 <td class="num">${m.mfr_pts_current.toLocaleString()}</td>
                 <td class="num">${m.mfr_pts_proj.toLocaleString()}</td>
                 <td class="num">${m.playoff_cars}</td>
-                <td class="num">${champPct > 0 ? champPct.toFixed(1) + "%" : "—"}</td>
-                <td>${m.best_driver ? escapeHTML(m.best_driver) : "—"}</td>
               </tr>`;
             }).join("")}
           </tbody>
