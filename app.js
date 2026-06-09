@@ -13355,8 +13355,9 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 22;  // v22: drafting-track prediction uses plate-specific history only
-                            // (no overall form leak) — re-freeze chase_preds
+  const PROJ_VERSION = 23;  // v23: project by per-driver eligible starts (exclude part-timers);
+                            // manufacturer view uses real NASCAR mfr scale (matches Standings page)
+                            // v22: drafting-track prediction uses plate-specific history only
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
   // Check in-memory cache first
@@ -13420,10 +13421,28 @@ function simulateSeasonRollout(series, year, opts = {}) {
   const lastCompletedRound = completedRaces.length ? completedRaces[completedRaces.length - 1].round : 0;
   const driverStandingsMap = driverPointsMapThroughRound(lastCompletedRound);
 
+  // Per-DRIVER eligible start counts (summed across every car they drove). The
+  // entity filter above is car-centric, so a full-time CAR with a part-time
+  // representative driver (e.g. a Cup regular running a handful of Trucks races,
+  // or any one-off/relief driver who happens to be a car's most-recent pilot)
+  // would otherwise be projected as if that driver runs the rest of the season —
+  // wrong: part-timers aren't championship-eligible and shouldn't appear in the
+  // season projection in any series. Require the driver THEMSELVES to have run
+  // enough races, using the same (completed − 3) tolerance.
+  const driverStartCounts = new Map();
+  completedRaces.forEach(r => (r.results || []).forEach(d => {
+    if (d.ineligible) return;                 // crossover/ineligible starts don't count toward eligibility
+    const k = normalizeDriverName(d.driver || "");
+    if (!k) return;
+    driverStartCounts.set(k, (driverStartCounts.get(k) || 0) + 1);
+  }));
+
   let drivers = fullTimeEntities.map(e => {
     const name = e.primaryDriver || e.driver;
     if (!name) return null;
     const driverKey = normalizeDriverName(name);
+    // Drop part-time drivers — only project full-season championship contenders.
+    if ((driverStartCounts.get(driverKey) || 0) < projMinRaces) return null;
     const driverEntry = driverStandingsMap.get(driverKey);
     const currentPts = driverEntry ? (driverEntry.total || 0) : 0;
     const currentWins = driverEntry ? (driverEntry.wins || 0) : 0;
@@ -27763,9 +27782,28 @@ function _aggregateMfrProj(proj, champBySlug) {
   });
 
   const list = Array.from(mfrs.values());
+
+  // Real NASCAR manufacturer points (best finisher of each make per race, 2014+
+  // scale) — the SAME computation the Standings → Manufacturer page uses, so the
+  // current totals match it exactly. Project forward by each make's current
+  // points-per-race rate (the manufacturer championship runs every race with no
+  // reset). Keyed by raw manufacturer code (TYT/CHV/FRD), which matches d.manufacturer.
+  let realByCode = new Map();
+  try {
+    realByCode = new Map(
+      manufacturerStandingsThroughRound(999999).map(m => [m.manufacturer, m])
+    );
+  } catch (_) { /* standings fn unavailable — fall back to 0 below */ }
+  const completed = proj.completed_races || 0;
+  const totalRaces = completed + (proj.remaining_races || 0);
   list.forEach(m => {
     m.avg_proj_pts = m.cars.length ? Math.round(m.total_proj_pts / m.cars.length) : 0;
     m.avg_current_pts = m.cars.length ? Math.round(m.total_current_pts / m.cars.length) : 0;
+    const real = realByCode.get(m.code);
+    m.mfr_pts_current = real ? Math.round(real.total) : 0;
+    m.mfr_pts_proj = completed > 0
+      ? Math.round(m.mfr_pts_current * (totalRaces / completed))
+      : m.mfr_pts_current;
   });
   return list;
 }
@@ -27820,15 +27858,14 @@ function _renderProjectionMfrContenders(proj, traces) {
   `;
 }
 
-// Manufacturer projected-points bar chart — bars are AVERAGE projected points
-// per car (not summed: summed just rewards whoever fields the most cars). Solid
-// = current avg, light = projected avg. Sorted by projected avg, same as the
-// standings table below, so the chart and table agree. (The cards above rank by
-// title odds — a separate stat, exactly like the driver view's champ% cards vs
-// its points-standings chart.)
+// Manufacturer projected-points bar chart — uses REAL NASCAR manufacturer
+// points (best finisher of each make per race, the same scale as the Standings →
+// Manufacturer page), so current totals match that page exactly. Solid = current,
+// light = projected full season (current rate × all races; the manufacturer
+// title runs every race with no reset). Sorted by projected, same as the table.
 function _renderProjectionMfrChart(proj, traces) {
   const mfrs = _aggregateMfrProj(proj, _champMapFromTraces(traces))
-    .sort((a, b) => b.avg_proj_pts - a.avg_proj_pts);
+    .sort((a, b) => b.mfr_pts_proj - a.mfr_pts_proj);
   if (!mfrs.length) return "";
 
   const barH = 30;
@@ -27837,13 +27874,13 @@ function _renderProjectionMfrChart(proj, traces) {
   const rightPad = 150;
   const chartW = 920;
   const chartH = mfrs.length * (barH + gap) + 30;
-  const maxPts = Math.max(...mfrs.map(m => m.avg_proj_pts), 1);
+  const maxPts = Math.max(...mfrs.map(m => m.mfr_pts_proj), 1);
 
   const bars = mfrs.map((m, i) => {
     const y = i * (barH + gap) + 15;
     const hex = _mfrColor(m.code);
-    const fullBarW = Math.max((m.avg_proj_pts / maxPts) * (chartW - leftPad - rightPad), 2);
-    const curBarW = Math.max((m.avg_current_pts / maxPts) * (chartW - leftPad - rightPad), 2);
+    const fullBarW = Math.max((m.mfr_pts_proj / maxPts) * (chartW - leftPad - rightPad), 2);
+    const curBarW = Math.max((m.mfr_pts_current / maxPts) * (chartW - leftPad - rightPad), 2);
 
     return `
       <g>
@@ -27860,12 +27897,12 @@ function _renderProjectionMfrChart(proj, traces) {
         <rect x="${leftPad}" y="${y}" width="${curBarW}" height="${barH}" rx="3" fill="${hex}" fill-opacity="0.85"/>
         <rect x="${leftPad}" y="${y}" width="4" height="${barH}" rx="1" fill="${hex}"/>
         <text x="${leftPad + 10}" y="${y + barH / 2 + 4}"
-              style="font-family:var(--mono);font-size:10px;fill:var(--text);opacity:0.85;">
-          ${m.avg_current_pts.toLocaleString()}
+              style="font-family:var(--mono);font-size:10px;fill:var(--text);opacity:0.9;">
+          ${m.mfr_pts_current.toLocaleString()}
         </text>
         <text x="${leftPad + fullBarW + 8}" y="${y + barH / 2 + 4}"
               style="font-family:var(--mono);font-size:11px;fill:var(--muted);">
-          ${m.avg_proj_pts.toLocaleString()} avg pts · ${m.cars.length} cars
+          ${m.mfr_pts_proj.toLocaleString()} proj pts
         </text>
       </g>
     `;
@@ -27876,7 +27913,7 @@ function _renderProjectionMfrChart(proj, traces) {
       <div class="proj-section-head">
         <div class="ed-kicker">manufacturer battle</div>
         <h2 class="ed-hero ed-hero-sm">Projected manufacturer points</h2>
-        <div class="ed-byline">Average projected points per car · solid = current, light = projected</div>
+        <div class="ed-byline">NASCAR manufacturer scale (best finisher each race) · solid = current, light = projected full season</div>
       </div>
       <div class="proj-chart-host" style="overflow-x:auto;">
         <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;max-width:${chartW}px;height:auto;display:block;">
@@ -27891,7 +27928,7 @@ function _renderProjectionMfrChart(proj, traces) {
 // Shows projected wins, top 5s, avg projected finish, playoff representation.
 function _renderProjectionMfrTable(proj, traces) {
   const sorted = _aggregateMfrProj(proj, _champMapFromTraces(traces))
-    .sort((a, b) => b.avg_proj_pts - a.avg_proj_pts);
+    .sort((a, b) => b.mfr_pts_proj - a.mfr_pts_proj);
 
   return `
     <section class="proj-section">
@@ -27906,9 +27943,8 @@ function _renderProjectionMfrTable(proj, traces) {
             <th>Manufacturer</th>
             <th class="num">Cars</th>
             <th class="num">Current Wins</th>
-            <th class="num">Proj Wins</th>
-            <th class="num">Proj Top 5</th>
-            <th class="num">Avg Proj Pts</th>
+            <th class="num">Mfr Pts</th>
+            <th class="num">Proj Mfr Pts</th>
             <th class="num">Playoff Cars</th>
             <th class="num">Champ %</th>
             <th>Best Driver</th>
@@ -27921,9 +27957,8 @@ function _renderProjectionMfrTable(proj, traces) {
                 <td>${escapeHTML(m.name)}</td>
                 <td class="num">${m.cars.length}</td>
                 <td class="num">${m.total_current_wins}</td>
-                <td class="num">${m.total_proj_wins}</td>
-                <td class="num">${m.total_proj_top5}</td>
-                <td class="num">${m.avg_proj_pts.toLocaleString()}</td>
+                <td class="num">${m.mfr_pts_current.toLocaleString()}</td>
+                <td class="num">${m.mfr_pts_proj.toLocaleString()}</td>
                 <td class="num">${m.playoff_cars}</td>
                 <td class="num">${champPct > 0 ? champPct.toFixed(1) + "%" : "—"}</td>
                 <td>${m.best_driver ? escapeHTML(m.best_driver) : "—"}</td>
