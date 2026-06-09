@@ -27072,6 +27072,35 @@ function _wireProjectionChartTooltips(host) {
   });
 }
 
+// Owner-point projection: same projection, re-based onto OWNER points.
+// NASCAR owner points accrue to the CAR (all drivers who run it, including
+// ineligible crossovers) and so the to-date baseline differs from driver
+// points. Future races accrue identically for the car (same entry/driver we're
+// projecting), so the only difference is the baseline: shift current_pts to the
+// car's owner total and add the SAME projected race gain on top. Everything else
+// (playoff %, championship %, projected wins) is the same competition. Result is
+// cached on proj so the owner view's chart + table don't recompute it.
+function _ownerizeProj(proj) {
+  if (proj._ownerized) return proj._ownerized;
+  let ownerMap = null;
+  try { ownerMap = pointsMapThroughRound(999999); } catch (_) { ownerMap = null; }
+  const drivers = proj.drivers.map(d => {
+    const o = ownerMap && ownerMap.get(`#${d.car_number}`);
+    const driverCur = d.current_pts || 0;
+    const ownerCur = o ? (o.total || 0) : driverCur;
+    const driverProj = d.projected_reg_total != null ? d.projected_reg_total : driverCur;
+    const gain = driverProj - driverCur;            // future race points (identical for the car)
+    return {
+      ...d,
+      current_pts: ownerCur,
+      current_wins: o ? (o.wins || 0) : d.current_wins,
+      projected_reg_total: ownerCur + gain,
+    };
+  });
+  proj._ownerized = { ...proj, drivers };
+  return proj._ownerized;
+}
+
 function _buildProjectionHTML(proj) {
   if (proj.season_over) {
     return `
@@ -27134,9 +27163,9 @@ function _buildProjectionHTML(proj) {
     <div class="proj-view proj-view-owner" hidden>
       ${_renderProjectionTopContenders(topContenders, proj)}
 
-      ${_renderProjectionChart(proj)}
+      ${_renderProjectionChart(_ownerizeProj(proj))}
 
-      ${_renderProjectionOwnerTable(proj)}
+      ${_renderProjectionOwnerTable(_ownerizeProj(proj))}
 
       ${chaseTraces.length > 0
         ? _renderProjectionChaseChart(chaseDrivers, proj, chaseTraces)
@@ -27145,11 +27174,11 @@ function _buildProjectionHTML(proj) {
     </div>
 
     <div class="proj-view proj-view-mfr" hidden>
-      ${_renderProjectionMfrContenders(proj)}
+      ${_renderProjectionMfrContenders(proj, chaseTraces)}
 
-      ${_renderProjectionMfrChart(proj)}
+      ${_renderProjectionMfrChart(proj, chaseTraces)}
 
-      ${_renderProjectionMfrTable(proj)}
+      ${_renderProjectionMfrTable(proj, chaseTraces)}
     </div>
   `;
 }
@@ -27683,8 +27712,13 @@ function _mfrColor(code) { return _MFR_HEX[code] || "#888888"; }
 
 // Shared manufacturer aggregation — used by the contenders, chart, and table
 // so all three agree. Aggregates each car (driver) up to its manufacturer.
-function _aggregateMfrProj(proj) {
+// champBySlug (optional): slug -> derived championship probability from the
+// chase traces. When provided, manufacturer champ% uses the SAME numbers as the
+// driver contender cards (softmax-derived), so the two views reconcile. Drivers
+// outside the chase field have no trace and contribute 0 (they can't win).
+function _aggregateMfrProj(proj, champBySlug) {
   const fieldSize = proj.rule.field || 16;
+  const champOf = d => champBySlug ? (champBySlug.get(d.slug) || 0) : (d.championship_pct || 0);
   const allSorted = proj.drivers.slice().sort((a, b) =>
     (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
   );
@@ -27714,17 +27748,18 @@ function _aggregateMfrProj(proj) {
       });
     }
     const m = mfrs.get(code);
+    const dChamp = champOf(d);
     m.cars.push(d);
     m.total_proj_pts += Math.round(d.projected_reg_total || d.current_pts || 0);
     m.total_current_pts += (d.current_pts || 0);
     m.total_proj_wins += Math.round(d.projected_wins || 0);
     m.total_current_wins += (d.current_wins || 0);
     m.total_proj_top5 += Math.round(d.projected_top5 || 0);
-    m.champ_pct_sum += (d.championship_pct || 0);
+    m.champ_pct_sum += dChamp;
     const rank = rankMap.get(d);
     if (rank != null && rank < fieldSize) m.playoff_cars++;
-    if ((d.championship_pct || 0) > m.best_driver_pct) {
-      m.best_driver_pct = d.championship_pct || 0;
+    if (dChamp > m.best_driver_pct) {
+      m.best_driver_pct = dChamp;
       m.best_driver = d.name;
       m.best_driver_car = d.car_number;
     }
@@ -27737,11 +27772,19 @@ function _aggregateMfrProj(proj) {
   return list;
 }
 
+// slug -> derived championship probability, taken from the chase traces so the
+// manufacturer views match the driver contender cards exactly.
+function _champMapFromTraces(traces) {
+  const m = new Map();
+  (traces || []).forEach(t => m.set(t.slug, t.champPct || 0));
+  return m;
+}
+
 // Manufacturer "championship picture" — mirrors the driver contender cards but
 // for makes. % is the chance the champion comes from that manufacturer (sum of
 // its cars' mutually-exclusive championship probabilities).
-function _renderProjectionMfrContenders(proj) {
-  const mfrs = _aggregateMfrProj(proj)
+function _renderProjectionMfrContenders(proj, traces) {
+  const mfrs = _aggregateMfrProj(proj, _champMapFromTraces(traces))
     .sort((a, b) => b.champ_pct_sum - a.champ_pct_sum);
   if (!mfrs.length) return "";
   return `
@@ -27782,8 +27825,8 @@ function _renderProjectionMfrContenders(proj) {
 // Manufacturer projected-points bar chart — mirrors the driver standings chart
 // but bars are total projected points across all of a make's cars. No playoff
 // cutline (manufacturers don't have a field cutoff).
-function _renderProjectionMfrChart(proj) {
-  const mfrs = _aggregateMfrProj(proj)
+function _renderProjectionMfrChart(proj, traces) {
+  const mfrs = _aggregateMfrProj(proj, _champMapFromTraces(traces))
     .sort((a, b) => b.total_proj_pts - a.total_proj_pts);
   if (!mfrs.length) return "";
 
@@ -27863,8 +27906,9 @@ function _renderProjectionMfrChart(proj) {
 
 // Manufacturer projection table — aggregates by manufacturer code.
 // Shows projected wins, top 5s, avg projected finish, playoff representation.
-function _renderProjectionMfrTable(proj) {
-  const sorted = _aggregateMfrProj(proj).sort((a, b) => b.total_proj_wins - a.total_proj_wins);
+function _renderProjectionMfrTable(proj, traces) {
+  const sorted = _aggregateMfrProj(proj, _champMapFromTraces(traces))
+    .sort((a, b) => b.champ_pct_sum - a.champ_pct_sum);
 
   return `
     <section class="proj-section">

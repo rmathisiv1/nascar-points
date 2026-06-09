@@ -161,8 +161,8 @@ disabled `update-points.yml` + `scrape_drivers.py` + `backfill_crew_chiefs.py`.
 ## BACKLOG (deferred — not started)
 
 Prediction view:
-- Remove projected wins / projected top-5s from the chase projection (too confusing).
-- Owner / manufacturer projection views.
+- ~~Remove projected wins / projected top-5s from the chase projection (too confusing).~~ DONE — dropped from driver + owner reg-season tables.
+- ~~Owner / manufacturer projection views.~~ DONE — owner view mirrors the driver view but on OWNER points (baseline from `pointsMapThroughRound`, future gain added on top); mfr view = championship-picture cards + projected-points bar chart + table, champ% derived from the same chase traces as the driver cards (so they reconcile). Mfr chart sorts by total points (more cars = more points, labeled as such); cards + table sort by champ%.
 
 Driver Compare:
 - Total vs per-race average toggle.
@@ -191,6 +191,40 @@ Data:
 - Spider chart season/career toggle; teammate wins/weekends toggle.
 
 ---
+
+## FUTURE: PROD + DEV (STAGING) SETUP — if/when a custom domain is bought
+
+Goal: a public "prod" site on the custom domain plus an identical "dev" site we
+push experiments to first, so prod can't break by accident. Three routes, in
+increasing capability (current host is GitHub Pages, deploy = GitHub Desktop push):
+
+1. **Second repo (least disruptive, works today).** Create `nascar-points-dev`
+   alongside `nascar-points`. Prod gets the custom domain; dev stays on the
+   `rmathisiv1.github.io/nascar-points-dev` URL. Push to dev, eyeball the live dev
+   URL, then copy proven files into the prod repo and push. Two repo folders in
+   GitHub Desktop, same workflow.
+   - **Gotcha (important for THIS app):** the six Actions workflows write
+     `data/*.json` into the repo, and they'd only run in prod → dev data goes
+     stale. Fix: in the DEV copy of `app.js`, fetch `data/*.json` from the PROD
+     URL (absolute, e.g. `https://<prod-domain>/data/points_2026.json?v=...`)
+     instead of relative paths. Dev then always shows live data and we don't
+     duplicate scrapers or double the Actions minutes — dev becomes a pure code
+     sandbox. (All data fetches are already cache-busted with `?v=Date.now()`.)
+
+2. **Cloudflare Pages / Netlify (best long-term).** Move hosting off GitHub Pages
+   (still backed by the same GitHub repo, free tier is plenty). Both auto-build
+   EVERY branch + pull request and hand back a preview URL: `main` → custom domain,
+   a `dev` branch → `dev.<domain>`, any PR → a throwaway preview link. This is the
+   real staging setup — no second repo, no manual file copying, branch previews
+   mean prod basically can't break by accident. ~30 min of one-time wiring.
+
+3. **Local preview (fastest loop, not shareable).** Before any push, run the repo
+   folder with `python -m http.server 8000` and open `localhost:8000`. Instant, no
+   cache games, no deploy wait — great for catching obvious breaks pre-push.
+
+Recommendation: route 1 today if minimizing change; route 2 (Cloudflare Pages) if
+willing to migrate hosting once. Either way the data-fetch absolute-URL note in
+route 1 is the thing that would actually bite this app.
 
 ## WATCH-OUTS
 - CSS "didn't take" → cache (hard-refresh) / `!important` / wrong media query.
