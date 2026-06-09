@@ -2489,6 +2489,7 @@ async function loadCurrentData() {
   }
   if (payload.series) {
     _normalizeTrackCodes(payload.series, year);
+    _sanitizePlaceholderResults(payload.series);
     SEASON_CACHE[year] = payload.series;
   }
   STATE.data = seriesBlock;
@@ -2537,6 +2538,33 @@ function scheduleLengthForSeries(series) {
 // Keyed by year → { [seriesCode]: seriesBlock }
 // ============================================================
 const SEASON_CACHE = {};
+
+// Guard against placeholder result rows. Some feeds (notably NASCAR's
+// weekend-feed) publish a race's ENTRY LIST in `results` — every driver at
+// finish_pos 0 — BEFORE the race runs. Such a set has no winner, so we treat
+// it as not-yet-run: clear `results` (and any stray post-race summary fields)
+// so the race reads as upcoming and those zeros never reach the "completed"
+// check, power rankings, averages, or storylines. Runs at load time on the
+// whole series block, before any analytics or rendering touch the data.
+function _sanitizePlaceholderResults(seriesBlock) {
+  if (!seriesBlock || typeof seriesBlock !== "object") return;
+  const SUMMARY = ["race_time", "avg_speed", "pole_speed", "margin_of_victory", "lead_changes", "cautions"];
+  let cleared = 0;
+  for (const code of Object.keys(seriesBlock)) {
+    const races = seriesBlock[code] && seriesBlock[code].races;
+    if (!Array.isArray(races)) continue;
+    for (const race of races) {
+      const res = race && race.results;
+      if (Array.isArray(res) && res.length &&
+          !res.some(d => d && Number(d.finish_pos) === 1)) {
+        race.results = [];
+        for (const k of SUMMARY) if (k in race) delete race[k];
+        cleared++;
+      }
+    }
+  }
+  if (cleared) console.warn(`sanitized ${cleared} race(s) with placeholder (winner-less) results`);
+}
 
 // Track code normalization — fixes cases where Racing Reference reuses
 // the same track code for physically different tracks across eras.
@@ -2788,6 +2816,7 @@ async function loadSeasonIntoCache(year) {
       // across eras. Must run BEFORE any analytics or rendering touches
       // this data so every downstream consumer sees the corrected codes.
       _normalizeTrackCodes(SEASON_CACHE[year], year);
+      _sanitizePlaceholderResults(SEASON_CACHE[year]);
       // Invalidate the cross-season driver analytics cache — its
       // per-(driver, series) and per-(driver, series, trackCode)
       // entries were built from a partial SEASON_CACHE and would now
@@ -15435,9 +15464,22 @@ function renderHomeStorylines(year, series) {
     });
   });
 
-  // Pick up to N from each bucket, shuffled within the bucket so the
-  // selection varies each render. Then combine + shuffle the final mix.
-  const shuffled = (arr) => arr.slice().sort(() => Math.random() - 0.5);
+  // Pick up to N from each bucket. The selection used to reshuffle with
+  // Math.random() on every render — but the home page re-renders several
+  // times as background seasons load, so the tiles churned and never settled.
+  // Seed a deterministic shuffle from the season + number of completed races
+  // so the mix is STABLE across re-renders yet still rotates week to week.
+  let _slRng = (year * 131 + (STATE.data?.races || [])
+    .filter(r => (r.results || []).some(d => d && Number(d.finish_pos) === 1)).length) >>> 0 || 1;
+  const _slRand = () => { _slRng = (_slRng * 1664525 + 1013904223) >>> 0; return _slRng / 4294967296; };
+  const shuffled = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(_slRand() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
   const picked = [];
   ["NCS", "NOS", "NTS", "CC"].forEach(bk => {
     picked.push(...shuffled(buckets[bk]).slice(0, QUOTA[bk]));
