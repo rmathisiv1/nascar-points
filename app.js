@@ -5542,10 +5542,15 @@ async function loadEntryList() {
           // Raw American top-5 odds (e.g. +450, -160), shown exactly as posted
           // when present (preferred over the implied-prob round-trip).
           top5_odds: typeof e.top5_odds === "number" ? e.top5_odds : null,
-          // Car number from the entry source (the Jayski fallback supplies this;
-          // the odds feed does not). When present, used for display so a one-off
-          // sub shows in the car they're actually entered in.
+          // Car number from the entry source. NASCAR's weekend-feed now supplies
+          // this for every series (the odds feed never did); used for display so
+          // a one-off sub shows in the car they're actually entered in.
           car: e.car != null ? String(e.car) : null,
+          // NASCAR-native entry metadata (weekend-feed). Carried through for use
+          // by the entry/prediction board and future features.
+          team: e.team != null ? String(e.team) : null,
+          manufacturer: e.manufacturer != null ? String(e.manufacturer) : null,
+          crew_chief: e.crew_chief != null ? String(e.crew_chief) : null,
         }))
         .filter(e => e.driver);
       if (!list.length) continue;
