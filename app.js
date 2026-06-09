@@ -9758,14 +9758,28 @@ function countTeamChampionships(teamCode) {
 // loaded seasons, so each table row is a cheap lookup instead of re-walking the
 // cache. Key per stateKey: drivers -> driver slug; teams -> team_code of the
 // champion's dominant car; crewchiefs -> slug of the champion's dominant CC.
-function _buildChampIndex(stateKey) {
+// Honors the SAME series + generation filters as every other column (via the
+// passed table state), so e.g. the NOS view doesn't credit a driver's Cup
+// titles. Mirrors foldRecordByFilters: series filter always applies; the
+// generation filter applies only on NCS (the older eras had no NOS/NTS).
+function _buildChampIndex(stateKey, st) {
+  const seriesFilter = st && st.series;
+  const gens = st && st.gens;
+  const applyGens = seriesFilter === "NCS";
+  const inSelectedGens = (year) => {
+    if (!applyGens || !gens || gens.size === 0) return true;
+    return NASCAR_GENERATIONS.some(g =>
+      gens.has(g.id) && year >= g.year_start && year <= g.year_end);
+  };
   const idx = new Map();
   const bump = (k) => { if (k != null && k !== "") idx.set(k, (idx.get(k) || 0) + 1); };
   const seriesList = ["NCS", "NOS", "NTS"];
   Object.keys(SEASON_CACHE).map(Number).forEach(year => {
     const blocks = SEASON_CACHE[year];
     if (!blocks) return;
+    if (!inSelectedGens(year)) return;
     seriesList.forEach(sCode => {
+      if (seriesFilter && seriesFilter !== "all" && sCode !== seriesFilter) return;
       const block = blocks[sCode];
       const champ = block && block.final_standings && block.final_standings[0];
       if (!champ || !champ.driver) return;
@@ -24840,7 +24854,7 @@ function renderAllTimeTable(rawRecs, linkBuilder, stateKey, pageLabel) {
   const st = ALLTIME_STATE[stateKey];
   const search = (st.search || "").trim().toLowerCase();
   const currentSeason = (STATE.seasonsAvailable && STATE.seasonsAvailable[0]) || STATE.season;
-  const champIndex = _buildChampIndex(stateKey);
+  const champIndex = _buildChampIndex(stateKey, st);
 
   // Fold each record by active filters; drop those with no matching years
   let visible = rawRecs.map(rec => {
