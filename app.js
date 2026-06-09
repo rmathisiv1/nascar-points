@@ -5614,9 +5614,13 @@ function getRaceDocs(year, series, race) {
 // once it renders. Returns "" when we have no entry doc for the race.
 function entryListLink(race, series, compact) {
   const s = series || STATE.series;
+  // Prefer the NASCAR-native entry list (data/entry_list.json) for this race's
+  // track; fall back to the older Jayski entry doc if that's all we have.
+  const hasNative = (typeof getEntryList === "function") &&
+    ((getEntryList(s, race && race.track_code) || []).length > 0);
   const rec = getRaceDocs(STATE.season, s, race);
-  const hasEntry = rec && rec.docs && rec.docs.entry && Array.isArray(rec.docs.entry.rows) && rec.docs.entry.rows.length;
-  if (!hasEntry) return "";
+  const hasDoc = rec && rec.docs && rec.docs.entry && Array.isArray(rec.docs.entry.rows) && rec.docs.entry.rows.length;
+  if (!hasNative && !hasDoc) return "";
   const label = compact ? "Entry list →" : "View entry list →";
   if (STATE.view === "race") {
     return `<a class="entry-list-link" href="#" onclick="selectRaceTab('entry');return false;">${label}</a>`;
@@ -22055,7 +22059,7 @@ function _renderRaceCenterImpl() {
 
   const tabs = [{ key: "overview", label: "Overview", html: overviewHTML }];
   if (entryListCard) {
-    tabs.push({ key: "entrylist", label: "Entry List", html: entryListCard });
+    tabs.push({ key: "entry", label: "Entry List", html: entryListCard });
   }
   if (sessionsHTML) {
     tabs.push({ key: "results", label: isUpcoming ? "Sessions" : "Race Results", html: sessionsHTML });
