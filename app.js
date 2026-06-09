@@ -27120,7 +27120,54 @@ function _ownerizeProj(proj) {
       projected_reg_total: ownerCur + gain,
     };
   });
-  proj._ownerized = { ...proj, drivers };
+
+  // Re-add full-time CARS the driver field dropped because they have no single
+  // regular driver — a full-time car shared by multiple drivers (e.g. the #1
+  // truck). They belong in OWNER standings: owner points accrue to the car no
+  // matter who drives it. They weren't Monte-Carlo simulated (no clear driver to
+  // predict), so project their owner points forward at the car's current
+  // per-race rate (the car runs every remaining race) and give a simple in/out
+  // playoff estimate by projected rank below.
+  const completed = proj.completed_races || 0;
+  const remaining = proj.remaining_races || 0;
+  const have = new Set(drivers.map(d => String(d.car_number)));
+  let added = [];
+  try {
+    const threshold = Math.max(1, completed - 3);
+    allEntities().forEach(e => {
+      const carStarts = e.totalStarts || (e.races ? e.races.length : 0);
+      if (carStarts < threshold) return;            // not a full-time car
+      if (have.has(String(e.car_number))) return;   // already represented by its regular driver
+      const o = ownerMap && ownerMap.get(`#${e.car_number}`);
+      const cur = o ? (o.total || 0) : 0;
+      const rate = completed > 0 ? cur / completed : 0;
+      added.push({
+        slug: `car-${e.car_number}`,
+        name: `#${e.car_number}`,
+        car_number: e.car_number,
+        team_code: e.team_code,
+        manufacturer: e.manufacturer,
+        current_pts: cur,
+        current_wins: o ? (o.wins || 0) : 0,
+        current_top5: 0,
+        playoff_pct: 0,                             // set just below from projected rank
+        championship_pct: 0,
+        projected_reg_total: Math.round(cur + rate * remaining),
+        shared_ride: true,
+      });
+    });
+  } catch (_) { added = []; }
+
+  const all = drivers.concat(added);
+  if (added.length) {
+    const fieldSize = (proj.rule && proj.rule.field) || 16;
+    const ranked = all.slice().sort((a, b) =>
+      (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
+    );
+    ranked.forEach((d, i) => { if (d.shared_ride) d.playoff_pct = i < fieldSize ? 1 : 0; });
+  }
+
+  proj._ownerized = { ...proj, drivers: all };
   return proj._ownerized;
 }
 
