@@ -13355,8 +13355,9 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 23;  // v23: project by per-driver eligible starts (exclude part-timers);
-                            // manufacturer view uses real NASCAR mfr scale (matches Standings page)
+  const PROJ_VERSION = 24;  // v24: project each full-time car's PREDOMINANT (regular) driver, ≥50%
+                            // of the car's starts — keeps injured full-timers (Bowman/Crews),
+                            // excludes part-time fill-ins (Heim). Mfr view uses real NASCAR mfr scale.
                             // v22: drafting-track prediction uses plate-specific history only
   const cacheKey = `${series}|${year}|${nSims}|${completedCount}|v${PROJ_VERSION}`;
 
@@ -13425,24 +13426,26 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // entity filter above is car-centric, so a full-time CAR with a part-time
   // representative driver (e.g. a Cup regular running a handful of Trucks races,
   // or any one-off/relief driver who happens to be a car's most-recent pilot)
-  // would otherwise be projected as if that driver runs the rest of the season —
-  // wrong: part-timers aren't championship-eligible and shouldn't appear in the
-  // season projection in any series. Require the driver THEMSELVES to have run
-  // enough races, using the same (completed − 3) tolerance.
-  const driverStartCounts = new Map();
-  completedRaces.forEach(r => (r.results || []).forEach(d => {
-    if (d.ineligible) return;                 // crossover/ineligible starts don't count toward eligibility
-    const k = normalizeDriverName(d.driver || "");
-    if (!k) return;
-    driverStartCounts.set(k, (driverStartCounts.get(k) || 0) + 1);
-  }));
-
+  // A full-time CAR is projectable, but it must be attributed to its REGULAR
+  // driver — the predominant driver (most starts), NOT the car's most-recent
+  // pilot. This is the key distinction:
+  //   • An injured/absent full-timer (Alex Bowman #48, Brent Crews #19) is still
+  //     the predominant driver of their car — relief drivers only split the few
+  //     races they missed — so they stay in the projection even after missing
+  //     several races. (Using "most-recent driver" would wrongly swap them out
+  //     for whoever happened to drive last.)
+  //   • A part-timer who shares a ride / drops in occasionally (e.g. Corey Heim
+  //     running a handful of NTS races) is never the majority driver of a
+  //     full-time car, so the majority-share guard below excludes them.
   let drivers = fullTimeEntities.map(e => {
-    const name = e.primaryDriver || e.driver;
+    const predom = (e.driversByStarts && e.driversByStarts[0]) || null;
+    const name = predom ? predom.name : (e.predominantDriver || e.driver);
     if (!name) return null;
+    // Regular driver must hold at least half of the car's starts — keeps injured
+    // full-timers, drops part-time fill-ins and true rotating rides.
+    const carStarts = e.totalStarts || (e.races ? e.races.length : 0) || 1;
+    if (predom && predom.starts < 0.5 * carStarts) return null;
     const driverKey = normalizeDriverName(name);
-    // Drop part-time drivers — only project full-season championship contenders.
-    if ((driverStartCounts.get(driverKey) || 0) < projMinRaces) return null;
     const driverEntry = driverStandingsMap.get(driverKey);
     const currentPts = driverEntry ? (driverEntry.total || 0) : 0;
     const currentWins = driverEntry ? (driverEntry.wins || 0) : 0;
