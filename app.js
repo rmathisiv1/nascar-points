@@ -27129,7 +27129,6 @@ function _ownerizeProj(proj) {
   // per-race rate (the car runs every remaining race) and give a simple in/out
   // playoff estimate by projected rank below.
   const completed = proj.completed_races || 0;
-  const remaining = proj.remaining_races || 0;
   const have = new Set(drivers.map(d => String(d.car_number)));
   let added = [];
   try {
@@ -27140,7 +27139,6 @@ function _ownerizeProj(proj) {
       if (have.has(String(e.car_number))) return;   // already represented by its regular driver
       const o = ownerMap && ownerMap.get(`#${e.car_number}`);
       const cur = o ? (o.total || 0) : 0;
-      const rate = completed > 0 ? cur / completed : 0;
       added.push({
         slug: `car-${e.car_number}`,
         name: `#${e.car_number}`,
@@ -27152,11 +27150,28 @@ function _ownerizeProj(proj) {
         current_top5: 0,
         playoff_pct: 0,                             // set just below from projected rank
         championship_pct: 0,
-        projected_reg_total: Math.round(cur + rate * remaining),
+        projected_reg_total: cur,                   // gain filled in below
         shared_ride: true,
       });
     });
   } catch (_) { added = []; }
+
+  // Project each re-added car CONSISTENTLY with the simulated field: borrow the
+  // projected regular-season GAIN from the simulated car whose current owner
+  // points are closest. (A raw rate extrapolation over all remaining races
+  // double-counts the chase and skips the sim's regression, which made these
+  // cars rocket past the real leaders.)
+  if (added.length && drivers.length) {
+    added.forEach(a => {
+      let best = null, bestDiff = Infinity;
+      for (const d of drivers) {
+        const diff = Math.abs((d.current_pts || 0) - a.current_pts);
+        if (diff < bestDiff) { bestDiff = diff; best = d; }
+      }
+      const gain = best ? ((best.projected_reg_total || best.current_pts || 0) - (best.current_pts || 0)) : 0;
+      a.projected_reg_total = Math.round(a.current_pts + gain);
+    });
+  }
 
   const all = drivers.concat(added);
   if (added.length) {
