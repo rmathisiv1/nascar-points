@@ -21164,21 +21164,55 @@ function _schedSeriesTag(code) {
   if (c) return `<span class="rsch-tag" style="color:${c}; border-color:${c};">${escapeHTML(code)}</span>`;
   return `<span class="rsch-tag rsch-tag-alt">${escapeHTML(code)}</span>`;
 }
+// Compact "Session Times" card for the race overview: each national series
+// (NCS / NOS / NTS) entered that weekend with its Practice / Qualifying / Race
+// start time. Drawn from the matched schedule.json event; renders nothing when
+// there's no match or no national series present.
+function _raceSessionTimesCard(race) {
+  const ev = (typeof scheduleForRace === "function") ? scheduleForRace(race, STATE.series) : null;
+  if (!ev || !Array.isArray(ev.sessions) || !ev.sessions.length) return "";
+  const ORDER = ["NCS", "NOS", "NTS"];
+  const present = ORDER.filter(code => ev.sessions.some(s => (s.series || []).includes(code)));
+  if (!present.length) return "";
+  const pick = (code, type) => {
+    if (type === "practice")
+      return ev.sessions.find(s => (s.type === "practice" || s.type === "final-practice") && (s.series || []).includes(code));
+    return ev.sessions.find(s => s.type === type && (s.series || []).includes(code));
+  };
+  const LINES = [["Practice", "practice"], ["Qualifying", "qualifying"], ["Race", "race"]];
+  const blocks = present.map(code => {
+    const rows = LINES.map(([label, type]) => {
+      const s = pick(code, type);
+      const t = s ? _sessDayTime(s) : "—";
+      return `<div class="rcx-st-row"><span class="rcx-st-k">${label}</span><span class="rcx-st-v">${escapeHTML(t)}</span></div>`;
+    }).join("");
+    return `<div class="rcx-st-grp"><div class="rcx-st-ser">${_schedSeriesTag(code)}</div>${rows}</div>`;
+  }).join("");
+  return `<div class="card rc-card">
+    <div class="rc-card-head"><span class="rc-card-title">Session Times</span></div>
+    <div class="rc-card-body"><div class="rcx-st">${blocks}</div></div>
+  </div>`;
+}
 const _SCHED_SES_LABEL = { practice: "Practice", "final-practice": "Final Practice",
   qualifying: "Qualifying", "heat": "Heat", "duel": "Duel", "last-chance": "Last Chance",
   race: "Race" };
-// "Schedule" tab — the entire event weekend (every session, every series)
-// grouped by day, drawn from the matched schedule.json event.
+// "Schedule" tab — the FULL weekend exactly as the Jayski PDF lists it: every
+// session and ancillary item (garage hours, meetings, intros, gate times, ...)
+// using each row's verbatim event text, grouped by day. On-track sessions are
+// emphasized and everything else dimmed so the running order still reads at a
+// glance through the operational noise.
 function raceScheduleTab(race) {
   const ev = (typeof scheduleForRace === "function") ? scheduleForRace(race, STATE.series) : null;
   if (!ev || !Array.isArray(ev.sessions) || !ev.sessions.length) return null;
-  const KEEP = { practice: 1, "final-practice": 1, qualifying: 1, heat: 1, duel: 1, "last-chance": 1, race: 1 };
-  const sess = ev.sessions.filter(s => KEEP[s.type]).sort((a, b) => {
-    const da = a.date || "", db = b.date || "";
-    if (da !== db) return da < db ? -1 : 1;
-    const ta = a.start_24 || "", tb = b.start_24 || "";
-    return ta < tb ? -1 : ta > tb ? 1 : 0;
-  });
+  const ONTRACK = { practice: 1, "final-practice": 1, qualifying: 1, heat: 1, duel: 1, "last-chance": 1, race: 1 };
+  const sess = ev.sessions.slice()
+    .filter(s => (s.event && s.event.trim()) || _SCHED_SES_LABEL[s.type])
+    .sort((a, b) => {
+      const da = a.date || "", db = b.date || "";
+      if (da !== db) return da < db ? -1 : 1;
+      const ta = a.start_24 || "", tb = b.start_24 || "";
+      return ta < tb ? -1 : ta > tb ? 1 : 0;
+    });
   if (!sess.length) return null;
   const groups = [];
   let cur = null;
@@ -21191,10 +21225,13 @@ function raceScheduleTab(race) {
   const dayHTML = groups.map(g => {
     const dayName = g.date && typeof formatLongDate === "function" ? formatLongDate(g.date) : titleCase(g.day);
     const rows = g.rows.map(s => {
-      const label = _SCHED_SES_LABEL[s.type] || titleCase((s.type || "").replace(/-/g, " "));
+      const onTrack = !!ONTRACK[s.type];
+      const label = (s.event && s.event.trim())
+        ? s.event.trim()
+        : (_SCHED_SES_LABEL[s.type] || titleCase((s.type || "").replace(/-/g, " ")));
       const codes = (s.series && s.series.length) ? s.series : (s.other_series || []);
       const tags = codes.map(_schedSeriesTag).join("");
-      return `<div class="rsch-row">
+      return `<div class="rsch-row ${onTrack ? "rsch-row-track" : "rsch-row-anc"}">
         <span class="rsch-time">${escapeHTML(s.start || "")}</span>
         <span class="rsch-type">${escapeHTML(label)}</span>
         <span class="rsch-tags">${tags}</span>
@@ -21203,7 +21240,7 @@ function raceScheduleTab(race) {
     return `<div class="rsch-day"><div class="rsch-day-h">${escapeHTML(dayName)}</div>${rows}</div>`;
   }).join("");
   return { key: "schedule", label: "Schedule",
-    html: `<div class="rsch">${dayHTML}</div>` };
+    html: `<div class="rsch rsch-full">${dayHTML}</div>` };
 }
 function _raceStatChips(race, ev, series) {
   const want = series || STATE.series;
@@ -21680,9 +21717,11 @@ function _renderRaceCenterImpl() {
   const perfCur = _trackPerformers(history, "current");
   const perfAll = _trackPerformers(history, "all");
   const trackHistHTML = renderTrackHistoryTable(history, STATE.series);
+  let sessionTimesCard = "";
+  try { sessionTimesCard = _raceSessionTimesCard(nextRace); } catch (e) { sessionTimesCard = ""; }
   const overviewHTML = `
     ${sessionLineHTML}
-    <div class="rcx-overview">
+    <div class="rcx-overview${sessionTimesCard ? " rcx-ov-3" : ""}">
       <div class="rcx-ov-main">
         ${predOrFinishCard}
       </div>
@@ -21714,6 +21753,7 @@ function _renderRaceCenterImpl() {
           </div>
         </div>
       </div>
+      ${sessionTimesCard ? `<div class="rcx-ov-side rcx-ov-sched">${sessionTimesCard}</div>` : ""}
     </div>
     <div class="rcx-all-head"><span class="t">All Races at ${escapeHTML(trackStr)}</span><span class="s">newest first</span></div>
     ${trackHistHTML}`;
