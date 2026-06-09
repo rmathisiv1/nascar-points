@@ -27822,67 +27822,50 @@ function _renderProjectionMfrContenders(proj, traces) {
   `;
 }
 
-// Manufacturer projected-points bar chart — mirrors the driver standings chart
-// but bars are total projected points across all of a make's cars. No playoff
-// cutline (manufacturers don't have a field cutoff).
+// Manufacturer title-odds bar chart — bar length is the chance the champion
+// comes from each make (the same champ% the cards and table are ranked by), so
+// the whole manufacturer view tells one consistent story. Trailing label shows
+// avg points/car (matching the table) for context. We deliberately do NOT plot
+// SUMMED points here: that just rewards whoever fields the most cars and put
+// Chevrolet on top while the title odds had Toyota on top — the mismatch.
 function _renderProjectionMfrChart(proj, traces) {
   const mfrs = _aggregateMfrProj(proj, _champMapFromTraces(traces))
-    .sort((a, b) => b.total_proj_pts - a.total_proj_pts);
+    .sort((a, b) => b.champ_pct_sum - a.champ_pct_sum);
   if (!mfrs.length) return "";
 
   const barH = 30;
   const gap = 6;
-  const leftPad = 150;
-  const rightPad = 150;
+  const leftPad = 140;
+  const rightPad = 160;
   const chartW = 920;
   const chartH = mfrs.length * (barH + gap) + 30;
-  const maxPts = Math.max(...mfrs.map(m => m.total_proj_pts), 1);
-
-  // Current points rank for movement arrows
-  const curRanked = mfrs.slice().sort((a, b) => b.total_current_pts - a.total_current_pts);
-  const curRankMap = new Map();
-  curRanked.forEach((m, i) => curRankMap.set(m.code, i + 1));
+  const maxPct = Math.max(...mfrs.map(m => m.champ_pct_sum), 0.01);
 
   const bars = mfrs.map((m, i) => {
     const y = i * (barH + gap) + 15;
     const hex = _mfrColor(m.code);
-    const fullBarW = Math.max((m.total_proj_pts / maxPts) * (chartW - leftPad - rightPad), 2);
-    const curBarW = Math.max((m.total_current_pts / maxPts) * (chartW - leftPad - rightPad), 2);
-
-    const projRank = i + 1;
-    const curRank = curRankMap.get(m.code) || projRank;
-    const diff = curRank - projRank;
-    let arrowText = "";
-    if (diff > 0) {
-      arrowText = `<text x="118" y="${y + barH / 2 + 4}" text-anchor="start"
-        style="font-family:var(--mono);font-size:10px;fill:#6ce06c;font-weight:700;">▲${diff}</text>`;
-    } else if (diff < 0) {
-      arrowText = `<text x="118" y="${y + barH / 2 + 4}" text-anchor="start"
-        style="font-family:var(--mono);font-size:10px;fill:#ff6b6b;font-weight:700;">▼${Math.abs(diff)}</text>`;
-    }
+    const pct = m.champ_pct_sum * 100;
+    const barW = Math.max((m.champ_pct_sum / maxPct) * (chartW - leftPad - rightPad), 2);
 
     return `
       <g>
         <text x="18" y="${y + barH / 2 + 4}" text-anchor="start"
               style="font-family:var(--mono);font-size:12px;font-weight:700;fill:var(--muted);">
-          P${projRank}
+          P${i + 1}
         </text>
         <text x="${leftPad - 12}" y="${y + barH / 2 + 4}" text-anchor="end"
               style="font-family:var(--serif);font-size:14px;fill:var(--text-2);">
           ${escapeHTML(m.name)}
         </text>
-        ${arrowText}
-        <rect x="${leftPad}" y="${y}" width="${fullBarW}" height="${barH}" rx="3"
-              fill="${hex}" fill-opacity="0.32" stroke="${hex}" stroke-width="1"/>
-        <rect x="${leftPad}" y="${y}" width="${curBarW}" height="${barH}" rx="3" fill="${hex}" fill-opacity="0.85"/>
+        <rect x="${leftPad}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="${hex}" fill-opacity="0.85"/>
         <rect x="${leftPad}" y="${y}" width="4" height="${barH}" rx="1" fill="${hex}"/>
         <text x="${leftPad + 10}" y="${y + barH / 2 + 4}"
-              style="font-family:var(--mono);font-size:10px;fill:var(--text);opacity:0.85;">
-          ${m.total_current_pts.toLocaleString()}
+              style="font-family:var(--mono);font-size:11px;font-weight:700;fill:var(--text);">
+          ${pct.toFixed(1)}%
         </text>
-        <text x="${leftPad + fullBarW + 8}" y="${y + barH / 2 + 4}"
+        <text x="${leftPad + barW + 8}" y="${y + barH / 2 + 4}"
               style="font-family:var(--mono);font-size:11px;fill:var(--muted);">
-          ${m.total_proj_pts.toLocaleString()} pts · ${m.cars.length} cars
+          ${m.avg_proj_pts.toLocaleString()} avg pts · ${m.cars.length} cars
         </text>
       </g>
     `;
@@ -27892,8 +27875,8 @@ function _renderProjectionMfrChart(proj, traces) {
     <section class="proj-section">
       <div class="proj-section-head">
         <div class="ed-kicker">manufacturer battle</div>
-        <h2 class="ed-hero ed-hero-sm">Projected manufacturer points</h2>
-        <div class="ed-byline">Total projected points across every car of each make · solid = current, light = projected</div>
+        <h2 class="ed-hero ed-hero-sm">Projected title odds by make</h2>
+        <div class="ed-byline">Chance the champion comes from each manufacturer · avg points per car shown for context</div>
       </div>
       <div class="proj-chart-host" style="overflow-x:auto;">
         <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;max-width:${chartW}px;height:auto;display:block;">

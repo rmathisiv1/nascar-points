@@ -162,7 +162,7 @@ disabled `update-points.yml` + `scrape_drivers.py` + `backfill_crew_chiefs.py`.
 
 Prediction view:
 - ~~Remove projected wins / projected top-5s from the chase projection (too confusing).~~ DONE — dropped from driver + owner reg-season tables.
-- ~~Owner / manufacturer projection views.~~ DONE — owner view mirrors the driver view but on OWNER points (baseline from `pointsMapThroughRound`, future gain added on top); mfr view = championship-picture cards + projected-points bar chart + table, champ% derived from the same chase traces as the driver cards (so they reconcile). Mfr chart sorts by total points (more cars = more points, labeled as such); cards + table sort by champ%.
+- ~~Owner / manufacturer projection views.~~ DONE — owner view mirrors the driver view but on OWNER points (baseline from `pointsMapThroughRound`, future gain added on top); mfr view = championship-picture cards + projected-points bar chart + table, champ% derived from the same chase traces as the driver cards (so they reconcile). Mfr chart, cards, and table all sort by champ% and the chart plots title odds (NOT summed points — summed points just rewards car count and contradicted the title odds); chart's trailing avg-pts label matches the table's Avg Proj Pts column.
 
 Driver Compare:
 - Total vs per-race average toggle.
