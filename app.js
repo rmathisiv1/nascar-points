@@ -22016,11 +22016,9 @@ function _renderRaceCenterImpl() {
   let sessionTimesCard = "";
   try { sessionTimesCard = _raceSessionTimesCard(nextRace); } catch (e) { sessionTimesCard = ""; }
   const overviewHTML = `
-    ${sessionLineHTML}
     <div class="rcx-overview${sessionTimesCard ? " rcx-ov-3" : ""}">
       <div class="rcx-ov-main">
         ${predOrFinishCard}
-        ${entryListCard}
       </div>
       <div class="rcx-ov-side">
         <div class="card rc-card">
@@ -22056,6 +22054,9 @@ function _renderRaceCenterImpl() {
     ${trackHistHTML}`;
 
   const tabs = [{ key: "overview", label: "Overview", html: overviewHTML }];
+  if (entryListCard) {
+    tabs.push({ key: "entrylist", label: "Entry List", html: entryListCard });
+  }
   if (sessionsHTML) {
     tabs.push({ key: "results", label: isUpcoming ? "Sessions" : "Race Results", html: sessionsHTML });
   }
