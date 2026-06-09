@@ -1,11 +1,14 @@
 {
   "drivers": {
     "aj-allmendinger": {
-      "name": "A.J. Allmendinger",
+      "name": "AJ Allmendinger",
       "slug": "aj-allmendinger",
-      "rr_key": "AJ_Allmendinger",
-      "dob": "1970-01-01",
-      "hometown": null,
+      "nascar_driver_id": 3774,
+      "dob": "1981-12-16",
+      "hometown": "Los Gatos, CA",
+      "crew_chief": "Trent Owens",
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -50,14 +53,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/AJ_Allmendinger"
+      "rr_key": "AJ_Allmendinger"
     },
     "aaron-fike": {
       "name": "Aaron Fike",
       "slug": "aaron-fike",
-      "rr_key": "Aaron_Fike",
+      "nascar_driver_id": 1031,
       "dob": "1982-11-24",
       "hometown": "Galesburg, IL",
+      "crew_chief": null,
+      "team": "1031",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -88,14 +94,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Aaron_Fike"
+      "rr_key": "Aaron_Fike"
     },
     "alex-bowman": {
       "name": "Alex Bowman",
       "slug": "alex-bowman",
-      "rr_key": "Alex_Bowman",
+      "nascar_driver_id": 4045,
       "dob": "1993-04-25",
       "hometown": "Tucson, AZ",
+      "crew_chief": "Blake Harris",
+      "team": "Hendrick Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 12,
@@ -140,14 +149,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Alex_Bowman"
+      "rr_key": "Alex_Bowman"
     },
     "alex-labbe": {
       "name": "Alex Labbe",
       "slug": "alex-labbe",
-      "rr_key": "Alex_Labbe",
+      "nascar_driver_id": 0,
       "dob": "1993-04-29",
       "hometown": "St. Albert, Quebec",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 11,
@@ -178,7 +190,7 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Alex_Labbe"
+      "rr_key": "Alex_Labbe"
     },
     "andy-houston": {
       "name": "Andy Houston",
@@ -235,9 +247,12 @@
     "andy-lally": {
       "name": "Andy Lally",
       "slug": "andy-lally",
-      "rr_key": "Andy_Lally",
+      "nascar_driver_id": 3816,
       "dob": "1975-02-11",
       "hometown": "Northport, NY",
+      "crew_chief": null,
+      "team": "3816",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -282,14 +297,17 @@
           "lead_lap_finishes": 4
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Andy_Lally"
+      "rr_key": "Andy_Lally"
     },
     "anthony-alfredo": {
       "name": "Anthony Alfredo",
       "slug": "anthony-alfredo",
-      "rr_key": "Anthony_Alfredo",
+      "nascar_driver_id": 4301,
       "dob": "1999-03-31",
       "hometown": "Ridgefield, CT",
+      "crew_chief": "Josh Graham",
+      "team": "Viking Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -334,14 +352,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Anthony_Alfredo"
+      "rr_key": "Anthony_Alfredo"
     },
     "aric-almirola": {
       "name": "Aric Almirola",
       "slug": "aric-almirola",
-      "rr_key": "Aric_Almirola",
+      "nascar_driver_id": 40,
       "dob": "1984-03-14",
       "hometown": "Tampa, FL",
+      "crew_chief": "Seth Chavka",
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 16,
@@ -386,7 +407,7 @@
           "lead_lap_finishes": 52
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Aric_Almirola"
+      "rr_key": "Aric_Almirola"
     },
     "ashton-lewis": {
       "name": "Ashton Lewis",
@@ -415,9 +436,12 @@
     "austin-cindric": {
       "name": "Austin Cindric",
       "slug": "austin-cindric",
-      "rr_key": "Austin_Cindric",
+      "nascar_driver_id": 4180,
       "dob": "1998-09-02",
       "hometown": "Mooresville, NC",
+      "crew_chief": "Brian Wilson",
+      "team": "Team Penske",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -462,14 +486,17 @@
           "lead_lap_finishes": 21
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Austin_Cindric"
+      "rr_key": "Austin_Cindric"
     },
     "austin-dillon": {
       "name": "Austin Dillon",
       "slug": "austin-dillon",
-      "rr_key": "Austin_Dillon",
+      "nascar_driver_id": 3873,
       "dob": "1990-04-27",
-      "hometown": "Lewisville, NC",
+      "hometown": "Welcome, NC",
+      "crew_chief": "Richard Boswell",
+      "team": "Richard Childress Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 16,
@@ -514,14 +541,17 @@
           "lead_lap_finishes": 55
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Austin_Dillon"
+      "rr_key": "Austin_Dillon"
     },
     "austin-hill": {
       "name": "Austin Hill",
       "slug": "austin-hill",
-      "rr_key": "Austin_Hill",
+      "nascar_driver_id": 4133,
       "dob": "1994-04-21",
       "hometown": "Winston, GA",
+      "crew_chief": "Chad Haney",
+      "team": "Richard Childress Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -566,14 +596,17 @@
           "lead_lap_finishes": 79
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Austin_Hill"
+      "rr_key": "Austin_Hill"
     },
     "austin-wayne-self": {
       "name": "Austin Wayne Self",
       "slug": "austin-wayne-self",
-      "rr_key": "Austin_Wayne_Self",
+      "nascar_driver_id": 4189,
       "dob": "1996-03-05",
       "hometown": "Austin, TX",
+      "crew_chief": null,
+      "team": "AM Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 1,
@@ -604,14 +637,17 @@
           "lead_lap_finishes": 63
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Austin_Wayne_Self"
+      "rr_key": "Austin_Wayne_Self"
     },
     "bj-mcleod": {
-      "name": "B.J. McLeod",
+      "name": "BJ McLeod",
       "slug": "bj-mcleod",
-      "rr_key": "BJ_McLeod",
-      "dob": "1970-01-01",
+      "nascar_driver_id": 3973,
+      "dob": "1983-11-17",
       "hometown": null,
+      "crew_chief": "Lee Leslie",
+      "team": "Live Fast Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -656,14 +692,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/BJ_McLeod"
+      "rr_key": "BJ_McLeod"
     },
     "bayley-currey": {
       "name": "Bayley Currey",
       "slug": "bayley-currey",
-      "rr_key": "Bayley_Currey",
-      "dob": "1996-10-29",
+      "nascar_driver_id": 4257,
+      "dob": "1996-10-19",
       "hometown": "Driftwood, TX",
+      "crew_chief": "Phil Gould",
+      "team": "Niece Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -708,14 +747,17 @@
           "lead_lap_finishes": 37
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Bayley_Currey"
+      "rr_key": "Bayley_Currey"
     },
     "ben-kennedy": {
       "name": "Ben Kennedy",
       "slug": "ben-kennedy",
-      "rr_key": "Ben_Kennedy",
+      "nascar_driver_id": 4084,
       "dob": "1991-12-26",
       "hometown": "Daytona Beach, FL",
+      "crew_chief": null,
+      "team": "Richard Childress Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -746,14 +788,17 @@
           "lead_lap_finishes": 54
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ben_Kennedy"
+      "rr_key": "Ben_Kennedy"
     },
     "ben-rhodes": {
       "name": "Ben Rhodes",
       "slug": "ben-rhodes",
-      "rr_key": "Ben_Rhodes",
+      "nascar_driver_id": 4107,
       "dob": "1997-02-21",
       "hometown": "Louisville, KY",
+      "crew_chief": "Cale Gale",
+      "team": "ThorSport Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -798,14 +843,17 @@
           "lead_lap_finishes": 179
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ben_Rhodes"
+      "rr_key": "Ben_Rhodes"
     },
     "bill-elliott": {
       "name": "Bill Elliott",
       "slug": "bill-elliott",
-      "rr_key": "Bill_Elliott",
+      "nascar_driver_id": 939,
       "dob": "1955-10-08",
       "hometown": "Dawsonville, GA",
+      "crew_chief": null,
+      "team": "939",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 38,
@@ -850,14 +898,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Bill_Elliott"
+      "rr_key": "Bill_Elliott"
     },
     "bill-lester": {
       "name": "Bill Lester",
       "slug": "bill-lester",
-      "rr_key": "Bill_Lester",
+      "nascar_driver_id": 1979,
       "dob": "1961-02-06",
       "hometown": "Oakland, CA",
+      "crew_chief": null,
+      "team": "1979",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -902,14 +953,17 @@
           "lead_lap_finishes": 50
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Bill_Lester"
+      "rr_key": "Bill_Lester"
     },
     "blaine-perkins": {
       "name": "Blaine Perkins",
       "slug": "blaine-perkins",
-      "rr_key": "Blaine_Perkins",
+      "nascar_driver_id": 4376,
       "dob": "2000-02-28",
       "hometown": "Bakersfield, CA",
+      "crew_chief": "Cody McKenzie",
+      "team": "Jordan Anderson Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -940,14 +994,17 @@
           "lead_lap_finishes": 7
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Blaine_Perkins"
+      "rr_key": "Blaine_Perkins"
     },
     "blake-koch": {
       "name": "Blake Koch",
       "slug": "blake-koch",
-      "rr_key": "Blake_Koch",
+      "nascar_driver_id": 3917,
       "dob": "1985-08-07",
       "hometown": "W. Palm Beach, FL",
+      "crew_chief": null,
+      "team": "JD Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -992,14 +1049,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Blake_Koch"
+      "rr_key": "Blake_Koch"
     },
     "bobby-dotter": {
       "name": "Bobby Dotter",
       "slug": "bobby-dotter",
-      "rr_key": "Bobby_Dotter",
+      "nascar_driver_id": 869,
       "dob": "1960-07-11",
       "hometown": "Chicago, IL",
+      "crew_chief": null,
+      "team": "869",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 14,
@@ -1044,7 +1104,7 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Bobby_Dotter"
+      "rr_key": "Bobby_Dotter"
     },
     "bobby-hamilton": {
       "name": "Bobby Hamilton",
@@ -1099,11 +1159,14 @@
       "source_url": "https://www.racing-reference.info/driver/Bobby_Hamilton"
     },
     "bobby-hamilton-jr": {
-      "name": "Bobby Hamilton, Jr.",
+      "name": "Bobby Hamilton Jr",
       "slug": "bobby-hamilton-jr",
-      "rr_key": "Bobby_Hamilton_Jr",
+      "nascar_driver_id": 1358,
       "dob": "1978-01-08",
       "hometown": "Nashville, TN",
+      "crew_chief": null,
+      "team": "1358",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -1148,14 +1211,17 @@
           "lead_lap_finishes": 23
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Bobby_Hamilton_Jr"
+      "rr_key": "Bobby_Hamilton_Jr"
     },
     "boris-said": {
       "name": "Boris Said",
       "slug": "boris-said",
-      "rr_key": "Boris_Said",
+      "nascar_driver_id": 2883,
       "dob": "1962-09-18",
       "hometown": "Carlsbad, CA",
+      "crew_chief": null,
+      "team": "2883",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 21,
@@ -1200,14 +1266,17 @@
           "lead_lap_finishes": 20
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Boris_Said"
+      "rr_key": "Boris_Said"
     },
     "brad-coleman": {
       "name": "Brad Coleman",
       "slug": "brad-coleman",
-      "rr_key": "Brad_Coleman",
+      "nascar_driver_id": 621,
       "dob": "1988-02-26",
       "hometown": "Houston, TX",
+      "crew_chief": null,
+      "team": "621",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -1238,14 +1307,17 @@
           "lead_lap_finishes": 22
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brad_Coleman"
+      "rr_key": "Brad_Coleman"
     },
     "brad-keselowski": {
       "name": "Brad Keselowski",
       "slug": "brad-keselowski",
-      "rr_key": "Brad_Keselowski",
+      "nascar_driver_id": 1816,
       "dob": "1984-02-12",
       "hometown": "Rochester Hills, MI",
+      "crew_chief": "Jeremy Bullins",
+      "team": "RFK Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 19,
@@ -1290,14 +1362,17 @@
           "lead_lap_finishes": 30
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brad_Keselowski"
+      "rr_key": "Brad_Keselowski"
     },
     "brad-sweet": {
       "name": "Brad Sweet",
       "slug": "brad-sweet",
-      "rr_key": "Brad_Sweet",
+      "nascar_driver_id": 3926,
       "dob": "1985-12-31",
       "hometown": "Grass Valley, CA",
+      "crew_chief": null,
+      "team": "3926",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -1328,14 +1403,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brad_Sweet"
+      "rr_key": "Brad_Sweet"
     },
     "brad-teague": {
       "name": "Brad Teague",
       "slug": "brad-teague",
-      "rr_key": "Brad_Teague",
+      "nascar_driver_id": 3272,
       "dob": "1947-12-09",
       "hometown": "Johnson City, TN",
+      "crew_chief": null,
+      "team": "3272",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 12,
@@ -1380,14 +1458,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brad_Teague"
+      "rr_key": "Brad_Teague"
     },
     "brandon-brown": {
       "name": "Brandon Brown",
       "slug": "brandon-brown",
-      "rr_key": "Brandon_Brown",
+      "nascar_driver_id": 4118,
       "dob": "1993-09-14",
       "hometown": "Woodbridge, VA",
+      "crew_chief": null,
+      "team": "Brandonbilt Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 7,
@@ -1418,14 +1499,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brandon_Brown"
+      "rr_key": "Brandon_Brown"
     },
     "brandon-jones": {
       "name": "Brandon Jones",
       "slug": "brandon-jones",
-      "rr_key": "Brandon_Jones",
+      "nascar_driver_id": 4085,
       "dob": "1997-02-18",
       "hometown": "Atlanta, GA",
+      "crew_chief": "Sam McAulay",
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 12,
@@ -1456,14 +1540,17 @@
           "lead_lap_finishes": 40
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brandon_Jones"
+      "rr_key": "Brandon_Jones"
     },
     "brandon-whitt": {
       "name": "Brandon Whitt",
       "slug": "brandon-whitt",
-      "rr_key": "Brandon_Whitt",
+      "nascar_driver_id": 3572,
       "dob": "1982-10-15",
       "hometown": "El Cajon, CA",
+      "crew_chief": null,
+      "team": "3572",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -1508,14 +1595,17 @@
           "lead_lap_finishes": 21
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brandon_Whitt"
+      "rr_key": "Brandon_Whitt"
     },
     "brendan-gaughan": {
       "name": "Brendan Gaughan",
       "slug": "brendan-gaughan",
-      "rr_key": "Brendan_Gaughan",
+      "nascar_driver_id": 1165,
       "dob": "1975-07-10",
       "hometown": "Las Vegas, NV",
+      "crew_chief": null,
+      "team": "Beard Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 11,
@@ -1560,14 +1650,17 @@
           "lead_lap_finishes": 128
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brendan_Gaughan"
+      "rr_key": "Brendan_Gaughan"
     },
     "brennan-poole": {
       "name": "Brennan Poole",
       "slug": "brennan-poole",
-      "rr_key": "Brennan_Poole",
+      "nascar_driver_id": 4144,
       "dob": "1991-04-11",
       "hometown": "The Woodlands, TX",
+      "crew_chief": "Frankie Kerr",
+      "team": "Alpha Prime Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -1612,14 +1705,17 @@
           "lead_lap_finishes": 14
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brennan_Poole"
+      "rr_key": "Brennan_Poole"
     },
     "brent-sherman": {
       "name": "Brent Sherman",
       "slug": "brent-sherman",
-      "rr_key": "Brent_Sherman",
+      "nascar_driver_id": 3006,
       "dob": "1974-05-24",
       "hometown": "N. Barrington, IL",
+      "crew_chief": null,
+      "team": "3006",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -1664,14 +1760,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brent_Sherman"
+      "rr_key": "Brent_Sherman"
     },
     "bret-holmes": {
       "name": "Bret Holmes",
       "slug": "bret-holmes",
-      "rr_key": "Bret_Holmes",
+      "nascar_driver_id": 4373,
       "dob": "1997-05-05",
       "hometown": "Munford, AL",
+      "crew_chief": "Mike Shiplett",
+      "team": "4373",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NTS": {
           "years": 5,
@@ -1688,7 +1787,7 @@
           "lead_lap_finishes": 28
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Bret_Holmes"
+      "rr_key": "Bret_Holmes"
     },
     "brett-bodine": {
       "name": "Brett Bodine",
@@ -1745,9 +1844,12 @@
     "brett-moffitt": {
       "name": "Brett Moffitt",
       "slug": "brett-moffitt",
-      "rr_key": "Brett_Moffitt",
+      "nascar_driver_id": 4038,
       "dob": "1992-08-07",
       "hometown": "Grimes, IA",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -1792,14 +1894,17 @@
           "lead_lap_finishes": 70
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brett_Moffitt"
+      "rr_key": "Brett_Moffitt"
     },
     "brian-keselowski": {
       "name": "Brian Keselowski",
       "slug": "brian-keselowski",
-      "rr_key": "Brian_Keselowski",
+      "nascar_driver_id": 3772,
       "dob": "1981-09-02",
       "hometown": "Rochester Hills, MI",
+      "crew_chief": null,
+      "team": "3772",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -1844,14 +1949,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brian_Keselowski"
+      "rr_key": "Brian_Keselowski"
     },
     "brian-scott": {
       "name": "Brian Scott",
       "slug": "brian-scott",
-      "rr_key": "Brian_Scott",
+      "nascar_driver_id": 3822,
       "dob": "1988-01-12",
       "hometown": "Boise, ID",
+      "crew_chief": null,
+      "team": "3822",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -1896,14 +2004,17 @@
           "lead_lap_finishes": 39
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brian_Scott"
+      "rr_key": "Brian_Scott"
     },
     "brian-vickers": {
       "name": "Brian Vickers",
       "slug": "brian-vickers",
-      "rr_key": "Brian_Vickers",
+      "nascar_driver_id": 3425,
       "dob": "1983-10-24",
       "hometown": "Thomasville, NC",
+      "crew_chief": null,
+      "team": "3425",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 14,
@@ -1934,14 +2045,17 @@
           "lead_lap_finishes": 95
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Brian_Vickers"
+      "rr_key": "Brian_Vickers"
     },
     "bryan-silas": {
       "name": "Bryan Silas",
       "slug": "bryan-silas",
-      "rr_key": "Bryan_Silas",
+      "nascar_driver_id": 3798,
       "dob": "1987-06-13",
       "hometown": "Stuart, FL",
+      "crew_chief": null,
+      "team": "3798",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -1986,14 +2100,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Bryan_Silas"
+      "rr_key": "Bryan_Silas"
     },
     "bubba-wallace": {
       "name": "Bubba Wallace",
       "slug": "bubba-wallace",
-      "rr_key": "Bubba_Wallace",
+      "nascar_driver_id": 4025,
       "dob": "1993-10-08",
       "hometown": "Mobile, AL",
+      "crew_chief": "Charles Denike",
+      "team": "23XI Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -2038,14 +2155,17 @@
           "lead_lap_finishes": 36
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Bubba_Wallace"
+      "rr_key": "Bubba_Wallace"
     },
     "burney-lamar": {
       "name": "Burney Lamar",
       "slug": "burney-lamar",
-      "rr_key": "Burney_Lamar",
+      "nascar_driver_id": 1904,
       "dob": "1980-08-21",
       "hometown": "West Sacramento, CA",
+      "crew_chief": null,
+      "team": "1904",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -2090,14 +2210,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Burney_Lamar"
+      "rr_key": "Burney_Lamar"
     },
     "butch-miller": {
       "name": "Butch Miller",
       "slug": "butch-miller",
-      "rr_key": "Butch_Miller",
+      "nascar_driver_id": 2249,
       "dob": "1952-06-05",
       "hometown": "Coopersville, MI",
+      "crew_chief": null,
+      "team": "2249",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -2142,14 +2265,17 @@
           "lead_lap_finishes": 63
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Butch_Miller"
+      "rr_key": "Butch_Miller"
     },
     "cale-gale": {
       "name": "Cale Gale",
       "slug": "cale-gale",
-      "rr_key": "Cale_Gale",
+      "nascar_driver_id": 1140,
       "dob": "1985-03-05",
       "hometown": "Mobile, AL",
+      "crew_chief": null,
+      "team": "1140",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 4,
@@ -2194,14 +2320,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Cale_Gale"
+      "rr_key": "Cale_Gale"
     },
     "carl-edwards": {
       "name": "Carl Edwards",
       "slug": "carl-edwards",
-      "rr_key": "Carl_Edwards",
+      "nascar_driver_id": 923,
       "dob": "1979-08-15",
       "hometown": "Columbia, MO",
+      "crew_chief": null,
+      "team": "923",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 13,
@@ -2246,14 +2375,17 @@
           "lead_lap_finishes": 40
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Carl_Edwards"
+      "rr_key": "Carl_Edwards"
     },
     "carl-long": {
       "name": "Carl Long",
       "slug": "carl-long",
-      "rr_key": "Carl_Long",
-      "dob": "1967-09-20",
+      "nascar_driver_id": 2028,
+      "dob": "1967-08-20",
       "hometown": "Roxboro, NC",
+      "crew_chief": null,
+      "team": "MBM Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 13,
@@ -2298,14 +2430,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Carl_Long"
+      "rr_key": "Carl_Long"
     },
     "carlos-contreras": {
       "name": "Carlos Contreras",
       "slug": "carlos-contreras",
-      "rr_key": "Carlos_Contreras",
+      "nascar_driver_id": 646,
       "dob": "1970-06-08",
       "hometown": "Mexico City, Mexico",
+      "crew_chief": null,
+      "team": "646",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 7,
@@ -2336,14 +2471,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Carlos_Contreras"
+      "rr_key": "Carlos_Contreras"
     },
     "carson-hocevar": {
       "name": "Carson Hocevar",
       "slug": "carson-hocevar",
-      "rr_key": "Carson_Hocevar",
+      "nascar_driver_id": 4326,
       "dob": "2003-01-28",
       "hometown": "Portage, MI",
+      "crew_chief": "Luke Lambert",
+      "team": "Spire Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -2388,14 +2526,17 @@
           "lead_lap_finishes": 63
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Carson_Hocevar"
+      "rr_key": "Carson_Hocevar"
     },
     "carson-kvapil": {
       "name": "Carson Kvapil",
       "slug": "carson-kvapil",
-      "rr_key": "Carson_Kvapil",
+      "nascar_driver_id": 4467,
       "dob": "2003-05-22",
       "hometown": "Mooresville, NC",
+      "crew_chief": "Rodney Childers",
+      "team": "JR Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -2426,14 +2567,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Carson_Kvapil"
+      "rr_key": "Carson_Kvapil"
     },
     "casey-atwood": {
       "name": "Casey Atwood",
       "slug": "casey-atwood",
-      "rr_key": "Casey_Atwood",
+      "nascar_driver_id": 99,
       "dob": "1980-08-25",
       "hometown": "Antioch, TN",
+      "crew_chief": null,
+      "team": "99",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -2478,14 +2622,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Casey_Atwood"
+      "rr_key": "Casey_Atwood"
     },
     "casey-mears": {
       "name": "Casey Mears",
       "slug": "casey-mears",
-      "rr_key": "Casey_Mears",
+      "nascar_driver_id": 2215,
       "dob": "1978-03-12",
       "hometown": "Bakersfield, CA",
+      "crew_chief": null,
+      "team": "2215",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 17,
@@ -2530,14 +2677,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Casey_Mears"
+      "rr_key": "Casey_Mears"
     },
     "chad-chaffin": {
       "name": "Chad Chaffin",
       "slug": "chad-chaffin",
-      "rr_key": "Chad_Chaffin",
+      "nascar_driver_id": 532,
       "dob": "1968-07-20",
       "hometown": "Smyrna, TN",
+      "crew_chief": null,
+      "team": "532",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -2582,14 +2732,17 @@
           "lead_lap_finishes": 58
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chad_Chaffin"
+      "rr_key": "Chad_Chaffin"
     },
     "chad-finchum": {
       "name": "Chad Finchum",
       "slug": "chad-finchum",
-      "rr_key": "Chad_Finchum",
+      "nascar_driver_id": 4234,
       "dob": "1994-09-22",
       "hometown": "Knoxville, TN",
+      "crew_chief": null,
+      "team": "MBM Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -2620,14 +2773,17 @@
           "lead_lap_finishes": 15
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chad_Finchum"
+      "rr_key": "Chad_Finchum"
     },
     "chad-mccumbee": {
       "name": "Chad McCumbee",
       "slug": "chad-mccumbee",
-      "rr_key": "Chad_McCumbee",
+      "nascar_driver_id": 2170,
       "dob": "1984-10-15",
       "hometown": "Supply, NC",
+      "crew_chief": null,
+      "team": "2170",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -2672,14 +2828,17 @@
           "lead_lap_finishes": 50
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chad_McCumbee"
+      "rr_key": "Chad_McCumbee"
     },
     "chandler-smith": {
       "name": "Chandler Smith",
       "slug": "chandler-smith",
-      "rr_key": "Chandler_Smith",
+      "nascar_driver_id": 4312,
       "dob": "2002-06-26",
       "hometown": "Talking Rock, GA",
+      "crew_chief": "Jon Leonard",
+      "team": "Front Row Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -2724,14 +2883,17 @@
           "lead_lap_finishes": 74
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chandler_Smith"
+      "rr_key": "Chandler_Smith"
     },
     "chase-briscoe": {
       "name": "Chase Briscoe",
       "slug": "chase-briscoe",
-      "rr_key": "Chase_Briscoe",
+      "nascar_driver_id": 4228,
       "dob": "1994-12-15",
       "hometown": "Mitchell, IN",
+      "crew_chief": "James Small",
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -2776,14 +2938,17 @@
           "lead_lap_finishes": 24
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chase_Briscoe"
+      "rr_key": "Chase_Briscoe"
     },
     "chase-elliott": {
       "name": "Chase Elliott",
       "slug": "chase-elliott",
-      "rr_key": "Chase_Elliott",
+      "nascar_driver_id": 4062,
       "dob": "1995-11-28",
       "hometown": "Dawsonville, GA",
+      "crew_chief": "Alan Gustafson",
+      "team": "Hendrick Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 12,
@@ -2828,14 +2993,17 @@
           "lead_lap_finishes": 16
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chase_Elliott"
+      "rr_key": "Chase_Elliott"
     },
     "chase-miller": {
       "name": "Chase Miller",
       "slug": "chase-miller",
-      "rr_key": "Chase_Miller",
+      "nascar_driver_id": 3777,
       "dob": "1987-01-28",
       "hometown": "Canton, GA",
+      "crew_chief": null,
+      "team": "3777",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 7,
@@ -2880,7 +3048,7 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chase_Miller"
+      "rr_key": "Chase_Miller"
     },
     "chase-montgomery": {
       "name": "Chase Montgomery",
@@ -2923,9 +3091,12 @@
     "chase-purdy": {
       "name": "Chase Purdy",
       "slug": "chase-purdy",
-      "rr_key": "Chase_Purdy",
-      "dob": "1999-11-11",
+      "nascar_driver_id": 4295,
+      "dob": "1999-11-19",
       "hometown": "Meridian, MS",
+      "crew_chief": "Jason Trinchere",
+      "team": "Spire Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NTS": {
           "years": 6,
@@ -2942,14 +3113,17 @@
           "lead_lap_finishes": 64
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chase_Purdy"
+      "rr_key": "Chase_Purdy"
     },
     "chris-buescher": {
       "name": "Chris Buescher",
       "slug": "chris-buescher",
-      "rr_key": "Chris_Buescher",
+      "nascar_driver_id": 3989,
       "dob": "1992-10-29",
       "hometown": "Prosper, TX",
+      "crew_chief": "Scott Graves",
+      "team": "RFK Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 12,
@@ -2994,14 +3168,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chris_Buescher"
+      "rr_key": "Chris_Buescher"
     },
     "chris-fontaine": {
       "name": "Chris Fontaine",
       "slug": "chris-fontaine",
-      "rr_key": "Chris_Fontaine",
+      "nascar_driver_id": 1074,
       "dob": "1981-12-01",
       "hometown": "Lakeland, FL",
+      "crew_chief": null,
+      "team": "1074",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -3046,14 +3223,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chris_Fontaine"
+      "rr_key": "Chris_Fontaine"
     },
     "chris-jones": {
       "name": "Chris Jones",
       "slug": "chris-jones",
-      "rr_key": "Chris_Jones",
+      "nascar_driver_id": 3791,
       "dob": "1970-01-01",
       "hometown": null,
+      "crew_chief": null,
+      "team": "3791",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -3098,14 +3278,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Chris_Jones"
+      "rr_key": "Chris_Jones"
     },
     "christian-eckes": {
       "name": "Christian Eckes",
       "slug": "christian-eckes",
-      "rr_key": "Christian_Eckes",
+      "nascar_driver_id": 4268,
       "dob": "2000-11-10",
-      "hometown": "Middletown, NY",
+      "hometown": "Greenville, NY",
+      "crew_chief": "David Elenz",
+      "team": "McAnally-Hilgemann Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 1,
@@ -3136,14 +3319,17 @@
           "lead_lap_finishes": 100
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Christian_Eckes"
+      "rr_key": "Christian_Eckes"
     },
     "christopher-bell": {
       "name": "Christopher Bell",
       "slug": "christopher-bell",
-      "rr_key": "Christopher_Bell",
+      "nascar_driver_id": 4153,
       "dob": "1994-12-16",
       "hometown": "Norman, OK",
+      "crew_chief": "Adam Stevens",
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -3188,14 +3374,17 @@
           "lead_lap_finishes": 50
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Christopher_Bell"
+      "rr_key": "Christopher_Bell"
     },
     "clay-greenfield": {
       "name": "Clay Greenfield",
       "slug": "clay-greenfield",
-      "rr_key": "Clay_Greenfield",
+      "nascar_driver_id": 3936,
       "dob": "1984-06-03",
       "hometown": "Clarksville, TN",
+      "crew_chief": null,
+      "team": "Clay Greenfield Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -3226,14 +3415,17 @@
           "lead_lap_finishes": 12
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Clay_Greenfield"
+      "rr_key": "Clay_Greenfield"
     },
     "clay-rogers": {
       "name": "Clay Rogers",
       "slug": "clay-rogers",
-      "rr_key": "Clay_Rogers",
+      "nascar_driver_id": 2810,
       "dob": "1980-11-06",
       "hometown": "Mooresville, NC",
+      "crew_chief": null,
+      "team": "2810",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -3278,14 +3470,17 @@
           "lead_lap_finishes": 17
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Clay_Rogers"
+      "rr_key": "Clay_Rogers"
     },
     "clint-bowyer": {
       "name": "Clint Bowyer",
       "slug": "clint-bowyer",
-      "rr_key": "Clint_Bowyer",
+      "nascar_driver_id": 339,
       "dob": "1979-05-30",
       "hometown": "Emporia, KS",
+      "crew_chief": null,
+      "team": "Stewart-Haas Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 16,
@@ -3330,14 +3525,17 @@
           "lead_lap_finishes": 12
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Clint_Bowyer"
+      "rr_key": "Clint_Bowyer"
     },
     "cody-coughlin": {
       "name": "Cody Coughlin",
       "slug": "cody-coughlin",
-      "rr_key": "Cody_Coughlin",
+      "nascar_driver_id": 4155,
       "dob": "1995-12-11",
       "hometown": "Delaware, OH",
+      "crew_chief": null,
+      "team": "4155",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NTS": {
           "years": 4,
@@ -3354,14 +3552,17 @@
           "lead_lap_finishes": 24
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Cody_Coughlin"
+      "rr_key": "Cody_Coughlin"
     },
     "cody-ware": {
       "name": "Cody Ware",
       "slug": "cody-ware",
-      "rr_key": "Cody_Ware",
+      "nascar_driver_id": 4125,
       "dob": "1995-11-07",
       "hometown": "Greensboro, NC",
+      "crew_chief": "Billy Plourde",
+      "team": "Rick Ware Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 11,
@@ -3406,14 +3607,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Cody_Ware"
+      "rr_key": "Cody_Ware"
     },
     "colby-howard": {
       "name": "Colby Howard",
       "slug": "colby-howard",
-      "rr_key": "Colby_Howard",
+      "nascar_driver_id": 4344,
       "dob": "2001-10-28",
       "hometown": "Simpsonville, SC",
+      "crew_chief": null,
+      "team": "CR7 Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -3444,14 +3648,17 @@
           "lead_lap_finishes": 30
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Colby_Howard"
+      "rr_key": "Colby_Howard"
     },
     "cole-custer": {
       "name": "Cole Custer",
       "slug": "cole-custer",
-      "rr_key": "Cole_Custer",
+      "nascar_driver_id": 4104,
       "dob": "1998-01-23",
       "hometown": "Ladera Ranch, CA",
+      "crew_chief": "Aaron Kramer",
+      "team": "Haas Factory Team",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -3496,14 +3703,17 @@
           "lead_lap_finishes": 32
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Cole_Custer"
+      "rr_key": "Cole_Custer"
     },
     "cole-whitt": {
       "name": "Cole Whitt",
       "slug": "cole-whitt",
-      "rr_key": "Cole_Whitt",
+      "nascar_driver_id": 3979,
       "dob": "1991-06-22",
       "hometown": "Alpine, CA",
+      "crew_chief": null,
+      "team": "TriStar Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 8,
@@ -3548,14 +3758,17 @@
           "lead_lap_finishes": 18
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Cole_Whitt"
+      "rr_key": "Cole_Whitt"
     },
     "colin-braun": {
       "name": "Colin Braun",
       "slug": "colin-braun",
-      "rr_key": "Colin_Braun",
+      "nascar_driver_id": 3828,
       "dob": "1988-09-22",
       "hometown": "Ovalo, TX",
+      "crew_chief": null,
+      "team": "3828",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 4,
@@ -3586,14 +3799,17 @@
           "lead_lap_finishes": 34
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Colin_Braun"
+      "rr_key": "Colin_Braun"
     },
     "connor-mosack": {
       "name": "Connor Mosack",
       "slug": "connor-mosack",
-      "rr_key": "Connor_Mosack",
+      "nascar_driver_id": 4433,
       "dob": "1999-01-20",
       "hometown": "Charlotte, NC",
+      "crew_chief": null,
+      "team": "4433",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 4,
@@ -3624,14 +3840,17 @@
           "lead_lap_finishes": 20
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Connor_Mosack"
+      "rr_key": "Connor_Mosack"
     },
     "connor-zilisch": {
       "name": "Connor Zilisch",
       "slug": "connor-zilisch",
-      "rr_key": "Connor_Zilisch",
+      "nascar_driver_id": 4481,
       "dob": "2006-07-22",
       "hometown": "Mooresville, NC",
+      "crew_chief": "Randall Burnett",
+      "team": "Trackhouse Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -3676,14 +3895,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Connor_Zilisch"
+      "rr_key": "Connor_Zilisch"
     },
     "corey-heim": {
       "name": "Corey Heim",
       "slug": "corey-heim",
-      "rr_key": "Corey_Heim",
+      "nascar_driver_id": 4387,
       "dob": "2002-07-05",
       "hometown": "Marietta, GA",
+      "crew_chief": "Scott Zipadelli",
+      "team": "Tricon Garage",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -3728,14 +3950,17 @@
           "lead_lap_finishes": 81
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Corey_Heim"
+      "rr_key": "Corey_Heim"
     },
     "corey-lajoie": {
       "name": "Corey LaJoie",
       "slug": "corey-lajoie",
-      "rr_key": "Corey_LaJoie",
+      "nascar_driver_id": 4096,
       "dob": "1991-09-25",
       "hometown": "Concord, NC",
+      "crew_chief": "Dan Stillman",
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 11,
@@ -3780,7 +4005,7 @@
           "lead_lap_finishes": 13
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Corey_LaJoie"
+      "rr_key": "Corey_LaJoie"
     },
     "coy-gibbs": {
       "name": "Coy Gibbs",
@@ -3823,9 +4048,12 @@
     "dj-kennington": {
       "name": "D.J. Kennington",
       "slug": "dj-kennington",
-      "rr_key": "DJ_Kennington",
+      "nascar_driver_id": 3709,
       "dob": "1977-07-15",
       "hometown": "St. Thomas, Ontario",
+      "crew_chief": null,
+      "team": "3709",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -3870,14 +4098,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/DJ_Kennington"
+      "rr_key": "DJ_Kennington"
     },
     "dakoda-armstrong": {
       "name": "Dakoda Armstrong",
       "slug": "dakoda-armstrong",
-      "rr_key": "Dakoda_Armstrong",
+      "nascar_driver_id": 3998,
       "dob": "1991-07-16",
       "hometown": "New Castle, IN",
+      "crew_chief": null,
+      "team": "3998",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -3922,14 +4153,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Dakoda_Armstrong"
+      "rr_key": "Dakoda_Armstrong"
     },
     "dale-earnhardt-jr": {
-      "name": "Dale Earnhardt, Jr.",
+      "name": "Dale Earnhardt Jr.",
       "slug": "dale-earnhardt-jr",
-      "rr_key": "Dale_Earnhardt_Jr",
+      "nascar_driver_id": 915,
       "dob": "1974-10-10",
       "hometown": "Kannapolis, NC",
+      "crew_chief": null,
+      "team": "JR Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 19,
@@ -3960,14 +4194,17 @@
           "lead_lap_finishes": 110
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Dale_Earnhardt_Jr"
+      "rr_key": "Dale_Earnhardt_Jr"
     },
     "dale-jarrett": {
       "name": "Dale Jarrett",
       "slug": "dale-jarrett",
-      "rr_key": "Dale_Jarrett",
+      "nascar_driver_id": 1675,
       "dob": "1956-11-26",
       "hometown": "Hickory, NC",
+      "crew_chief": null,
+      "team": "1675",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 24,
@@ -3998,14 +4235,17 @@
           "lead_lap_finishes": 127
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Dale_Jarrett"
+      "rr_key": "Dale_Jarrett"
     },
     "danica-patrick": {
       "name": "Danica Patrick",
       "slug": "danica-patrick",
-      "rr_key": "Danica_Patrick",
+      "nascar_driver_id": 3929,
       "dob": "1982-03-25",
       "hometown": "Roscoe, IL",
+      "crew_chief": null,
+      "team": "3929",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -4036,14 +4276,17 @@
           "lead_lap_finishes": 24
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Danica_Patrick"
+      "rr_key": "Danica_Patrick"
     },
     "daniel-dye": {
       "name": "Daniel Dye",
       "slug": "daniel-dye",
-      "rr_key": "Daniel_Dye",
+      "nascar_driver_id": 4451,
       "dob": "2003-12-04",
       "hometown": "Daytona Beach, FL",
+      "crew_chief": "Lennie Chandler",
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -4088,14 +4331,17 @@
           "lead_lap_finishes": 27
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Daniel_Dye"
+      "rr_key": "Daniel_Dye"
     },
     "daniel-hemric": {
       "name": "Daniel Hemric",
       "slug": "daniel-hemric",
-      "rr_key": "Daniel_Hemric",
+      "nascar_driver_id": 4093,
       "dob": "1991-01-27",
       "hometown": "Kannapolis, NC",
+      "crew_chief": "Kevin Bellicourt",
+      "team": "McAnally-Hilgemann Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -4140,7 +4386,7 @@
           "lead_lap_finishes": 63
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Daniel_Hemric"
+      "rr_key": "Daniel_Hemric"
     },
     "daniel-suarez": {
       "name": "Daniel Suarez",
@@ -4197,9 +4443,12 @@
     "danny-efland": {
       "name": "Danny Efland",
       "slug": "danny-efland",
-      "rr_key": "Danny_Efland",
+      "nascar_driver_id": 3806,
       "dob": "1988-10-04",
       "hometown": "Irmo, SC",
+      "crew_chief": null,
+      "team": "3806",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -4244,14 +4493,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Danny_Efland"
+      "rr_key": "Danny_Efland"
     },
     "danny-oquinn-jr": {
-      "name": "Danny O'Quinn, Jr.",
+      "name": "Danny O'Quinn Jr",
       "slug": "danny-oquinn-jr",
-      "rr_key": "Danny_OQuinn_Jr",
+      "nascar_driver_id": 2449,
       "dob": "1985-05-07",
       "hometown": "Coeburn, VA",
+      "crew_chief": null,
+      "team": "2449",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -4296,14 +4548,17 @@
           "lead_lap_finishes": 23
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Danny_OQuinn_Jr"
+      "rr_key": "Danny_OQuinn_Jr"
     },
     "dave-blaney": {
       "name": "Dave Blaney",
       "slug": "dave-blaney",
-      "rr_key": "Dave_Blaney",
+      "nascar_driver_id": 267,
       "dob": "1962-10-24",
       "hometown": "Hartford, OH",
+      "crew_chief": null,
+      "team": "267",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 17,
@@ -4348,14 +4603,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Dave_Blaney"
+      "rr_key": "Dave_Blaney"
     },
     "david-gilliland": {
       "name": "David Gilliland",
       "slug": "david-gilliland",
-      "rr_key": "David_Gilliland",
+      "nascar_driver_id": 1202,
       "dob": "1976-04-01",
       "hometown": "Riverside, CA",
+      "crew_chief": null,
+      "team": "DGR-Crosley",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 12,
@@ -4400,14 +4658,17 @@
           "lead_lap_finishes": 11
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/David_Gilliland"
+      "rr_key": "David_Gilliland"
     },
     "david-green": {
       "name": "David Green",
       "slug": "david-green",
-      "rr_key": "David_Green",
+      "nascar_driver_id": 1278,
       "dob": "1958-01-28",
       "hometown": "Owensboro, KY",
+      "crew_chief": null,
+      "team": "1278",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 8,
@@ -4452,14 +4713,17 @@
           "lead_lap_finishes": 7
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/David_Green"
+      "rr_key": "David_Green"
     },
     "david-ragan": {
       "name": "David Ragan",
       "slug": "david-ragan",
-      "rr_key": "David_Ragan",
+      "nascar_driver_id": 2674,
       "dob": "1985-12-24",
       "hometown": "Unadilla, GA",
+      "crew_chief": null,
+      "team": "2674",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 18,
@@ -4504,14 +4768,17 @@
           "lead_lap_finishes": 14
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/David_Ragan"
+      "rr_key": "David_Ragan"
     },
     "david-reutimann": {
       "name": "David Reutimann",
       "slug": "david-reutimann",
-      "rr_key": "David_Reutimann",
+      "nascar_driver_id": 2735,
       "dob": "1970-03-02",
       "hometown": "Zephyrhills, FL",
+      "crew_chief": null,
+      "team": "2735",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -4556,14 +4823,17 @@
           "lead_lap_finishes": 52
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/David_Reutimann"
+      "rr_key": "David_Reutimann"
     },
     "david-starr": {
       "name": "David Starr",
       "slug": "david-starr",
-      "rr_key": "David_Starr",
+      "nascar_driver_id": 3170,
       "dob": "1967-10-11",
       "hometown": "Houston, TX",
+      "crew_chief": null,
+      "team": "JD Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 9,
@@ -4608,14 +4878,17 @@
           "lead_lap_finishes": 189
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/David_Starr"
+      "rr_key": "David_Starr"
     },
     "david-stremme": {
       "name": "David Stremme",
       "slug": "david-stremme",
-      "rr_key": "David_Stremme",
+      "nascar_driver_id": 3221,
       "dob": "1977-06-19",
       "hometown": "South Bend, IN",
+      "crew_chief": null,
+      "team": "3221",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -4660,14 +4933,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/David_Stremme"
+      "rr_key": "David_Stremme"
     },
     "dawson-cram": {
       "name": "Dawson Cram",
       "slug": "dawson-cram",
-      "rr_key": "Dawson_Cram",
+      "nascar_driver_id": 4256,
       "dob": "2001-09-12",
       "hometown": "Mooresville, NC",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -4698,14 +4974,17 @@
           "lead_lap_finishes": 11
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Dawson_Cram"
+      "rr_key": "Dawson_Cram"
     },
     "dean-thompson": {
       "name": "Dean Thompson",
       "slug": "dean-thompson",
-      "rr_key": "Dean_Thompson",
+      "nascar_driver_id": 4414,
       "dob": "2001-08-30",
       "hometown": "Anaheim, CA",
+      "crew_chief": "Kris Bowen",
+      "team": "Sam Hunt Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -4736,14 +5015,17 @@
           "lead_lap_finishes": 29
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Dean_Thompson"
+      "rr_key": "Dean_Thompson"
     },
     "dennis-setzer": {
       "name": "Dennis Setzer",
       "slug": "dennis-setzer",
-      "rr_key": "Dennis_Setzer",
+      "nascar_driver_id": 2983,
       "dob": "1960-02-27",
       "hometown": "Newton, NC",
+      "crew_chief": null,
+      "team": "2983",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -4788,14 +5070,17 @@
           "lead_lap_finishes": 208
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Dennis_Setzer"
+      "rr_key": "Dennis_Setzer"
     },
     "denny-hamlin": {
       "name": "Denny Hamlin",
       "slug": "denny-hamlin",
-      "rr_key": "Denny_Hamlin",
+      "nascar_driver_id": 1361,
       "dob": "1980-11-18",
       "hometown": "Chesterfield, VA",
+      "crew_chief": "Chris Gayle",
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 22,
@@ -4840,14 +5125,17 @@
           "lead_lap_finishes": 15
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Denny_Hamlin"
+      "rr_key": "Denny_Hamlin"
     },
     "derek-kraus": {
       "name": "Derek Kraus",
       "slug": "derek-kraus",
-      "rr_key": "Derek_Kraus",
+      "nascar_driver_id": 4297,
       "dob": "2001-09-01",
       "hometown": "Stratford, WI",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -4892,14 +5180,17 @@
           "lead_lap_finishes": 51
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Derek_Kraus"
+      "rr_key": "Derek_Kraus"
     },
     "derrike-cope": {
       "name": "Derrike Cope",
       "slug": "derrike-cope",
-      "rr_key": "Derrike_Cope",
+      "nascar_driver_id": 666,
       "dob": "1958-11-03",
       "hometown": "Spanaway, WA",
+      "crew_chief": null,
+      "team": "666",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 32,
@@ -4944,14 +5235,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Derrike_Cope"
+      "rr_key": "Derrike_Cope"
     },
     "donnie-neuenberger": {
       "name": "Donnie Neuenberger",
       "slug": "donnie-neuenberger",
-      "rr_key": "Donnie_Neuenberger",
+      "nascar_driver_id": 2388,
       "dob": "1962-08-10",
       "hometown": "Brandywine, MD",
+      "crew_chief": null,
+      "team": "2388",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -4996,14 +5290,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Donnie_Neuenberger"
+      "rr_key": "Donnie_Neuenberger"
     },
     "dylan-lupton": {
       "name": "Dylan Lupton",
       "slug": "dylan-lupton",
-      "rr_key": "Dylan_Lupton",
+      "nascar_driver_id": 4146,
       "dob": "1993-12-07",
       "hometown": "Wilton, CA",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -5048,14 +5345,17 @@
           "lead_lap_finishes": 9
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Dylan_Lupton"
+      "rr_key": "Dylan_Lupton"
     },
     "elliott-sadler": {
       "name": "Elliott Sadler",
       "slug": "elliott-sadler",
-      "rr_key": "Elliott_Sadler",
+      "nascar_driver_id": 2878,
       "dob": "1975-04-30",
       "hometown": "Emporia, VA",
+      "crew_chief": null,
+      "team": "JR Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 17,
@@ -5100,14 +5400,17 @@
           "lead_lap_finishes": 13
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Elliott_Sadler"
+      "rr_key": "Elliott_Sadler"
     },
     "eric-mcclure": {
       "name": "Eric McClure",
       "slug": "eric-mcclure",
-      "rr_key": "Eric_McClure",
+      "nascar_driver_id": 2160,
       "dob": "1978-12-11",
       "hometown": "Chilhowie, VA",
+      "crew_chief": null,
+      "team": "2160",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -5152,14 +5455,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Eric_McClure"
+      "rr_key": "Eric_McClure"
     },
     "erik-darnell": {
       "name": "Erik Darnell",
       "slug": "erik-darnell",
-      "rr_key": "Erik_Darnell",
+      "nascar_driver_id": 760,
       "dob": "1982-12-02",
       "hometown": "Beach Park, IL",
+      "crew_chief": null,
+      "team": "760",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -5204,14 +5510,17 @@
           "lead_lap_finishes": 54
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Erik_Darnell"
+      "rr_key": "Erik_Darnell"
     },
     "erik-jones": {
       "name": "Erik Jones",
       "slug": "erik-jones",
-      "rr_key": "Erik_Jones",
+      "nascar_driver_id": 4059,
       "dob": "1996-05-30",
       "hometown": "Byron, MI",
+      "crew_chief": "Justin Alexander",
+      "team": "Legacy Motor Club",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 11,
@@ -5256,14 +5565,17 @@
           "lead_lap_finishes": 36
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Erik_Jones"
+      "rr_key": "Erik_Jones"
     },
     "garrett-smithley": {
       "name": "Garrett Smithley",
       "slug": "garrett-smithley",
-      "rr_key": "Garrett_Smithley",
+      "nascar_driver_id": 4142,
       "dob": "1992-04-27",
       "hometown": "Ligonier, PA",
+      "crew_chief": null,
+      "team": "Alpha Prime Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -5308,7 +5620,7 @@
           "lead_lap_finishes": 4
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Garrett_Smithley"
+      "rr_key": "Garrett_Smithley"
     },
     "geoffrey-bodine": {
       "name": "Geoffrey Bodine",
@@ -5403,9 +5715,12 @@
     "grant-enfinger": {
       "name": "Grant Enfinger",
       "slug": "grant-enfinger",
-      "rr_key": "Grant_Enfinger",
+      "nascar_driver_id": 3978,
       "dob": "1985-01-22",
       "hometown": "Fairhope, AL",
+      "crew_chief": "Derek Smith",
+      "team": "CR7 Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -5450,14 +5765,17 @@
           "lead_lap_finishes": 184
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Grant_Enfinger"
+      "rr_key": "Grant_Enfinger"
     },
     "gray-gaulding": {
       "name": "Gray Gaulding",
       "slug": "gray-gaulding",
-      "rr_key": "Gray_Gaulding",
+      "nascar_driver_id": 4103,
       "dob": "1998-02-10",
       "hometown": "Colonial Heights, VA",
+      "crew_chief": null,
+      "team": "SS Green Light Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -5502,14 +5820,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Gray_Gaulding"
+      "rr_key": "Gray_Gaulding"
     },
     "greg-biffle": {
       "name": "Greg Biffle",
       "slug": "greg-biffle",
-      "rr_key": "Greg_Biffle",
+      "nascar_driver_id": 243,
       "dob": "1969-12-23",
       "hometown": "Vancouver, WA",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 16,
@@ -5554,14 +5875,17 @@
           "lead_lap_finishes": 58
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Greg_Biffle"
+      "rr_key": "Greg_Biffle"
     },
     "hailie-deegan": {
       "name": "Hailie Deegan",
       "slug": "hailie-deegan",
-      "rr_key": "Hailie_Deegan",
-      "dob": "2001-07-18",
+      "nascar_driver_id": 4366,
+      "dob": "2001-07-17",
       "hometown": "Temecula, CA",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -5592,7 +5916,7 @@
           "lead_lap_finishes": 36
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Hailie_Deegan"
+      "rr_key": "Hailie_Deegan"
     },
     "hank-parker-jr": {
       "name": "Hank Parker, Jr.",
@@ -5649,9 +5973,12 @@
     "harrison-burton": {
       "name": "Harrison Burton",
       "slug": "harrison-burton",
-      "rr_key": "Harrison_Burton",
+      "nascar_driver_id": 4217,
       "dob": "2000-10-09",
       "hometown": "Huntersville, NC",
+      "crew_chief": "Brian Gainey",
+      "team": "AM Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -5696,14 +6023,17 @@
           "lead_lap_finishes": 31
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Harrison_Burton"
+      "rr_key": "Harrison_Burton"
     },
     "harrison-rhodes": {
       "name": "Harrison Rhodes",
       "slug": "harrison-rhodes",
-      "rr_key": "Harrison_Rhodes",
+      "nascar_driver_id": 4057,
       "dob": "1993-07-15",
       "hometown": "High Point, NC",
+      "crew_chief": null,
+      "team": "4057",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -5734,14 +6064,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Harrison_Rhodes"
+      "rr_key": "Harrison_Rhodes"
     },
     "hermie-sadler": {
       "name": "Hermie Sadler",
       "slug": "hermie-sadler",
-      "rr_key": "Hermie_Sadler",
+      "nascar_driver_id": 2879,
       "dob": "1969-04-24",
       "hometown": "Emporia, VA",
+      "crew_chief": null,
+      "team": "2879",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 13,
@@ -5786,14 +6119,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Hermie_Sadler"
+      "rr_key": "Hermie_Sadler"
     },
     "jj-yeley": {
       "name": "J.J. Yeley",
       "slug": "jj-yeley",
-      "rr_key": "JJ_Yeley",
+      "nascar_driver_id": 3669,
       "dob": "1970-01-01",
       "hometown": null,
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -5838,14 +6174,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/JJ_Yeley"
+      "rr_key": "JJ_Yeley"
     },
     "jack-sprague": {
       "name": "Jack Sprague",
       "slug": "jack-sprague",
-      "rr_key": "Jack_Sprague",
+      "nascar_driver_id": 3145,
       "dob": "1964-08-08",
       "hometown": "Spring Lake, MI",
+      "crew_chief": null,
+      "team": "3145",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -5890,14 +6229,17 @@
           "lead_lap_finishes": 224
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jack_Sprague"
+      "rr_key": "Jack_Sprague"
     },
     "jack-wood": {
       "name": "Jack Wood",
       "slug": "jack-wood",
-      "rr_key": "Jack_Wood",
+      "nascar_driver_id": 0,
       "dob": "2000-08-07",
       "hometown": "Loomis, CA",
+      "crew_chief": "Kevin Bellicourt",
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NTS": {
           "years": 5,
@@ -5914,14 +6256,17 @@
           "lead_lap_finishes": 41
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jack_Wood"
+      "rr_key": "Jack_Wood"
     },
     "jake-garcia": {
       "name": "Jake Garcia",
       "slug": "jake-garcia",
-      "rr_key": "Jake_Garcia",
+      "nascar_driver_id": 4423,
       "dob": "2005-03-03",
       "hometown": "Monroe, GA",
+      "crew_chief": "Joshua Hankish",
+      "team": "ThorSport Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 1,
@@ -5952,14 +6297,17 @@
           "lead_lap_finishes": 55
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jake_Garcia"
+      "rr_key": "Jake_Garcia"
     },
     "james-buescher": {
       "name": "James Buescher",
       "slug": "james-buescher",
-      "rr_key": "James_Buescher",
+      "nascar_driver_id": 3850,
       "dob": "1990-03-26",
       "hometown": "Plano, TX",
+      "crew_chief": null,
+      "team": "3850",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 7,
@@ -6004,14 +6352,17 @@
           "lead_lap_finishes": 17
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/James_Buescher"
+      "rr_key": "James_Buescher"
     },
     "jamie-dick": {
       "name": "Jamie Dick",
       "slug": "jamie-dick",
-      "rr_key": "Jamie_Dick",
+      "nascar_driver_id": 3913,
       "dob": "1989-02-05",
       "hometown": "Albuquerque, NM",
+      "crew_chief": null,
+      "team": "3913",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 5,
@@ -6042,14 +6393,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jamie_Dick"
+      "rr_key": "Jamie_Dick"
     },
     "jamie-mcmurray": {
       "name": "Jamie McMurray",
       "slug": "jamie-mcmurray",
-      "rr_key": "Jamie_McMurray",
+      "nascar_driver_id": 2208,
       "dob": "1976-06-03",
       "hometown": "Joplin, MO",
+      "crew_chief": null,
+      "team": "Chip Ganassi Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 19,
@@ -6094,14 +6448,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jamie_McMurray"
+      "rr_key": "Jamie_McMurray"
     },
     "jason-keller": {
       "name": "Jason Keller",
       "slug": "jason-keller",
-      "rr_key": "Jason_Keller",
+      "nascar_driver_id": 1794,
       "dob": "1970-04-23",
       "hometown": "Greenville, SC",
+      "crew_chief": null,
+      "team": "1794",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -6132,14 +6489,17 @@
           "lead_lap_finishes": 270
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jason_Keller"
+      "rr_key": "Jason_Keller"
     },
     "jason-leffler": {
       "name": "Jason Leffler",
       "slug": "jason-leffler",
-      "rr_key": "Jason_Leffler",
+      "nascar_driver_id": 1963,
       "dob": "1975-09-16",
       "hometown": "Long Beach, CA",
+      "crew_chief": null,
+      "team": "1963",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -6184,14 +6544,17 @@
           "lead_lap_finishes": 36
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jason_Leffler"
+      "rr_key": "Jason_Leffler"
     },
     "jason-white": {
       "name": "Jason White",
       "slug": "jason-white",
-      "rr_key": "Jason_White",
+      "nascar_driver_id": 3557,
       "dob": "1970-01-01",
       "hometown": null,
+      "crew_chief": null,
+      "team": "3557",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -6236,14 +6599,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jason_White"
+      "rr_key": "Jason_White"
     },
     "jay-sauter": {
       "name": "Jay Sauter",
       "slug": "jay-sauter",
-      "rr_key": "Jay_Sauter",
+      "nascar_driver_id": 2909,
       "dob": "1962-06-22",
       "hometown": "West Salem, WI",
+      "crew_chief": null,
+      "team": "2909",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -6288,14 +6654,17 @@
           "lead_lap_finishes": 60
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jay_Sauter"
+      "rr_key": "Jay_Sauter"
     },
     "jeb-burton": {
       "name": "Jeb Burton",
       "slug": "jeb-burton",
-      "rr_key": "Jeb_Burton",
+      "nascar_driver_id": 4018,
       "dob": "1992-08-06",
       "hometown": "Halifax, VA",
+      "crew_chief": null,
+      "team": "Jordan Anderson Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -6340,14 +6709,17 @@
           "lead_lap_finishes": 36
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jeb_Burton"
+      "rr_key": "Jeb_Burton"
     },
     "jeff-burton": {
       "name": "Jeff Burton",
       "slug": "jeff-burton",
-      "rr_key": "Jeff_Burton",
+      "nascar_driver_id": 451,
       "dob": "1967-06-29",
       "hometown": "South Boston, VA",
+      "crew_chief": null,
+      "team": "451",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 22,
@@ -6392,14 +6764,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jeff_Burton"
+      "rr_key": "Jeff_Burton"
     },
     "jeff-fuller": {
       "name": "Jeff Fuller",
       "slug": "jeff-fuller",
-      "rr_key": "Jeff_Fuller",
+      "nascar_driver_id": 1126,
       "dob": "1957-03-27",
       "hometown": "Auburn, MA",
+      "crew_chief": null,
+      "team": "1126",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -6430,14 +6805,17 @@
           "lead_lap_finishes": 24
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jeff_Fuller"
+      "rr_key": "Jeff_Fuller"
     },
     "jeff-gordon": {
       "name": "Jeff Gordon",
       "slug": "jeff-gordon",
-      "rr_key": "Jeff_Gordon",
+      "nascar_driver_id": 1237,
       "dob": "1971-08-04",
       "hometown": "Pittsboro, IN",
+      "crew_chief": null,
+      "team": "1237",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 25,
@@ -6468,14 +6846,17 @@
           "lead_lap_finishes": 29
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jeff_Gordon"
+      "rr_key": "Jeff_Gordon"
     },
     "jeff-green": {
       "name": "Jeff Green",
       "slug": "jeff-green",
-      "rr_key": "Jeff_Green",
+      "nascar_driver_id": 1282,
       "dob": "1962-09-06",
       "hometown": "Owensboro, KY",
+      "crew_chief": null,
+      "team": "BJ McLeod Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 18,
@@ -6520,14 +6901,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jeff_Green"
+      "rr_key": "Jeff_Green"
     },
     "jeffrey-earnhardt": {
       "name": "Jeffrey Earnhardt",
       "slug": "jeffrey-earnhardt",
-      "rr_key": "Jeffrey_Earnhardt",
+      "nascar_driver_id": 0,
       "dob": "1989-06-22",
       "hometown": "Mooresville, NC",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -6572,14 +6956,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jeffrey_Earnhardt"
+      "rr_key": "Jeffrey_Earnhardt"
     },
     "jennifer-jo-cobb": {
       "name": "Jennifer Jo Cobb",
       "slug": "jennifer-jo-cobb",
-      "rr_key": "Jennifer_Jo_Cobb",
+      "nascar_driver_id": 608,
       "dob": "1973-06-12",
       "hometown": "Kansas City, KS",
+      "crew_chief": null,
+      "team": "Jennifer Jo Cobb Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 15,
@@ -6610,14 +6997,17 @@
           "lead_lap_finishes": 11
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jennifer_Jo_Cobb"
+      "rr_key": "Jennifer_Jo_Cobb"
     },
     "jeremy-clements": {
       "name": "Jeremy Clements",
       "slug": "jeremy-clements",
-      "rr_key": "Jeremy_Clements",
+      "nascar_driver_id": 595,
       "dob": "1985-01-16",
       "hometown": "Spartanburg, SC",
+      "crew_chief": "Matt Weber",
+      "team": "Jeremy Clements Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 21,
@@ -6634,14 +7024,17 @@
           "lead_lap_finishes": 214
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jeremy_Clements"
+      "rr_key": "Jeremy_Clements"
     },
     "jeremy-mayfield": {
       "name": "Jeremy Mayfield",
       "slug": "jeremy-mayfield",
-      "rr_key": "Jeremy_Mayfield",
+      "nascar_driver_id": 2145,
       "dob": "1969-05-27",
       "hometown": "Owensboro, KY",
+      "crew_chief": null,
+      "team": "2145",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 17,
@@ -6686,7 +7079,7 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jeremy_Mayfield"
+      "rr_key": "Jeremy_Mayfield"
     },
     "jerry-hill": {
       "name": "Jerry Hill",
@@ -6795,9 +7188,12 @@
     "jesse-little": {
       "name": "Jesse Little",
       "slug": "jesse-little",
-      "rr_key": "Jesse_Little",
+      "nascar_driver_id": 4150,
       "dob": "1997-04-15",
       "hometown": "Sherrills Ford, NC",
+      "crew_chief": null,
+      "team": "Young's Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -6842,14 +7238,17 @@
           "lead_lap_finishes": 25
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jesse_Little"
+      "rr_key": "Jesse_Little"
     },
     "jesse-love": {
       "name": "Jesse Love",
       "slug": "jesse-love",
-      "rr_key": "Jesse_Love",
+      "nascar_driver_id": 4463,
       "dob": "2005-01-14",
       "hometown": "Menlo Park, CA",
+      "crew_chief": "Danny Stockman",
+      "team": "Richard Childress Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -6894,14 +7293,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jesse_Love"
+      "rr_key": "Jesse_Love"
     },
     "jimmie-johnson": {
       "name": "Jimmie Johnson",
       "slug": "jimmie-johnson",
-      "rr_key": "Jimmie_Johnson",
+      "nascar_driver_id": 1717,
       "dob": "1975-09-17",
       "hometown": "El Cajon, CA",
+      "crew_chief": null,
+      "team": "Legacy Motor Club",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 24,
@@ -6946,7 +7348,7 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jimmie_Johnson"
+      "rr_key": "Jimmie_Johnson"
     },
     "jimmy-spencer": {
       "name": "Jimmy Spencer",
@@ -7001,11 +7403,14 @@
       "source_url": "https://www.racing-reference.info/driver/Jimmy_Spencer"
     },
     "joe-graf-jr": {
-      "name": "Joe Graf Jr",
+      "name": "Joe Graf Jr.",
       "slug": "joe-graf-jr",
-      "rr_key": "Joe_Graf_Jr",
+      "nascar_driver_id": 4313,
       "dob": "1998-07-12",
       "hometown": "Mahwah, NJ",
+      "crew_chief": null,
+      "team": "RSS Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -7022,14 +7427,17 @@
           "lead_lap_finishes": 40
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Joe_Graf_Jr"
+      "rr_key": "Joe_Graf_Jr"
     },
     "joe-nemechek": {
       "name": "Joe Nemechek",
       "slug": "joe-nemechek",
-      "rr_key": "Joe_Nemechek",
+      "nascar_driver_id": 2384,
       "dob": "1963-09-26",
       "hometown": "Naples, FL",
+      "crew_chief": null,
+      "team": "Mike Harmon Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 24,
@@ -7074,7 +7482,7 @@
           "lead_lap_finishes": 23
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Joe_Nemechek"
+      "rr_key": "Joe_Nemechek"
     },
     "joey-coulter": {
       "name": "Joey Coulter",
@@ -7131,9 +7539,12 @@
     "joey-gase": {
       "name": "Joey Gase",
       "slug": "joey-gase",
-      "rr_key": "Joey_Gase",
+      "nascar_driver_id": 4004,
       "dob": "1993-02-08",
       "hometown": "Cedar Rapids, IA",
+      "crew_chief": "Wayne Carroll",
+      "team": "4004",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 11,
@@ -7178,14 +7589,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Joey_Gase"
+      "rr_key": "Joey_Gase"
     },
     "joey-logano": {
       "name": "Joey Logano",
       "slug": "joey-logano",
-      "rr_key": "Joey_Logano",
+      "nascar_driver_id": 3859,
       "dob": "1990-05-24",
       "hometown": "Middletown, CT",
+      "crew_chief": "Paul Wolfe",
+      "team": "Team Penske",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 19,
@@ -7230,7 +7644,7 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Joey_Logano"
+      "rr_key": "Joey_Logano"
     },
     "johanna-long": {
       "name": "Johanna Long",
@@ -7287,9 +7701,12 @@
     "john-andretti": {
       "name": "John Andretti",
       "slug": "john-andretti",
-      "rr_key": "John_Andretti",
+      "nascar_driver_id": 68,
       "dob": "1963-03-12",
       "hometown": "Bethlehem, PA",
+      "crew_chief": null,
+      "team": "68",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 17,
@@ -7334,7 +7751,7 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/John_Andretti"
+      "rr_key": "John_Andretti"
     },
     "john-h-nemechek": {
       "name": "John H. Nemechek",
@@ -7391,9 +7808,12 @@
     "john-wes-townley": {
       "name": "John Wes Townley",
       "slug": "john-wes-townley",
-      "rr_key": "John_Wes_Townley",
+      "nascar_driver_id": 3855,
       "dob": "1989-12-31",
       "hometown": "Watkinsville, GA",
+      "crew_chief": null,
+      "team": "3855",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -7438,7 +7858,7 @@
           "lead_lap_finishes": 56
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/John_Wes_Townley"
+      "rr_key": "John_Wes_Townley"
     },
     "johnny-benson-jr": {
       "name": "Johnny Benson, Jr.",
@@ -7495,9 +7915,12 @@
     "johnny-chapman": {
       "name": "Johnny Chapman",
       "slug": "johnny-chapman",
-      "rr_key": "Johnny_Chapman",
+      "nascar_driver_id": 541,
       "dob": "1967-12-14",
       "hometown": "Statesville, NC",
+      "crew_chief": null,
+      "team": "541",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -7542,14 +7965,17 @@
           "lead_lap_finishes": 4
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Johnny_Chapman"
+      "rr_key": "Johnny_Chapman"
     },
     "johnny-sauter": {
       "name": "Johnny Sauter",
       "slug": "johnny-sauter",
-      "rr_key": "Johnny_Sauter",
+      "nascar_driver_id": 2911,
       "dob": "1978-05-01",
       "hometown": "Necedah, WI",
+      "crew_chief": "Joshua Hankish",
+      "team": "ThorSport Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 11,
@@ -7594,14 +8020,17 @@
           "lead_lap_finishes": 243
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Johnny_Sauter"
+      "rr_key": "Johnny_Sauter"
     },
     "jon-wood": {
       "name": "Jon Wood",
       "slug": "jon-wood",
-      "rr_key": "Jon_Wood",
+      "nascar_driver_id": 3637,
       "dob": "1981-10-25",
       "hometown": "Stuart, VA",
+      "crew_chief": null,
+      "team": "3637",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -7646,14 +8075,17 @@
           "lead_lap_finishes": 73
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jon_Wood"
+      "rr_key": "Jon_Wood"
     },
     "jordan-anderson": {
       "name": "Jordan Anderson",
       "slug": "jordan-anderson",
-      "rr_key": "Jordan_Anderson",
+      "nascar_driver_id": 4139,
       "dob": "1991-04-15",
       "hometown": "Forest Acres, SC",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 9,
@@ -7698,14 +8130,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Jordan_Anderson"
+      "rr_key": "Jordan_Anderson"
     },
     "josh-berry": {
       "name": "Josh Berry",
       "slug": "josh-berry",
-      "rr_key": "Josh_Berry",
+      "nascar_driver_id": 4123,
       "dob": "1990-10-22",
       "hometown": "Hendersonville, TN",
+      "crew_chief": "Miles Stanley",
+      "team": "Wood Brothers Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -7750,14 +8185,17 @@
           "lead_lap_finishes": 7
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Josh_Berry"
+      "rr_key": "Josh_Berry"
     },
     "josh-bilicki": {
       "name": "Josh Bilicki",
       "slug": "josh-bilicki",
-      "rr_key": "Josh_Bilicki",
+      "nascar_driver_id": 4213,
       "dob": "1995-06-03",
       "hometown": "Menomonee Falls, WI",
+      "crew_chief": "Mario Gosselin",
+      "team": "DGM Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 9,
@@ -7802,14 +8240,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Josh_Bilicki"
+      "rr_key": "Josh_Bilicki"
     },
     "josh-reaume": {
       "name": "Josh Reaume",
       "slug": "josh-reaume",
-      "rr_key": "Josh_Reaume",
+      "nascar_driver_id": 4102,
       "dob": "1990-10-11",
       "hometown": "Redlands, CA",
+      "crew_chief": null,
+      "team": "Team Reaume",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 5,
@@ -7840,14 +8281,17 @@
           "lead_lap_finishes": 10
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Josh_Reaume"
+      "rr_key": "Josh_Reaume"
     },
     "josh-williams": {
       "name": "Josh Williams",
       "slug": "josh-williams",
-      "rr_key": "Josh_Williams",
+      "nascar_driver_id": 4106,
       "dob": "1993-08-03",
       "hometown": "Port Charlotte, FL",
+      "crew_chief": "Eddie Pardue",
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -7892,14 +8336,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Josh_Williams"
+      "rr_key": "Josh_Williams"
     },
     "josh-wise": {
       "name": "Josh Wise",
       "slug": "josh-wise",
-      "rr_key": "Josh_Wise",
+      "nascar_driver_id": 3797,
       "dob": "1983-02-07",
       "hometown": "Riverside, CA",
+      "crew_chief": null,
+      "team": "3797",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 8,
@@ -7944,14 +8391,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Josh_Wise"
+      "rr_key": "Josh_Wise"
     },
     "juan-pablo-montoya": {
       "name": "Juan Pablo Montoya",
       "slug": "juan-pablo-montoya",
-      "rr_key": "Juan_Pablo_Montoya",
+      "nascar_driver_id": 3773,
       "dob": "1975-09-20",
       "hometown": "Bogota, Colombia",
+      "crew_chief": null,
+      "team": "3773",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -7982,14 +8432,17 @@
           "lead_lap_finishes": 12
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Juan_Pablo_Montoya"
+      "rr_key": "Juan_Pablo_Montoya"
     },
     "justin-allgaier": {
       "name": "Justin Allgaier",
       "slug": "justin-allgaier",
-      "rr_key": "Justin_Allgaier",
+      "nascar_driver_id": 34,
       "dob": "1986-06-06",
       "hometown": "Riverton, IL",
+      "crew_chief": "Andrew Overstreet",
+      "team": "JR Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -8034,14 +8487,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Justin_Allgaier"
+      "rr_key": "Justin_Allgaier"
     },
     "justin-haley": {
       "name": "Justin Haley",
       "slug": "justin-haley",
-      "rr_key": "Justin_Haley",
+      "nascar_driver_id": 4172,
       "dob": "1999-04-28",
       "hometown": "Winamac, IN",
+      "crew_chief": "Mike Hillman Jr.",
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -8086,14 +8542,17 @@
           "lead_lap_finishes": 44
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Justin_Haley"
+      "rr_key": "Justin_Haley"
     },
     "justin-labonte": {
       "name": "Justin Labonte",
       "slug": "justin-labonte",
-      "rr_key": "Justin_Labonte",
+      "nascar_driver_id": 1892,
       "dob": "1981-02-05",
       "hometown": "Trinity, NC",
+      "crew_chief": null,
+      "team": "1892",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 7,
@@ -8138,14 +8597,17 @@
           "lead_lap_finishes": 14
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Justin_Labonte"
+      "rr_key": "Justin_Labonte"
     },
     "justin-lofton": {
       "name": "Justin Lofton",
       "slug": "justin-lofton",
-      "rr_key": "Justin_Lofton",
+      "nascar_driver_id": 3909,
       "dob": "1986-02-18",
       "hometown": "Westmorland, CA",
+      "crew_chief": null,
+      "team": "3909",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -8176,14 +8638,17 @@
           "lead_lap_finishes": 52
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Justin_Lofton"
+      "rr_key": "Justin_Lofton"
     },
     "justin-marks": {
       "name": "Justin Marks",
       "slug": "justin-marks",
-      "rr_key": "Justin_Marks",
+      "nascar_driver_id": 3836,
       "dob": "1981-03-25",
       "hometown": "Rocklin, CA",
+      "crew_chief": null,
+      "team": "Chip Ganassi Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -8228,14 +8693,17 @@
           "lead_lap_finishes": 16
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Justin_Marks"
+      "rr_key": "Justin_Marks"
     },
     "kaden-honeycutt": {
       "name": "Kaden Honeycutt",
       "slug": "kaden-honeycutt",
-      "rr_key": "Kaden_Honeycutt",
+      "nascar_driver_id": 4427,
       "dob": "2003-06-23",
       "hometown": "Willow Park, TX",
+      "crew_chief": "Scott Zipadelli",
+      "team": "TRICON Garage",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -8266,14 +8734,17 @@
           "lead_lap_finishes": 45
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kaden_Honeycutt"
+      "rr_key": "Kaden_Honeycutt"
     },
     "kasey-kahne": {
       "name": "Kasey Kahne",
       "slug": "kasey-kahne",
-      "rr_key": "Kasey_Kahne",
+      "nascar_driver_id": 1772,
       "dob": "1980-04-10",
       "hometown": "Enumclaw, WA",
+      "crew_chief": null,
+      "team": "Leavine Family Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 15,
@@ -8318,14 +8789,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kasey_Kahne"
+      "rr_key": "Kasey_Kahne"
     },
     "kaz-grala": {
       "name": "Kaz Grala",
       "slug": "kaz-grala",
-      "rr_key": "Kaz_Grala",
+      "nascar_driver_id": 4191,
       "dob": "1998-12-29",
       "hometown": "Boston, MA",
+      "crew_chief": "Billy Plourde",
+      "team": "Rick Ware Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -8370,14 +8844,17 @@
           "lead_lap_finishes": 32
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kaz_Grala"
+      "rr_key": "Kaz_Grala"
     },
     "kelly-bires": {
       "name": "Kelly Bires",
       "slug": "kelly-bires",
-      "rr_key": "Kelly_Bires",
+      "nascar_driver_id": 3779,
       "dob": "1984-08-25",
       "hometown": "Mauston, WI",
+      "crew_chief": null,
+      "team": "3779",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -8422,14 +8899,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kelly_Bires"
+      "rr_key": "Kelly_Bires"
     },
     "kelly-sutton": {
       "name": "Kelly Sutton",
       "slug": "kelly-sutton",
-      "rr_key": "Kelly_Sutton",
+      "nascar_driver_id": 3235,
       "dob": "1971-09-24",
       "hometown": "Crownsville, MD",
+      "crew_chief": null,
+      "team": "3235",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NTS": {
           "years": 5,
@@ -8446,14 +8926,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kelly_Sutton"
+      "rr_key": "Kelly_Sutton"
     },
     "ken-schrader": {
       "name": "Ken Schrader",
       "slug": "ken-schrader",
-      "rr_key": "Ken_Schrader",
+      "nascar_driver_id": 2937,
       "dob": "1955-05-29",
       "hometown": "Fenton, MO",
+      "crew_chief": null,
+      "team": "2937",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 29,
@@ -8498,14 +8981,17 @@
           "lead_lap_finishes": 59
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ken_Schrader"
+      "rr_key": "Ken_Schrader"
     },
     "kenny-hendrick": {
       "name": "Kenny Hendrick",
       "slug": "kenny-hendrick",
-      "rr_key": "Kenny_Hendrick",
+      "nascar_driver_id": 1462,
       "dob": "1969-09-10",
       "hometown": "Chino, CA",
+      "crew_chief": null,
+      "team": "1462",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -8550,14 +9036,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kenny_Hendrick"
+      "rr_key": "Kenny_Hendrick"
     },
     "kenny-wallace": {
       "name": "Kenny Wallace",
       "slug": "kenny-wallace",
-      "rr_key": "Kenny_Wallace",
+      "nascar_driver_id": 3456,
       "dob": "1963-08-23",
       "hometown": "St. Louis, MO",
+      "crew_chief": null,
+      "team": "3456",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 21,
@@ -8602,7 +9091,7 @@
           "lead_lap_finishes": 11
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kenny_Wallace"
+      "rr_key": "Kenny_Wallace"
     },
     "kerry-earnhardt": {
       "name": "Kerry Earnhardt",
@@ -8659,9 +9148,12 @@
     "kertus-davis": {
       "name": "Kertus Davis",
       "slug": "kertus-davis",
-      "rr_key": "Kertus_Davis",
+      "nascar_driver_id": 767,
       "dob": "1981-02-26",
       "hometown": "Gaffney, SC",
+      "crew_chief": null,
+      "team": "767",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -8692,14 +9184,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kertus_Davis"
+      "rr_key": "Kertus_Davis"
     },
     "kevin-conway": {
       "name": "Kevin Conway",
       "slug": "kevin-conway",
-      "rr_key": "Kevin_Conway",
+      "nascar_driver_id": 648,
       "dob": "1979-04-15",
       "hometown": "Cornelius, NC",
+      "crew_chief": null,
+      "team": "648",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -8744,7 +9239,7 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kevin_Conway"
+      "rr_key": "Kevin_Conway"
     },
     "kevin-grubb": {
       "name": "Kevin Grubb",
@@ -8801,9 +9296,12 @@
     "kevin-harvick": {
       "name": "Kevin Harvick",
       "slug": "kevin-harvick",
-      "rr_key": "Kevin_Harvick",
+      "nascar_driver_id": 1416,
       "dob": "1975-12-08",
       "hometown": "Bakersfield, CA",
+      "crew_chief": "Rodney Childers",
+      "team": "Stewart-Haas Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 23,
@@ -8848,14 +9346,17 @@
           "lead_lap_finishes": 75
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kevin_Harvick"
+      "rr_key": "Kevin_Harvick"
     },
     "kevin-lepage": {
       "name": "Kevin Lepage",
       "slug": "kevin-lepage",
-      "rr_key": "Kevin_Lepage",
+      "nascar_driver_id": 1976,
       "dob": "1962-06-26",
       "hometown": "Shelburne, VT",
+      "crew_chief": null,
+      "team": "1976",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 13,
@@ -8900,14 +9401,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kevin_Lepage"
+      "rr_key": "Kevin_Lepage"
     },
     "korbin-forrister": {
       "name": "Korbin Forrister",
       "slug": "korbin-forrister",
-      "rr_key": "Korbin_Forrister",
+      "nascar_driver_id": 4111,
       "dob": "1992-11-16",
       "hometown": "Cedartown, GA",
+      "crew_chief": null,
+      "team": "4111",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -8938,14 +9442,17 @@
           "lead_lap_finishes": 11
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Korbin_Forrister"
+      "rr_key": "Korbin_Forrister"
     },
     "kris-wright": {
       "name": "Kris Wright",
       "slug": "kris-wright",
-      "rr_key": "Kris_Wright",
+      "nascar_driver_id": 0,
       "dob": "1994-07-17",
       "hometown": "Wexford, PA",
+      "crew_chief": "Darren Fraley",
+      "team": "McAnally-Hilgemann Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -8976,14 +9483,17 @@
           "lead_lap_finishes": 20
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kris_Wright"
+      "rr_key": "Kris_Wright"
     },
     "kurt-busch": {
       "name": "Kurt Busch",
       "slug": "kurt-busch",
-      "rr_key": "Kurt_Busch",
+      "nascar_driver_id": 453,
       "dob": "1978-08-04",
       "hometown": "Las Vegas, NV",
+      "crew_chief": null,
+      "team": "23XI Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 23,
@@ -9028,14 +9538,17 @@
           "lead_lap_finishes": 21
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kurt_Busch"
+      "rr_key": "Kurt_Busch"
     },
     "kyle-busch": {
       "name": "Kyle Busch",
       "slug": "kyle-busch",
-      "rr_key": "Kyle_Busch",
+      "nascar_driver_id": 454,
       "dob": "1985-05-02",
       "hometown": "Las Vegas, NV",
+      "crew_chief": "Andy Street",
+      "team": "Richard Childress Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 24,
@@ -9080,14 +9593,17 @@
           "lead_lap_finishes": 156
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kyle_Busch"
+      "rr_key": "Kyle_Busch"
     },
     "kyle-krisiloff": {
       "name": "Kyle Krisiloff",
       "slug": "kyle-krisiloff",
-      "rr_key": "Kyle_Krisiloff",
+      "nascar_driver_id": 1878,
       "dob": "1986-03-03",
       "hometown": "Carmel, IN",
+      "crew_chief": null,
+      "team": "1878",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -9118,14 +9634,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kyle_Krisiloff"
+      "rr_key": "Kyle_Krisiloff"
     },
     "kyle-larson": {
       "name": "Kyle Larson",
       "slug": "kyle-larson",
-      "rr_key": "Kyle_Larson",
+      "nascar_driver_id": 4030,
       "dob": "1992-07-31",
       "hometown": "Elk Grove, CA",
+      "crew_chief": "Cliff Daniels",
+      "team": "Hendrick Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 14,
@@ -9170,14 +9689,17 @@
           "lead_lap_finishes": 13
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kyle_Larson"
+      "rr_key": "Kyle_Larson"
     },
     "kyle-petty": {
       "name": "Kyle Petty",
       "slug": "kyle-petty",
-      "rr_key": "Kyle_Petty",
+      "nascar_driver_id": 2558,
       "dob": "1960-06-02",
       "hometown": "Randleman, NC",
+      "crew_chief": null,
+      "team": "2558",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 30,
@@ -9222,14 +9744,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kyle_Petty"
+      "rr_key": "Kyle_Petty"
     },
     "kyle-sieg": {
       "name": "Kyle Sieg",
       "slug": "kyle-sieg",
-      "rr_key": "Kyle_Sieg",
+      "nascar_driver_id": 4388,
       "dob": "2001-04-16",
       "hometown": "Tucker, GA",
+      "crew_chief": "Aedan McHugh",
+      "team": "RSS Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -9246,14 +9771,17 @@
           "lead_lap_finishes": 62
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kyle_Sieg"
+      "rr_key": "Kyle_Sieg"
     },
     "kyle-weatherman": {
       "name": "Kyle Weatherman",
       "slug": "kyle-weatherman",
-      "rr_key": "Kyle_Weatherman",
+      "nascar_driver_id": 4187,
       "dob": "1997-08-28",
       "hometown": "Wentzville, MO",
+      "crew_chief": "Mario Gosselin",
+      "team": "4187",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -9298,14 +9826,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Kyle_Weatherman"
+      "rr_key": "Kyle_Weatherman"
     },
     "lance-hooper": {
       "name": "Lance Hooper",
       "slug": "lance-hooper",
-      "rr_key": "Lance_Hooper",
+      "nascar_driver_id": 1562,
       "dob": "1967-06-01",
       "hometown": "Palmdale, CA",
+      "crew_chief": null,
+      "team": "1562",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -9350,7 +9881,7 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Lance_Hooper"
+      "rr_key": "Lance_Hooper"
     },
     "lance-norick": {
       "name": "Lance Norick",
@@ -9393,9 +9924,12 @@
     "landon-cassill": {
       "name": "Landon Cassill",
       "slug": "landon-cassill",
-      "rr_key": "Landon_Cassill",
+      "nascar_driver_id": 3808,
       "dob": "1989-07-07",
       "hometown": "Cedar Rapids, IA",
+      "crew_chief": null,
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 12,
@@ -9440,14 +9974,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Landon_Cassill"
+      "rr_key": "Landon_Cassill"
     },
     "larry-foyt": {
       "name": "Larry Foyt",
       "slug": "larry-foyt",
-      "rr_key": "Larry_Foyt",
+      "nascar_driver_id": 1096,
       "dob": "1977-02-22",
       "hometown": "Houston, TX",
+      "crew_chief": null,
+      "team": "1096",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -9492,14 +10029,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Larry_Foyt"
+      "rr_key": "Larry_Foyt"
     },
     "larry-gunselman": {
       "name": "Larry Gunselman",
       "slug": "larry-gunselman",
-      "rr_key": "Larry_Gunselman",
+      "nascar_driver_id": 1320,
       "dob": "1960-12-01",
       "hometown": "Snohomish, WA",
+      "crew_chief": null,
+      "team": "1320",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -9544,14 +10084,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Larry_Gunselman"
+      "rr_key": "Larry_Gunselman"
     },
     "lawless-alan": {
       "name": "Lawless Alan",
       "slug": "lawless-alan",
-      "rr_key": "Lawless_Alan",
+      "nascar_driver_id": 4371,
       "dob": "2000-02-02",
       "hometown": "Van Nuys, CA",
+      "crew_chief": "Matthew Lucas",
+      "team": "Reaume Brothers Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 1,
@@ -9582,14 +10125,17 @@
           "lead_lap_finishes": 31
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Lawless_Alan"
+      "rr_key": "Lawless_Alan"
     },
     "layne-riggs": {
       "name": "Layne Riggs",
       "slug": "layne-riggs",
-      "rr_key": "Layne_Riggs",
+      "nascar_driver_id": 4446,
       "dob": "2002-06-11",
       "hometown": "Bahama, NC",
+      "crew_chief": "Dylan Cappello",
+      "team": "Front Row Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 1,
@@ -9620,14 +10166,17 @@
           "lead_lap_finishes": 40
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Layne_Riggs"
+      "rr_key": "Layne_Riggs"
     },
     "leland-honeyman": {
       "name": "Leland Honeyman",
       "slug": "leland-honeyman",
-      "rr_key": "Leland_Honeyman",
+      "nascar_driver_id": 4449,
       "dob": "2005-02-23",
       "hometown": "Mooresville, NC",
+      "crew_chief": "Andrew Abbott",
+      "team": "Young's Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -9658,14 +10207,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Leland_Honeyman"
+      "rr_key": "Leland_Honeyman"
     },
     "marcos-ambrose": {
       "name": "Marcos Ambrose",
       "slug": "marcos-ambrose",
-      "rr_key": "Marcos_Ambrose",
+      "nascar_driver_id": 49,
       "dob": "1976-09-01",
       "hometown": "Launceston, Tasmania",
+      "crew_chief": null,
+      "team": "49",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 8,
@@ -9710,14 +10262,17 @@
           "lead_lap_finishes": 10
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Marcos_Ambrose"
+      "rr_key": "Marcos_Ambrose"
     },
     "mario-gosselin": {
       "name": "Mario Gosselin",
       "slug": "mario-gosselin",
-      "rr_key": "Mario_Gosselin",
+      "nascar_driver_id": 1243,
       "dob": "1971-10-20",
       "hometown": "Lake Wales, FL",
+      "crew_chief": null,
+      "team": "1243",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -9762,14 +10317,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Mario_Gosselin"
+      "rr_key": "Mario_Gosselin"
     },
     "mark-green": {
       "name": "Mark Green",
       "slug": "mark-green",
-      "rr_key": "Mark_Green",
+      "nascar_driver_id": 1284,
       "dob": "1959-04-08",
       "hometown": "Owensboro, KY",
+      "crew_chief": null,
+      "team": "1284",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -9814,14 +10372,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Mark_Green"
+      "rr_key": "Mark_Green"
     },
     "mark-martin": {
       "name": "Mark Martin",
       "slug": "mark-martin",
-      "rr_key": "Mark_Martin",
+      "nascar_driver_id": 2117,
       "dob": "1959-01-09",
       "hometown": "Batesville, AR",
+      "crew_chief": null,
+      "team": "2117",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 31,
@@ -9866,7 +10427,7 @@
           "lead_lap_finishes": 23
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Mark_Martin"
+      "rr_key": "Mark_Martin"
     },
     "martin-truex-jr": {
       "name": "Martin Truex Jr",
@@ -9923,9 +10484,12 @@
     "mason-massey": {
       "name": "Mason Massey",
       "slug": "mason-massey",
-      "rr_key": "Mason_Massey",
+      "nascar_driver_id": 4315,
       "dob": "1997-01-24",
       "hometown": "Douglasville, GA",
+      "crew_chief": "Kevin Manion",
+      "team": "Youngs Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -9956,14 +10520,17 @@
           "lead_lap_finishes": 9
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Mason_Massey"
+      "rr_key": "Mason_Massey"
     },
     "matt-crafton": {
       "name": "Matt Crafton",
       "slug": "matt-crafton",
-      "rr_key": "Matt_Crafton",
+      "nascar_driver_id": 0,
       "dob": "1976-06-11",
       "hometown": "Tulare, CA",
+      "crew_chief": "Jeriod Prince",
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -10008,14 +10575,17 @@
           "lead_lap_finishes": 446
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Matt_Crafton"
+      "rr_key": "Matt_Crafton"
     },
     "matt-dibenedetto": {
       "name": "Matt DiBenedetto",
       "slug": "matt-dibenedetto",
-      "rr_key": "Matt_DiBenedetto",
+      "nascar_driver_id": 3916,
       "dob": "1991-07-27",
       "hometown": "Grass Valley, CA",
+      "crew_chief": "Pat Tryson",
+      "team": "Viking Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -10060,14 +10630,17 @@
           "lead_lap_finishes": 27
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Matt_DiBenedetto"
+      "rr_key": "Matt_DiBenedetto"
     },
     "matt-kenseth": {
       "name": "Matt Kenseth",
       "slug": "matt-kenseth",
-      "rr_key": "Matt_Kenseth",
+      "nascar_driver_id": 1810,
       "dob": "1972-03-10",
       "hometown": "Cambridge, WI",
+      "crew_chief": null,
+      "team": "1810",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 22,
@@ -10098,14 +10671,17 @@
           "lead_lap_finishes": 222
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Matt_Kenseth"
+      "rr_key": "Matt_Kenseth"
     },
     "matt-mills": {
       "name": "Matt Mills",
       "slug": "matt-mills",
-      "rr_key": "Matt_Mills",
+      "nascar_driver_id": 4209,
       "dob": "1996-11-14",
       "hometown": "Lynchburg, VA",
+      "crew_chief": "Mike Shiplett",
+      "team": "Niece Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -10150,14 +10726,17 @@
           "lead_lap_finishes": 23
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Matt_Mills"
+      "rr_key": "Matt_Mills"
     },
     "matt-tifft": {
       "name": "Matt Tifft",
       "slug": "matt-tifft",
-      "rr_key": "Matt_Tifft",
+      "nascar_driver_id": 4131,
       "dob": "1996-06-26",
       "hometown": "Hinckley, OH",
+      "crew_chief": null,
+      "team": "4131",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -10202,14 +10781,17 @@
           "lead_lap_finishes": 17
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Matt_Tifft"
+      "rr_key": "Matt_Tifft"
     },
     "max-papis": {
       "name": "Max Papis",
       "slug": "max-papis",
-      "rr_key": "Max_Papis",
+      "nascar_driver_id": 2484,
       "dob": "1969-10-03",
       "hometown": "Como, Italy",
+      "crew_chief": null,
+      "team": "2484",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -10254,14 +10836,17 @@
           "lead_lap_finishes": 22
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Max_Papis"
+      "rr_key": "Max_Papis"
     },
     "michael-annett": {
       "name": "Michael Annett",
       "slug": "michael-annett",
-      "rr_key": "Michael_Annett",
+      "nascar_driver_id": 3861,
       "dob": "1986-06-23",
       "hometown": "Des Moines, IA",
+      "crew_chief": null,
+      "team": "JR Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -10306,14 +10891,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Michael_Annett"
+      "rr_key": "Michael_Annett"
     },
     "michael-mcdowell": {
       "name": "Michael McDowell",
       "slug": "michael-mcdowell",
-      "rr_key": "Michael_McDowell",
+      "nascar_driver_id": 3832,
       "dob": "1984-12-21",
-      "hometown": "Phoenix, AZ",
+      "hometown": "Glendale, AZ",
+      "crew_chief": "Travis Peterson",
+      "team": "Spire Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 19,
@@ -10358,14 +10946,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Michael_McDowell"
+      "rr_key": "Michael_McDowell"
     },
     "michael-waltrip": {
       "name": "Michael Waltrip",
       "slug": "michael-waltrip",
-      "rr_key": "Michael_Waltrip",
+      "nascar_driver_id": 3478,
       "dob": "1963-04-30",
       "hometown": "Owensboro, KY",
+      "crew_chief": null,
+      "team": "3478",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 33,
@@ -10410,14 +11001,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Michael_Waltrip"
+      "rr_key": "Michael_Waltrip"
     },
     "miguel-paludo": {
       "name": "Miguel Paludo",
       "slug": "miguel-paludo",
-      "rr_key": "Miguel_Paludo",
+      "nascar_driver_id": 3960,
       "dob": "1983-07-26",
       "hometown": "Nova Prata, Brazil",
+      "crew_chief": null,
+      "team": "3960",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 4,
@@ -10448,14 +11042,17 @@
           "lead_lap_finishes": 51
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Miguel_Paludo"
+      "rr_key": "Miguel_Paludo"
     },
     "mike-bliss": {
       "name": "Mike Bliss",
       "slug": "mike-bliss",
-      "rr_key": "Mike_Bliss",
+      "nascar_driver_id": 275,
       "dob": "1965-04-05",
       "hometown": "Milwaukie, OR",
+      "crew_chief": null,
+      "team": "275",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 20,
@@ -10500,14 +11097,17 @@
           "lead_lap_finishes": 137
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Mike_Bliss"
+      "rr_key": "Mike_Bliss"
     },
     "mike-harmon": {
       "name": "Mike Harmon",
       "slug": "mike-harmon",
-      "rr_key": "Mike_Harmon",
+      "nascar_driver_id": 1392,
       "dob": "1958-01-24",
       "hometown": "Birmingport, AL",
+      "crew_chief": null,
+      "team": "Mike Harmon Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -10552,7 +11152,7 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Mike_Harmon"
+      "rr_key": "Mike_Harmon"
     },
     "mike-mclaughlin": {
       "name": "Mike McLaughlin",
@@ -10609,9 +11209,12 @@
     "mike-skinner": {
       "name": "Mike Skinner",
       "slug": "mike-skinner",
-      "rr_key": "Mike_Skinner",
+      "nascar_driver_id": 3052,
       "dob": "1957-06-28",
       "hometown": "Ontario, CA",
+      "crew_chief": null,
+      "team": "3052",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 22,
@@ -10656,14 +11259,17 @@
           "lead_lap_finishes": 176
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Mike_Skinner"
+      "rr_key": "Mike_Skinner"
     },
     "mike-wallace": {
       "name": "Mike Wallace",
       "slug": "mike-wallace",
-      "rr_key": "Mike_Wallace",
+      "nascar_driver_id": 3458,
       "dob": "1959-03-10",
       "hometown": "St. Louis, MO",
+      "crew_chief": null,
+      "team": "3458",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 22,
@@ -10708,14 +11314,17 @@
           "lead_lap_finishes": 68
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Mike_Wallace"
+      "rr_key": "Mike_Wallace"
     },
     "morgan-shepherd": {
       "name": "Morgan Shepherd",
       "slug": "morgan-shepherd",
-      "rr_key": "Morgan_Shepherd",
+      "nascar_driver_id": 3002,
       "dob": "1941-10-12",
       "hometown": "Ferguson, NC",
+      "crew_chief": null,
+      "team": "3002",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 32,
@@ -10760,14 +11369,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Morgan_Shepherd"
+      "rr_key": "Morgan_Shepherd"
     },
     "myatt-snider": {
       "name": "Myatt Snider",
       "slug": "myatt-snider",
-      "rr_key": "Myatt_Snider",
+      "nascar_driver_id": 4223,
       "dob": "1994-12-30",
       "hometown": "Charlotte, NC",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 7,
@@ -10798,14 +11410,17 @@
           "lead_lap_finishes": 20
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Myatt_Snider"
+      "rr_key": "Myatt_Snider"
     },
     "nelson-piquet-jr": {
-      "name": "Nelson Piquet, Jr.",
+      "name": "Nelson Piquet Jr",
       "slug": "nelson-piquet-jr",
-      "rr_key": "Nelson_Piquet_Jr",
+      "nascar_driver_id": 3930,
       "dob": "1985-07-25",
       "hometown": "Brasilia, Brazil",
+      "crew_chief": null,
+      "team": "3930",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -10850,14 +11465,17 @@
           "lead_lap_finishes": 36
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Nelson_Piquet_Jr"
+      "rr_key": "Nelson_Piquet_Jr"
     },
     "nick-sanchez": {
       "name": "Nick Sanchez",
       "slug": "nick-sanchez",
-      "rr_key": "Nick_Sanchez",
+      "nascar_driver_id": 4416,
       "dob": "2001-06-10",
       "hometown": "Miami, FL",
+      "crew_chief": null,
+      "team": "AM Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -10888,14 +11506,17 @@
           "lead_lap_finishes": 40
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Nick_Sanchez"
+      "rr_key": "Nick_Sanchez"
     },
     "noah-gragson": {
       "name": "Noah Gragson",
       "slug": "noah-gragson",
-      "rr_key": "Noah_Gragson",
+      "nascar_driver_id": 4224,
       "dob": "1998-07-15",
       "hometown": "Las Vegas, NV",
+      "crew_chief": "Grant Hutchens",
+      "team": "Front Row Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -10940,14 +11561,17 @@
           "lead_lap_finishes": 34
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Noah_Gragson"
+      "rr_key": "Noah_Gragson"
     },
     "norm-benning": {
       "name": "Norm Benning",
       "slug": "norm-benning",
-      "rr_key": "Norm_Benning",
+      "nascar_driver_id": 214,
       "dob": "1952-01-16",
       "hometown": "Level Green, PA",
+      "crew_chief": "Daniel Killius",
+      "team": "Norm Benning Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 17,
@@ -10992,14 +11616,17 @@
           "lead_lap_finishes": 17
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Norm_Benning"
+      "rr_key": "Norm_Benning"
     },
     "parker-kligerman": {
       "name": "Parker Kligerman",
       "slug": "parker-kligerman",
-      "rr_key": "Parker_Kligerman",
-      "dob": "1990-08-08",
+      "nascar_driver_id": 3914,
+      "dob": "1990-10-08",
       "hometown": "Westport, CT",
+      "crew_chief": "Patrick Donahue",
+      "team": "Big Machine Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -11044,14 +11671,17 @@
           "lead_lap_finishes": 81
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Parker_Kligerman"
+      "rr_key": "Parker_Kligerman"
     },
     "parker-retzlaff": {
       "name": "Parker Retzlaff",
       "slug": "parker-retzlaff",
-      "rr_key": "Parker_Retzlaff",
+      "nascar_driver_id": 4419,
       "dob": "2003-05-21",
       "hometown": "Rhinelander, WI",
+      "crew_chief": "Danny Efland",
+      "team": "Viking Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -11096,14 +11726,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Parker_Retzlaff"
+      "rr_key": "Parker_Retzlaff"
     },
     "patrick-carpentier": {
       "name": "Patrick Carpentier",
       "slug": "patrick-carpentier",
-      "rr_key": "Patrick_Carpentier",
+      "nascar_driver_id": 3811,
       "dob": "1971-08-13",
       "hometown": "Ville LaSalle, Quebec",
+      "crew_chief": null,
+      "team": "3811",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -11148,14 +11781,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Patrick_Carpentier"
+      "rr_key": "Patrick_Carpentier"
     },
     "patrick-emerling": {
       "name": "Patrick Emerling",
       "slug": "patrick-emerling",
-      "rr_key": "Patrick_Emerling",
+      "nascar_driver_id": 4254,
       "dob": "1992-09-19",
       "hometown": "Orchard Park, NY",
+      "crew_chief": null,
+      "team": "4254",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 7,
@@ -11186,14 +11822,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Patrick_Emerling"
+      "rr_key": "Patrick_Emerling"
     },
     "paul-menard": {
       "name": "Paul Menard",
       "slug": "paul-menard",
-      "rr_key": "Paul_Menard",
+      "nascar_driver_id": 2225,
       "dob": "1980-08-21",
       "hometown": "Eau Claire, WI",
+      "crew_chief": null,
+      "team": "Wood Brothers Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 16,
@@ -11238,7 +11877,7 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Paul_Menard"
+      "rr_key": "Paul_Menard"
     },
     "phil-bonifield": {
       "name": "Phil Bonifield",
@@ -11281,9 +11920,12 @@
     "quin-houff": {
       "name": "Quin Houff",
       "slug": "quin-houff",
-      "rr_key": "Quin_Houff",
+      "nascar_driver_id": 4229,
       "dob": "1997-09-15",
       "hometown": "Weyers Cave, VA",
+      "crew_chief": null,
+      "team": "Starcom Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -11314,14 +11956,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Quin_Houff"
+      "rr_key": "Quin_Houff"
     },
     "rajah-caruth": {
       "name": "Rajah Caruth",
       "slug": "rajah-caruth",
-      "rr_key": "Rajah_Caruth",
+      "nascar_driver_id": 4422,
       "dob": "2002-06-11",
       "hometown": "Washington, DC",
+      "crew_chief": null,
+      "team": "JR Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 4,
@@ -11352,7 +11997,7 @@
           "lead_lap_finishes": 54
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Rajah_Caruth"
+      "rr_key": "Rajah_Caruth"
     },
     "randy-lajoie": {
       "name": "Randy LaJoie",
@@ -11409,9 +12054,12 @@
     "randy-macdonald": {
       "name": "Randy MacDonald",
       "slug": "randy-macdonald",
-      "rr_key": "Randy_MacDonald",
+      "nascar_driver_id": 2067,
       "dob": "1962-07-26",
       "hometown": "Oshawa, Ontario",
+      "crew_chief": null,
+      "team": "2067",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -11456,14 +12104,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Randy_MacDonald"
+      "rr_key": "Randy_MacDonald"
     },
     "ray-black-jr": {
-      "name": "Ray Black, Jr.",
+      "name": "Ray Black Jr.",
       "slug": "ray-black-jr",
-      "rr_key": "Ray_Black_Jr",
+      "nascar_driver_id": 4110,
       "dob": "1991-05-17",
       "hometown": "Palm Coast, FL",
+      "crew_chief": null,
+      "team": "SS Green Light Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -11508,14 +12159,17 @@
           "lead_lap_finishes": 10
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ray_Black_Jr"
+      "rr_key": "Ray_Black_Jr"
     },
     "reed-sorenson": {
       "name": "Reed Sorenson",
       "slug": "reed-sorenson",
-      "rr_key": "Reed_Sorenson",
-      "dob": "1986-02-05",
+      "nascar_driver_id": 3120,
+      "dob": "1970-01-01",
       "hometown": "Peachtree City, GA",
+      "crew_chief": null,
+      "team": "Spire Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 16,
@@ -11560,14 +12214,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Reed_Sorenson"
+      "rr_key": "Reed_Sorenson"
     },
     "regan-smith": {
       "name": "Regan Smith",
       "slug": "regan-smith",
-      "rr_key": "Regan_Smith",
+      "nascar_driver_id": 3094,
       "dob": "1983-09-23",
       "hometown": "Cato, NY",
+      "crew_chief": null,
+      "team": "3094",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 12,
@@ -11612,7 +12269,7 @@
           "lead_lap_finishes": 17
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Regan_Smith"
+      "rr_key": "Regan_Smith"
     },
     "rich-bickle": {
       "name": "Rich Bickle",
@@ -11669,9 +12326,12 @@
     "rick-crawford": {
       "name": "Rick Crawford",
       "slug": "rick-crawford",
-      "rr_key": "Rick_Crawford",
+      "nascar_driver_id": 706,
       "dob": "1958-07-26",
       "hometown": "Mobile, AL",
+      "crew_chief": null,
+      "team": "706",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -11716,14 +12376,17 @@
           "lead_lap_finishes": 210
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Rick_Crawford"
+      "rr_key": "Rick_Crawford"
     },
     "ricky-carmichael": {
       "name": "Ricky Carmichael",
       "slug": "ricky-carmichael",
-      "rr_key": "Ricky_Carmichael",
+      "nascar_driver_id": 3880,
       "dob": "1979-11-27",
       "hometown": "Tallahassee, FL",
+      "crew_chief": null,
+      "team": "3880",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -11754,7 +12417,7 @@
           "lead_lap_finishes": 33
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ricky_Carmichael"
+      "rr_key": "Ricky_Carmichael"
     },
     "ricky-craven": {
       "name": "Ricky Craven",
@@ -11811,9 +12474,12 @@
     "ricky-rudd": {
       "name": "Ricky Rudd",
       "slug": "ricky-rudd",
-      "rr_key": "Ricky_Rudd",
+      "nascar_driver_id": 2852,
       "dob": "1956-09-12",
       "hometown": "Chesapeake, VA",
+      "crew_chief": null,
+      "team": "2852",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 33,
@@ -11844,14 +12510,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ricky_Rudd"
+      "rr_key": "Ricky_Rudd"
     },
     "ricky-stenhouse-jr": {
-      "name": "Ricky Stenhouse Jr",
+      "name": "Ricky Stenhouse Jr.",
       "slug": "ricky-stenhouse-jr",
-      "rr_key": "Ricky_Stenhouse_Jr",
+      "nascar_driver_id": 3888,
       "dob": "1987-10-02",
       "hometown": "Olive Branch, MS",
+      "crew_chief": "Mike Kelley",
+      "team": "HYAK Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 16,
@@ -11896,14 +12565,17 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ricky_Stenhouse_Jr"
+      "rr_key": "Ricky_Stenhouse_Jr"
     },
     "riley-herbst": {
       "name": "Riley Herbst",
       "slug": "riley-herbst",
-      "rr_key": "Riley_Herbst",
+      "nascar_driver_id": 4269,
       "dob": "1999-02-24",
       "hometown": "Las Vegas, NV",
+      "crew_chief": "Davin Restivo",
+      "team": "23XI Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -11948,14 +12620,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Riley_Herbst"
+      "rr_key": "Riley_Herbst"
     },
     "robby-gordon": {
       "name": "Robby Gordon",
       "slug": "robby-gordon",
-      "rr_key": "Robby_Gordon",
+      "nascar_driver_id": 1239,
       "dob": "1969-01-02",
       "hometown": "Cerritos, CA",
+      "crew_chief": null,
+      "team": "1239",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 19,
@@ -12000,7 +12675,7 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Robby_Gordon"
+      "rr_key": "Robby_Gordon"
     },
     "robert-pressley": {
       "name": "Robert Pressley",
@@ -12107,11 +12782,14 @@
       "source_url": "https://www.racing-reference.info/driver/Robert_Richardson_Jr"
     },
     "ron-hornaday-jr": {
-      "name": "Ron Hornaday, Jr.",
+      "name": "Ron Hornaday Jr",
       "slug": "ron-hornaday-jr",
-      "rr_key": "Ron_Hornaday_Jr",
+      "nascar_driver_id": 1568,
       "dob": "1958-06-20",
       "hometown": "Palmdale, CA",
+      "crew_chief": null,
+      "team": "1568",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 14,
@@ -12156,14 +12834,17 @@
           "lead_lap_finishes": 271
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ron_Hornaday_Jr"
+      "rr_key": "Ron_Hornaday_Jr"
     },
     "ross-chastain": {
       "name": "Ross Chastain",
       "slug": "ross-chastain",
-      "rr_key": "Ross_Chastain",
+      "nascar_driver_id": 4001,
       "dob": "1992-12-04",
       "hometown": "Alva, FL",
+      "crew_chief": "Brandon McSwain",
+      "team": "Trackhouse Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -12208,7 +12889,7 @@
           "lead_lap_finishes": 77
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ross_Chastain"
+      "rr_key": "Ross_Chastain"
     },
     "rusty-wallace": {
       "name": "Rusty Wallace",
@@ -12265,9 +12946,12 @@
     "ryan-blaney": {
       "name": "Ryan Blaney",
       "slug": "ryan-blaney",
-      "rr_key": "Ryan_Blaney",
+      "nascar_driver_id": 4023,
       "dob": "1993-12-31",
       "hometown": "High Point, NC",
+      "crew_chief": "Jonathan Hassler",
+      "team": "Team Penske",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 13,
@@ -12312,14 +12996,17 @@
           "lead_lap_finishes": 48
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ryan_Blaney"
+      "rr_key": "Ryan_Blaney"
     },
     "ryan-ellis": {
       "name": "Ryan Ellis",
       "slug": "ryan-ellis",
-      "rr_key": "Ryan_Ellis",
+      "nascar_driver_id": 4029,
       "dob": "1989-11-29",
       "hometown": "Ashburn, VA",
+      "crew_chief": "Eddie Troconis",
+      "team": "Young's Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -12364,14 +13051,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ryan_Ellis"
+      "rr_key": "Ryan_Ellis"
     },
     "ryan-newman": {
       "name": "Ryan Newman",
       "slug": "ryan-newman",
-      "rr_key": "Ryan_Newman",
+      "nascar_driver_id": 2394,
       "dob": "1977-12-08",
       "hometown": "South Bend, IN",
+      "crew_chief": null,
+      "team": "Roush Fenway Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 23,
@@ -12416,14 +13106,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ryan_Newman"
+      "rr_key": "Ryan_Newman"
     },
     "ryan-preece": {
       "name": "Ryan Preece",
       "slug": "ryan-preece",
-      "rr_key": "Ryan_Preece",
+      "nascar_driver_id": 4070,
       "dob": "1990-10-25",
       "hometown": "Berlin, CT",
+      "crew_chief": "Derrick Finley",
+      "team": "RFK Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 9,
@@ -12468,14 +13161,17 @@
           "lead_lap_finishes": 12
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ryan_Preece"
+      "rr_key": "Ryan_Preece"
     },
     "ryan-reed": {
       "name": "Ryan Reed",
       "slug": "ryan-reed",
-      "rr_key": "Ryan_Reed",
+      "nascar_driver_id": 4049,
       "dob": "1993-08-12",
       "hometown": "Bakersfield, CA",
+      "crew_chief": null,
+      "team": "Roush Fenway Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -12520,14 +13216,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ryan_Reed"
+      "rr_key": "Ryan_Reed"
     },
     "ryan-sieg": {
       "name": "Ryan Sieg",
       "slug": "ryan-sieg",
-      "rr_key": "Ryan_Sieg",
+      "nascar_driver_id": 3884,
       "dob": "1987-06-20",
       "hometown": "Tucker, GA",
+      "crew_chief": "Matt Noyce",
+      "team": "RSS Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -12572,14 +13271,17 @@
           "lead_lap_finishes": 38
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ryan_Sieg"
+      "rr_key": "Ryan_Sieg"
     },
     "ryan-truex": {
       "name": "Ryan Truex",
       "slug": "ryan-truex",
-      "rr_key": "Ryan_Truex",
+      "nascar_driver_id": 3952,
       "dob": "1992-03-18",
       "hometown": "Mayetta, NJ",
+      "crew_chief": "Chris Gayle",
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -12624,14 +13326,17 @@
           "lead_lap_finishes": 41
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ryan_Truex"
+      "rr_key": "Ryan_Truex"
     },
     "ryan-vargas": {
       "name": "Ryan Vargas",
       "slug": "ryan-vargas",
-      "rr_key": "Ryan_Vargas",
+      "nascar_driver_id": 4320,
       "dob": "2000-09-23",
       "hometown": "La Mirada, CA",
+      "crew_chief": null,
+      "team": "4320",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -12662,14 +13367,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ryan_Vargas"
+      "rr_key": "Ryan_Vargas"
     },
     "sam-hornish-jr": {
-      "name": "Sam Hornish, Jr.",
+      "name": "Sam Hornish Jr.",
       "slug": "sam-hornish-jr",
-      "rr_key": "Sam_Hornish_Jr",
+      "nascar_driver_id": 3776,
       "dob": "1979-07-02",
       "hometown": "Defiance, OH",
+      "crew_chief": null,
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -12714,14 +13422,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Sam_Hornish_Jr"
+      "rr_key": "Sam_Hornish_Jr"
     },
     "sam-mayer": {
       "name": "Sam Mayer",
       "slug": "sam-mayer",
-      "rr_key": "Sam_Mayer",
+      "nascar_driver_id": 4327,
       "dob": "2003-06-26",
       "hometown": "Franklin, WI",
+      "crew_chief": "Jason Trinchere",
+      "team": "Haas Factory Team",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -12752,14 +13463,17 @@
           "lead_lap_finishes": 6
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Sam_Mayer"
+      "rr_key": "Sam_Mayer"
     },
     "sammy-smith": {
       "name": "Sammy Smith",
       "slug": "sammy-smith",
-      "rr_key": "Sammy_Smith",
+      "nascar_driver_id": 4441,
       "dob": "2004-06-04",
       "hometown": "Johnston, IA",
+      "crew_chief": "Cory Shea",
+      "team": "JR Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 5,
@@ -12790,14 +13504,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Sammy_Smith"
+      "rr_key": "Sammy_Smith"
     },
     "scott-lagasse-jr": {
-      "name": "Scott Lagasse, Jr.",
+      "name": "Scott Lagasse Jr",
       "slug": "scott-lagasse-jr",
-      "rr_key": "Scott_Lagasse_Jr",
+      "nascar_driver_id": 1899,
       "dob": "1981-01-31",
       "hometown": "St. Augustine, FL",
+      "crew_chief": null,
+      "team": "1899",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 12,
@@ -12828,14 +13545,17 @@
           "lead_lap_finishes": 12
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Scott_Lagasse_Jr"
+      "rr_key": "Scott_Lagasse_Jr"
     },
     "scott-riggs": {
       "name": "Scott Riggs",
       "slug": "scott-riggs",
-      "rr_key": "Scott_Riggs",
+      "nascar_driver_id": 2771,
       "dob": "1971-01-01",
       "hometown": "Bahama, NC",
+      "crew_chief": null,
+      "team": "2771",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -12880,14 +13600,17 @@
           "lead_lap_finishes": 25
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Scott_Riggs"
+      "rr_key": "Scott_Riggs"
     },
     "scott-speed": {
       "name": "Scott Speed",
       "slug": "scott-speed",
-      "rr_key": "Scott_Speed",
+      "nascar_driver_id": 3845,
       "dob": "1983-01-24",
       "hometown": "Manteca, CA",
+      "crew_chief": null,
+      "team": "3845",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 6,
@@ -12932,14 +13655,17 @@
           "lead_lap_finishes": 12
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Scott_Speed"
+      "rr_key": "Scott_Speed"
     },
     "scott-wimmer": {
       "name": "Scott Wimmer",
       "slug": "scott-wimmer",
-      "rr_key": "Scott_Wimmer",
+      "nascar_driver_id": 3620,
       "dob": "1976-01-26",
       "hometown": "Wausau, WI",
+      "crew_chief": null,
+      "team": "3620",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -12984,14 +13710,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Scott_Wimmer"
+      "rr_key": "Scott_Wimmer"
     },
     "shane-hall": {
       "name": "Shane Hall",
       "slug": "shane-hall",
-      "rr_key": "Shane_Hall",
+      "nascar_driver_id": 1350,
       "dob": "1969-08-25",
       "hometown": "Simpsonville, SC",
+      "crew_chief": null,
+      "team": "1350",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -13022,7 +13751,7 @@
           "lead_lap_finishes": 22
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Shane_Hall"
+      "rr_key": "Shane_Hall"
     },
     "shane-hmiel": {
       "name": "Shane Hmiel",
@@ -13079,9 +13808,12 @@
     "shane-sieg": {
       "name": "Shane Sieg",
       "slug": "shane-sieg",
-      "rr_key": "Shane_Sieg",
+      "nascar_driver_id": 3020,
       "dob": "1982-08-23",
       "hometown": "Tucker, GA",
+      "crew_chief": null,
+      "team": "3020",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 1,
@@ -13126,14 +13858,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Shane_Sieg"
+      "rr_key": "Shane_Sieg"
     },
     "shane-van-gisbergen": {
-      "name": "Shane Van Gisbergen",
+      "name": "Shane van Gisbergen",
       "slug": "shane-van-gisbergen",
-      "rr_key": "Shane_Van_Gisbergen",
+      "nascar_driver_id": 4469,
       "dob": "1989-05-09",
       "hometown": "Auckland, New Zealand",
+      "crew_chief": "Stephen Doran",
+      "team": "Trackhouse Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -13178,14 +13913,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Shane_Van_Gisbergen"
+      "rr_key": "Shane_Van_Gisbergen"
     },
     "shelby-howard": {
       "name": "Shelby Howard",
       "slug": "shelby-howard",
-      "rr_key": "Shelby_Howard",
+      "nascar_driver_id": 1584,
       "dob": "1985-07-25",
       "hometown": "Greenwood, IN",
+      "crew_chief": null,
+      "team": "1584",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -13230,14 +13968,17 @@
           "lead_lap_finishes": 18
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Shelby_Howard"
+      "rr_key": "Shelby_Howard"
     },
     "sheldon-creed": {
       "name": "Sheldon Creed",
       "slug": "sheldon-creed",
-      "rr_key": "Sheldon_Creed",
+      "nascar_driver_id": 4204,
       "dob": "1997-09-30",
       "hometown": "Alpine, CA",
+      "crew_chief": "Jonathan Toney",
+      "team": "Haas Factory Team",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -13282,14 +14023,17 @@
           "lead_lap_finishes": 54
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Sheldon_Creed"
+      "rr_key": "Sheldon_Creed"
     },
     "spencer-boyd": {
       "name": "Spencer Boyd",
       "slug": "spencer-boyd",
-      "rr_key": "Spencer_Boyd",
+      "nascar_driver_id": 4192,
       "dob": "1995-06-26",
-      "hometown": "Creve Coeur, MO",
+      "hometown": "St. Louis, MO",
+      "crew_chief": "Mike Hillman",
+      "team": "Freedom Racing Enterprises",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -13334,14 +14078,17 @@
           "lead_lap_finishes": 48
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Spencer_Boyd"
+      "rr_key": "Spencer_Boyd"
     },
     "spencer-gallagher": {
       "name": "Spencer Gallagher",
       "slug": "spencer-gallagher",
-      "rr_key": "Spencer_Gallagher",
+      "nascar_driver_id": 4063,
       "dob": "1989-11-20",
       "hometown": "Las Vegas, NV",
+      "crew_chief": null,
+      "team": "GMS Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -13386,14 +14133,17 @@
           "lead_lap_finishes": 30
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Spencer_Gallagher"
+      "rr_key": "Spencer_Gallagher"
     },
     "stacy-compton": {
       "name": "Stacy Compton",
       "slug": "stacy-compton",
-      "rr_key": "Stacy_Compton",
+      "nascar_driver_id": 638,
       "dob": "1967-05-26",
       "hometown": "Lynchburg, VA",
+      "crew_chief": null,
+      "team": "638",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 7,
@@ -13438,14 +14188,17 @@
           "lead_lap_finishes": 99
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Stacy_Compton"
+      "rr_key": "Stacy_Compton"
     },
     "stanton-barrett": {
       "name": "Stanton Barrett",
       "slug": "stanton-barrett",
-      "rr_key": "Stanton_Barrett",
+      "nascar_driver_id": 157,
       "dob": "1972-12-01",
       "hometown": "Bishop, CA",
+      "crew_chief": null,
+      "team": "157",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -13490,14 +14243,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Stanton_Barrett"
+      "rr_key": "Stanton_Barrett"
     },
     "stefan-parsons": {
       "name": "Stefan Parsons",
       "slug": "stefan-parsons",
-      "rr_key": "Stefan_Parsons",
+      "nascar_driver_id": 4285,
       "dob": "1998-06-15",
       "hometown": "Cornelius, NC",
+      "crew_chief": null,
+      "team": "BJ McLeod Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 7,
@@ -13528,14 +14284,17 @@
           "lead_lap_finishes": 14
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Stefan_Parsons"
+      "rr_key": "Stefan_Parsons"
     },
     "stephen-leicht": {
       "name": "Stephen Leicht",
       "slug": "stephen-leicht",
-      "rr_key": "Stephen_Leicht",
+      "nascar_driver_id": 1965,
       "dob": "1987-01-09",
       "hometown": "Asheville, NC",
+      "crew_chief": null,
+      "team": "MBM Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 4,
@@ -13580,14 +14339,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Stephen_Leicht"
+      "rr_key": "Stephen_Leicht"
     },
     "sterling-marlin": {
       "name": "Sterling Marlin",
       "slug": "sterling-marlin",
-      "rr_key": "Sterling_Marlin",
+      "nascar_driver_id": 2104,
       "dob": "1957-06-30",
       "hometown": "Columbia, TN",
+      "crew_chief": null,
+      "team": "2104",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 33,
@@ -13618,14 +14380,17 @@
           "lead_lap_finishes": 30
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Sterling_Marlin"
+      "rr_key": "Sterling_Marlin"
     },
     "steve-grissom": {
       "name": "Steve Grissom",
       "slug": "steve-grissom",
-      "rr_key": "Steve_Grissom",
+      "nascar_driver_id": 1303,
       "dob": "1963-06-26",
       "hometown": "Gadsden, AL",
+      "crew_chief": null,
+      "team": "1303",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 11,
@@ -13670,14 +14435,17 @@
           "lead_lap_finishes": 12
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Steve_Grissom"
+      "rr_key": "Steve_Grissom"
     },
     "steve-park": {
       "name": "Steve Park",
       "slug": "steve-park",
-      "rr_key": "Steve_Park",
+      "nascar_driver_id": 2495,
       "dob": "1967-08-23",
       "hometown": "East Northport, NY",
+      "crew_chief": null,
+      "team": "2495",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -13722,14 +14490,17 @@
           "lead_lap_finishes": 35
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Steve_Park"
+      "rr_key": "Steve_Park"
     },
     "steve-wallace": {
       "name": "Steve Wallace",
       "slug": "steve-wallace",
-      "rr_key": "Steve_Wallace",
+      "nascar_driver_id": 3461,
       "dob": "1987-08-18",
       "hometown": "Charlotte, NC",
+      "crew_chief": null,
+      "team": "3461",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -13774,14 +14545,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Steve_Wallace"
+      "rr_key": "Steve_Wallace"
     },
     "stewart-friesen": {
       "name": "Stewart Friesen",
       "slug": "stewart-friesen",
-      "rr_key": "Stewart_Friesen",
+      "nascar_driver_id": 4205,
       "dob": "1983-07-25",
-      "hometown": "Niagara-on-the-Lake, Ontario",
+      "hometown": "Niagara-on-the-Lake, Canada",
+      "crew_chief": "Dustin Dunn",
+      "team": "Halmar Friesen Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -13812,14 +14586,17 @@
           "lead_lap_finishes": 145
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Stewart_Friesen"
+      "rr_key": "Stewart_Friesen"
     },
     "tj-bell": {
       "name": "T.J. Bell",
       "slug": "tj-bell",
-      "rr_key": "TJ_Bell",
-      "dob": "1970-01-01",
+      "nascar_driver_id": 198,
+      "dob": "1980-08-25",
       "hometown": null,
+      "crew_chief": null,
+      "team": "TJ Bell Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -13864,14 +14641,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/TJ_Bell"
+      "rr_key": "TJ_Bell"
     },
     "tanner-gray": {
       "name": "Tanner Gray",
       "slug": "tanner-gray",
-      "rr_key": "Tanner_Gray",
+      "nascar_driver_id": 4342,
       "dob": "1999-04-15",
-      "hometown": "Artesia, NM",
+      "hometown": "Mooresville, NC",
+      "crew_chief": "Jeff Hensley",
+      "team": "TRICON Garage",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NTS": {
           "years": 8,
@@ -13888,7 +14668,7 @@
           "lead_lap_finishes": 92
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tanner_Gray"
+      "rr_key": "Tanner_Gray"
     },
     "tate-fogleman": {
       "name": "Tate Fogleman",
@@ -13917,9 +14697,12 @@
     "tayler-malsam": {
       "name": "Tayler Malsam",
       "slug": "tayler-malsam",
-      "rr_key": "Tayler_Malsam",
+      "nascar_driver_id": 3871,
       "dob": "1989-02-15",
       "hometown": "Sammamish, WA",
+      "crew_chief": null,
+      "team": "3871",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -13950,14 +14733,17 @@
           "lead_lap_finishes": 29
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tayler_Malsam"
+      "rr_key": "Tayler_Malsam"
     },
     "taylor-gray": {
       "name": "Taylor Gray",
       "slug": "taylor-gray",
-      "rr_key": "Taylor_Gray",
+      "nascar_driver_id": 4406,
       "dob": "2005-03-25",
       "hometown": "Denver, NC",
+      "crew_chief": "Jason Ratcliff",
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -13988,14 +14774,17 @@
           "lead_lap_finishes": 40
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Taylor_Gray"
+      "rr_key": "Taylor_Gray"
     },
     "ted-musgrave": {
       "name": "Ted Musgrave",
       "slug": "ted-musgrave",
-      "rr_key": "Ted_Musgrave",
+      "nascar_driver_id": 2360,
       "dob": "1955-12-18",
       "hometown": "Waukegan, IL",
+      "crew_chief": null,
+      "team": "2360",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 16,
@@ -14040,14 +14829,17 @@
           "lead_lap_finishes": 140
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ted_Musgrave"
+      "rr_key": "Ted_Musgrave"
     },
     "terry-cook": {
       "name": "Terry Cook",
       "slug": "terry-cook",
-      "rr_key": "Terry_Cook",
+      "nascar_driver_id": 658,
       "dob": "1968-02-26",
       "hometown": "Sylvania, OH",
+      "crew_chief": null,
+      "team": "658",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -14092,14 +14884,17 @@
           "lead_lap_finishes": 166
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Terry_Cook"
+      "rr_key": "Terry_Cook"
     },
     "terry-labonte": {
       "name": "Terry Labonte",
       "slug": "terry-labonte",
-      "rr_key": "Terry_Labonte",
+      "nascar_driver_id": 1893,
       "dob": "1956-11-16",
       "hometown": "Corpus Christi, TX",
+      "crew_chief": null,
+      "team": "1893",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 37,
@@ -14144,14 +14939,17 @@
           "lead_lap_finishes": 3
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Terry_Labonte"
+      "rr_key": "Terry_Labonte"
     },
     "tim-andrews": {
       "name": "Tim Andrews",
       "slug": "tim-andrews",
-      "rr_key": "Tim_Andrews",
+      "nascar_driver_id": 3889,
       "dob": "1983-01-15",
       "hometown": "Mooresville, NC",
+      "crew_chief": null,
+      "team": "3889",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -14196,7 +14994,7 @@
           "lead_lap_finishes": 2
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tim_Andrews"
+      "rr_key": "Tim_Andrews"
     },
     "tim-fedewa": {
       "name": "Tim Fedewa",
@@ -14253,9 +15051,12 @@
     "tim-sauter": {
       "name": "Tim Sauter",
       "slug": "tim-sauter",
-      "rr_key": "Tim_Sauter",
+      "nascar_driver_id": 2912,
       "dob": "1964-10-13",
       "hometown": "Necedah, WI",
+      "crew_chief": null,
+      "team": "2912",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 3,
@@ -14300,14 +15101,17 @@
           "lead_lap_finishes": 8
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tim_Sauter"
+      "rr_key": "Tim_Sauter"
     },
     "timmy-hill": {
       "name": "Timmy Hill",
       "slug": "timmy-hill",
-      "rr_key": "Timmy_Hill",
+      "nascar_driver_id": 3984,
       "dob": "1993-02-25",
       "hometown": "Port Tobacco, MD",
+      "crew_chief": "Terry Elmore",
+      "team": "Hill Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 14,
@@ -14352,14 +15156,17 @@
           "lead_lap_finishes": 57
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Timmy_Hill"
+      "rr_key": "Timmy_Hill"
     },
     "timothy-peters": {
       "name": "Timothy Peters",
       "slug": "timothy-peters",
-      "rr_key": "Timothy_Peters",
+      "nascar_driver_id": 2550,
       "dob": "1980-08-29",
       "hometown": "Providence, NC",
+      "crew_chief": null,
+      "team": "Rackley W.A.R.",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -14404,14 +15211,17 @@
           "lead_lap_finishes": 176
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Timothy_Peters"
+      "rr_key": "Timothy_Peters"
     },
     "todd-bodine": {
       "name": "Todd Bodine",
       "slug": "todd-bodine",
-      "rr_key": "Todd_Bodine",
+      "nascar_driver_id": 287,
       "dob": "1964-02-27",
       "hometown": "Chemung, NY",
+      "crew_chief": null,
+      "team": "287",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 19,
@@ -14456,14 +15266,17 @@
           "lead_lap_finishes": 165
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Todd_Bodine"
+      "rr_key": "Todd_Bodine"
     },
     "todd-gilliland": {
       "name": "Todd Gilliland",
       "slug": "todd-gilliland",
-      "rr_key": "Todd_Gilliland",
+      "nascar_driver_id": 4231,
       "dob": "2000-05-15",
       "hometown": "Sherrills Ford, NC",
+      "crew_chief": "Chris Lawson",
+      "team": "Front Row Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -14494,14 +15307,17 @@
           "lead_lap_finishes": 68
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Todd_Gilliland"
+      "rr_key": "Todd_Gilliland"
     },
     "todd-kluever": {
       "name": "Todd Kluever",
       "slug": "todd-kluever",
-      "rr_key": "Todd_Kluever",
+      "nascar_driver_id": 1855,
       "dob": "1978-07-06",
       "hometown": "Sun Prairie, WI",
+      "crew_chief": null,
+      "team": "1855",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 1,
@@ -14546,14 +15362,17 @@
           "lead_lap_finishes": 17
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Todd_Kluever"
+      "rr_key": "Todd_Kluever"
     },
     "tommy-joe-martins": {
       "name": "Tommy Joe Martins",
       "slug": "tommy-joe-martins",
-      "rr_key": "Tommy_Joe_Martins",
+      "nascar_driver_id": 3902,
       "dob": "1986-12-07",
       "hometown": "Como, MS",
+      "crew_chief": null,
+      "team": "Martins Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 8,
@@ -14584,14 +15403,17 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tommy_Joe_Martins"
+      "rr_key": "Tommy_Joe_Martins"
     },
     "tony-raines": {
       "name": "Tony Raines",
       "slug": "tony-raines",
-      "rr_key": "Tony_Raines",
+      "nascar_driver_id": 2681,
       "dob": "1964-04-14",
       "hometown": "LaPorte, IN",
+      "crew_chief": null,
+      "team": "2681",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 13,
@@ -14636,14 +15458,17 @@
           "lead_lap_finishes": 30
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tony_Raines"
+      "rr_key": "Tony_Raines"
     },
     "tony-stewart": {
       "name": "Tony Stewart",
       "slug": "tony-stewart",
-      "rr_key": "Tony_Stewart",
+      "nascar_driver_id": 3193,
       "dob": "1971-05-20",
       "hometown": "Columbus, IN",
+      "crew_chief": null,
+      "team": "3193",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 18,
@@ -14688,7 +15513,7 @@
           "lead_lap_finishes": 5
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tony_Stewart"
+      "rr_key": "Tony_Stewart"
     },
     "tracy-hines": {
       "name": "Tracy Hines",
@@ -14731,9 +15556,12 @@
     "travis-kvapil": {
       "name": "Travis Kvapil",
       "slug": "travis-kvapil",
-      "rr_key": "Travis_Kvapil",
+      "nascar_driver_id": 1890,
       "dob": "1976-03-01",
       "hometown": "Janesville, WI",
+      "crew_chief": null,
+      "team": "MAKE Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 11,
@@ -14778,14 +15606,17 @@
           "lead_lap_finishes": 120
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Travis_Kvapil"
+      "rr_key": "Travis_Kvapil"
     },
     "trevor-bayne": {
       "name": "Trevor Bayne",
       "slug": "trevor-bayne",
-      "rr_key": "Trevor_Bayne",
+      "nascar_driver_id": 3883,
       "dob": "1991-02-19",
       "hometown": "Knoxville, TN",
+      "crew_chief": null,
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 9,
@@ -14830,14 +15661,17 @@
           "lead_lap_finishes": 7
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Trevor_Bayne"
+      "rr_key": "Trevor_Bayne"
     },
     "ty-dillon": {
       "name": "Ty Dillon",
       "slug": "ty-dillon",
-      "rr_key": "Ty_Dillon",
+      "nascar_driver_id": 4013,
       "dob": "1992-02-27",
-      "hometown": "Lewisville, NC",
+      "hometown": "Welcome, NC",
+      "crew_chief": "Andrew Dickeson",
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 13,
@@ -14882,14 +15716,17 @@
           "lead_lap_finishes": 62
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ty_Dillon"
+      "rr_key": "Ty_Dillon"
     },
     "ty-gibbs": {
       "name": "Ty Gibbs",
       "slug": "ty-gibbs",
-      "rr_key": "Ty_Gibbs",
+      "nascar_driver_id": 4368,
       "dob": "2002-10-04",
       "hometown": "Charlotte, NC",
+      "crew_chief": "Tyler Allen",
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -14920,14 +15757,17 @@
           "lead_lap_finishes": 57
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ty_Gibbs"
+      "rr_key": "Ty_Gibbs"
     },
     "ty-majeski": {
       "name": "Ty Majeski",
       "slug": "ty-majeski",
-      "rr_key": "Ty_Majeski",
+      "nascar_driver_id": 4235,
       "dob": "1994-08-18",
       "hometown": "Seymour, WI",
+      "crew_chief": "Joe Shear Jr.",
+      "team": "ThorSport Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -14958,14 +15798,17 @@
           "lead_lap_finishes": 96
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ty_Majeski"
+      "rr_key": "Ty_Majeski"
     },
     "tyler-ankrum": {
       "name": "Tyler Ankrum",
       "slug": "tyler-ankrum",
-      "rr_key": "Tyler_Ankrum",
+      "nascar_driver_id": 4296,
       "dob": "2001-03-06",
       "hometown": "San Bernardino, CA",
+      "crew_chief": "Mark Hillman",
+      "team": "McAnally-Hilgemann Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 1,
@@ -14996,14 +15839,17 @@
           "lead_lap_finishes": 118
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tyler_Ankrum"
+      "rr_key": "Tyler_Ankrum"
     },
     "tyler-reddick": {
       "name": "Tyler Reddick",
       "slug": "tyler-reddick",
-      "rr_key": "Tyler_Reddick",
+      "nascar_driver_id": 4065,
       "dob": "1996-01-11",
       "hometown": "Corning, CA",
+      "crew_chief": "Billy Scott",
+      "team": "23XI Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 8,
@@ -15048,14 +15894,17 @@
           "lead_lap_finishes": 51
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tyler_Reddick"
+      "rr_key": "Tyler_Reddick"
     },
     "tyler-young": {
       "name": "Tyler Young",
       "slug": "tyler-young",
-      "rr_key": "Tyler_Young",
+      "nascar_driver_id": 4020,
       "dob": "1990-07-15",
       "hometown": "Midland, TX",
+      "crew_chief": null,
+      "team": "Young's Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 2,
@@ -15100,14 +15949,17 @@
           "lead_lap_finishes": 27
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Tyler_Young"
+      "rr_key": "Tyler_Young"
     },
     "vinnie-miller": {
       "name": "Vinnie Miller",
       "slug": "vinnie-miller",
-      "rr_key": "Vinnie_Miller",
+      "nascar_driver_id": 4253,
       "dob": "1997-08-16",
       "hometown": "Metamora, MI",
+      "crew_chief": null,
+      "team": "BJ McLeod Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 4,
@@ -15138,14 +15990,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Vinnie_Miller"
+      "rr_key": "Vinnie_Miller"
     },
     "ward-burton": {
       "name": "Ward Burton",
       "slug": "ward-burton",
-      "rr_key": "Ward_Burton",
+      "nascar_driver_id": 452,
       "dob": "1961-10-25",
       "hometown": "South Boston, VA",
+      "crew_chief": null,
+      "team": "452",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 13,
@@ -15190,14 +16045,17 @@
           "lead_lap_finishes": 1
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Ward_Burton"
+      "rr_key": "Ward_Burton"
     },
     "wayne-edwards": {
       "name": "Wayne Edwards",
       "slug": "wayne-edwards",
-      "rr_key": "Wayne_Edwards",
+      "nascar_driver_id": 931,
       "dob": "1970-01-01",
       "hometown": null,
+      "crew_chief": null,
+      "team": "931",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 2,
@@ -15242,14 +16100,17 @@
           "lead_lap_finishes": 0
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Wayne_Edwards"
+      "rr_key": "Wayne_Edwards"
     },
     "wendell-chavous": {
       "name": "Wendell Chavous",
       "slug": "wendell-chavous",
-      "rr_key": "Wendell_Chavous",
+      "nascar_driver_id": 4134,
       "dob": "1985-02-28",
       "hometown": "Hephzibah, GA",
+      "crew_chief": null,
+      "team": "Premium Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NTS": {
           "years": 4,
@@ -15266,14 +16127,17 @@
           "lead_lap_finishes": 10
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Wendell_Chavous"
+      "rr_key": "Wendell_Chavous"
     },
     "william-byron": {
       "name": "William Byron",
       "slug": "william-byron",
-      "rr_key": "William_Byron",
+      "nascar_driver_id": 4184,
       "dob": "1997-11-29",
       "hometown": "Charlotte, NC",
+      "crew_chief": "Rudy Fugle",
+      "team": "Hendrick Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 9,
@@ -15318,14 +16182,17 @@
           "lead_lap_finishes": 26
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/William_Byron"
+      "rr_key": "William_Byron"
     },
     "william-sawalich": {
       "name": "William Sawalich",
       "slug": "william-sawalich",
-      "rr_key": "William_Sawalich",
+      "nascar_driver_id": 4459,
       "dob": "2006-10-03",
       "hometown": "Eden Prairie, MN",
+      "crew_chief": "Jeff Meendering",
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 3,
@@ -15356,14 +16223,17 @@
           "lead_lap_finishes": 13
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/William_Sawalich"
+      "rr_key": "William_Sawalich"
     },
     "willie-allen": {
       "name": "Willie Allen",
       "slug": "willie-allen",
-      "rr_key": "Willie_Allen",
+      "nascar_driver_id": 33,
       "dob": "1980-06-15",
       "hometown": "Bon Aqua, TN",
+      "crew_chief": null,
+      "team": "33",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NOS": {
           "years": 6,
@@ -15394,14 +16264,17 @@
           "lead_lap_finishes": 12
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Willie_Allen"
+      "rr_key": "Willie_Allen"
     },
     "zane-smith": {
       "name": "Zane Smith",
       "slug": "zane-smith",
-      "rr_key": "Zane_Smith",
+      "nascar_driver_id": 4272,
       "dob": "1999-06-09",
       "hometown": "Huntington Beach, CA",
+      "crew_chief": "Ryan Bergenty",
+      "team": "Front Row Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 5,
@@ -15446,10 +16319,600 @@
           "lead_lap_finishes": 82
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Zane_Smith"
+      "rr_key": "Zane_Smith"
+    },
+    "rico-abreu": {
+      "name": "Rico Abreu",
+      "slug": "rico-abreu",
+      "nascar_driver_id": 4185,
+      "dob": "1992-01-30",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "ThorSport Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "earl-bamber": {
+      "name": "Earl Bamber",
+      "slug": "earl-bamber",
+      "nascar_driver_id": 4361,
+      "dob": "1990-07-09",
+      "hometown": null,
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "logan-bearden": {
+      "name": "Logan Bearden",
+      "slug": "logan-bearden",
+      "nascar_driver_id": 4394,
+      "dob": null,
+      "hometown": "Leander, TX",
+      "crew_chief": null,
+      "team": "4394",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "tanner-berryhill": {
+      "name": "Tanner Berryhill",
+      "slug": "tanner-berryhill",
+      "nascar_driver_id": 4022,
+      "dob": "1993-11-29",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Obaika Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "cole-butcher": {
+      "name": "Cole Butcher",
+      "slug": "cole-butcher",
+      "nascar_driver_id": 4523,
+      "dob": "1996-08-31",
+      "hometown": "Porter's Lake, Canada",
+      "crew_chief": "Rich Lushes",
+      "team": "ThorSport Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "justin-carrol": {
+      "name": "Justin Carrol",
+      "slug": "justin-carrol",
+      "nascar_driver_id": 4372,
+      "dob": null,
+      "hometown": "Williamsburg, VA",
+      "crew_chief": "Terry Carroll",
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "bryan-collyer": {
+      "name": "Bryan Collyer",
+      "slug": "bryan-collyer",
+      "nascar_driver_id": 4362,
+      "dob": "1962-10-16",
+      "hometown": null,
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "brent-crews": {
+      "name": "Brent Crews",
+      "slug": "brent-crews",
+      "nascar_driver_id": 4504,
+      "dob": null,
+      "hometown": "Davidson, NC",
+      "crew_chief": null,
+      "team": "Joe Gibbs Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "harold-crooms": {
+      "name": "Harold Crooms",
+      "slug": "harold-crooms",
+      "nascar_driver_id": 4365,
+      "dob": "1979-10-24",
+      "hometown": null,
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "corey-day": {
+      "name": "Corey Day",
+      "slug": "corey-day",
+      "nascar_driver_id": 4502,
+      "dob": "2005-11-28",
+      "hometown": "Clovis, CA",
+      "crew_chief": "Adam Wall",
+      "team": "Hendrick Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "gus-dean": {
+      "name": "Gus Dean",
+      "slug": "gus-dean",
+      "nascar_driver_id": 4300,
+      "dob": "1994-08-19",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Young's Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "natalie-decker": {
+      "name": "Natalie Decker",
+      "slug": "natalie-decker",
+      "nascar_driver_id": 4196,
+      "dob": "1997-06-25",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Niece Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "tyler-dippel": {
+      "name": "Tyler Dippel",
+      "slug": "tyler-dippel",
+      "nascar_driver_id": 4276,
+      "dob": "2000-04-05",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Young's Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "luke-fenhaus": {
+      "name": "Luke Fenhaus",
+      "slug": "luke-fenhaus",
+      "nascar_driver_id": 4489,
+      "dob": "2004-04-08",
+      "hometown": "Wausau, WI",
+      "crew_chief": "Joe Williams Jr",
+      "team": "Hettinger Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "justin-fontaine": {
+      "name": "Justin Fontaine",
+      "slug": "justin-fontaine",
+      "nascar_driver_id": 4218,
+      "dob": "1997-10-18",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "4218",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "matthew-gould": {
+      "name": "Matthew Gould",
+      "slug": "matthew-gould",
+      "nascar_driver_id": 4498,
+      "dob": null,
+      "hometown": "Mooresville, NC",
+      "crew_chief": "Jon Leonard",
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "matt-gould": {
+      "name": "Matt Gould",
+      "slug": "matt-gould",
+      "nascar_driver_id": 0,
+      "dob": "2006-01-08",
+      "hometown": null,
+      "crew_chief": "Wally Rogers",
+      "team": "Niece Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "austin-green": {
+      "name": "Austin Green",
+      "slug": "austin-green",
+      "nascar_driver_id": 4479,
+      "dob": "2001-03-26",
+      "hometown": "Concord, NC",
+      "crew_chief": "Jody Measamer",
+      "team": "Peterson Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "cameron-hayley": {
+      "name": "Cameron Hayley",
+      "slug": "cameron-hayley",
+      "nascar_driver_id": 4130,
+      "dob": "1996-07-21",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "ThorSport Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "brandon-hightower": {
+      "name": "Brandon Hightower",
+      "slug": "brandon-hightower",
+      "nascar_driver_id": 4183,
+      "dob": "1998-03-17",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Contreras Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "caleb-holman": {
+      "name": "Caleb Holman",
+      "slug": "caleb-holman",
+      "nascar_driver_id": 1551,
+      "dob": "1984-01-07",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Henderson Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "ryan-huff": {
+      "name": "Ryan Huff",
+      "slug": "ryan-huff",
+      "nascar_driver_id": 4347,
+      "dob": "2001-04-13",
+      "hometown": null,
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "jesse-iwuji": {
+      "name": "Jesse Iwuji",
+      "slug": "jesse-iwuji",
+      "nascar_driver_id": 4291,
+      "dob": "1987-08-12",
+      "hometown": "Carrollton, TX",
+      "crew_chief": null,
+      "team": "Jesse Iwuji Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "matt-jaskol": {
+      "name": "Matt Jaskol",
+      "slug": "matt-jaskol",
+      "nascar_driver_id": 4381,
+      "dob": "1984-10-15",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "G2G Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "bobby-kennedy": {
+      "name": "Bobby Kennedy",
+      "slug": "bobby-kennedy",
+      "nascar_driver_id": 4363,
+      "dob": "1993-12-26",
+      "hometown": null,
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "katherine-legge": {
+      "name": "Katherine Legge",
+      "slug": "katherine-legge",
+      "nascar_driver_id": 4284,
+      "dob": "1980-07-12",
+      "hometown": null,
+      "crew_chief": "David Ingram",
+      "team": "Live Fast Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "raphael-lessard": {
+      "name": "Raphael Lessard",
+      "slug": "raphael-lessard",
+      "nascar_driver_id": 4306,
+      "dob": "2001-07-05",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "GMS Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "landen-lewis": {
+      "name": "Landen Lewis",
+      "slug": "landen-lewis",
+      "nascar_driver_id": 4468,
+      "dob": null,
+      "hometown": "Ocean Isle Beach, NC",
+      "crew_chief": "Jamie Jones",
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "mason-maggio": {
+      "name": "Mason Maggio",
+      "slug": "mason-maggio",
+      "nascar_driver_id": 4432,
+      "dob": null,
+      "hometown": "Palm Beach Garden, FL",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "keith-mcgee": {
+      "name": "Keith McGee",
+      "slug": "keith-mcgee",
+      "nascar_driver_id": 4382,
+      "dob": "1981-05-07",
+      "hometown": "Eagle River, AK",
+      "crew_chief": null,
+      "team": "4382",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "cj-mclaughlin": {
+      "name": "CJ McLaughlin",
+      "slug": "cj-mclaughlin",
+      "nascar_driver_id": 4316,
+      "dob": "1992-07-01",
+      "hometown": "Framingham, MA",
+      "crew_chief": "Kevin Johnson",
+      "team": "RSS Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "thad-moffitt": {
+      "name": "Thad Moffitt",
+      "slug": "thad-moffitt",
+      "nascar_driver_id": 4415,
+      "dob": "2000-11-12",
+      "hometown": null,
+      "crew_chief": "Doug George",
+      "team": "Faction46 Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "frankie-muniz": {
+      "name": "Frankie Muniz",
+      "slug": "frankie-muniz",
+      "nascar_driver_id": 4478,
+      "dob": "1985-12-05",
+      "hometown": "Scottsdale, AZ",
+      "crew_chief": "Pedro Lopez",
+      "team": "Team Reaume",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "john-hunter-nemechek": {
+      "name": "John Hunter Nemechek",
+      "slug": "john-hunter-nemechek",
+      "nascar_driver_id": 4092,
+      "dob": "1997-06-11",
+      "hometown": null,
+      "crew_chief": "Travis Mack",
+      "team": "Legacy Motor Club",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "todd-peck": {
+      "name": "Todd Peck",
+      "slug": "todd-peck",
+      "nascar_driver_id": 3997,
+      "dob": "1986-01-29",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "BJ McLeod Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "andr-s-p-rez": {
+      "name": "Andr\u00e9s P\u00e9rez",
+      "slug": "andr-s-p-rez",
+      "nascar_driver_id": 4490,
+      "dob": "2005-04-02",
+      "hometown": "Mexico City, Mexico",
+      "crew_chief": "Wally Rogers",
+      "team": "Niece Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "bubba-pollard": {
+      "name": "Bubba Pollard",
+      "slug": "bubba-pollard",
+      "nascar_driver_id": 4480,
+      "dob": null,
+      "hometown": "Senoia, GA",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "bubba-pollard-copy": {
+      "name": "Bubba Pollard Copy",
+      "slug": "bubba-pollard-copy",
+      "nascar_driver_id": 0,
+      "dob": null,
+      "hometown": "Senoia, GA",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "lee-pulliam": {
+      "name": "Lee Pulliam",
+      "slug": "lee-pulliam",
+      "nascar_driver_id": 4536,
+      "dob": null,
+      "hometown": "Semora, NC",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "brenden-queen": {
+      "name": "Brenden Queen",
+      "slug": "brenden-queen",
+      "nascar_driver_id": 4487,
+      "dob": "1997-11-21",
+      "hometown": "Chesapeake, VA",
+      "crew_chief": "Eddie Pardue",
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "kimi-raikkonen": {
+      "name": "Kimi Raikkonen",
+      "slug": "kimi-raikkonen",
+      "nascar_driver_id": 3990,
+      "dob": null,
+      "hometown": "Espoo, Finland",
+      "crew_chief": null,
+      "team": "Trackhouse Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "sam-rameau": {
+      "name": "Sam Rameau",
+      "slug": "sam-rameau",
+      "nascar_driver_id": 0,
+      "dob": "2002-06-15",
+      "hometown": null,
+      "crew_chief": "Daniel Stebbins",
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "codie-rohrbaugh": {
+      "name": "Codie Rohrbaugh",
+      "slug": "codie-rohrbaugh",
+      "nascar_driver_id": 4287,
+      "dob": "1993-11-12",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "CR7 Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "cory-roper": {
+      "name": "Cory Roper",
+      "slug": "cory-roper",
+      "nascar_driver_id": 4262,
+      "dob": "1977-07-31",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Roper Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "christian-rose": {
+      "name": "Christian Rose",
+      "slug": "christian-rose",
+      "nascar_driver_id": 4471,
+      "dob": "1995-06-14",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Niece Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "angela-ruch": {
+      "name": "Angela Ruch",
+      "slug": "angela-ruch",
+      "nascar_driver_id": 3857,
+      "dob": "1983-08-18",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Reaume Brothers Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "gio-ruggiero": {
+      "name": "Gio Ruggiero",
+      "slug": "gio-ruggiero",
+      "nascar_driver_id": 4503,
+      "dob": "2006-08-29",
+      "hometown": "Seekonk, MA",
+      "crew_chief": "Jerame Donley",
+      "team": "TRICON Garage",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "dalton-sargeant": {
+      "name": "Dalton Sargeant",
+      "slug": "dalton-sargeant",
+      "nascar_driver_id": 4171,
+      "dob": "1998-03-25",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "GMS Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "lavar-scott": {
+      "name": "Lavar Scott",
+      "slug": "lavar-scott",
+      "nascar_driver_id": 4518,
+      "dob": null,
+      "hometown": "Carney's Point, NJ",
+      "crew_chief": "Kase Kallenbach",
+      "team": "Alpha Prime Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "andy-seuss": {
+      "name": "Andy Seuss",
+      "slug": "andy-seuss",
+      "nascar_driver_id": 4064,
+      "dob": "1987-03-15",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Our Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "mike-skeen": {
+      "name": "Mike Skeen",
+      "slug": "mike-skeen",
+      "nascar_driver_id": 4087,
+      "dob": "1986-10-25",
+      "hometown": null,
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "patrick-staropoli": {
+      "name": "Patrick Staropoli",
+      "slug": "patrick-staropoli",
+      "nascar_driver_id": 4227,
+      "dob": "1989-11-10",
+      "hometown": "Plantation, FL",
+      "crew_chief": "Patrick Donahue",
+      "team": "4227",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "daniel-su-rez": {
+      "name": "Daniel Su\u00e1rez",
+      "slug": "daniel-su-rez",
+      "nascar_driver_id": 4113,
+      "dob": "1992-01-07",
+      "hometown": "Monterrey, Mexico",
+      "crew_chief": "Ryan Sparks",
+      "team": "Spire Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "dawson-sutton": {
+      "name": "Dawson Sutton",
+      "slug": "dawson-sutton",
+      "nascar_driver_id": 4488,
+      "dob": "2006-01-28",
+      "hometown": "Lebanon, TN",
+      "crew_chief": "Chad Kendrick",
+      "team": "Rackley WAR",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "austin-theriault": {
+      "name": "Austin Theriault",
+      "slug": "austin-theriault",
+      "nascar_driver_id": 4114,
+      "dob": "1994-01-23",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Brad Keselowski Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "timothy-tyrrell": {
+      "name": "Timothy Tyrrell",
+      "slug": "timothy-tyrrell",
+      "nascar_driver_id": 4529,
+      "dob": "2004-09-08",
+      "hometown": "Manassas, VA",
+      "crew_chief": "Bruce Cook",
+      "team": "Kaulig Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "greg-van-alst": {
+      "name": "Greg Van Alst",
+      "slug": "greg-van-alst",
+      "nascar_driver_id": 4465,
+      "dob": null,
+      "hometown": "Anderson, IN",
+      "crew_chief": null,
+      "team": null,
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "kody-vanderwal": {
+      "name": "Kody Vanderwal",
+      "slug": "kody-vanderwal",
+      "nascar_driver_id": 4345,
+      "dob": "2001-01-19",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "Jimmy Means Racing",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
+    },
+    "tim-viens": {
+      "name": "Tim Viens",
+      "slug": "tim-viens",
+      "nascar_driver_id": 4151,
+      "dob": "1976-10-10",
+      "hometown": null,
+      "crew_chief": null,
+      "team": "CMI Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json"
     }
   },
-  "generated_at": "2026-05-06T14:24:44+00:00",
-  "source": "racing-reference.info",
-  "count": 324
+  "generated_at": "2026-06-09T12:55:16Z",
+  "source": "cf.nascar.com/cacher/drivers.json (bios); career computed from race data",
+  "count": 383
 }

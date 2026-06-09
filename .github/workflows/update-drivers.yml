@@ -1,0 +1,46 @@
+name: Update NASCAR Driver Bios (NASCAR feed)
+
+# Refreshes data/drivers.json (birthdate, hometown, current crew chief / team)
+# from NASCAR's roster feed. Cloud-friendly — unlike the Racing-Reference driver
+# scraper, cf.nascar.com doesn't block GitHub's IPs. Bios change rarely, so once
+# a week is plenty; it merges (never clobbers existing data, never overwrites a
+# good value with a blank), and career stats are computed by the app from race
+# data, not stored here.
+
+on:
+  schedule:
+    - cron: '0 13 * * 1'   # Monday 8:00 AM EDT
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-drivers
+  cancel-in-progress: false
+
+jobs:
+  bios:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Refresh bios from NASCAR feed
+        run: python scripts/scrape_drivers_nascar.py --out data/drivers.json
+      - name: Commit & push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/drivers.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No bio changes."
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "chore(bios): NASCAR-feed driver bios refresh [skip ci]"
+          git push
