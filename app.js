@@ -15192,6 +15192,30 @@ function computeTrackKing(trackCode, series) {
 }
 
 // Render top-5 standings cards for all three series, side-by-side.
+// Championship % per car for the home mini-standings, computed the SAME way the
+// Projection page's "most likely champion" cards are: cached Monte-Carlo
+// rollout → deterministic chase traces (softmax over reset chase points). Keyed
+// by car_number string so it agrees with the Projection page. Runs in the
+// series' context because the rollout reads the active series' races; the
+// rollout itself is cached (memory + localStorage) so this is cheap after the
+// first compute. Cars outside the projected playoff field aren't in the map.
+function _homeChampPctByCar(year, series) {
+  const m = new Map();
+  try {
+    _withSeriesContext(year, series, () => {
+      const proj = simulateSeasonRollout(series, year);
+      if (!proj || !proj.drivers || proj.season_over) return;
+      const fieldSize = (proj.rule && proj.rule.field) || 16;
+      const sorted = proj.drivers.slice().sort((a, b) =>
+        (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0));
+      const chase = sorted.slice(0, fieldSize).map(d => ({ ...d }));
+      if (chase.length) _computeChaseTraces(chase, proj);   // writes championship_pct onto clones
+      chase.forEach(d => { if (d.car_number != null) m.set(String(d.car_number), d.championship_pct || 0); });
+    });
+  } catch (_) { /* projection not ready — leave empty, rows show — */ }
+  return m;
+}
+
 function renderHomeStandingsTrio(year) {
   const yearBlock = SEASON_CACHE[year];
   if (!yearBlock) return `<div class="muted" style="grid-column:1/-1;text-align:center;padding:24px;">Standings loading…</div>`;
@@ -15204,6 +15228,7 @@ function renderHomeStandingsTrio(year) {
     if (top5.length === 0) {
       return `<div class="home-card home-standings-card"><div class="home-standings-label" style="color:${_homeSeriesAccent(s)};">${SERIES_FULL_NAME[s] || s}</div><div class="muted" style="font-size:12px;padding:8px 0;">Season hasn't started</div></div>`;
     }
+    const champByCar = _homeChampPctByCar(year, s);
     const leader = top5[0];
     const leaderTotal = leader.total;
     const rows = top5.map((r, i) => {
@@ -15212,11 +15237,16 @@ function renderHomeStandingsTrio(year) {
       const ptsCell = i === 0
         ? `<span class="home-mini-pts">${leaderTotal}</span>`
         : `<span class="home-mini-back">−${leaderTotal - r.total}</span>`;
+      const cp = champByCar.get(String(r.car_number));
+      const champCell = cp != null
+        ? `<span class="home-mini-champ" style="color:${_homeSeriesAccent(s)};" title="Projected championship %">${(cp * 100).toFixed(1)}%</span>`
+        : `<span class="home-mini-champ dim" title="Outside the projected playoff field">—</span>`;
       return `<a class="home-mini-row profile-link" href="#/driver/${slugify(r.primaryDriver || r.driver || '')}">
         <span class="home-mini-rank">${i + 1}</span>
         <span class="home-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
         <span class="home-mini-name">${escapeHTML(lastNameOf(r.primaryDriver || r.driver || ''))}</span>
         ${ptsCell}
+        ${champCell}
       </a>`;
     }).join("");
     return `<div class="home-card home-standings-card">

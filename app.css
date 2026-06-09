@@ -8316,7 +8316,7 @@ body.lightbox-open {
 .home-standings-link:hover { text-decoration: underline; }
 .home-mini-row {
   display: grid;
-  grid-template-columns: 22px 28px 1fr auto;
+  grid-template-columns: 22px 28px 1fr auto auto;
   gap: 8px;
   padding: 6px 0;
   align-items: center;
@@ -8354,6 +8354,14 @@ body.lightbox-open {
   color: var(--muted);
   text-align: right;
 }
+.home-mini-champ {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 42px;
+}
+.home-mini-champ.dim { color: var(--dim); }
 
 /* Stat cards row */
 .home-stat-row {
