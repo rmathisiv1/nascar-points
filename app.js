@@ -12934,6 +12934,58 @@ function paintCrewChiefCareerHeatmap() {
 // returns at most one tile, and we cap the total surfaced tiles to
 // keep the page focused. See helpers below for what's available.
 // ============================================================
+// A cheap signature of the home page's heavy inputs: per-series completed-race
+// counts (only change when a race runs) + how much pace / entry data is loaded.
+// Used to memoize the expensive sections so the home page's several background
+// re-renders (race docs, lineups, schedule, pace) reuse results instead of
+// recomputing three Monte-Carlo rollouts + three prediction boards each time.
+function _homeTrioSig(year) {
+  const yb = SEASON_CACHE[year] || {};
+  const counts = ["NCS", "NOS", "NTS"].map(s => {
+    const b = yb[s];
+    return b && b.races ? b.races.filter(r => (r.results || []).length > 0).length : 0;
+  }).join(",");
+  const paceN = (typeof PACE_CACHE !== "undefined") ? Object.keys(PACE_CACHE).length : 0;
+  const entN = (typeof ENTRY_LIST_CACHE !== "undefined") ? Object.keys(ENTRY_LIST_CACHE).length : 0;
+  return `${year}|${counts}|p${paceN}|e${entN}`;
+}
+
+let _homePredTrioMemo = { sig: null, html: "" };
+let _homeChampMemo = { sig: null, maps: {} };
+
+// Fill the home mini-standings championship % AFTER first paint. Computes each
+// series' projection (cached rollout → chase traces) one at a time, yielding a
+// frame between series so the main thread never locks. The per-series maps are
+// memoized by signature, so the costly rollout runs once per data state; later
+// re-renders just re-patch the (replaced) DOM cells from the cached maps.
+function _fillHomeChampDeferred(year) {
+  const sig = _homeTrioSig(year);
+  if (_homeChampMemo.sig !== sig) _homeChampMemo = { sig, maps: {} };
+  const series = ["NCS", "NOS", "NTS"];
+  let i = 0;
+  const step = () => {
+    if (STATE.view !== "home") return;            // user navigated away — stop
+    const s = series[i++];
+    if (!s) return;
+    let map = _homeChampMemo.maps[s];
+    if (!map) { map = _homeChampPctByCar(year, s); _homeChampMemo.maps[s] = map; }
+    document.querySelectorAll(`.home-mini-champ[data-champ-s="${s}"]`).forEach(el => {
+      const car = el.getAttribute("data-champ-car");
+      const cp = map.get(String(car));
+      if (cp != null) {
+        el.textContent = (cp * 100).toFixed(1) + "%";
+        el.classList.remove("dim");
+        el.style.color = _homeSeriesAccent(s);
+      } else {
+        el.textContent = "—";
+        el.title = "Outside the projected playoff field";
+      }
+    });
+    if (i < series.length) setTimeout(step, 16);   // yield ~1 frame between series
+  };
+  requestAnimationFrame(() => setTimeout(step, 0));
+}
+
 function renderHome() {
   const host = document.getElementById("home-host");
   if (!host) return;
@@ -13010,7 +13062,18 @@ function renderHome() {
 
   // ----- Section 2c: race prediction trio (NCS | NOS | NTS) -----
   // Side-by-side predicted-finish top-10 for each series' upcoming race.
-  const predictionTrioHTML = renderHomePredictionTrio(latestYear);
+  // Memoized by data signature: the home page re-renders several times as
+  // background data lands, and recomputing three prediction boards each time
+  // was a big chunk of the first-load stall. Recompute only when the underlying
+  // data (completed races / pace) actually changes.
+  const _trioSig = _homeTrioSig(latestYear);
+  let predictionTrioHTML;
+  if (_homePredTrioMemo.sig === _trioSig && _homePredTrioMemo.html) {
+    predictionTrioHTML = _homePredTrioMemo.html;
+  } else {
+    predictionTrioHTML = renderHomePredictionTrio(latestYear);
+    _homePredTrioMemo = { sig: _trioSig, html: predictionTrioHTML };
+  }
 
   // ----- Section 3: stat cards + storylines -----
   const statsHTML = renderHomeStatCards(latestYear, series);
@@ -13032,6 +13095,9 @@ function renderHome() {
       ` : ""}
     </div>
   `;
+
+  // Fill the championship % column after paint (off the critical path).
+  _fillHomeChampDeferred(latestYear);
 
   restoreCtx();
 }
@@ -15228,7 +15294,6 @@ function renderHomeStandingsTrio(year) {
     if (top5.length === 0) {
       return `<div class="home-card home-standings-card"><div class="home-standings-label" style="color:${_homeSeriesAccent(s)};">${SERIES_FULL_NAME[s] || s}</div><div class="muted" style="font-size:12px;padding:8px 0;">Season hasn't started</div></div>`;
     }
-    const champByCar = _homeChampPctByCar(year, s);
     const leader = top5[0];
     const leaderTotal = leader.total;
     const rows = top5.map((r, i) => {
@@ -15237,10 +15302,11 @@ function renderHomeStandingsTrio(year) {
       const ptsCell = i === 0
         ? `<span class="home-mini-pts">${leaderTotal}</span>`
         : `<span class="home-mini-back">−${leaderTotal - r.total}</span>`;
-      const cp = champByCar.get(String(r.car_number));
-      const champCell = cp != null
-        ? `<span class="home-mini-champ" style="color:${_homeSeriesAccent(s)};" title="Projected championship %">${(cp * 100).toFixed(1)}%</span>`
-        : `<span class="home-mini-champ dim" title="Outside the projected playoff field">—</span>`;
+      // Placeholder — the projected championship % is filled in AFTER the page
+      // paints (see _fillHomeChampDeferred). Computing it inline ran three full
+      // Monte-Carlo rollouts on the render path and, because the home page
+      // re-renders as background data lands, fired them on every re-render.
+      const champCell = `<span class="home-mini-champ dim" data-champ-s="${s}" data-champ-car="${escapeHTML(String(r.car_number))}" title="Projected championship %">·</span>`;
       return `<a class="home-mini-row profile-link" href="#/driver/${slugify(r.primaryDriver || r.driver || '')}">
         <span class="home-mini-rank">${i + 1}</span>
         <span class="home-mini-car" style="background:${carHex};color:${txt}">${r.car_number}</span>
