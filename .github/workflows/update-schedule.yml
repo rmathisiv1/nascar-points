@@ -8,11 +8,8 @@ name: Update NASCAR Weekend Schedule
 
 on:
   schedule:
-    # Daily at 11:00 UTC (~6 AM EST / 7 AM EDT).
-    - cron: '0 11 * * *'
-    # Extra passes across the race weekend in case sessions get revised.
-    - cron: '0 13 * * 5'   # Friday
-    - cron: '0 13 * * 6'   # Saturday
+    # Daily at 13:00 UTC (9 AM EDT / 8 AM EST). Single pass every morning.
+    - cron: '0 13 * * *'
   workflow_dispatch:
     inputs:
       season:

@@ -8,11 +8,11 @@ name: Update NASCAR Race Documents
 
 on:
   schedule:
-    # All times UTC. EST is UTC−5 (no DST handling).
-    # Monday  8:00 AM EST = Monday  13:00 UTC  (just after the points refresh)
-    # Tuesday 8:00 AM EST = Tuesday 13:00 UTC  (catch late infraction reports)
-    - cron: '0 13 * * 1'
-    - cron: '0 13 * * 2'
+    # ET labels (EDT = UTC-4). Two Monday passes plus a Wednesday catch for
+    # late-posted infraction/penalty reports.
+    - cron: '0 10 * * 1'   # Mon 6:00 AM ET
+    - cron: '0 14 * * 1'   # Mon 10:00 AM ET
+    - cron: '0 0 * * 4'    # Wed 8:00 PM ET (= Thu 00:00 UTC)
   workflow_dispatch:
     inputs:
       season:

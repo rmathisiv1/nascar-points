@@ -6,9 +6,13 @@ name: update-lineups
 # first pass after qualifying and quietly does nothing otherwise. Cheap.
 on:
   schedule:
-    # Hourly, Friday–Sunday (UTC). Covers Sat-evening qualifying for Sun races
-    # and Sat-morning qualifying for Sat races, with margin.
-    - cron: "0 * * * 5,6,0"
+    # ET labels (EDT = UTC-4). Overlapping windows sit on the :30 mark so they
+    # never collide with the Results sweep (:00); the isolated Sun 3 AM grab
+    # stays on the hour. Scraper self-gates (no-ops until STARTROW posts).
+    - cron: "30 14-22 * * 5"  # Fri 10 AM – 6 PM ET, hourly
+    - cron: "30 14-23 * * 6"  # Sat 10 AM – 7 PM ET   (Sat 10 AM -> 10 PM, hourly)
+    - cron: "30 0-2 * * 0"    # Sat 8 – 10 PM ET      (UTC Sun 00–02)
+    - cron: "0 7 * * 0"       # Sun 3:00 AM ET
   workflow_dispatch: {}   # manual "Run workflow" button
 
 permissions:

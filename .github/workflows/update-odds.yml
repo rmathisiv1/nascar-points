@@ -7,9 +7,10 @@ name: Update NASCAR Odds / Entry List
 
 on:
   schedule:
-    # Every 6 hours (00:15, 06:15, 12:15, 18:15 UTC). The :15 offset dodges the
-    # top-of-hour scheduler congestion that delays GitHub cron runs.
-    - cron: '15 */6 * * *'
+    # All times UTC; :15 offset keeps odds clear of every other workflow's
+    # :00/:30 runs. ET labels are EDT (UTC-4). Once a day Mon–Fri; every 6h Sat/Sun.
+    - cron: '15 12 * * 1-5'         # Mon–Fri 8:15 AM ET — once daily
+    - cron: '15 0,6,12,18 * * 6,0'  # Sat & Sun — every 6 hours
   workflow_dispatch:
     inputs:
       season:

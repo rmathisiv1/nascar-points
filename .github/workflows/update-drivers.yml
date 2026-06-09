@@ -9,7 +9,7 @@ name: Update NASCAR Driver Bios (NASCAR feed)
 
 on:
   schedule:
-    - cron: '0 13 * * 1'   # Monday 8:00 AM EDT
+    - cron: '30 13 * * 1'  # Mon 9:30 AM ET (offset 30 min from the 9:00 Schedule run)
   workflow_dispatch:
 
 permissions:

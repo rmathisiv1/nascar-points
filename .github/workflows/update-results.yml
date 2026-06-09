@@ -7,16 +7,31 @@ name: Update NASCAR Results (NASCAR feed)
 # schedule, and standings are summed by the frontend from race_pts.
 #
 # This replaces the *results* half of the old local update.ps1 / update-points.yml.
-# (Driver bios are separate and still RR-based — refresh those locally if needed.)
+# (Driver bios are separate — see update-drivers.yml.)
+#
+# Scheduling: there's no way for cron to read schedule.json and fire exactly at
+# each race's finish — cron is fixed UTC. But it doesn't need to. Results don't
+# exist in the feed until a race actually ends, and this scraper only fills empty
+# slots and only commits when something changed. So a frequent run is "event-timed"
+# by nature: it grabs results on the first pass after the checkered flag and
+# no-ops otherwise (same self-gating trick the lineups workflow uses). Hence a
+# daily 8 PM ET catch-all plus an hourly sweep across Sat & Sun race windows.
 
 on:
   schedule:
-    # UTC. EST = UTC-5 / EDT = UTC-4 (labels assume EDT, summer).
-    - cron: '0 11 * * 0'   # Sun  7:00 AM EDT — Saturday races
-    - cron: '0 11 * * 1'   # Mon  7:00 AM EDT — main: Sunday races
-    - cron: '0 16 * * 1'   # Mon 12:00 PM EDT — retry
-    - cron: '0 11 * * 2'   # Tue  7:00 AM EDT — Monday postponements
-    - cron: '0 14 * * 6'   # Sat 10:00 AM EDT — Friday Truck races
+    # All times UTC, labels in ET (EDT = UTC-4). Results fire on the :00 mark;
+    # every other workflow is offset to :15/:30 so git pushes never collide.
+    - cron: '0 12 * * 1-5'     # Mon–Fri 8:00 AM ET — weekday baseline
+    # Friday 4 PM ET -> Sat 2 AM ET, hourly:
+    - cron: '0 20-23 * * 5'    # Fri 4–7 PM ET
+    - cron: '0 0-6 * * 6'      # Fri 8 PM – Sat 2 AM ET (UTC Sat 00–06)
+    # Saturday 8 AM ET -> Sun 2 AM ET, hourly (skips 13:00 UTC so Sat clears Schedule):
+    - cron: '0 12,14-23 * * 6' # Sat 8 AM – 7 PM ET
+    - cron: '0 0-6 * * 0'      # Sat 8 PM – Sun 2 AM ET (UTC Sun 00–06)
+    # Sunday: once at 8 AM, then 4 PM ET -> Mon 2 AM ET hourly:
+    - cron: '0 12 * * 0'       # Sun 8:00 AM ET
+    - cron: '0 20-23 * * 0'    # Sun 4–7 PM ET
+    - cron: '0 0-6 * * 1'      # Sun 8 PM – Mon 2 AM ET (UTC Mon 00–06)
   workflow_dispatch:
     inputs:
       season:
