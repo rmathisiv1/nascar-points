@@ -27186,7 +27186,7 @@ function _buildProjectionHTML(proj) {
     <div class="proj-view proj-view-owner" hidden>
       ${_renderProjectionTopContenders(topContenders, proj, true)}
 
-      ${_renderProjectionChart(_ownerizeProj(proj))}
+      ${_renderProjectionChart(_ownerizeProj(proj), { carPill: true })}
 
       ${_renderProjectionOwnerTable(_ownerizeProj(proj))}
 
@@ -27209,7 +27209,7 @@ function _buildProjectionHTML(proj) {
 // Projected standings bar chart — horizontal bars for each driver sorted
 // by projected seed, with a cutline at the playoff field boundary.
 // Toggle between "points" (current pts) and "rank" views.
-function _renderProjectionChart(proj) {
+function _renderProjectionChart(proj, opts = {}) {
   const fieldSize = proj.rule.field || 16;
   const sorted = proj.drivers.slice()
     .sort((a, b) => (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0))
@@ -27260,10 +27260,12 @@ function _renderProjectionChart(proj) {
           P${projRank}
         </text>
         ${arrowText}
-        <text x="${leftPad - 6}" y="${y + barH / 2 + 4}" text-anchor="end"
-              style="font-family:var(--serif);font-size:12px;fill:var(--text-2);">
-          ${escapeHTML(d.name)}
-        </text>
+        ${opts.carPill
+          ? `<rect x="${leftPad - 44}" y="${y + (barH - 16) / 2}" width="38" height="16" rx="3" fill="${carHex}"/>
+             <text x="${leftPad - 25}" y="${y + barH / 2 + 4}" text-anchor="middle"
+               style="font-family:var(--mono);font-size:11px;font-weight:700;fill:${contrastTextFor(carHex)};">${escapeHTML(String(d.car_number))}</text>`
+          : `<text x="${leftPad - 6}" y="${y + barH / 2 + 4}" text-anchor="end"
+               style="font-family:var(--serif);font-size:12px;fill:var(--text-2);">${escapeHTML(d.name)}</text>`}
         <!-- Projected portion (lighter) -->
         <rect x="${leftPad}" y="${y}" width="${fullBarW}" height="${barH}" rx="2"
               fill="${inField ? 'rgba(100,220,100,0.25)' : 'rgba(255,100,100,0.12)'}"
@@ -27849,9 +27851,6 @@ function _renderProjectionMfrContenders(proj, traces) {
               <div class="proj-contender-sub">title from this make</div>
               <div class="proj-contender-bar">
                 <div class="proj-contender-bar-fill" style="width:${Math.min(100, pct).toFixed(1)}%"></div>
-              </div>
-              <div class="proj-contender-meta">
-                <span class="muted">${m.playoff_cars} car${m.playoff_cars === 1 ? "" : "s"} in the field</span>
               </div>
             </div>
           `;
