@@ -5546,10 +5546,11 @@ async function loadEntryList() {
           // this for every series (the odds feed never did); used for display so
           // a one-off sub shows in the car they're actually entered in.
           car: e.car != null ? String(e.car) : null,
-          // NASCAR-native entry metadata (weekend-feed). Carried through for use
-          // by the entry/prediction board and future features.
-          team: e.team != null ? String(e.team) : null,
+          // NASCAR-native entry metadata (weekend-feed). Carried through for the
+          // Entry List card and future features.
           manufacturer: e.manufacturer != null ? String(e.manufacturer) : null,
+          sponsor: e.sponsor != null ? String(e.sponsor) : null,
+          owner: e.owner != null ? String(e.owner) : null,
           crew_chief: e.crew_chief != null ? String(e.crew_chief) : null,
         }))
         .filter(e => e.driver);
@@ -21499,60 +21500,43 @@ function _raceStatChips(race, ev, series) {
   if (!chips.length) return "";
   return `<div class="rcx-chips">${chips.map(c => `<span class="rcx-chip">${c}</span>`).join("")}</div>`;
 }
-// Visible ENTRY LIST card for an upcoming race — the field as NASCAR posted it
-// (driver, car #, team, manufacturer, crew chief), with win odds when the book
-// has them. Fed by data/entry_list.json via getEntryList; renders nothing if no
-// entry list has loaded for this track yet (falls back to silence, not a stub).
-const _MFR_SHORT = { Toyota: "TOY", Ford: "FRD", Chevrolet: "CHV" };
+// Visible ENTRY LIST card for an upcoming race — NASCAR's numerical entry list:
+// car #, driver, manufacturer, sponsor, owner, crew chief, in car-number order.
+// Fed by data/entry_list.json via getEntryList; renders nothing until an entry
+// list has loaded for this track.
 function _renderEntryListCard(series, trackCode) {
   if (typeof getEntryList !== "function" || !trackCode) return "";
   const list = getEntryList(series, trackCode);
   if (!list || !list.length) return "";
-  const hasOdds = list.some(e => e.win_prob != null);
   const rows = list.slice().sort((a, b) => {
-    if (hasOdds) {
-      const wa = a.win_prob == null ? -1 : a.win_prob;
-      const wb = b.win_prob == null ? -1 : b.win_prob;
-      if (wb !== wa) return wb - wa;             // best odds first
-    }
-    const ca = parseInt(a.car, 10), cb = parseInt(b.car, 10);  // else by car #
-    return (isNaN(ca) ? 999 : ca) - (isNaN(cb) ? 999 : cb);
-  }).map((e, i) => {
+    const ca = parseInt(a.car, 10), cb = parseInt(b.car, 10);
+    return (isNaN(ca) ? 9999 : ca) - (isNaN(cb) ? 9999 : cb);
+  }).map(e => {
     const car = e.car != null ? String(e.car) : null;
     const carHex = car ? colorFor(series, car) : "#888";
     const carTxt = contrastTextFor(carHex);
+    const slug = slugify(e.driver || "");
     const ent = car && (typeof allEntities === "function")
       ? allEntities().find(x => String(x.car_number) === car) : null;
-    const isPT = !(ent && typeof isFullTime === "function" && isFullTime(ent));
+    const isPT = car && !(ent && typeof isFullTime === "function" && isFullTime(ent));
     const ptBadge = isPT ? `<span class="hp-parttime" title="Part-time entry">PT</span>` : "";
-    const mfr = e.manufacturer ? (_MFR_SHORT[e.manufacturer] || e.manufacturer.slice(0, 3).toUpperCase()) : "—";
-    const winStr = e.win_prob != null ? `${(e.win_prob * 100).toFixed(0)}%` : "—";
-    const carLabel = car ? `#${car}` : "—";
-    const slug = slugify(e.driver || "");
-    const detail = [];
-    if (e.team) detail.push(`<span class="hpt-detail-stat"><label>team</label><span>${escapeHTML(e.team)}</span></span>`);
-    if (e.crew_chief) detail.push(`<span class="hpt-detail-stat"><label>crew chief</label><span>${escapeHTML(e.crew_chief)}</span></span>`);
-    if (e.top5_prob != null) detail.push(`<span class="hpt-detail-stat"><label>top 5</label><span>${(e.top5_prob * 100).toFixed(0)}%</span></span>`);
-    return `
-      <details class="hpt-row-wrap">
-        <summary class="hpt-row">
-          <span class="hp-pos">${i + 1}</span>
-          <span class="hp-car" style="background:${carHex};color:${carTxt}">${carLabel}</span>
-          <span class="hp-name">${escapeHTML(e.driver || "")}${ptBadge}</span>
-          <span class="hp-stat-cell">${mfr}</span>
-          <span class="hp-stat-cell hp-odds">${winStr}</span>
-        </summary>
-        <div class="hpt-row-detail">
-          <a class="hpt-detail-link profile-link" href="#/driver/${slug}">full profile →</a>
-          ${detail.join("")}
-        </div>
-      </details>`;
+    const carChip = `<span class="car-tag" style="background:${carHex};color:${carTxt}">${escapeHTML(car || "—")}</span>`;
+    return `<tr>
+      <td class="el-car">${carChip}</td>
+      <td class="el-drv"><a class="profile-link" href="#/driver/${slug}">${escapeHTML(e.driver || "")}</a>${ptBadge}</td>
+      <td class="el-mfr">${escapeHTML(e.manufacturer || "—")}</td>
+      <td class="el-spon">${escapeHTML(e.sponsor || "—")}</td>
+      <td class="el-own">${escapeHTML(e.owner || "—")}</td>
+      <td class="el-cc">${escapeHTML(e.crew_chief || "—")}</td>
+    </tr>`;
   }).join("");
   return `<div class="card rc-card">
-    <div class="rc-card-head"><span class="rc-card-title">Entry List</span><span class="rc-card-sub">${list.length} cars${hasOdds ? "" : " · no odds"}</span></div>
-    <div class="hpt-col">
-      <div class="hpt-table-head"><span></span><span></span><span></span><span class="rps-col-label">MFR</span><span class="rps-col-label">WIN</span></div>
-      <div class="rps-list">${rows}</div>
+    <div class="rc-card-head"><span class="rc-card-title">Entry List</span><span class="rc-card-sub">${list.length} cars</span></div>
+    <div class="rc-card-body">
+      <table class="el-table">
+        <thead><tr><th>#</th><th>Driver</th><th>Mfr</th><th class="el-spon-h">Sponsor</th><th>Owner</th><th>Crew Chief</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>
   </div>`;
 }

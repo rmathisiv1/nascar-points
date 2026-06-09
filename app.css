@@ -7353,6 +7353,64 @@ body.lightbox-open {
 }
 
 /* ============================================================
+   Entry List table (upcoming-race Entry List tab) — NASCAR's
+   numerical entry list: car #, driver, mfr, sponsor, owner, CC.
+   ============================================================ */
+.el-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.el-table thead th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.el-table tbody td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line-faint, rgba(255,255,255,0.05));
+  vertical-align: middle;
+}
+.el-table tbody tr:last-child td { border-bottom: none; }
+.el-table .el-car { width: 1%; white-space: nowrap; }
+.el-table .el-car .car-tag {
+  display: inline-block;
+  min-width: 26px;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.el-table .el-drv { font-weight: 600; white-space: nowrap; }
+.el-table .el-drv .profile-link { color: var(--text); text-decoration: none; }
+.el-table .el-drv .profile-link:hover { text-decoration: underline; }
+.el-table .el-mfr { color: var(--muted); white-space: nowrap; }
+.el-table .el-spon, .el-table .el-own, .el-table .el-cc { color: var(--text-dim, var(--text)); }
+.el-table .hp-parttime {
+  margin-left: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 3px;
+  vertical-align: middle;
+}
+@media (max-width: 640px) {
+  .el-table { font-size: 12px; }
+  .el-table .el-spon { display: none; }   /* drop sponsor first on narrow screens */
+  .el-table thead th.el-spon-h { display: none; }
+}
+
+/* ============================================================
    CC profile — multi-series stat cards (mirrors driver "Career By Series")
    ============================================================ */
 .cc-series-multi {

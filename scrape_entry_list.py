@@ -295,13 +295,16 @@ def entries_from_weekend_feed(season, series_id, race_id):
         if not name or name.lower() in seen:
             continue
         seen.add(name.lower())
-        team = (r.get("team_name") or r.get("owner_fullname") or "").strip()
+        owner = (r.get("owner_fullname") or r.get("team_name") or "").strip()
+        sponsor = (r.get("sponsor") or r.get("sponsor_name")
+                   or r.get("primary_sponsor") or "").strip()
         out.append({
             "driver": name,
             "driver_id": r.get("driver_id"),
             "car": str(r.get("car_number") or "").strip() or None,
-            "team": team or None,
             "manufacturer": _mfr_name(r.get("car_make")),
+            "sponsor": sponsor or None,
+            "owner": owner or None,
             "crew_chief": (r.get("crew_chief_fullname") or "").strip() or None,
         })
     return out or None
@@ -336,6 +339,9 @@ def main():
     ap.add_argument("--dump", action="store_true")
     ap.add_argument("--list-markets", action="store_true",
                     help="print the markets each race exposes (debug the top-5 matcher)")
+    ap.add_argument("--keys", action="store_true",
+                    help="print the raw weekend-feed entry row (first car) for each "
+                         "series and exit — use to confirm field names like sponsor")
     ap.add_argument("--jayski", default=None,
                     help="entry-list fallback per series when the odds market isn't posted: "
                          "comma-separated SERIES=URL "
@@ -375,6 +381,15 @@ def main():
         rid = race.get("race_id")
         track = race.get("track_name", "")
         print(f"  {code}: race_id={rid}  {track}", file=sys.stderr)
+        if args.keys:
+            wf = fetch_json(f"{CACHER}/{args.season}/{series_id}/{rid}/weekend-feed.json")
+            wrr = ((wf or {}).get("weekend_race") or [{}])[0].get("results") or []
+            if wrr:
+                print(f"    first entry row keys/values for {code}:")
+                print(json.dumps(wrr[0], indent=2))
+            else:
+                print(f"    (no entry rows posted yet for {code})")
+            continue
         # PRIMARY: NASCAR's own weekend-feed entry list (all 3 series, carries
         # car #, team, manufacturer, crew chief). Odds are layered on top.
         entries = entries_from_weekend_feed(args.season, series_id, rid)
