@@ -27132,10 +27132,23 @@ function _buildProjectionHTML(proj) {
     </div>
 
     <div class="proj-view proj-view-owner" hidden>
+      ${_renderProjectionTopContenders(topContenders, proj)}
+
+      ${_renderProjectionChart(proj)}
+
       ${_renderProjectionOwnerTable(proj)}
+
+      ${chaseTraces.length > 0
+        ? _renderProjectionChaseChart(chaseDrivers, proj, chaseTraces)
+          + _renderProjectionChaseTable(chaseDrivers, proj, chaseTraces)
+        : ""}
     </div>
 
     <div class="proj-view proj-view-mfr" hidden>
+      ${_renderProjectionMfrContenders(proj)}
+
+      ${_renderProjectionMfrChart(proj)}
+
       ${_renderProjectionMfrTable(proj)}
     </div>
   `;
@@ -27270,8 +27283,6 @@ function _renderProjectionRegSeasonTable(proj) {
             <th>Driver</th>
             <th class="num">Current Pts</th>
             <th class="num">Proj Pts</th>
-            <th class="num">Proj Wins</th>
-            <th class="num">Proj Top 5</th>
             <th class="num">From Leader</th>
             <th class="num">From Cutline</th>
             <th class="num">Chase %</th>
@@ -27283,8 +27294,6 @@ function _renderProjectionRegSeasonTable(proj) {
               const playoffPct = d.playoff_pct * 100;
               const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
               const projPts = Math.round(d.projected_reg_total || d.current_pts || 0);
-              const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : "—";
-              const projTop5 = d.projected_top5 != null ? Math.round(d.projected_top5) : "—";
               const fromLeader = i === 0 ? "—" : `−${(Math.round(leaderPts) - projPts).toLocaleString()}`;
               const fromCutline = i < fieldSize
                 ? (projPts === cutlinePts ? "CUTLINE" : `+${(projPts - cutlinePts).toLocaleString()}`)
@@ -27299,8 +27308,6 @@ function _renderProjectionRegSeasonTable(proj) {
                 </td>
                 <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
                 <td class="num">${projPts.toLocaleString()}</td>
-                <td class="num">${projWins}</td>
-                <td class="num">${projTop5}</td>
                 <td class="num">${fromLeader}</td>
                 <td class="num">${fromCutline}</td>
                 <td class="num ${playoffCls}">${playoffPct.toFixed(0)}%</td>
@@ -27630,7 +27637,6 @@ function _renderProjectionOwnerTable(proj) {
             <th>Team</th>
             <th class="num">Current Pts</th>
             <th class="num">Proj Pts</th>
-            <th class="num">Proj Wins</th>
             <th class="num">From Leader</th>
             <th class="num">From Cutline</th>
             <th class="num">Chase %</th>
@@ -27640,7 +27646,6 @@ function _renderProjectionOwnerTable(proj) {
               const carHex = colorFor(proj.series, d.car_number);
               const txt = contrastTextFor(carHex);
               const projPts = Math.round(d.projected_reg_total || d.current_pts || 0);
-              const projWins = d.projected_wins != null ? Math.round(d.projected_wins) : 0;
               const playoffPct = d.playoff_pct * 100;
               const playoffCls = playoffPct >= 80 ? "proj-pct-hot" : playoffPct >= 40 ? "proj-pct-warm" : "proj-pct-cold";
               const fromLeader = i === 0 ? "—" : `−${(Math.round(leaderPts) - projPts).toLocaleString()}`;
@@ -27660,7 +27665,6 @@ function _renderProjectionOwnerTable(proj) {
                 <td>${escapeHTML(d.team_code || "")}</td>
                 <td class="num">${(d.current_pts || 0).toLocaleString()}</td>
                 <td class="num">${projPts.toLocaleString()}</td>
-                <td class="num">${projWins}</td>
                 <td class="num">${fromLeader}</td>
                 <td class="num">${fromCutline}</td>
                 <td class="num ${playoffCls}">${playoffPct.toFixed(0)}%</td>
@@ -27673,16 +27677,22 @@ function _renderProjectionOwnerTable(proj) {
   `;
 }
 
-// Manufacturer projection table — aggregates by manufacturer code.
-// Shows projected wins, top 5s, avg projected finish, playoff representation.
-function _renderProjectionMfrTable(proj) {
+// Brand colors for the manufacturer views (parallels colorFor for drivers).
+const _MFR_HEX = { CHV: "#c79a3b", FRD: "#1f4e9c", TYT: "#e60012", RAM: "#8a8d8f", DOD: "#b22222" };
+function _mfrColor(code) { return _MFR_HEX[code] || "#888888"; }
+
+// Shared manufacturer aggregation — used by the contenders, chart, and table
+// so all three agree. Aggregates each car (driver) up to its manufacturer.
+function _aggregateMfrProj(proj) {
   const fieldSize = proj.rule.field || 16;
   const allSorted = proj.drivers.slice().sort((a, b) =>
     (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
   );
+  const rankMap = new Map();
+  allSorted.forEach((d, i) => rankMap.set(d, i));
 
-  const mfrs = new Map();
   const MFR_NAMES = { CHV: "Chevrolet", FRD: "Ford", TYT: "Toyota", RAM: "Ram", DOD: "Dodge" };
+  const mfrs = new Map();
 
   proj.drivers.forEach(d => {
     const code = d.manufacturer || "???";
@@ -27691,40 +27701,170 @@ function _renderProjectionMfrTable(proj) {
         code,
         name: MFR_NAMES[code] || code,
         cars: [],
+        total_proj_pts: 0,
+        total_current_pts: 0,
         total_proj_wins: 0,
         total_current_wins: 0,
         total_proj_top5: 0,
         playoff_cars: 0,
         champ_pct_sum: 0,
         best_driver: null,
+        best_driver_car: null,
         best_driver_pct: 0,
       });
     }
     const m = mfrs.get(code);
     m.cars.push(d);
+    m.total_proj_pts += Math.round(d.projected_reg_total || d.current_pts || 0);
+    m.total_current_pts += (d.current_pts || 0);
     m.total_proj_wins += Math.round(d.projected_wins || 0);
     m.total_current_wins += (d.current_wins || 0);
     m.total_proj_top5 += Math.round(d.projected_top5 || 0);
     m.champ_pct_sum += (d.championship_pct || 0);
-    const driverRank = allSorted.indexOf(d);
-    if (driverRank >= 0 && driverRank < fieldSize) m.playoff_cars++;
-    if (d.championship_pct > m.best_driver_pct) {
-      m.best_driver_pct = d.championship_pct;
+    const rank = rankMap.get(d);
+    if (rank != null && rank < fieldSize) m.playoff_cars++;
+    if ((d.championship_pct || 0) > m.best_driver_pct) {
+      m.best_driver_pct = d.championship_pct || 0;
       m.best_driver = d.name;
+      m.best_driver_car = d.car_number;
     }
   });
 
-  const sorted = Array.from(mfrs.values()).sort((a, b) => b.total_proj_wins - a.total_proj_wins);
-
-  // Compute avg projected finish per mfr
-  sorted.forEach(m => {
-    const finishes = m.cars
-      .map(d => d.projected_reg_total)
-      .filter(v => v != null);
-    m.avg_proj_pts = finishes.length
-      ? Math.round(finishes.reduce((a, b) => a + b, 0) / finishes.length)
-      : 0;
+  const list = Array.from(mfrs.values());
+  list.forEach(m => {
+    m.avg_proj_pts = m.cars.length ? Math.round(m.total_proj_pts / m.cars.length) : 0;
   });
+  return list;
+}
+
+// Manufacturer "championship picture" — mirrors the driver contender cards but
+// for makes. % is the chance the champion comes from that manufacturer (sum of
+// its cars' mutually-exclusive championship probabilities).
+function _renderProjectionMfrContenders(proj) {
+  const mfrs = _aggregateMfrProj(proj)
+    .sort((a, b) => b.champ_pct_sum - a.champ_pct_sum);
+  if (!mfrs.length) return "";
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">manufacturer battle</div>
+        <h2 class="ed-hero ed-hero-sm">Championship picture</h2>
+      </div>
+      <div class="proj-contender-row">
+        ${mfrs.map((m, i) => {
+          const hex = _mfrColor(m.code);
+          const txt = contrastTextFor(hex);
+          const pct = m.champ_pct_sum * 100;
+          const isLeader = i === 0;
+          return `
+            <div class="proj-contender ${isLeader ? "proj-contender-leader" : ""}">
+              <div class="proj-contender-rank">${i + 1}</div>
+              <div class="proj-contender-name-row">
+                <span class="proj-contender-car" style="background:${hex};color:${txt}">${escapeHTML(m.code)}</span>
+                <span class="proj-contender-name">${escapeHTML(m.name)}</span>
+              </div>
+              <div class="proj-contender-bigpct">${pct.toFixed(1)}<span class="proj-pct-symbol">%</span></div>
+              <div class="proj-contender-sub">title from this make</div>
+              <div class="proj-contender-bar">
+                <div class="proj-contender-bar-fill" style="width:${Math.min(100, pct).toFixed(1)}%"></div>
+              </div>
+              <div class="proj-contender-meta">
+                <span class="muted">${m.playoff_cars} car${m.playoff_cars === 1 ? "" : "s"} in the field</span>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+// Manufacturer projected-points bar chart — mirrors the driver standings chart
+// but bars are total projected points across all of a make's cars. No playoff
+// cutline (manufacturers don't have a field cutoff).
+function _renderProjectionMfrChart(proj) {
+  const mfrs = _aggregateMfrProj(proj)
+    .sort((a, b) => b.total_proj_pts - a.total_proj_pts);
+  if (!mfrs.length) return "";
+
+  const barH = 30;
+  const gap = 6;
+  const leftPad = 150;
+  const rightPad = 150;
+  const chartW = 920;
+  const chartH = mfrs.length * (barH + gap) + 30;
+  const maxPts = Math.max(...mfrs.map(m => m.total_proj_pts), 1);
+
+  // Current points rank for movement arrows
+  const curRanked = mfrs.slice().sort((a, b) => b.total_current_pts - a.total_current_pts);
+  const curRankMap = new Map();
+  curRanked.forEach((m, i) => curRankMap.set(m.code, i + 1));
+
+  const bars = mfrs.map((m, i) => {
+    const y = i * (barH + gap) + 15;
+    const hex = _mfrColor(m.code);
+    const fullBarW = Math.max((m.total_proj_pts / maxPts) * (chartW - leftPad - rightPad), 2);
+    const curBarW = Math.max((m.total_current_pts / maxPts) * (chartW - leftPad - rightPad), 2);
+
+    const projRank = i + 1;
+    const curRank = curRankMap.get(m.code) || projRank;
+    const diff = curRank - projRank;
+    let arrowText = "";
+    if (diff > 0) {
+      arrowText = `<text x="118" y="${y + barH / 2 + 4}" text-anchor="start"
+        style="font-family:var(--mono);font-size:10px;fill:#6ce06c;font-weight:700;">▲${diff}</text>`;
+    } else if (diff < 0) {
+      arrowText = `<text x="118" y="${y + barH / 2 + 4}" text-anchor="start"
+        style="font-family:var(--mono);font-size:10px;fill:#ff6b6b;font-weight:700;">▼${Math.abs(diff)}</text>`;
+    }
+
+    return `
+      <g>
+        <text x="18" y="${y + barH / 2 + 4}" text-anchor="start"
+              style="font-family:var(--mono);font-size:12px;font-weight:700;fill:var(--muted);">
+          P${projRank}
+        </text>
+        <text x="${leftPad - 12}" y="${y + barH / 2 + 4}" text-anchor="end"
+              style="font-family:var(--serif);font-size:14px;fill:var(--text-2);">
+          ${escapeHTML(m.name)}
+        </text>
+        ${arrowText}
+        <rect x="${leftPad}" y="${y}" width="${fullBarW}" height="${barH}" rx="3"
+              fill="${hex}" fill-opacity="0.32" stroke="${hex}" stroke-width="1"/>
+        <rect x="${leftPad}" y="${y}" width="${curBarW}" height="${barH}" rx="3" fill="${hex}" fill-opacity="0.85"/>
+        <rect x="${leftPad}" y="${y}" width="4" height="${barH}" rx="1" fill="${hex}"/>
+        <text x="${leftPad + 10}" y="${y + barH / 2 + 4}"
+              style="font-family:var(--mono);font-size:10px;fill:var(--text);opacity:0.85;">
+          ${m.total_current_pts.toLocaleString()}
+        </text>
+        <text x="${leftPad + fullBarW + 8}" y="${y + barH / 2 + 4}"
+              style="font-family:var(--mono);font-size:11px;fill:var(--muted);">
+          ${m.total_proj_pts.toLocaleString()} pts · ${m.cars.length} cars
+        </text>
+      </g>
+    `;
+  }).join("");
+
+  return `
+    <section class="proj-section">
+      <div class="proj-section-head">
+        <div class="ed-kicker">manufacturer battle</div>
+        <h2 class="ed-hero ed-hero-sm">Projected manufacturer points</h2>
+        <div class="ed-byline">Total projected points across every car of each make · solid = current, light = projected</div>
+      </div>
+      <div class="proj-chart-host" style="overflow-x:auto;">
+        <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;max-width:${chartW}px;height:auto;display:block;">
+          ${bars}
+        </svg>
+      </div>
+    </section>
+  `;
+}
+
+// Manufacturer projection table — aggregates by manufacturer code.
+// Shows projected wins, top 5s, avg projected finish, playoff representation.
+function _renderProjectionMfrTable(proj) {
+  const sorted = _aggregateMfrProj(proj).sort((a, b) => b.total_proj_wins - a.total_proj_wins);
 
   return `
     <section class="proj-section">

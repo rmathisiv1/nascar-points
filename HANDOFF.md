@@ -1,189 +1,199 @@
 # NASCAR Analytics App — Handoff Sheet
 
-App: **Racecar Data** — a NASCAR analytics web app deployed at
+App: **Racecar Data** — a NASCAR analytics web app at
 `rmathisiv1.github.io/nascar-points`. Single-page app (vanilla JS, no framework),
-hash-routed. Built for a Joe Gibbs Racing professional who iterates fast via
-screenshots and deploys per logical batch.
+hash-routed. Built for a Joe Gibbs Racing engineer (rmathis) who iterates fast via
+screenshots, on Windows + PowerShell + GitHub Desktop, and deploys per logical batch.
+
+In-app date this session: **2026-06-09**. Latest completed race: **R15 Michigan**
+(won by Hamlin). Next up: **R16 Pocono** (Sun Jun 14), R17 San Diego, NTS R13 San Diego.
+
+---
+
+## ⚠️ UNDONE TASKS — START HERE
+
+### 1. Verify the "Pocono placeholder" fix actually shipped (live-site bug)
+NASCAR's weekend-feed publishes a race's entry list in `results` BEFORE the race
+(every `finish_pos` 0). The old results scraper wrote those into `points_2026.json`,
+so Pocono rendered as "completed": blank results table, 0.0 best-avg-finish, inflated
+power rankings (Zilisch), and churning storylines. Three fixes were handed over —
+confirm all three landed (user pivoted to script cleanup right after, may not have
+deployed):
+- `app.js` (adds `_sanitizePlaceholderResults()` at load + seeded storyline shuffle) → repo root, pushed.
+- `fix_placeholder_results.py` run with `--apply`, and `data/points_2026.json` committed.
+  - `python fix_placeholder_results.py` (dry-run) → expect NCS Pocono + likely NOS Pocono + NTS San Diego → `--apply`.
+- `scrape_results_nascar.py` (hardened: requires a winner `finishing_position==1` before writing) → `scripts\`, pushed.
+
+### 2. Deploy the six reworked workflow schedules + commit drivers.json
+All six rescheduled `.yml` were handed over; confirm they're in `.github\workflows\`
+and pushed: `update-odds`, `update-schedule`, `update-results`, `update-lineups`,
+`update-race-docs`, `update-drivers`. Also commit/push the refreshed `data/drivers.json`
+(the 383-driver NASCAR-feed bios run — user ran it, output confirmed).
+
+### 3. ⏳ 1949–1969 backfill — STILL RUNNING (the "Petty wins" fix)
+A PowerShell loop is re-scraping Cup seasons 1949–1969 on the user's machine; it
+takes ~all day (~1,000 RR race pages, rate-limited). It writes one file per season,
+so it's safe to resume if interrupted:
+```powershell
+1949..1969 | ForEach-Object { python scripts\scrape_points.py --season $_ --only NCS --out "data\points_$_.json" }
+```
+**When it finishes:**
+1. Commit/push all `data\points_19*.json`.
+2. Run `python audit_wins.py data 30` — it compares retired legends to baked-in
+   canonical totals. **Expect Richard Petty = 200 and everything green.**
+3. That confirms the historical record is repaired and Racing-Reference is fully
+   out of the loop (the weekly automation is already all on NASCAR/Jayski feeds).
+
+Why it was broken: `scrape_points.py` had parser bugs on RR's old-format pages —
+the decisive one was `race_results_pattern` only matching `{season}_` URLs and
+rejecting the hyphen form (`1963-08`), so hyphen-form races were never parsed and
+left as empty stubs; counting `finish_pos===1` across those stubs undercounted wins
+(Petty showed 178). Five fixes were applied to `scrape_points.py` and it's already
+deployed (verified on a 1963 test: 55 races, 0 empty, Petty 14). The backfill is the
+re-scrape that propagates the fix to all early seasons.
 
 ---
 
 ## ENVIRONMENT & WORKFLOW (read first)
 
-- **Authoritative working copy:** `/mnt/user-data/outputs/` — this is where ALL
-  edits are made. Files: `app.js` (~27,870 lines), `app.css` (~2457 braces,
-  balanced), `index.html` (~640 lines), plus scrapers (`scrape_jayski_entry.py`,
-  `scrape_race_docs.py`, `scrape_entry_list.py`, `diag_personnel.py`).
-- `/mnt/project/` is a **read-only, STALE** snapshot — never edit it, always use
-  `/mnt/user-data/outputs/`.
-- **Network is DISABLED** in the sandbox bash. The user runs scrapers locally and
-  pastes the output/screenshots.
-- **Deploy flow:** user copies the outputs files into a local Windows repo
+- **Authoritative working copy:** `/mnt/user-data/outputs/` — make ALL edits here.
+  `/mnt/project/` is a **read-only, STALE** snapshot; never edit it. (It can lag the
+  live site by days — confirm currency by grepping for a recent symbol before trusting it.)
+- **Network is DISABLED** in the sandbox. The user runs scrapers locally and pastes output/screenshots.
+- **Deploy:** user copies outputs files into the local repo
   (`C:\Users\rmathis\OneDrive - Joe Gibbs Racing, Inc\Documents\GitHub\nascar-points`),
-  then `git add`/`commit`/`push` → GitHub Pages. **PowerShell does NOT support `&&`** —
-  always give commands as separate lines.
-- **ALWAYS remind the user to hard-refresh (Ctrl+Shift+R) after CSS edits** —
-  GitHub Pages / browser caching has repeatedly caused "it didn't change" reports
-  that were actually stale CSS, not bad code.
-- The user pastes placeholder text literally — give exact copy-paste commands with
-  REAL filenames/values, never placeholders.
+  then commits/pushes via GitHub Desktop → GitHub Pages. App files → repo root;
+  scrapers → `scripts\`; workflows → `.github\workflows\`; data → `data\`.
+- **PowerShell:** no `&&` (separate lines); user can't paste multiline Python, but can
+  run one-line `python -c` and PS loops. Give exact copy-paste commands with REAL names.
+- **Always remind: hard-refresh (Ctrl+Shift+R) after CSS edits** — GitHub Pages CDN /
+  browser cache repeatedly caused false "it didn't change" reports. (Same reason
+  `data/*.json` fetches are cache-busted with `?v=Date.now()`.)
 
-### MANDATORY validation before every handoff
+### MANDATORY validation before handoff
 - `node --check app.js`
-- brace-balance app.css: `grep -o '{' app.css | wc -l` must equal `grep -o '}' app.css | wc -l`
-- div-balance index.html via the python `html.parser` snippet (counts `<div>`/`</div>`)
+- CSS brace balance: count of `{` == count of `}`
 - `python3 -m py_compile <scraper>.py` for any scraper touched
-- Then `present_files` the changed files and give the exact `git add/commit/push` lines.
+- Then `present_files` the changed files + give exact deploy steps.
 
 ### Working style
-- Concise, surgical fixes. Validate before handoff. One logical batch per push.
-- The user catches bugs quickly from screenshots — when they say something "didn't
-  change," first suspect (a) CSS cache (tell them to hard-refresh) or (b) a more-
-  specific/`!important` rule overriding the edit, or (c) the edit being in the wrong
-  media query. Check the cascade before assuming the code is wrong.
+Concise, surgical, one logical batch per push. User catches bugs from screenshots
+fast; when something "didn't change," suspect CSS cache → a more-specific/`!important`
+rule → wrong media query, before suspecting the code.
 
 ---
 
-## APP ARCHITECTURE (key facts)
+## DATA INFRASTRUCTURE — now cloud-native (migrated off Racing-Reference)
 
-- **Routing:** hash-based, `parseHash()` → sets `STATE.view` → hashchange handler
-  calls `ensurePageSeries()` then `render()`. Views in the `VIEWS` array.
-- **Data model:** `SEASON_CACHE[year]` holds all 3 series. Races keyed by ROUND
-  within (year, series): `#/race/<round>?_y=YYYY&_s=NCS`. Round N is a DIFFERENT
-  race per series. Data files exist back to 1995 only (data-availability limit).
-  `SERIES_MIN_YEAR = {NCS:1949, NOS:1982, NTS:1995}`.
-- **Series state:** `STATE.series` is the single active render series. Each
-  series-scoped page has independent memory in `STATE.pageSeries[view]`, restored by
-  `ensurePageSeries()` on navigation and written by the page header's NCS/NOS/NTS
-  toggle (`applyPageSeries` / `applySeriesChangeGlobal`). **Home is force-pinned to
-  NCS** both in `ensurePageSeries` and defensively at the top of `renderHome()`.
-- **Color helpers:** `colorFor(series, carNumber)` → hex; `contrastTextFor(hex)` →
-  "#000"/"#fff" (CORRECT for text-on-pill — NEVER use safeContrastColor for text).
-- Other helpers: `normalizeDriverName`, `escapeHTML`, `prettyTrack(code, track)`,
-  `formatRaceDate`, `seriesLabel`, `displayName`, `entityKey`, `computeSeasonTotals`,
-  `racesSorted`, `allEntities`, `isFullTime`, `orgColorForTeam`.
+RR 403s GitHub's cloud IPs, so weekly scraping moved to NASCAR's `cf.nascar.com`
+feed (+ Jayski for schedule/docs/lineups), which works in Actions. The old RR points
+workflow is **disabled and its files deleted**.
 
-### Unified page header + sub-nav (recently rebuilt — important)
-- `#page-series-bar` (top of `col-center`) is the **universal page header**, rendered
-  by `renderPageSeriesBar()`. It is a flex COLUMN with two rows:
-  - `.page-hd-row` — title (left, `.page-hd-title` = italic serif, lowercase,
-    `--accent` color) + series toggle (right, `.page-hd-right` with "SERIES" label
-    `.pgs-label` + NCS/NOS/NTS `.pgs-btn`).
-  - `.page-subnav` — the in-page sub-nav, rendered by `pageSubNav(view)` from the
-    `SUBNAV_GROUPS` array. Three groups:
-    - **Standings:** Standings, Playoffs, Projection
-    - **Analytics:** Power Rankings(form), Cumulative Season(arc), Heatmap, Teammate,
-      Stage vs Finish(trajectory), Season Data(breakdown), Driver Compare(compare)
-    - **Data:** Drivers, Teams, Tracks(trackstats), Crew Chiefs, Personnel, Points Format Calc(pointscalc)
-  - Sub-nav uses shared `.takeover-siblings` / `.takeover-sibling` styling. Left-
-    aligned, vertically centered (`.page-subnav { padding: 5px 0 }`). Scrolls
-    horizontally on mobile (min-width:0 + overflow-x:auto + right-edge fade mask);
-    active item auto-scrolled into view in `render()`.
-- Header hidden only on Home and Historical. Entity pages (profile/team/cc) suppress
-  the generic title (they render their own rich title). The big per-view
-  `.view-head h1` is globally `display:none` (unified header replaces it);
-  `.view-sub` subtitle still shows.
-- The old hardcoded `.profile-takeover-head` sub-nav blocks were REMOVED from
-  index.html — there are NO hardcoded sub-navs anymore; everything is centralized in
-  `pageSubNav()`.
-- **Historical page** has its own bar (`renderHistoricalBar`); `.hist-bar-title`
-  matches the accent-italic-serif-lowercase title style.
+**Live workflows** (output file · source · cadence, all UTC; ET labels = EDT):
+| Workflow | Writes | Source | Cadence |
+|---|---|---|---|
+| update-odds | entry_list.json | fantasy odds feed | Mon–Fri 12:15; Sat/Sun every 6h (:15) |
+| update-schedule | schedule.json | Jayski PDFs | daily 13:00 (9 AM ET) |
+| update-results | points_<yr>.json | cf.nascar.com weekend-feed | daily 12:00; Fri 4 PM→Sat 2 AM, Sat 8 AM→Sun 2 AM, Sun 8 AM + 4 PM→Mon 2 AM hourly (all :00) |
+| update-drivers | drivers.json | cf.nascar.com roster | Mon 13:30 (:30) |
+| update-race-docs | race_docs.json | Jayski PDFs | Mon 10:00 + Mon 14:00 + Wed 8 PM ET (:00) |
+| update-lineups | lineups.json | Jayski STARTROW | Fri/Sat windows (:30), Sun 3 AM (:00) |
 
-### Layout / scroll
-- **Desktop (`min-width:768px`):** body is locked to the viewport — `html,body
-  {height:100%/100vh; overflow:hidden}`, `body {display:flex; flex-direction:column}`,
-  topbar/metricbar/banner/footer are `flex:0 0 auto`, `.dashboard {flex:1 1 auto;
-  overflow:hidden}`. Panes scroll internally so the topbar never scrolls away.
-- **Mobile (`max-width:767.98px`):** topbar is `position:sticky; top:0` (see KNOWN
-  ISSUES — user reports it still scrolls away, needs fixing). Search is an always-
-  inline field (no expand-overlay); theme toggle hard-right; short "Search…"
-  placeholder set via JS. The separate `.mobile-page-title` bar is hidden (unified
-  header shows the title).
+Minute lanes (Results :00, Odds :15, Lineups/Bios :30, Schedule :00 on an idle hour)
+were chosen so no two workflows push in the same minute — verified collision-free.
+Note: GitHub cron can jitter under load; if push collisions ever appear, add
+`git pull --rebase --autostash` before `git push` in each commit step (the
+guaranteed fix; offsets cover the normal case). Standings need no feed — the frontend
+sums `race_pts`. Career stats need no scrape — app computes from race data.
 
-### Boot loading overlay
-- `#app-loader` (first body child) — full-screen splash ("Racecar Data" + spinner +
-  "Loading season data…"). `hideAppLoader()` (idempotent) fades it out after the
-  first `render()` in `boot()`. Safety nets: 12s timeout, window error listener,
-  `boot().catch()`.
+**`schedule.json` gotcha:** each session's full PDF row text lives in the `event`
+field (the `name` field is unused/null). The race-page Schedule tab uses it for the
+full-PDF view; session types are `practice/qualifying/race/final-practice/heat/duel/
+last-chance` (on-track) plus `other/meeting/intros` (ancillary).
 
-### Charts
-- **Cumulative season (arc):** `drawArcChart({svgId, rounds, entities, selectedSet,
-  metric, cumStartFromZero, tall})`. `tall:!showPlayoffs` (single chart fills page,
-  splits to compact when playoffs start). Has per-round dots with white-ring win
-  highlights + a rich `.pc-tooltip`-style hover popup (`wireArcHover()`). Mobile: SVG
-  sizes to content (no dead space), `margin-top:22px` to clear the title, team PILLS
-  (not dropdown), Top 5 + Top 10 + All + Clear buttons, no per-team Clear.
-- **Projection chase chart:** the reference style for dots/tooltips. Renders dots,
-  win highlights, `.pc-tooltip` hover with driver/track/finish/cum/position.
+### Scrapers (post-cleanup — only these remain)
+Active (feed a workflow or are a dependency): `scrape_entry_list.py`, `scrape_schedule.py`,
+`scrape_lineup.py`, `scrape_race_docs.py` (imports `scrape_jayski_entry.py`),
+`scrape_results_nascar.py` (imports `team_codes.py`), `scrape_drivers_nascar.py`,
+`team_codes.py`. Manual tools kept: `scrape_points.py` (RR historical backfill + module
+dep), `audit_wins.py`, `verify_backfill.py`, `fix_placeholder_results.py`.
+**Deleted this session:** audit_tracks, backfill_history, diag_loop_data, dump_schedule,
+dump_startrow, fix_roval_track_code, fallback_options, verify_new_model, merge_personnel,
+diag_personnel (the roster-wiper), probe_driver/probe_nascar_feed/probe_results, and the
+disabled `update-points.yml` + `scrape_drivers.py` + `backfill_crew_chiefs.py`.
 
 ---
 
-## CURRENT STATE (as of this handoff)
-
-Everything below is DONE, validated, and (assuming the user pushed) live:
-- Unified page header + centralized 3-group sub-nav, left-aligned & vertically
-  centered, mobile-scrollable with fade + active-into-view.
-- Projection moved UNDER the Standings dropdown in the top nav (no longer standalone).
-- Home force-pinned to NCS (both `ensurePageSeries` and `renderHome`).
-- Desktop viewport lock so topbar stays put; footer is a flex child.
-- Mobile inline search (icon no longer overlaps hamburger), short placeholder,
-  bigger page title (19px).
-- Arc: mobile team pills, removed team Clear, Top 5 button, taller graph, dead-space
-  removed, win-highlight dots + rich hover tooltip, title clears y-axis on mobile.
-- Heatmap dropdown spacing fixed; schedule rows are whole-row→race (no track link);
-  page titles use the panel-title accent style.
-- Boot loading overlay.
-- Back buttons removed from playoffs/projection/all Data pages (kept on
-  profile/race/track/team/cc/schedule entity drill-downs).
+## DONE THIS SESSION (assuming pushed)
+- Migrated weekly scraping to cf.nascar.com (new results + bios scrapers/workflows).
+- Fixed the Petty 178→200 root cause in `scrape_points.py` (5 parser fixes); backfill running (see Undone #3).
+- Bios refreshed from the feed: 383 drivers (59 new), runs in ~3s vs RR's ~1000 fetches.
+- Reworked + deconflicted all six workflow schedules.
+- Race-overview **Session Times** card (3rd column: NCS/NOS/NTS × Practice/Qual/Race times).
+- Race-page **Schedule tab** now shows the FULL PDF weekend (verbatim `event` text,
+  on-track rows emphasized, ancillary dimmed) instead of the on-track-only filter.
+- Fixed home **storyline churn** (was reshuffling with `Math.random()` every render →
+  now a seeded shuffle keyed to season + completed-race count: stable across re-renders).
+- Added `_sanitizePlaceholderResults()` at load so winner-less result sets never corrupt
+  the UI again (self-heal for the Pocono bug, from any source).
+- Repo cleanup (see scraper list above).
 
 ---
 
-## BACKLOG — user's current "to work on" list (NEW, not yet started)
+## APP ARCHITECTURE (durable facts)
+- **Routing:** hash-based; `parseHash()` → `STATE.view` → hashchange → `ensurePageSeries()` → `render()`.
+- **Data model:** `SEASON_CACHE[year]` holds all 3 series; races keyed by ROUND within
+  (year, series): `#/race/<round>?_y=YYYY&_s=NCS`. `SERIES_MIN_YEAR={NCS:1949,NOS:1982,NTS:1995}`.
+  A race is "completed" iff its `results` has a winner (`finish_pos===1`) — placeholders are sanitized at load.
+- **Series state:** `STATE.series` is the active render series; per-page memory in
+  `STATE.pageSeries[view]`. **Home is force-pinned to NCS** (ensurePageSeries + top of renderHome).
+- **Color:** `colorFor(series, carNumber)`→hex; `contrastTextFor(hex)`→"#000"/"#fff"
+  (use for text-on-pill; NEVER `safeContrastColor` for text).
+- **Schedule matching:** `scheduleForRace(race, series)` matches a points race to a
+  schedule.json event (by date, then per-series race-session date, then nearest same-track).
+- **Storyline picker:** `renderHomeStorylines()` → `generateHomeStorylinesForSeries()`;
+  per-series quotas, seeded shuffle (do NOT reintroduce `Math.random()` here).
+- Unified page header (`renderPageSeriesBar` + `pageSubNav`/`SUBNAV_GROUPS`); header
+  hidden on Home/Historical. Desktop = viewport-locked flex column; mobile topbar sticky.
 
-1. **Driver Compare — total/average toggle.** Add a toggle to switch the compare
-   stats between season totals and per-race averages.
-2. **Driver Compare — head-to-head series/all toggle.** Add a toggle on the
-   head-to-head section for "this series only" vs "all series."
-3. **Mobile topbar stays at top when scrolling.** User reports the mobile topbar
-   still scrolls out of view despite `position:sticky`. Likely an ancestor with
-   `overflow` breaking sticky, or the mobile layout lets the body scroll under a
-   clipped ancestor. Needs a proper fix (consider the same flex-column viewport lock
-   used on desktop, adapted for mobile's scrolling content, or `position:fixed`
-   topbar with content padding).
-4. **Mobile landscape stays in mobile view.** Rotating the phone to horizontal
-   currently crosses the 768px breakpoint → swaps to desktop layout AND then won't
-   scroll. Need the mobile layout to persist in landscape (e.g. detect touch/coarse
-   pointer or use a different breakpoint strategy) so it stays usable.
-5. **Hamburger menu bottom margin.** The mobile nav side-sheet pop-out cuts off / the
-   last menu options are hard to see/click. Add bottom padding/margin (and ensure the
-   menu scrolls if it's taller than the viewport).
-6. **Remove projected wins / projected top-5s from the chase projection.** Too
-   confusing — strip those columns/numbers from the championship-chase projection
-   view.
+---
 
-## DEFERRED BACKLOG (older, still open)
+## BACKLOG (deferred — not started)
 
-- Spider chart season/career toggle + top driver/team spiders.
-- Track "king" all-time record holder.
+Prediction view:
+- Remove projected wins / projected top-5s from the chase projection (too confusing).
 - Owner / manufacturer projection views.
-- Teammate view wins/weekends toggle.
-- Fix Petty wins (data accuracy issue).
-- Wire `scrape_race_docs.py` into GitHub Actions (`--current` weekly).
-- Session times / full event schedules (needs a new data feed).
-- Cleanup inert `STATE.mode` plumbing (left from removing the present/historical
-  toggle — DOM lookups are null-guarded, harmless, offered for cleanup).
-- Jayski roster backfill: 2020-and-earlier Truck Series rosters come back empty
-  (2020 was "Gander Outdoors/RV Truck Series" so the constructed `-ncts-` entry-list
-  URLs 404, and archived race pages return no roster). Decision pending: either patch
-  the scraper to try the Gander Outdoors URL naming, or floor NTS roster coverage at
-  2021. Roster coverage currently ~2021-2026 (some pages show 2024-2026).
+
+Driver Compare:
+- Total vs per-race average toggle.
+- Head-to-head this-series vs all-series toggle.
+
+Mobile (most user-visible bugs):
+- Topbar still scrolls away despite `position:sticky` (likely an `overflow` ancestor) — needs proper fix.
+- Landscape crosses the 768px breakpoint → desktop layout + won't scroll; keep mobile layout in landscape.
+- Hamburger side-sheet cuts off bottom items — add bottom padding + scroll.
+
+UI polish (parked):
+- Mobile home-hero series label: filled pill vs current colored text; mobile podium treatment.
+- The one-line "Practice · Qualifying · Race" summary at top of race overview is now
+  redundant with the Session Times card — offered for removal.
+- Full-schedule tab: ancillary rows are dimmed and text is verbatim ALL-CAPS from the
+  PDF — offered title-casing / equal-weight as tweaks.
+
+Data:
+- NTS roster backfill: ≤2020 Truck rosters come back empty (2020 "Gander Outdoors/RV"
+  URL naming 404s); decide whether to patch the URL scheme or floor coverage at 2021.
+  Re-check 2019–2023 coverage now that the silent-stub parser bug is fixed.
+- Career-stat currency: active drivers' `drivers.json` career block goes stale now that
+  RR bios are retired; app computes from race data as fallback (accurate post-backfill) —
+  decide whether to drop the career blocks entirely.
+- Practice-results VIEW not built ("Practice results →" opens the race overview).
+- Spider chart season/career toggle; teammate wins/weekends toggle.
 
 ---
 
-## KNOWN ISSUES / WATCH-OUTS
-- Mobile topbar scroll + landscape (items 3 & 4 above) are the most user-visible
-  open bugs.
-- When editing CSS that "doesn't take," check for: stale cache (hard-refresh),
-  duplicate/`!important` rules, or wrong media query. The mobile search bug last
-  round was a `position:static` that let an absolute `::before` escape onto the
-  hamburger — small CSS details matter.
-- `:has()` selectors are used (e.g. arc chart height) — fine for 2026 browsers.
+## WATCH-OUTS
+- CSS "didn't take" → cache (hard-refresh) / `!important` / wrong media query.
+- `:has()` selectors are used (fine for 2026 browsers).
+- Inert `STATE.mode` plumbing remains (null-guarded, harmless) — offered for cleanup.
+- The roster-wiper `diag_personnel.py` was DELETED; if it reappears, never run `--fix`.
