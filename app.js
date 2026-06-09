@@ -27170,6 +27170,11 @@ function _ownerizeProj(proj) {
       }
       const gain = best ? ((best.projected_reg_total || best.current_pts || 0) - (best.current_pts || 0)) : 0;
       a.projected_reg_total = Math.round(a.current_pts + gain);
+      if (best) {
+        a.pred_slug = best.slug;                 // borrow this car's per-race chase predictions
+        a.projected_wins = best.projected_wins;
+        a.projected_top5 = best.projected_top5;
+      }
     });
   }
 
@@ -27218,6 +27223,20 @@ function _buildProjectionHTML(proj) {
   chaseDrivers.sort((a, b) => (b.championship_pct || 0) - (a.championship_pct || 0));
   const topContenders = chaseDrivers.slice(0, 5);
 
+  // OWNER chase — a SEPARATE chase built from the OWNER field so it matches the
+  // owner regular-season standings (which include full-time shared-ride cars
+  // like the #1 truck that qualify on owner points). Same machinery as the
+  // driver chase, seeded by projected OWNER standings; shared-ride cars borrow a
+  // comparable car's per-race predictions via pred_slug (set in _ownerizeProj).
+  const ownerProj = _ownerizeProj(proj);
+  const ownerSorted = ownerProj.drivers.slice().sort((a, b) =>
+    (b.projected_reg_total || b.current_pts || 0) - (a.projected_reg_total || a.current_pts || 0)
+  );
+  const ownerChaseDrivers = ownerSorted.slice(0, fieldSize).map(d => ({ ...d }));
+  const ownerChaseTraces = ownerChaseDrivers.length > 0 ? _computeChaseTraces(ownerChaseDrivers, ownerProj) : [];
+  ownerChaseDrivers.sort((a, b) => (b.championship_pct || 0) - (a.championship_pct || 0));
+  const ownerTopContenders = ownerChaseDrivers.slice(0, 5);
+
   return `
     <div class="proj-meta muted" style="margin-bottom:16px;">
       ${proj.n_sims.toLocaleString()} simulations ·
@@ -27246,15 +27265,15 @@ function _buildProjectionHTML(proj) {
     </div>
 
     <div class="proj-view proj-view-owner" hidden>
-      ${_renderProjectionTopContenders(topContenders, proj, true)}
+      ${_renderProjectionTopContenders(ownerTopContenders, ownerProj, true)}
 
-      ${_renderProjectionChart(_ownerizeProj(proj), { carPill: true })}
+      ${_renderProjectionChart(ownerProj, { carPill: true })}
 
-      ${_renderProjectionOwnerTable(_ownerizeProj(proj))}
+      ${_renderProjectionOwnerTable(ownerProj)}
 
-      ${chaseTraces.length > 0
-        ? _renderProjectionChaseChart(chaseDrivers.map(d => ({ ...d, name: `#${d.car_number}` })), proj, chaseTraces.map(t => ({ ...t, name: `#${t.car_number}` })))
-          + _renderProjectionChaseTable(chaseDrivers, proj, chaseTraces, true)
+      ${ownerChaseTraces.length > 0
+        ? _renderProjectionChaseChart(ownerChaseDrivers, ownerProj, ownerChaseTraces)
+          + _renderProjectionChaseTable(ownerChaseDrivers, ownerProj, ownerChaseTraces, true)
         : ""}
     </div>
 
@@ -27471,8 +27490,9 @@ function _computeChaseTraces(chaseDrivers, proj) {
   (proj.chase_preds || []).forEach(cp => predByRound.set(cp.round, cp));
   const predFor = (driver, race) => {
     const cp = predByRound.get(race.round);
-    if (cp && cp.preds[driver.slug] != null) {
-      return { predicted_finish: cp.preds[driver.slug], predicted_stage_pts: cp.stage[driver.slug] || 0 };
+    const key = driver.pred_slug || driver.slug;   // shared-ride cars borrow a comparable car's preds
+    if (cp && cp.preds[key] != null) {
+      return { predicted_finish: cp.preds[key], predicted_stage_pts: cp.stage[key] || 0 };
     }
     return predictDriverForRace(driver.name, proj.series, race.track_code); // pre-v20 fallback
   };
@@ -27513,8 +27533,9 @@ function _computeChaseTraces(chaseDrivers, proj) {
       // the rounded independent estimate only when there is no field order
       // (pre-v20 cached proj).
       const fieldOrder = posByRound.get(race.round);
-      const pos = (fieldOrder && fieldOrder.get(d.slug) != null)
-        ? fieldOrder.get(d.slug)
+      const okey = d.pred_slug || d.slug;
+      const pos = (fieldOrder && fieldOrder.get(okey) != null)
+        ? fieldOrder.get(okey)
         : Math.max(1, Math.round(predFinish));
       const isWin = pos === 1;
       // Finish-position points for the driver's ACTUAL full-field position, plus
