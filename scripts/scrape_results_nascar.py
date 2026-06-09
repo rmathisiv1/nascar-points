@@ -381,7 +381,13 @@ def main():
             wf = fetch_json(f"{CACHER}/{args.season}/{sid}/{rid}/weekend-feed.json")
             wr_list = (wf or {}).get("weekend_race") or []
             wr = wr_list[0] if wr_list else None
-            if not wr or not (wr.get("results") or []):
+            res_rows = (wr or {}).get("results") or []
+            # The weekend-feed publishes the ENTRY LIST as `results` BEFORE the
+            # race runs — every finishing_position == 0. A non-empty array is
+            # NOT proof the race ran. Only treat it as scored once a real
+            # finishing order exists, i.e. a winner (position 1) is present.
+            scored = any(_to_int(r.get("finishing_position")) == 1 for r in res_rows)
+            if not wr or not scored:
                 continue  # not scored yet
 
             loop_by_id = {}
@@ -391,8 +397,8 @@ def main():
                     loop_by_id[drow.get("driver_id")] = drow
 
             rows = build_results(wr, loop_by_id, code)
-            if not rows:
-                continue
+            if not rows or not any(r.get("finish_pos") == 1 for r in rows):
+                continue  # no winner in the built rows -> not a scored race
             race["results"] = rows
             update_summary(race, wr)
             filled += 1
