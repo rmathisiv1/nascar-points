@@ -1,0 +1,70 @@
+name: Update NASCAR Standings (official feed)
+
+# Pulls NASCAR's OFFICIAL published standings (driver, owner, manufacturer) into
+# data/standings_<season>.json via scripts/scrape_standings.py. These feeds are
+# penalty-applied and score the driver and owner championships separately, so the
+# site shows NASCAR's real totals verbatim instead of summing per-race points
+# (which can't reproduce a penalty that splits the two championships).
+#
+# Why a daily run, not just race-day: points penalties are frequently announced
+# midweek (Tue/Wed), which changes the official totals without a race. A once-
+# daily pass catches those; the weekend evening passes catch the post-race
+# update. The scraper rewrites the file each run but the commit step only pushes
+# when something actually changed, so extra runs are harmless no-ops.
+#
+# Minute offset is :45 — Results runs at :00, the other workflows at :15/:30, so
+# standings' git push never collides with theirs.
+
+on:
+  schedule:
+    - cron: '45 12 * * *'      # every day 8:45 AM ET — weekday baseline + midweek penalties
+    - cron: '45 21 * * 0,6'    # Sat & Sun 5:45 PM ET — post-race
+    - cron: '45 1 * * 0,1'     # Sat & Sun ~9:45 PM ET (UTC Sun/Mon 01:45) — late races
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Season to refresh'
+        required: false
+        default: '2026'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-standings
+  cancel-in-progress: false
+
+jobs:
+  standings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Pull official standings from NASCAR feed
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+        run: |
+          python scripts/scrape_standings.py --season "$SEASON" --out "data/standings_${SEASON}.json"
+
+      - name: Commit & push if changed
+        env:
+          SEASON: ${{ github.event.inputs.season || '2026' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "data/standings_${SEASON}.json" 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No standings changes."
+            exit 0
+          fi
+          git diff --cached --stat
+          git commit -m "chore(standings): official NASCAR feed refresh ${SEASON} [skip ci]"
+          git push
