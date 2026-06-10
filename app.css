@@ -5134,7 +5134,7 @@ a.rc-sched-winner:hover {
   .rc-sched-result { display: none; }
   /* Hide the italic race name on mobile to keep the row compact */
   .rc-sched-name { display: none; }
-  .rc-sched-track { font-size: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .rc-sched-track { font-size: 12px; display: flex; flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
   /* On mobile, the NEXT pill no longer lives in the round cell (no room
      next to R12 in 38px). It moves to inline beside the track name in
      the second column where there's plenty of horizontal room. The
@@ -13470,11 +13470,11 @@ body.lightbox-open {
 .rcx-ov-main { min-width: 0; }
 /* Session Times card (race-overview right column): per national series, the
    Practice / Qualifying / Race start times. */
-.rcx-st { display: flex; flex-direction: column; gap: 12px; }
+.rcx-st { display: flex; flex-direction: column; gap: 14px; padding: 4px 10px 2px; }
 .rcx-st-grp { display: flex; flex-direction: column; }
-.rcx-st-ser { margin-bottom: 5px; }
-.rcx-st-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
-  padding: 3px 0; border-bottom: 1px solid var(--border); }
+.rcx-st-ser { margin-bottom: 6px; }
+.rcx-st-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  padding: 5px 4px; border-bottom: 1px solid var(--border); }
 .rcx-st-row:last-child { border-bottom: none; }
 .rcx-st-k { font-size: 12px; color: var(--dim); }
 .rcx-st-v { font-family: var(--mono); font-size: 12px; color: var(--text); white-space: nowrap; }

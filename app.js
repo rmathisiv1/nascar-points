@@ -21896,8 +21896,10 @@ function renderTrackHistoryTable(history, series) {
     const wTeamCode = winner
       ? (winner.team_code || (typeof teamCodeFromName === "function" ? teamCodeFromName(winner.team, SERIES_TO_KEY[ser], winner.car_number) : ""))
       : "";
+    const tHex = wTeamCode ? (orgColorForTeam(wTeamCode) || "#555") : null;
+    const tTxt = tHex ? contrastTextFor(tHex) : null;
     const tHTML = wTeamCode
-      ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}">${escapeHTML(wTeamCode)}</a>`
+      ? `<a class="profile-link team-pill" href="#/team/${encodeURIComponent(wTeamCode)}" style="background:${tHex};color:${tTxt}">${escapeHTML(wTeamCode)}</a>`
       : `<span class="muted">—</span>`;
     const wMfr = winner ? ((typeof manufacturerName === "function") ? manufacturerName(winner.manufacturer) : winner.manufacturer) : "";
     const mHTML = wMfr ? escapeHTML(wMfr) : `<span class="muted">—</span>`;
