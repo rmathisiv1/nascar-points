@@ -14555,8 +14555,8 @@ function renderHomePredictionTrio(year) {
       };
     });
     if (!computed) {
-      return `<div class="home-card hpt-col">
-        <div class="hpt-head"><span class="hpt-title"><span class="hhb-series" style="color:${_homeSeriesAccent(series)};">${series}</span></span></div>
+      return `<div class="home-card hpt-col" style="border-left:3px solid ${_homeSeriesAccent(series)};">
+        <div class="hpt-head"><span class="hpt-title"></span></div>
         <div class="muted" style="font-size:12px;padding:12px 4px;">No upcoming race or data loaded.</div>
       </div>`;
     }
@@ -14566,9 +14566,9 @@ function renderHomePredictionTrio(year) {
     // sets STATE.pageSeries[that view] before navigation, so the track page
     // opens in the matching series rather than whatever it last remembered.
     const raceHref = `#/race/${computed.round}?_y=${year}&_s=${encodeURIComponent(series)}`;
-    return `<div class="home-card hpt-col">
+    return `<div class="home-card hpt-col" style="border-left:3px solid ${_homeSeriesAccent(series)};">
       <div class="hpt-head">
-        <span class="hpt-title"><span class="hhb-series" style="color:${_homeSeriesAccent(series)};">${series}</span><span class="hhb-track">${escapeHTML(computed.trackName)}</span></span>
+        <span class="hpt-title"><span class="hhb-track">${escapeHTML(computed.trackName)}</span></span>
         <a class="hpt-race" href="${raceHref}">R${computed.round} →</a>
       </div>
       <div class="hpt-table-head">
@@ -14993,7 +14993,7 @@ function _renderUpcomingBand(year, series) {
       <div class="hhb-spine" style="background:${spineBg0};"><span>${series}</span></div>
       <div class="hhb-body">
       <div class="hhb-count"><div class="hhb-num-line"><span class="hhb-num">—</span></div><div class="hhb-sub">done</div></div>
-      <div class="hhb-mid"><div class="hhb-title"><span class="hhb-series" style="color:${accent};">${series}</span></div>
+      <div class="hhb-mid"><div class="hhb-title"></div>
       <div class="hhb-meta">Season complete</div></div>
       <div class="hhb-right"></div>
       </div></div>`;
@@ -15047,7 +15047,7 @@ function _renderUpcomingBand(year, series) {
       <div class="hhb-sub">${csub}</div>
     </div>
     <div class="hhb-mid">
-      <div class="hhb-title"><span class="hhb-series" style="color:${accent};">${series}</span><a class="hhb-track" href="${trackHref}">${escapeHTML(trackName)}</a></div>
+      <div class="hhb-title"><a class="hhb-track" href="${trackHref}">${escapeHTML(trackName)}</a></div>
       ${metaStr ? `<div class="hhb-meta">${escapeHTML(metaStr)}</div>` : ""}
       ${factsHTML}
     </div>
@@ -15065,7 +15065,7 @@ function _renderPodiumBand(year, series) {
   const last = completed.length ? completed[completed.length - 1] : null;
   if (!last) {
     return `<div class="home-pod-band" style="border-left-color:${accent};">
-      <div class="hpb-head"><div class="hpb-h-left"><span class="hpb-series" style="color:${accent};">${series}</span><span class="hpb-track muted">No races yet</span></div></div></div>`;
+      <div class="hpb-head"><div class="hpb-h-left"><span class="hpb-track muted">No races yet</span></div></div></div>`;
   }
   const top3 = (last.results || []).filter(d => d.finish_pos >= 1 && d.finish_pos <= 3)
     .sort((a, b) => a.finish_pos - b.finish_pos).slice(0, 3);
@@ -15087,7 +15087,7 @@ function _renderPodiumBand(year, series) {
   }).join("");
   return `<div class="home-pod-band" style="border-left-color:${accent};">
     <div class="hpb-head">
-      <div class="hpb-h-left"><span class="hpb-series" style="color:${accent};">${series}</span><span class="hpb-rt"><span class="hpb-r">R${last.round}</span> <a class="hpb-track" href="${dHref}">${escapeHTML(trackName)}</a></span></div>
+      <div class="hpb-h-left"><span class="hpb-rt"><span class="hpb-r">R${last.round}</span> <a class="hpb-track" href="${dHref}">${escapeHTML(trackName)}</a></span></div>
       ${dateStr ? `<span class="hpb-date">${escapeHTML(dateStr)}</span>` : ""}
     </div>
     <div class="hpb-podium">${items}</div>
@@ -15346,11 +15346,11 @@ function renderHomeStandingsTrio(year) {
   return ["NCS", "NOS", "NTS"].map(s => {
     const block = yearBlock[s];
     if (!block || !block.races) {
-      return `<div class="home-card home-standings-card"><div class="home-standings-label" style="color:${_homeSeriesAccent(s)};">${SERIES_FULL_NAME[s] || s}</div><div class="muted" style="font-size:12px;padding:8px 0;">No data</div></div>`;
+      return `<div class="home-card home-standings-card" style="border-left:3px solid ${_homeSeriesAccent(s)};"><div class="muted" style="font-size:12px;padding:8px 0;">No data</div></div>`;
     }
     const top5 = computeStandingsForBlock(block).slice(0, 5);
     if (top5.length === 0) {
-      return `<div class="home-card home-standings-card"><div class="home-standings-label" style="color:${_homeSeriesAccent(s)};">${SERIES_FULL_NAME[s] || s}</div><div class="muted" style="font-size:12px;padding:8px 0;">Season hasn't started</div></div>`;
+      return `<div class="home-card home-standings-card" style="border-left:3px solid ${_homeSeriesAccent(s)};"><div class="muted" style="font-size:12px;padding:8px 0;">Season hasn't started</div></div>`;
     }
     const leader = top5[0];
     const leaderTotal = leader.total;
@@ -15373,9 +15373,8 @@ function renderHomeStandingsTrio(year) {
         ${champCell}
       </a>`;
     }).join("");
-    return `<div class="home-card home-standings-card">
+    return `<div class="home-card home-standings-card" style="border-left:3px solid ${_homeSeriesAccent(s)};">
       <div class="home-standings-head">
-        <span class="home-standings-label" style="color:${_homeSeriesAccent(s)};">${SERIES_FULL_NAME[s] || s}</span>
         <a class="home-standings-link" href="#/standings?series=${s}">Full →</a>
       </div>
       ${rows}
