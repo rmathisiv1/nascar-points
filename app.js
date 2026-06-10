@@ -8828,7 +8828,7 @@ function renderTeammates() {
       const rec = {
         car: d.car_number, driver: d.driver, team, grp,
         finish: d.finish_pos,
-        total: d.race_pts || 0,
+        total: _ownerPointsForResult(d),
         ineligible: !!d.ineligible,
       };
       (groupAll[grp] ||= []).push(rec);
@@ -8907,7 +8907,7 @@ function renderTeammates() {
   races.forEach(r => {
     (r.results || []).forEach(d => {
       if (d.ineligible) return;
-      seasonPts[d.car_number] = (seasonPts[d.car_number] || 0) + (d.race_pts || 0);
+      seasonPts[d.car_number] = (seasonPts[d.car_number] || 0) + _ownerPointsForResult(d);
     });
   });
 
@@ -19640,13 +19640,29 @@ function _finishPointsForPos(pos) {
 // field exists in 2025+ data and applies to whichever car got the FL —
 // we include it for consistency.
 function _ownerPointsForResult(d) {
-  if (!d.ineligible) return d.race_pts || 0;
-  if (d.finish_pos == null) return 0;
-  const finishBase = _finishPointsForPos(d.finish_pos);
-  const winBonus = (d.finish_pos === 1) ? 15 : 0;
-  const stage = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
-  const fl = d.fastest_lap_pt || 0;
-  return finishBase + winBonus + stage + fl;
+  // Explicit owner-points override — escape hatch for rare cases the automatic
+  // rule below can't infer (e.g. a DQ, or a penalty that also docked the owner).
+  if (d.owner_pts != null) return d.owner_pts;
+  if (d.ineligible) {
+    if (d.finish_pos == null) return 0;
+    const finishBase = _finishPointsForPos(d.finish_pos);
+    const winBonus = (d.finish_pos === 1) ? 15 : 0;
+    const stage = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
+    const fl = d.fastest_lap_pt || 0;
+    return finishBase + winBonus + stage + fl;
+  }
+  // Eligible driver. Owner (car) points are the points the car EARNED on track
+  // = finish points + stage points. A driver-only penalty docks the driver's
+  // race_pts below that earned total (NASCAR reflects it in the per-race feed),
+  // but the owner championship is NOT penalized, so it keeps the earned points.
+  // This needs no penalty list: re-scraping points each week surfaces the gap
+  // automatically the moment NASCAR posts a penalty. Pre-stage-era seasons used
+  // larger point scales (earned < race_pts), so max() leaves those untouched and
+  // the two only diverge on a genuine penalty.
+  const racePts = d.race_pts || 0;
+  const earned = (d.finish_pts || 0) + (d.stage_1_pts || 0)
+               + (d.stage_2_pts || 0) + (d.fastest_lap_pt || 0);
+  return Math.max(racePts, earned);
 }
 
 function pointsMapThroughRound(maxRound) {
