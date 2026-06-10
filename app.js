@@ -5456,6 +5456,50 @@ function getDriverTypePace(driverName, series, trackCode) {
 // Populated by loadEntryList() once the feed endpoint is wired (see below).
 const ENTRY_LIST_CACHE = {};
 
+// Official NASCAR standings (driver + owner + manufacturer), pulled by
+// scripts/scrape_standings.py from NASCAR's published points feeds into
+// data/standings_<year>.json. These are the AUTHORITATIVE season totals:
+// penalties applied, and driver vs owner scored separately exactly as NASCAR
+// does (a driver-only penalty leaves the owner total higher). We display these
+// verbatim rather than summing per-race points, which cannot reproduce a
+// penalty that splits the two championships.
+// Cache shape: OFFICIAL_STANDINGS[year][series] = {
+//   driversByName: Map(normalizedName -> row), ownersByCar: Map(car -> row) }
+const OFFICIAL_STANDINGS = {};
+const _officialStandingsAttempted = {};
+
+function _officialStandingsFor(year, series) {
+  const y = OFFICIAL_STANDINGS[year];
+  return (y && y[series]) || null;
+}
+
+async function loadOfficialStandings(year) {
+  year = year || STATE.season;
+  if (_officialStandingsAttempted[year]) return;
+  _officialStandingsAttempted[year] = true;
+  try {
+    const resp = await fetch(`data/standings_${year}.json`, { cache: "no-store" });
+    if (!resp.ok) return;   // no official file for this season — fall back to derived
+    const payload = await resp.json();
+    const bySeries = (payload && payload.series) || {};
+    const yearCache = OFFICIAL_STANDINGS[year] || (OFFICIAL_STANDINGS[year] = {});
+    Object.keys(bySeries).forEach(series => {
+      const blk = bySeries[series] || {};
+      const driversByName = new Map();
+      (blk.drivers || []).forEach(r => {
+        const k = normalizeDriverName(r.driver_name || "");
+        if (k) driversByName.set(k, r);
+      });
+      const ownersByCar = new Map();
+      (blk.owners || []).forEach(r => {
+        const car = String(r.vehicle_number != null ? r.vehicle_number : "").trim();
+        if (car) ownersByCar.set(car, r);
+      });
+      yearCache[series] = { driversByName, ownersByCar };
+    });
+  } catch (e) { /* derive instead */ }
+}
+
 // Mid-season charter continuations: when a car number is retired and its
 // charter continues under a NEW number (e.g. a driver leaves/retires mid-year
 // and the team fields a different number for the rest of the season). Keyed
@@ -19245,6 +19289,12 @@ function renderStandings() {
   const table = document.getElementById("standings-table");
   if (!STATE.data) return;
 
+  // Pull NASCAR's official published standings once (penalty-applied, driver and
+  // owner scored separately); re-render when it lands so totals match NASCAR.
+  if (typeof loadOfficialStandings === "function" && !_officialStandingsAttempted[STATE.season]) {
+    loadOfficialStandings(STATE.season).then(() => { if (STATE.view === "standings") renderStandings(); });
+  }
+
   // Stage-era gate. Pre-2017 has no stage points and no fastest-lap bonus;
   // hiding those columns keeps the table honest for old years.
   const stageEra = isStageEra();
@@ -19284,6 +19334,15 @@ function renderStandings() {
     previousRows = previousCutoff && previousCutoff >= 1
       ? driverRankingRowsFrom(previousMap)
       : [];
+  }
+
+  // Overlay NASCAR's official totals on the CURRENT standings (driver + owner),
+  // then re-sort so position/back reflect the official points. Penalties make
+  // the derived per-race sum wrong, and this is what makes the owner total
+  // diverge from the driver total (e.g. the #60 owner sitting above Preece).
+  if (view === "owner" || view === "driver") {
+    applyOfficialStandings(currentRows, view);
+    currentRows.sort((a, b) => b.total - a.total);
   }
 
   // Rank-change uses each row's `key` field (car_number for owner,
@@ -19640,29 +19699,15 @@ function _finishPointsForPos(pos) {
 // field exists in 2025+ data and applies to whichever car got the FL —
 // we include it for consistency.
 function _ownerPointsForResult(d) {
-  // Explicit owner-points override — escape hatch for rare cases the automatic
-  // rule below can't infer (e.g. a DQ, or a penalty that also docked the owner).
+  // Explicit owner-points override on a row, if present.
   if (d.owner_pts != null) return d.owner_pts;
-  if (d.ineligible) {
-    if (d.finish_pos == null) return 0;
-    const finishBase = _finishPointsForPos(d.finish_pos);
-    const winBonus = (d.finish_pos === 1) ? 15 : 0;
-    const stage = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
-    const fl = d.fastest_lap_pt || 0;
-    return finishBase + winBonus + stage + fl;
-  }
-  // Eligible driver. Owner (car) points are the points the car EARNED on track
-  // = finish points + stage points. A driver-only penalty docks the driver's
-  // race_pts below that earned total (NASCAR reflects it in the per-race feed),
-  // but the owner championship is NOT penalized, so it keeps the earned points.
-  // This needs no penalty list: re-scraping points each week surfaces the gap
-  // automatically the moment NASCAR posts a penalty. Pre-stage-era seasons used
-  // larger point scales (earned < race_pts), so max() leaves those untouched and
-  // the two only diverge on a genuine penalty.
-  const racePts = d.race_pts || 0;
-  const earned = (d.finish_pts || 0) + (d.stage_1_pts || 0)
-               + (d.stage_2_pts || 0) + (d.fastest_lap_pt || 0);
-  return Math.max(racePts, earned);
+  if (!d.ineligible) return d.race_pts || 0;
+  if (d.finish_pos == null) return 0;
+  const finishBase = _finishPointsForPos(d.finish_pos);
+  const winBonus = (d.finish_pos === 1) ? 15 : 0;
+  const stage = (d.stage_1_pts || 0) + (d.stage_2_pts || 0);
+  const fl = d.fastest_lap_pt || 0;
+  return finishBase + winBonus + stage + fl;
 }
 
 function pointsMapThroughRound(maxRound) {
@@ -20417,6 +20462,34 @@ function applyCanonicalStandings(rows, mode) {
       }
     }
   });
+}
+
+// Override CURRENT-season standing totals with NASCAR's official published
+// points (data/standings_<year>.json). Mirrors applyCanonicalStandings (which
+// handles finished historical seasons) but for the live season, where penalties
+// make the derived per-race sum wrong — and crucially makes the owner total
+// diverge from the driver total exactly as NASCAR scores it. Only applied to the
+// current standings, never the previous-round comparison, so movement arrows
+// keep using derived prior totals. No-op for any season without an official file.
+function applyOfficialStandings(rows, mode) {
+  const off = _officialStandingsFor(STATE.season, STATE.series);
+  if (!off) return;
+  if (mode === "owner") {
+    rows.forEach(r => {
+      const car = r.car_number != null ? String(r.car_number).replace(/^#/, "").trim() : "";
+      const hit = car && off.ownersByCar.get(car);
+      if (hit && hit.points != null) { r.total = hit.points; r.officialRank = hit.position; }
+    });
+    return;
+  }
+  if (mode === "driver") {
+    rows.forEach(r => {
+      for (const name of [r.primaryDriver, r.driver].filter(Boolean)) {
+        const hit = off.driversByName.get(normalizeDriverName(name));
+        if (hit && hit.points != null) { r.total = hit.points; r.officialRank = hit.position; return; }
+      }
+    });
+  }
 }
 
 // ============================================================
