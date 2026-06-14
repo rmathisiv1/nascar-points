@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-14T06:21:52Z",
+  "generated": "2026-06-14T14:58:32Z",
   "season": 2026,
   "series": {
     "NCS": {
@@ -2025,9 +2025,9 @@
         },
         {
           "position": 50,
-          "driver_name": "Alex Guenette",
-          "driver_id": 4088,
-          "car_no": "92",
+          "driver_name": "Gray Gaulding",
+          "driver_id": 4103,
+          "car_no": "74",
           "points": 9,
           "stage_points": 0,
           "playoff_points": 0,
@@ -2041,9 +2041,9 @@
         },
         {
           "position": 51,
-          "driver_name": "Gray Gaulding",
-          "driver_id": 4103,
-          "car_no": "74",
+          "driver_name": "Alex Guenette",
+          "driver_id": 4088,
+          "car_no": "92",
           "points": 9,
           "stage_points": 0,
           "playoff_points": 0,
@@ -2169,9 +2169,9 @@
         },
         {
           "position": 59,
-          "driver_name": "Matt Wilson ",
-          "driver_id": 4540,
-          "car_no": "35",
+          "driver_name": "Baltazar Leguizamon",
+          "driver_id": 4455,
+          "car_no": "30",
           "points": 1,
           "stage_points": 0,
           "playoff_points": 0,
@@ -2185,9 +2185,9 @@
         },
         {
           "position": 60,
-          "driver_name": "Baltazar Leguizamon",
-          "driver_id": 4455,
-          "car_no": "30",
+          "driver_name": "Matt Wilson ",
+          "driver_id": 4540,
+          "car_no": "35",
           "points": 1,
           "stage_points": 0,
           "playoff_points": 0,
