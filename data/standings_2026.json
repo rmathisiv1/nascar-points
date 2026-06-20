@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-20T14:55:33Z",
+  "generated": "2026-06-20T22:49:46Z",
   "season": 2026,
   "series": {
     "NCS": {
@@ -3929,22 +3929,6 @@
         },
         {
           "position": 69,
-          "driver_name": "Jamie McMurray",
-          "driver_id": 2208,
-          "car_no": "25",
-          "points": 3,
-          "stage_points": 0,
-          "playoff_points": 0,
-          "delta_leader": -559,
-          "wins": 0,
-          "top_5": 0,
-          "top_10": 0,
-          "starts": 1,
-          "dnf": 1,
-          "manufacturer": "RAM"
-        },
-        {
-          "position": 70,
           "driver_name": "Cory Roper",
           "driver_id": 4262,
           "car_no": "62",
@@ -3958,6 +3942,22 @@
           "starts": 1,
           "dnf": 1,
           "manufacturer": "Toyota"
+        },
+        {
+          "position": 70,
+          "driver_name": "Jamie McMurray",
+          "driver_id": 2208,
+          "car_no": "25",
+          "points": 3,
+          "stage_points": 0,
+          "playoff_points": 0,
+          "delta_leader": -559,
+          "wins": 0,
+          "top_5": 0,
+          "top_10": 0,
+          "starts": 1,
+          "dnf": 1,
+          "manufacturer": "RAM"
         },
         {
           "position": 71,
@@ -3977,22 +3977,6 @@
         },
         {
           "position": 72,
-          "driver_name": "Dystany Spurlock",
-          "driver_id": 4539,
-          "car_no": "69",
-          "points": 1,
-          "stage_points": 0,
-          "playoff_points": 0,
-          "delta_leader": -561,
-          "wins": 0,
-          "top_5": 0,
-          "top_10": 0,
-          "starts": 1,
-          "dnf": 1,
-          "manufacturer": "Ford"
-        },
-        {
-          "position": 73,
           "driver_name": "Tony Stewart",
           "driver_id": 3193,
           "car_no": "25",
@@ -4006,6 +3990,22 @@
           "starts": 1,
           "dnf": 1,
           "manufacturer": "RAM"
+        },
+        {
+          "position": 73,
+          "driver_name": "Dystany Spurlock",
+          "driver_id": 4539,
+          "car_no": "69",
+          "points": 1,
+          "stage_points": 0,
+          "playoff_points": 0,
+          "delta_leader": -561,
+          "wins": 0,
+          "top_5": 0,
+          "top_10": 0,
+          "starts": 1,
+          "dnf": 1,
+          "manufacturer": "Ford"
         }
       ],
       "owners": [
