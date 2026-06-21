@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-21T15:01:49Z",
+  "generated": "2026-06-21T22:49:51Z",
   "season": 2026,
   "series": {
     "NCS": {
@@ -2041,22 +2041,6 @@
         },
         {
           "position": 51,
-          "driver_name": "Alex Guenette",
-          "driver_id": 4088,
-          "car_no": "92",
-          "points": 9,
-          "stage_points": 0,
-          "playoff_points": 0,
-          "delta_leader": -838,
-          "wins": 0,
-          "top_5": 0,
-          "top_10": 0,
-          "starts": 1,
-          "dnf": 0,
-          "manufacturer": "Chevrolet"
-        },
-        {
-          "position": 52,
           "driver_name": "Gray Gaulding",
           "driver_id": 4103,
           "car_no": "74",
@@ -2072,23 +2056,23 @@
           "manufacturer": "Chevrolet"
         },
         {
-          "position": 53,
-          "driver_name": "Dexter Bean",
-          "driver_id": 3725,
-          "car_no": "91",
-          "points": 7,
+          "position": 52,
+          "driver_name": "Alex Guenette",
+          "driver_id": 4088,
+          "car_no": "92",
+          "points": 9,
           "stage_points": 0,
           "playoff_points": 0,
-          "delta_leader": -840,
+          "delta_leader": -838,
           "wins": 0,
           "top_5": 0,
           "top_10": 0,
           "starts": 1,
-          "dnf": 1,
+          "dnf": 0,
           "manufacturer": "Chevrolet"
         },
         {
-          "position": 54,
+          "position": 53,
           "driver_name": "Glen Reen",
           "driver_id": 4494,
           "car_no": "55",
@@ -2102,6 +2086,22 @@
           "starts": 1,
           "dnf": 0,
           "manufacturer": "Toyota"
+        },
+        {
+          "position": 54,
+          "driver_name": "Dexter Bean",
+          "driver_id": 3725,
+          "car_no": "91",
+          "points": 7,
+          "stage_points": 0,
+          "playoff_points": 0,
+          "delta_leader": -840,
+          "wins": 0,
+          "top_5": 0,
+          "top_10": 0,
+          "starts": 1,
+          "dnf": 1,
+          "manufacturer": "Chevrolet"
         },
         {
           "position": 55,
