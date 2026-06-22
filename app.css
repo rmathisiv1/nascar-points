@@ -3941,9 +3941,10 @@ a.driver-cell.profile-link:hover .car-tag {
   /* Hide columns flagged for mobile */
   .data-table .mob-hide,
   .profile-race-table .mob-hide { display: none; }
-  /* On mobile the Track column shows only the abbreviation (the "· Phoenix"
-     full name is dropped) to keep the collapsed table from scrolling. */
-  .profile-race-table .prt-track-full { display: none; }
+  /* On mobile the Track column shows the track NAME only — the abbreviation
+     and its separator are hidden so the collapsed table stays narrow. */
+  .profile-race-table .prt-track-abbr,
+  .profile-race-table .prt-track-sep { display: none; }
 
   /* Show chevron column on mobile */
   .mob-only { display: table-cell; }
@@ -6533,23 +6534,20 @@ a.rc-sched-winner:hover {
 }
 .ph-grid {
   display: grid;
-  /* Width strategy: row-label column at fixed 132px (year + series tag +
-     team pill all in one row), then race columns share remaining space
-     equally via 1fr, and a fixed 44px "Final" column at the end for the
-     year-end standings rank. Sticky-left on the row label keeps the year
-     visible while horizontal-scrolling on mobile. */
-  grid-template-columns: 144px repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
+  /* Width strategy: the row-label column sizes to its own content
+     (max-content) so it's exactly wide enough for year + series + car + team
+     pill — no overlap onto the race cells, and no dead gap after the team
+     pill. Race columns then share the rest via 1fr, with a fixed 44px "Final"
+     column. Sticky-left keeps the label visible while horizontal-scrolling. */
+  grid-template-columns: max-content repeat(var(--ph-cols, 36), minmax(20px, 1fr)) 44px;
   gap: 2px;
   font-family: var(--mono);
   font-size: 10px;
   width: 100%;
 }
-/* Mobile: give the sticky label column a touch more room (the grid scrolls
-   horizontally anyway) so year + series + car + team pill all fit without the
-   pill spilling over the race cells. */
 @media (max-width: 767.98px), (pointer: coarse) {
   #profile-career-heatmap .ph-grid {
-    grid-template-columns: 152px repeat(var(--ph-cols, 36), minmax(22px, 1fr)) 38px;
+    grid-template-columns: max-content repeat(var(--ph-cols, 36), minmax(22px, 1fr)) 38px;
   }
 }
 /* CC heatmap rows carry an extra pill (driver AND team), so the label
@@ -6578,8 +6576,6 @@ a.rc-sched-winner:hover {
   gap: 4px;
   font-size: 11px;
   white-space: nowrap;
-  overflow: hidden;
-  min-width: 0;
 }
 .ph-row-label-head {
   color: var(--dim);

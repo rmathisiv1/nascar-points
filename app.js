@@ -11702,8 +11702,8 @@ function paintProfileRaceTable(rows, kind) {
     //     which felt like "clicked any race, went to Phoenix" because the
     //     track page is series-and-track scoped, not race-scoped.
     const trackLink = r.track_code
-      ? `<a class="rc-track-link" href="#/track/${escapeHTML(r.track_code)}" title="Track history" onclick="event.stopPropagation()"><strong>${escapeHTML(r.track_code)}</strong></a><span class="prt-track-full"> · <a class="rc-race-link" href="#/race/${r.round}" title="Race results" onclick="event.stopPropagation()">${trackDisplay}</a></span>`
-      : `<strong>${escapeHTML(r.track_code || '')}</strong><span class="prt-track-full"> · ${trackDisplay}</span>`;
+      ? `<a class="rc-track-link prt-track-abbr" href="#/track/${escapeHTML(r.track_code)}" title="Track history" onclick="event.stopPropagation()"><strong>${escapeHTML(r.track_code)}</strong></a><span class="prt-track-sep"> · </span><a class="rc-race-link prt-track-name" href="#/race/${r.round}" title="Race results" onclick="event.stopPropagation()">${trackDisplay}</a>`
+      : `<strong class="prt-track-abbr">${escapeHTML(r.track_code || '')}</strong><span class="prt-track-sep"> · </span><span class="prt-track-name">${trackDisplay}</span>`;
     if (r.dns) {
       // 9 columns to span: Race, CC, Start, Finish, S1, S2, FL, Fin, Total
       return `<tr style="opacity:0.4">
