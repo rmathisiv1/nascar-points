@@ -4703,7 +4703,7 @@ function mean(xs) {
 // the field-relative 0-100 blend is assembled in renderFormTable where the
 // whole field is available for normalization. Components & weights:
 //   finish 35 / pace 30 / qualifying 20 / top-15% 15  (renormalized to 100).
-const POWER_WEIGHTS = { pace: 30, finish: 35, top15: 15, qual: 20 };
+const POWER_WEIGHTS = { pace: 18, finish: 42, top15: 18, qual: 22 };
 
 // Decide if a race is a "clean" race for form purposes — i.e. NOT a wreck/DNF.
 // We exclude when the status indicates a DNF (accident/mechanical) OR when the
@@ -4744,13 +4744,14 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
 
   // Recency weighting: more recent races count more. Linear step — the newest
   // race weighs 1.0 and each race further back drops by RECENCY_STEP, floored
-  // so even the oldest still contributes. At 0.28 the most recent ~3 races
-  // carry the weight (older ones sit at the 0.3 floor) — an aggressive, hot-
-  // hand-sensitive setting chosen deliberately.
+  // so even the oldest still contributes. At 0.12 with a 0.5 floor the window is
+  // only mildly front-loaded (newest race ~19% of total weight vs ~27% at the
+  // old 0.28/0.3 setting) — this is the deliberate, less hot-hand-sensitive
+  // tuning that keeps week-to-week rank moves from over-reacting to one result.
   // `use` is oldest→newest (driverRaces is chronological), so index 0 is oldest.
-  const RECENCY_STEP = 0.28;
+  const RECENCY_STEP = 0.12;
   const nUse = use.length;
-  const wAt = (idx) => Math.max(0.3, 1 - (nUse - 1 - idx) * RECENCY_STEP);
+  const wAt = (idx) => Math.max(0.5, 1 - (nUse - 1 - idx) * RECENCY_STEP);
   // Weighted average over a value-extractor, skipping rows where it's null.
   const wAvg = (rows, getter) => {
     let wsum = 0, acc = 0;
