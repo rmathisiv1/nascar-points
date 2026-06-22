@@ -2274,6 +2274,7 @@ function parseHash() {
 function slugify(name) {
   if (!name) return "";
   return String(name)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // strip accents (á→a) so "Suárez" and "Suarez" share ONE slug
     .toLowerCase()
     .replace(/[.']/g, "")            // drop periods/apostrophes
     .replace(/[^a-z0-9]+/g, "-")     // non-alphanumeric → dash

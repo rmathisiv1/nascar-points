@@ -22,7 +22,7 @@ lookups line up. dob is emitted YYYY-MM-DD (what calcAge expects); hometown is
     python scrape_drivers_nascar.py                       # -> data/drivers.json
     python scrape_drivers_nascar.py --out data/drivers.json
 """
-import argparse, json, re, sys
+import argparse, json, re, sys, unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -62,7 +62,12 @@ _US = {"united states", "usa", "us", "u.s.", "u.s.a.", ""}
 def slugify(name):
     if not name:
         return ""
-    s = str(name).lower()
+    # Strip accents (á->a) FIRST so "Daniel Suárez" and "Daniel Suarez" produce
+    # the SAME slug. Must match app.js slugify() exactly, or STATE.driverBios
+    # lookups split a driver across two keys.
+    s = unicodedata.normalize("NFD", str(name))
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    s = s.lower()
     s = re.sub(r"[.']", "", s)
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"^-+|-+$", "", s)
@@ -138,6 +143,28 @@ def main():
     else:
         payload = {}
     drivers = payload.get("drivers") or {}
+
+    # One-time re-key: collapse entries whose stored key no longer matches the
+    # (now accent-stripped) slug of their name — e.g. legacy "daniel-su-rez"
+    # merges into "daniel-suarez". On collision keep the richer record and carry
+    # forward the frozen extras (career/rr_key) from the loser.
+    def _richness(b):
+        return sum(1 for k in ("dob", "hometown", "career", "rr_key") if b.get(k))
+    rekeyed = {}
+    for k, b in drivers.items():
+        nm = b.get("name") or k.replace("-", " ")
+        nk = slugify(nm)
+        if nk in rekeyed:
+            keep, drop = (b, rekeyed[nk]) if _richness(b) > _richness(rekeyed[nk]) else (rekeyed[nk], b)
+            for extra in ("career", "rr_key"):
+                if drop.get(extra) and not keep.get(extra):
+                    keep[extra] = drop[extra]
+            keep["slug"] = nk
+            rekeyed[nk] = keep
+        else:
+            b = dict(b); b["slug"] = nk
+            rekeyed[nk] = b
+    drivers = rekeyed
 
     added = updated = skipped = 0
     for rec in response:
