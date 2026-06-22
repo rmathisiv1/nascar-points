@@ -3835,7 +3835,7 @@ function wireUIControls() {
       // Update panel title to match the mode
       const titleEl = document.getElementById("profile-track-splits-title");
       if (titleEl) {
-        titleEl.textContent = (newMode === "career" ? "Career" : STATE.season) + " Track Splits";
+        titleEl.textContent = (newMode === "career" ? "Career" : STATE.season) + " Track-Type Performance";
       }
       // Repaint just the splits grid — no need to rebuild entire profile
       const entity = findEntityFromSlug();
@@ -3852,7 +3852,7 @@ function wireUIControls() {
           // Re-grab the element right before each write — re-renders may have
           // replaced it since the click handler fired.
           const t1 = document.getElementById("profile-track-splits-title");
-          if (t1) t1.textContent = `Career Track Splits  (loading ${missing.length} season${missing.length === 1 ? "" : "s"}…)`;
+          if (t1) t1.textContent = `Career Track-Type Performance  (loading ${missing.length} season${missing.length === 1 ? "" : "s"}…)`;
           Promise.all(missing.map(y => loadSeasonIntoCache(y)))
             .then(() => {
               // Repaint as long as the user is still on a profile in career
@@ -3862,7 +3862,7 @@ function wireUIControls() {
               if (STATE.view !== "profile") return;
               if ((STATE.profile && STATE.profile.splitsRange) !== "career") return;
               const t2 = document.getElementById("profile-track-splits-title");
-              if (t2) t2.textContent = "Career Track Splits";
+              if (t2) t2.textContent = "Career Track-Type Performance";
               const e2 = findEntityFromSlug();
               if (e2) paintProfileTrackSplits(e2);
             });
@@ -4411,6 +4411,8 @@ function entitiesFromRaces(races) {
         total: d.race_pts || 0,
         lapsLed: d.laps_led || 0,
         pct_top15: d.loop_pct_top15_laps,
+        rating: d.loop_driver_rating,
+        pass_diff: d.loop_pass_diff,
         status: d.status,
         driver: d.driver,
         track_code: r.track_code,
@@ -10500,19 +10502,9 @@ function renderProfile() {
         </div>
       </div>
 
-      <div class="profile-panel full" id="profile-tt-panel" style="display:none;">
-        <div class="profile-panel-head">
-          <span class="profile-panel-title">Track-Type Performance</span>
-          <span class="profile-panel-sub" id="profile-tt-sub">In-race metrics by venue category</span>
-        </div>
-        <div class="profile-panel-body">
-          <div id="profile-tt-grid" class="profile-tt-grid"></div>
-        </div>
-      </div>
-
       <div class="profile-panel full">
         <div class="profile-panel-head">
-          <span class="profile-panel-title" id="profile-track-splits-title">${STATE.profile.splitsRange === "career" ? "Career" : STATE.season} Track Splits</span>
+          <span class="profile-panel-title" id="profile-track-splits-title">${STATE.profile.splitsRange === "career" ? "Career" : STATE.season} Track-Type Performance</span>
           <div class="profile-panel-head-right">
             <div class="toggle-group mini" id="profile-splits-series-toggle"
               ${STATE.profile.splitsRange === "career" ? "" : 'style="display:none"'}>
@@ -10534,7 +10526,7 @@ function renderProfile() {
 
       <div class="profile-panel full">
         <div class="profile-panel-head">
-          <span class="profile-panel-title">${STATE.season} Race-by-Race</span>
+          <span class="profile-panel-title">${STATE.season} Races</span>
           <span class="profile-panel-sub">${rows.filter(r => !r.dns).length} starts</span>
         </div>
         <div class="profile-panel-body" style="padding:0;">
@@ -11660,6 +11652,10 @@ function computeTrackSplits(entity) {
     const finishes = races.map(r => r.finish).filter(x => x != null);
     const starts = races.length;
     const stagePts = races.map(r => (r.s1 || 0) + (r.s2 || 0));
+    const _mean = (getter) => {
+      const v = races.map(getter).filter(x => x != null);
+      return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
+    };
     result[key] = {
       starts,
       wins: finishes.filter(f => f === 1).length,
@@ -11668,6 +11664,9 @@ function computeTrackSplits(entity) {
       avgFinish: finishes.length ? finishes.reduce((s, x) => s + x, 0) / finishes.length : null,
       avgStagePts: stagePts.length ? stagePts.reduce((s, x) => s + x, 0) / stagePts.length : null,
       bestFinish: finishes.length ? Math.min(...finishes) : null,
+      avgRating: _mean(r => r.rating),
+      avgPassDiff: _mean(r => r.pass_diff),
+      avgTop15: _mean(r => r.pct_top15),
     };
   }
   return result;
@@ -11715,6 +11714,9 @@ function computeCareerTrackSplits(driverSlug, seriesFilter) {
             track_code: race.track_code,
             year: parseInt(year, 10),
             series: sCode,
+            rating: d.loop_driver_rating,
+            pass_diff: d.loop_pass_diff,
+            pct_top15: d.loop_pct_top15_laps,
           });
         });
       });
@@ -11726,6 +11728,10 @@ function computeCareerTrackSplits(driverSlug, seriesFilter) {
     const finishes = races.map(r => r.finish).filter(x => x != null);
     const starts = races.length;
     const stagePts = races.map(r => (r.s1 || 0) + (r.s2 || 0));
+    const _mean = (getter) => {
+      const v = races.map(getter).filter(x => x != null);
+      return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null;
+    };
     result[key] = {
       starts,
       wins: finishes.filter(f => f === 1).length,
@@ -11734,6 +11740,9 @@ function computeCareerTrackSplits(driverSlug, seriesFilter) {
       avgFinish: finishes.length ? finishes.reduce((s, x) => s + x, 0) / finishes.length : null,
       avgStagePts: stagePts.length ? stagePts.reduce((s, x) => s + x, 0) / stagePts.length : null,
       bestFinish: finishes.length ? Math.min(...finishes) : null,
+      avgRating: _mean(r => r.rating),
+      avgPassDiff: _mean(r => r.pass_diff),
+      avgTop15: _mean(r => r.pct_top15),
     };
   }
   return result;
@@ -12157,6 +12166,15 @@ function paintProfileTrackSplits(entity) {
       if (s.avgFinish <= 10) avgCls = "hot";
       else if (s.avgFinish >= 21) avgCls = "cold";
     }
+    // Loop-metric tones — match the old Track-Type Performance panel.
+    const ratingTone = s.avgRating == null ? "" : (s.avgRating >= 100 ? "hot" : s.avgRating < 70 ? "cold" : "");
+    const passTone   = s.avgPassDiff == null ? "" : (s.avgPassDiff > 0 ? "hot" : s.avgPassDiff < 0 ? "cold" : "");
+    const t15Tone    = s.avgTop15 == null ? "" : (s.avgTop15 >= 70 ? "hot" : s.avgTop15 < 40 ? "cold" : "");
+    const passStr    = s.avgPassDiff == null ? "—" : (s.avgPassDiff > 0 ? `+${s.avgPassDiff.toFixed(1)}` : s.avgPassDiff.toFixed(1));
+    const loopRows = `
+        <div class="track-split-stat"><span class="k">Rating</span><span class="v ${ratingTone}">${s.avgRating != null ? s.avgRating.toFixed(1) : '—'}</span></div>
+        <div class="track-split-stat"><span class="k">Pass diff</span><span class="v ${passTone}">${passStr}</span></div>
+        <div class="track-split-stat"><span class="k">% Top-15</span><span class="v ${t15Tone}">${s.avgTop15 != null ? s.avgTop15.toFixed(1) + '%' : '—'}</span></div>`;
     return `<div class="track-split-card">
       <div class="track-split-head">
         <span class="track-split-label">${label}</span>
@@ -12169,6 +12187,7 @@ function paintProfileTrackSplits(entity) {
         <div class="track-split-stat"><span class="k">Avg Fin</span><span class="v ${avgCls}">${s.avgFinish != null ? s.avgFinish.toFixed(1) : '—'}</span></div>
         ${(isStageEra() && mode !== "career") ? `<div class="track-split-stat"><span class="k">Stage pts/race</span><span class="v">${s.avgStagePts != null ? s.avgStagePts.toFixed(1) : '—'}</span></div>` : ""}
         <div class="track-split-stat"><span class="k">Best</span><span class="v">P${s.bestFinish ?? '—'}</span></div>
+        ${loopRows}
       </div>
     </div>`;
   }).join("");
