@@ -50,7 +50,7 @@ const STATE = {
                 selected: new Set(), seasons: new Set(), ftOnly: true },
   teammates: { metric: "fin", ftOnly: true },
   profile: {
-    kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all",
+    kind: null, slug: null, splitsRange: "season", splitsSeries: "all", heatmapSeries: "all", racesSeries: null,
     trackPicker: { code: null, series: "all", gens: new Set() },
   },
   // Analytics → Track Stats: pick a track, see all-time driver stats there.
@@ -3942,6 +3942,35 @@ function wireUIControls() {
           hostHTMLAfter: (document.getElementById("profile-career-heatmap") || {}).innerHTML?.slice(0, 80),
         });
       }
+    }
+    // Races-table series filter — for drivers who ran more than one series in a
+    // season. Rebuilds rows for the picked series and repaints just the table.
+    const racesBtn = e.target.closest("#profile-races-series-toggle button");
+    if (racesBtn) {
+      e.preventDefault();
+      const newSeries = racesBtn.dataset.srs;
+      if (!newSeries) return;
+      const ent = findEntityFromSlug();
+      const slug = (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug)
+        ? STATE.profile.slug
+        : (ent ? slugify(ent.primaryDriver || ent.driver || "") : null);
+      STATE.profile.racesSeries = newSeries;
+      racesBtn.parentElement.querySelectorAll("button").forEach(b =>
+        b.classList.toggle("on", b === racesBtn));
+      const kind = (STATE.profile && STATE.profile.kind === "driver") ? "driver" : "owner";
+      let rows;
+      if (newSeries === STATE.series && ent) {
+        rows = profileRaceRows(ent);
+      } else {
+        const list = driverSeasonSeriesList(slug, STATE.season);
+        const info = list.find(x => x.series === newSeries);
+        const fullSchedule = info && info.completed > 0 && (info.starts / info.completed) >= 0.5;
+        rows = profileRaceRowsForSeries(slug, STATE.season, newSeries, { fullSchedule });
+      }
+      paintProfileRaceTable(rows, kind);
+      const sub = racesBtn.closest(".profile-panel-head")?.querySelector(".profile-panel-sub");
+      if (sub) sub.textContent = `${rows.filter(r => !r.dns).length} starts`;
+      return;
     }
     // CC career-heatmap series filter — same UX as the driver heatmap but
     // lives on the crew chief profile and updates STATE.cc.heatmapSeries.
@@ -9623,7 +9652,66 @@ function canonicalizeProfileURL(entity) {
   STATE.lastHash = canonical;
 }
 
-// Determine which season a car ran (needed for the career table once lazy-loaded).
+// Which series (NCS/NOS/NTS) a driver ran in a given season, with start counts.
+// Reads SEASON_CACHE[season] (all three series live in one points file), so it's
+// synchronous once the season is cached. Returns [{series, starts}] in NCS→NTS
+// order for series with at least one completed start. Used to decide whether the
+// Races table needs a series toggle.
+function driverSeasonSeriesList(driverSlug, season) {
+  const out = [];
+  const blocks = SEASON_CACHE[season];
+  if (!blocks || !driverSlug) return out;
+  ["NCS", "NOS", "NTS"].forEach(s => {
+    const block = blocks[s];
+    if (!block || !block.races) return;
+    let starts = 0, completed = 0;
+    block.races.forEach(race => {
+      const isDone = (race.results || []).some(d => d.finish_pos != null && d.finish_pos >= 1);
+      if (isDone) completed++;
+      const ran = (race.results || []).some(d =>
+        d.driver && slugify(d.driver) === driverSlug && d.finish_pos != null && d.finish_pos >= 1);
+      if (ran) starts++;
+    });
+    if (starts > 0) out.push({ series: s, starts, completed });
+  });
+  return out;
+}
+
+// Build race-table rows for ONE series in a season directly from SEASON_CACHE,
+// so the Races table can switch series without depending on STATE.data (which
+// only holds the current series). Each row carries its own crew chief so the
+// painter doesn't need the current-series CC lookup. `fullSchedule` true =
+// include every race with DNS placeholders (full-time view); false = only the
+// races the driver actually started (clean part-time view).
+function profileRaceRowsForSeries(driverSlug, season, series, { fullSchedule = false } = {}) {
+  const blocks = SEASON_CACHE[season];
+  const block = blocks && blocks[series];
+  if (!block || !block.races || !driverSlug) return [];
+  const races = block.races.slice().sort((a, b) => (a.round || 0) - (b.round || 0));
+  const rows = [];
+  races.forEach(r => {
+    const meta = { round: r.round, date: r.date, track: r.track, track_code: r.track_code, name: r.name };
+    const mine = (r.results || []).find(d => d.driver && slugify(d.driver) === driverSlug);
+    if (mine && mine.finish_pos != null && mine.finish_pos >= 1) {
+      rows.push({
+        ...meta,
+        start: mine.start_pos,
+        finish: mine.finish_pos,
+        s1: mine.stage_1_pts || 0, s2: mine.stage_2_pts || 0,
+        fin: mine.finish_pts || 0, fl: mine.fastest_lap_pt || 0,
+        total: mine.race_pts || 0,
+        status: mine.status,
+        driver: mine.driver,
+        cc: mine.crew_chief || null,
+      });
+    } else if (fullSchedule) {
+      rows.push({ ...meta, dns: true });
+    }
+  });
+  return rows;
+}
+
+// Determine season a car ran (needed for the career table once lazy-loaded).
 // For now just the current season.
 function profileRaceRows(entity) {
   const races = racesSorted();
@@ -10260,7 +10348,32 @@ function renderProfile() {
   const displayTitle = titleText;
   const displayTitleHTML = `${escapeHTML(titleText)}${renderCoDriverBadge(entity)}`;
 
-  const rows = profileRaceRows(entity);
+  // Cross-series Races table: a driver may run multiple series in one season
+  // (e.g. a Cup regular with a few Xfinity starts). Detect which series they ran
+  // and, if more than one, let the table toggle between them. The primary series
+  // (STATE.series) keeps the existing full-schedule-with-DNS view; secondary
+  // series show only actual starts unless the driver is effectively full-time
+  // there (>= half the completed races).
+  const _raceSlug = (STATE.profile && STATE.profile.kind === "driver" && STATE.profile.slug)
+    ? STATE.profile.slug
+    : slugify(entity.primaryDriver || entity.driver || "");
+  const seasonSeriesList = driverSeasonSeriesList(_raceSlug, STATE.season);
+  const _seriesCodes = seasonSeriesList.map(x => x.series);
+  let activeRacesSeries = STATE.series;
+  if (STATE.profile && STATE.profile.racesSeries && _seriesCodes.includes(STATE.profile.racesSeries)) {
+    activeRacesSeries = STATE.profile.racesSeries;
+  } else if (!_seriesCodes.includes(STATE.series) && _seriesCodes.length) {
+    activeRacesSeries = _seriesCodes[0];
+  }
+  let rows;
+  if (activeRacesSeries === STATE.series) {
+    rows = profileRaceRows(entity);
+  } else {
+    const info = seasonSeriesList.find(x => x.series === activeRacesSeries);
+    const fullSchedule = info && info.completed > 0 && (info.starts / info.completed) >= 0.5;
+    rows = profileRaceRowsForSeries(_raceSlug, STATE.season, activeRacesSeries, { fullSchedule });
+  }
+  const showRacesSeriesToggle = seasonSeriesList.length > 1;
   const mfr = manufacturerName(entity.manufacturer) || "—";
   const teamName = teamLabelForEra(teamCode, STATE.season).full;
 
@@ -10527,7 +10640,12 @@ function renderProfile() {
       <div class="profile-panel full">
         <div class="profile-panel-head">
           <span class="profile-panel-title">${STATE.season} Races</span>
-          <span class="profile-panel-sub">${rows.filter(r => !r.dns).length} starts</span>
+          <div class="profile-panel-head-right">
+            ${showRacesSeriesToggle ? `<div class="toggle-group mini" id="profile-races-series-toggle">
+              ${seasonSeriesList.map(x => `<button class="${activeRacesSeries === x.series ? "on" : ""}" data-srs="${x.series}">${x.series}</button>`).join("")}
+            </div>` : ""}
+            <span class="profile-panel-sub">${rows.filter(r => !r.dns).length} starts</span>
+          </div>
         </div>
         <div class="profile-panel-body" style="padding:0;">
           <div style="overflow-x:auto;">
@@ -11584,8 +11702,8 @@ function paintProfileRaceTable(rows, kind) {
     //     which felt like "clicked any race, went to Phoenix" because the
     //     track page is series-and-track scoped, not race-scoped.
     const trackLink = r.track_code
-      ? `<a class="rc-track-link" href="#/track/${escapeHTML(r.track_code)}" title="Track history" onclick="event.stopPropagation()"><strong>${escapeHTML(r.track_code)}</strong></a> · <a class="rc-race-link" href="#/race/${r.round}" title="Race results" onclick="event.stopPropagation()">${trackDisplay}</a>`
-      : `<strong>${escapeHTML(r.track_code || '')}</strong> · ${trackDisplay}`;
+      ? `<a class="rc-track-link" href="#/track/${escapeHTML(r.track_code)}" title="Track history" onclick="event.stopPropagation()"><strong>${escapeHTML(r.track_code)}</strong></a><span class="prt-track-full"> · <a class="rc-race-link" href="#/race/${r.round}" title="Race results" onclick="event.stopPropagation()">${trackDisplay}</a></span>`
+      : `<strong>${escapeHTML(r.track_code || '')}</strong><span class="prt-track-full"> · ${trackDisplay}</span>`;
     if (r.dns) {
       // 9 columns to span: Race, CC, Start, Finish, S1, S2, FL, Fin, Total
       return `<tr style="opacity:0.4">
@@ -11600,8 +11718,9 @@ function paintProfileRaceTable(rows, kind) {
     else if (r.finish <= 10) cls = "f-t10";
     else if (r.finish > 25) cls = "f-bad";
     const driverNote = (kind === "owner" && r.driver) ? `<div class="race-driver-tag">${escapeHTML(r.driver)}</div>` : "";
-    // Crew chief cell — link to #/cc/<slug> if we have it
-    const ccName = ccByRound.get(r.round);
+    // Crew chief cell — link to #/cc/<slug> if we have it. Cross-series rows
+    // carry their own cc; the primary-series path falls back to ccByRound.
+    const ccName = (r.cc != null) ? r.cc : ccByRound.get(r.round);
     const ccCell = ccName
       ? `<a class="profile-link" href="#/cc/${slugify(ccName)}">${escapeHTML(ccName)}</a>`
       : `<span class="muted">—</span>`;
@@ -11627,12 +11746,12 @@ function paintProfileRaceTable(rows, kind) {
     </tr>`;
   }).join("");
 
-  // Mobile collapse — keep R(0), Track(1), Finish(5), Total(10).
-  // Hide Name(2), CC(3), Start(4), S1(6), S2(7), FL(8), Fin(9). Indices
-  // shifted by +1 from before since CC inserted at column 3.
+  // Mobile collapse — keep R(0), Track(1), Start(4), Finish(5) visible.
+  // Everything else (Race, Crew Chief, S1, S2, FL, Fin pts, Total) folds into
+  // the tap-to-expand detail row so the table never scrolls horizontally.
   const table = tbody.closest("table.profile-race-table");
-  if (table) applyMobileTableCollapse(table, [0, 1, 5, 10], {
-    2: "Race", 3: "Crew Chief", 4: "Start", 6: "S1", 7: "S2", 8: "FL", 9: "Fin pts"
+  if (table) applyMobileTableCollapse(table, [0, 1, 4, 5], {
+    2: "Race", 3: "Crew Chief", 6: "S1", 7: "S2", 8: "FL", 9: "Fin pts", 10: "Total"
   });
 }
 

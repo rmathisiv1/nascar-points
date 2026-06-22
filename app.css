@@ -3941,6 +3941,9 @@ a.driver-cell.profile-link:hover .car-tag {
   /* Hide columns flagged for mobile */
   .data-table .mob-hide,
   .profile-race-table .mob-hide { display: none; }
+  /* On mobile the Track column shows only the abbreviation (the "· Phoenix"
+     full name is dropped) to keep the collapsed table from scrolling. */
+  .profile-race-table .prt-track-full { display: none; }
 
   /* Show chevron column on mobile */
   .mob-only { display: table-cell; }
