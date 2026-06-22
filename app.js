@@ -5584,6 +5584,17 @@ function getEntryList(series, trackCode) {
   return hit.list || null;
 }
 
+// The Entry List card only renders entries that have a car number assigned.
+// A preliminary feed (e.g. a not-yet-finalized field for an upcoming race) can
+// carry driver names with no car numbers, which would render an empty table.
+// Links and tabs must gate on the entries we can actually show — not the raw
+// list length — so the "Entry list →" affordance doesn't appear before there's
+// a real, populated list.
+function renderableEntryList(series, trackCode) {
+  const list = (typeof getEntryList === "function" && getEntryList(series, trackCode)) || [];
+  return list.filter(e => e && e.car != null);
+}
+
 // Lazily load the entry list for the upcoming race from the committed data
 // file (data/entry_list.json), produced weekly by scripts/scrape_entry_list.py
 // from NASCAR's odds feed. The file holds the next race per series, each with
@@ -5695,7 +5706,7 @@ function entryListLink(race, series, compact) {
   // Prefer the NASCAR-native entry list (data/entry_list.json) for this race's
   // track; fall back to the older Jayski entry doc if that's all we have.
   const hasNative = (typeof getEntryList === "function") &&
-    ((getEntryList(s, race && race.track_code) || []).length > 0);
+    (renderableEntryList(s, race && race.track_code).length > 0);
   const rec = getRaceDocs(STATE.season, s, race);
   const hasDoc = rec && rec.docs && rec.docs.entry && Array.isArray(rec.docs.entry.rows) && rec.docs.entry.rows.length;
   if (!hasNative && !hasDoc) return "";
@@ -15174,7 +15185,7 @@ function _renderUpcomingBand(year, series) {
     // Entry list link: prefer the NASCAR-native list (data/entry_list.json),
     // fall back to the older Jayski entry doc.
     const hasNative = (typeof getEntryList === "function") &&
-      ((getEntryList(series, nextRace.track_code) || []).length > 0);
+      (renderableEntryList(series, nextRace.track_code).length > 0);
     const rec = (typeof getRaceDocs === "function") ? getRaceDocs(year, series, nextRace) : null;
     const hasEntry = rec && rec.docs && rec.docs.entry && Array.isArray(rec.docs.entry.rows) && rec.docs.entry.rows.length;
     if (hasNative || hasEntry) boxes = _homeLinkBox(nextRace.round, year, series, "entry", "Entry list →");
@@ -21742,7 +21753,9 @@ function _renderEntryListCard(series, trackCode) {
   if (typeof getEntryList !== "function" || !trackCode) return "";
   const list = getEntryList(series, trackCode);
   if (!list || !list.length) return "";
-  const rows = list.filter(e => e.car != null).slice().sort((a, b) => {
+  const entries = list.filter(e => e.car != null);
+  if (!entries.length) return "";   // names without cars yet — no real list to show
+  const rows = entries.slice().sort((a, b) => {
     const ca = parseInt(a.car, 10), cb = parseInt(b.car, 10);
     return (isNaN(ca) ? 9999 : ca) - (isNaN(cb) ? 9999 : cb);
   }).map(e => {
@@ -21765,7 +21778,7 @@ function _renderEntryListCard(series, trackCode) {
     </tr>`;
   }).join("");
   return `<div class="card rc-card">
-    <div class="rc-card-head"><span class="rc-card-title">Entry List</span><span class="rc-card-sub">${list.length} cars</span></div>
+    <div class="rc-card-head"><span class="rc-card-title">Entry List</span><span class="rc-card-sub">${entries.length} cars</span></div>
     <div class="rc-card-body">
       <table class="el-table">
         <thead><tr><th>#</th><th>Driver</th><th>Mfr</th><th class="el-spon-h">Sponsor</th><th>Owner</th><th>Crew Chief</th></tr></thead>
