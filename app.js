@@ -7994,15 +7994,17 @@ function renderTrajectory() {
       <div class="tt-row total"><span class="lbl">Season pts rank</span><span class="val">P${rank} / ${totalN}</span></div>
     `;
     tip.hidden = false;
-    // Position relative to the card-chart parent of the svg
-    const card = svg.parentElement;
-    const cardRect = card.getBoundingClientRect();
-    // Place near the cursor
-    let left = (evt.clientX - cardRect.left) + 14;
-    let top = (evt.clientY - cardRect.top) - 10;
+    // Position FIXED to the viewport, right at the cursor (which is on the dot).
+    // This sidesteps containing-block / offset-parent quirks and the chart card's
+    // overflow:hidden clipping that were throwing the tip far from the point.
+    tip.style.position = "fixed";
     const tipRect = tip.getBoundingClientRect();
-    left = Math.max(6, Math.min(left, card.clientWidth - tipRect.width - 6));
-    if (top + tipRect.height > card.clientHeight) top = card.clientHeight - tipRect.height - 6;
+    const VW = window.innerWidth, VH = window.innerHeight;
+    let left = evt.clientX + 14;            // just right of the cursor
+    let top  = evt.clientY - 10;            // slightly above
+    if (left + tipRect.width > VW - 6) left = evt.clientX - tipRect.width - 14;  // flip left near right edge
+    if (top + tipRect.height > VH - 6) top = VH - tipRect.height - 6;
+    if (left < 6) left = 6;
     if (top < 6) top = 6;
     tip.style.left = `${left}px`;
     tip.style.top  = `${top}px`;
