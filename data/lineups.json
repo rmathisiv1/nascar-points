@@ -6,7 +6,7 @@
         "track": "Michigan International Speedway",
         "race_name": "FireKeepers Casino 400",
         "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/6/12615_STARTROW.pdf",
-        "scraped_at": "2026-06-08T00:16:26+00:00",
+        "scraped_at": "2026-06-13T23:41:55+00:00",
         "entries": [
           {
             "pos": 1,
@@ -305,6 +305,319 @@
             "driver_raw": "Josh Berry Motorcraft/Quick Lane"
           }
         ]
+      },
+      "16": {
+        "track_code": "",
+        "track": "Pocono Raceway",
+        "race_name": "Great American Getaway 400 presented by",
+        "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/13/12616_STARTROW.pdf",
+        "scraped_at": "2026-06-20T23:46:41+00:00",
+        "entries": [
+          {
+            "pos": 1,
+            "car": "11",
+            "qual_time": 51.948,
+            "qual_speed": 173.25,
+            "manufacturer": "Toyota",
+            "driver_raw": "Denny Hamlin King's Hawaiian Shake 'Em Bites"
+          },
+          {
+            "pos": 2,
+            "car": "5",
+            "qual_time": 52.003,
+            "qual_speed": 173.067,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Kyle Larson HendrickCars.com"
+          },
+          {
+            "pos": 3,
+            "car": "7",
+            "qual_time": 52.059,
+            "qual_speed": 172.881,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Daniel Suarez Freeway Insurance/Roamly"
+          },
+          {
+            "pos": 4,
+            "car": "54",
+            "qual_time": 52.092,
+            "qual_speed": 172.771,
+            "manufacturer": "Toyota",
+            "driver_raw": "Ty Gibbs Monster Energy"
+          },
+          {
+            "pos": 5,
+            "car": "19",
+            "qual_time": 52.132,
+            "qual_speed": 172.639,
+            "manufacturer": "Toyota",
+            "driver_raw": "Chase Briscoe Bass Pro Shops"
+          },
+          {
+            "pos": 6,
+            "car": "17",
+            "qual_time": 52.176,
+            "qual_speed": 172.493,
+            "manufacturer": "Ford",
+            "driver_raw": "Chris Buescher BuildSubmarines.com"
+          },
+          {
+            "pos": 7,
+            "car": "43",
+            "qual_time": 52.189,
+            "qual_speed": 172.45,
+            "manufacturer": "Toyota",
+            "driver_raw": "Erik Jones Dollar Tree"
+          },
+          {
+            "pos": 8,
+            "car": "42",
+            "qual_time": 52.277,
+            "qual_speed": 172.16,
+            "manufacturer": "Toyota",
+            "driver_raw": "John Hunter Nemechek Pye-Barker Fire & Safety"
+          },
+          {
+            "pos": 9,
+            "car": "24",
+            "qual_time": 52.331,
+            "qual_speed": 171.982,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "William Byron Raptor"
+          },
+          {
+            "pos": 10,
+            "car": "12",
+            "qual_time": 52.366,
+            "qual_speed": 171.867,
+            "manufacturer": "Ford",
+            "driver_raw": "Ryan Blaney Wabash"
+          },
+          {
+            "pos": 11,
+            "car": "22",
+            "qual_time": 52.467,
+            "qual_speed": 171.536,
+            "manufacturer": "Ford",
+            "driver_raw": "Joey Logano Shell Pennzoil"
+          },
+          {
+            "pos": 12,
+            "car": "48",
+            "qual_time": 52.484,
+            "qual_speed": 171.481,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Alex Bowman Ally"
+          },
+          {
+            "pos": 13,
+            "car": "71",
+            "qual_time": 52.488,
+            "qual_speed": 171.468,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Michael McDowell Delaware Life"
+          },
+          {
+            "pos": 14,
+            "car": "33",
+            "qual_time": 52.537,
+            "qual_speed": 171.308,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Austin Hill(i) zone Jalapeno Lime"
+          },
+          {
+            "pos": 15,
+            "car": "41",
+            "qual_time": 52.567,
+            "qual_speed": 171.21,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Cole Custer Haas/Autodesk"
+          },
+          {
+            "pos": 16,
+            "car": "45",
+            "qual_time": 52.568,
+            "qual_speed": 171.207,
+            "manufacturer": "Toyota",
+            "driver_raw": "Tyler Reddick SupplyHouse"
+          },
+          {
+            "pos": 17,
+            "car": "2",
+            "qual_time": 52.577,
+            "qual_speed": 171.178,
+            "manufacturer": "Ford",
+            "driver_raw": "Austin Cindric Menards/Ideal Door Garage Doors"
+          },
+          {
+            "pos": 18,
+            "car": "38",
+            "qual_time": 52.591,
+            "qual_speed": 171.132,
+            "manufacturer": "Ford",
+            "driver_raw": "Zane Smith Long John Silver's"
+          },
+          {
+            "pos": 19,
+            "car": "16",
+            "qual_time": 52.604,
+            "qual_speed": 171.09,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "AJ Allmendinger Celsius"
+          },
+          {
+            "pos": 20,
+            "car": "21",
+            "qual_time": 52.627,
+            "qual_speed": 171.015,
+            "manufacturer": "Ford",
+            "driver_raw": "Josh Berry Capgemini"
+          },
+          {
+            "pos": 21,
+            "car": "47",
+            "qual_time": 52.656,
+            "qual_speed": 170.921,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ricky Stenhouse Jr. Pylon Aviation"
+          },
+          {
+            "pos": 22,
+            "car": "20",
+            "qual_time": 52.724,
+            "qual_speed": 170.7,
+            "manufacturer": "Toyota",
+            "driver_raw": "Christopher Bell Rheem"
+          },
+          {
+            "pos": 23,
+            "car": "9",
+            "qual_time": 52.728,
+            "qual_speed": 170.687,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Chase Elliott NAPA Auto Parts"
+          },
+          {
+            "pos": 24,
+            "car": "1",
+            "qual_time": 52.73,
+            "qual_speed": 170.681,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ross Chastain Busch Light Lime"
+          },
+          {
+            "pos": 25,
+            "car": "35",
+            "qual_time": 52.818,
+            "qual_speed": 170.396,
+            "manufacturer": "Toyota",
+            "driver_raw": "Riley Herbst Monster Energy Zero Sugar"
+          },
+          {
+            "pos": 26,
+            "car": "77",
+            "qual_time": 52.838,
+            "qual_speed": 170.332,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Carson Hocevar Zeigler Auto Group"
+          },
+          {
+            "pos": 27,
+            "car": "10",
+            "qual_time": 52.859,
+            "qual_speed": 170.264,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ty Dillon Patriot Mobile"
+          },
+          {
+            "pos": 28,
+            "car": "88",
+            "qual_time": 52.949,
+            "qual_speed": 169.975,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Connor Zilisch # Roto-Rooter"
+          },
+          {
+            "pos": 29,
+            "car": "34",
+            "qual_time": 53.052,
+            "qual_speed": 169.645,
+            "manufacturer": "Ford",
+            "driver_raw": "Todd Gilliland Love's Travel Stops"
+          },
+          {
+            "pos": 30,
+            "car": "4",
+            "qual_time": 53.077,
+            "qual_speed": 169.565,
+            "manufacturer": "Ford",
+            "driver_raw": "Noah Gragson MillerTech/KOA"
+          },
+          {
+            "pos": 31,
+            "car": "97",
+            "qual_time": 53.191,
+            "qual_speed": 169.202,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Shane Van Gisbergen SuperFile"
+          },
+          {
+            "pos": 32,
+            "car": "3",
+            "qual_time": 53.214,
+            "qual_speed": 169.128,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Austin Dillon BetMGM x Survivor Triple Challenge"
+          },
+          {
+            "pos": 33,
+            "car": "51",
+            "qual_time": 53.488,
+            "qual_speed": 168.262,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Cody Ware Rocket Doctor"
+          },
+          {
+            "pos": 34,
+            "car": "78",
+            "qual_time": 53.642,
+            "qual_speed": 167.779,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Daniel Dye(i) Champion Container"
+          },
+          {
+            "pos": 35,
+            "car": "60",
+            "qual_time": 53.721,
+            "qual_speed": 167.532,
+            "manufacturer": "Ford",
+            "driver_raw": "Ryan Preece Trimble"
+          },
+          {
+            "pos": 36,
+            "car": "62",
+            "qual_time": 54.212,
+            "qual_speed": 166.015,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Casey Mears The Gracie Foundation"
+          },
+          {
+            "pos": 37,
+            "car": "6",
+            "qual_time": 71.136,
+            "qual_speed": 126.518,
+            "manufacturer": "Ford",
+            "driver_raw": "Brad Keselowski Castrol"
+          },
+          {
+            "pos": 38,
+            "car": "23",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Toyota",
+            "driver_raw": "Bubba Wallace SHADYRAYS"
+          }
+        ]
       }
     },
     "NOS": {
@@ -313,7 +626,7 @@
         "track": "Nashville Superspeedway",
         "race_name": "Sports Illustrated Resorts 250",
         "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/5/30/16-noaps-2026-lineuo.pdf",
-        "scraped_at": "2026-06-08T00:17:43+00:00",
+        "scraped_at": "2026-06-12T22:54:20+00:00",
         "entries": [
           {
             "pos": 2,
@@ -604,6 +917,271 @@
             "driver_raw": "Cleetus McFarland Tommy's Express Car Wash"
           }
         ]
+      },
+      "17": {
+        "track_code": "",
+        "track": "Pocono Raceway",
+        "race_name": "MillerTech Battery 250 presented by KOA",
+        "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/13/17-noaps-2026-lineup.pdf",
+        "scraped_at": "2026-06-19T23:37:51+00:00",
+        "entries": [
+          {
+            "pos": 1,
+            "car": "20",
+            "qual_time": 54.686,
+            "qual_speed": 164.576,
+            "manufacturer": "Toyota",
+            "driver_raw": "Brandon Jones Menards/Ortho"
+          },
+          {
+            "pos": 2,
+            "car": "54",
+            "qual_time": 54.749,
+            "qual_speed": 164.387,
+            "manufacturer": "Toyota",
+            "driver_raw": "Taylor Gray Operation 300"
+          },
+          {
+            "pos": 3,
+            "car": "88",
+            "qual_time": 54.787,
+            "qual_speed": 164.273,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "William Byron(i) HenrdickCars.com"
+          },
+          {
+            "pos": 4,
+            "car": "7",
+            "qual_time": 54.798,
+            "qual_speed": 164.24,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Justin Allgaier Carolina Carports"
+          },
+          {
+            "pos": 5,
+            "car": "8",
+            "qual_time": 54.923,
+            "qual_speed": 163.866,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sammy Smith O'Reilly Auto Parts"
+          },
+          {
+            "pos": 6,
+            "car": "9",
+            "qual_time": 54.959,
+            "qual_speed": 163.758,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Carson Kvapili Registix/TruckClub"
+          },
+          {
+            "pos": 7,
+            "car": "41",
+            "qual_time": 55.008,
+            "qual_speed": 163.613,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sam Mayer Audibel"
+          },
+          {
+            "pos": 8,
+            "car": "19",
+            "qual_time": 55.05,
+            "qual_speed": 163.488,
+            "manufacturer": "Toyota",
+            "driver_raw": "Brent Crews # Mobil 1"
+          },
+          {
+            "pos": 9,
+            "car": "39",
+            "qual_time": 55.119,
+            "qual_speed": 163.283,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ryan Sieg SciAps"
+          },
+          {
+            "pos": 10,
+            "car": "18",
+            "qual_time": 55.122,
+            "qual_speed": 163.274,
+            "manufacturer": "Toyota",
+            "driver_raw": "William Sawalich Starkey"
+          },
+          {
+            "pos": 11,
+            "car": "17",
+            "qual_time": 55.169,
+            "qual_speed": 163.135,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Corey Day HenrdickCars.com"
+          },
+          {
+            "pos": 12,
+            "car": "96",
+            "qual_time": 55.221,
+            "qual_speed": 162.981,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Anthony Alfredo Big Rack Spirits"
+          },
+          {
+            "pos": 13,
+            "car": "99",
+            "qual_time": 55.298,
+            "qual_speed": 162.755,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Parker Retzlaff FDNY Foundation"
+          },
+          {
+            "pos": 14,
+            "car": "1",
+            "qual_time": 55.304,
+            "qual_speed": 162.737,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Connor Zilisch(i) Roto-Rooter"
+          },
+          {
+            "pos": 15,
+            "car": "51",
+            "qual_time": 55.343,
+            "qual_speed": 162.622,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Jeremy Clements AllSouthElectric.com"
+          },
+          {
+            "pos": 16,
+            "car": "00",
+            "qual_time": 55.354,
+            "qual_speed": 162.59,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sheldon Creed VieLight"
+          },
+          {
+            "pos": 17,
+            "car": "21",
+            "qual_time": 55.406,
+            "qual_speed": 162.437,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Austin Hill Colorado Craft Beef"
+          },
+          {
+            "pos": 18,
+            "car": "27",
+            "qual_time": 55.462,
+            "qual_speed": 162.273,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Jeb Burton SpotOn"
+          },
+          {
+            "pos": 19,
+            "car": "44",
+            "qual_time": 55.538,
+            "qual_speed": 162.051,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Brennan Poole Members 1st"
+          },
+          {
+            "pos": 20,
+            "car": "28",
+            "qual_time": 55.619,
+            "qual_speed": 161.815,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Kyle Sieg Camelbeach Outdoor Waterpark"
+          },
+          {
+            "pos": 21,
+            "car": "2",
+            "qual_time": 55.722,
+            "qual_speed": 161.516,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Jesse Love Whelen"
+          },
+          {
+            "pos": 22,
+            "car": "87",
+            "qual_time": 55.873,
+            "qual_speed": 161.08,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Nick Sanchez Peterson Racing Group"
+          },
+          {
+            "pos": 23,
+            "car": "24",
+            "qual_time": 56.035,
+            "qual_speed": 160.614,
+            "manufacturer": "Toyota",
+            "driver_raw": "Harrison Burton DEX/SHARP"
+          },
+          {
+            "pos": 24,
+            "car": "02",
+            "qual_time": 56.039,
+            "qual_speed": 160.602,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ryan Ellis U.S. Naval Acadamy Navy Racing"
+          },
+          {
+            "pos": 25,
+            "car": "45",
+            "qual_time": 56.196,
+            "qual_speed": 160.154,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Lavar Scott # Sunoco"
+          },
+          {
+            "pos": 26,
+            "car": "32",
+            "qual_time": 56.221,
+            "qual_speed": 160.083,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Rajah Caruth HenrdickCars.com"
+          },
+          {
+            "pos": 27,
+            "car": "48",
+            "qual_time": 56.221,
+            "qual_speed": 160.083,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Patrick Staropoli # Syfovre"
+          },
+          {
+            "pos": 28,
+            "car": "38",
+            "qual_time": 56.551,
+            "qual_speed": 159.148,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Patrick Emerling(i) Pennsylvania ARMY National Guard"
+          },
+          {
+            "pos": 29,
+            "car": "92",
+            "qual_time": 56.553,
+            "qual_speed": 159.143,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Leland Honeyman Jr.(i) VOLTZ by Raptor Power"
+          },
+          {
+            "pos": 30,
+            "car": "35",
+            "qual_time": 57.492,
+            "qual_speed": 156.544,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Carson Ware Costa Oil"
+          },
+          {
+            "pos": 31,
+            "car": "53",
+            "qual_time": 57.832,
+            "qual_speed": 155.623,
+            "manufacturer": "Toyota",
+            "driver_raw": "Natalie Decker(i) T.N. Dickinson's Witch Hazel"
+          },
+          {
+            "pos": 32,
+            "car": "42",
+            "qual_time": 69.112,
+            "qual_speed": 130.223,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Nathan Byrd"
+          }
+        ]
       }
     },
     "NTS": {
@@ -612,7 +1190,7 @@
         "track": "Michigan International Speedway",
         "race_name": "DQS Solutions & Staffing 250 powered by",
         "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/6/32612_STARTROW.pdf",
-        "scraped_at": "2026-06-08T00:18:13+00:00",
+        "scraped_at": "2026-06-14T10:29:31+00:00",
         "entries": [
           {
             "pos": 1,
@@ -805,6 +1383,223 @@
             "qual_speed": 179.547,
             "manufacturer": "Ford",
             "driver_raw": "Frankie Muniz Morgan & Morgan"
+          }
+        ]
+      },
+      "13": {
+        "track_code": "",
+        "track": "San Diego Street Course",
+        "race_name": "Navy 250",
+        "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/19/32613_STARTROW.pdf",
+        "scraped_at": "2026-06-21T10:36:07+00:00",
+        "entries": [
+          {
+            "pos": 1,
+            "car": "11",
+            "qual_time": 134.782,
+            "qual_speed": 90.813,
+            "manufacturer": "Toyota",
+            "driver_raw": "Kaden Honeycutt Safelite"
+          },
+          {
+            "pos": 2,
+            "car": "34",
+            "qual_time": 135.196,
+            "qual_speed": 90.535,
+            "manufacturer": "Ford",
+            "driver_raw": "Layne Riggs Mattermost"
+          },
+          {
+            "pos": 3,
+            "car": "38",
+            "qual_time": 136.231,
+            "qual_speed": 89.847,
+            "manufacturer": "Ford",
+            "driver_raw": "Chandler Smith Hard Rock Casino Tejon/Hard Rock Cafe"
+          },
+          {
+            "pos": 4,
+            "car": "1",
+            "qual_time": 136.4,
+            "qual_speed": 89.736,
+            "manufacturer": "Toyota",
+            "driver_raw": "Jimmie Johnson(i) Carvana"
+          },
+          {
+            "pos": 5,
+            "car": "9",
+            "qual_time": 136.555,
+            "qual_speed": 89.634,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Grant Enfinger Grant County Mulch"
+          },
+          {
+            "pos": 6,
+            "car": "17",
+            "qual_time": 136.62,
+            "qual_speed": 89.592,
+            "manufacturer": "Toyota",
+            "driver_raw": "Giovanni Ruggiero JBL"
+          },
+          {
+            "pos": 7,
+            "car": "44",
+            "qual_time": 136.729,
+            "qual_speed": 89.52,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Andres Perez De Lara Acceptance Insurance"
+          },
+          {
+            "pos": 8,
+            "car": "88",
+            "qual_time": 136.732,
+            "qual_speed": 89.518,
+            "manufacturer": "Ford",
+            "driver_raw": "Ty Majeski SPAM/Menards"
+          },
+          {
+            "pos": 9,
+            "car": "45",
+            "qual_time": 137.065,
+            "qual_speed": 89.301,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Landen Lewis J.F. Electric"
+          },
+          {
+            "pos": 10,
+            "car": "75",
+            "qual_time": 137.13,
+            "qual_speed": 89.258,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Parker Kligerman FMS Solutions"
+          },
+          {
+            "pos": 11,
+            "car": "7",
+            "qual_time": 137.206,
+            "qual_speed": 89.209,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Connor Mosack Friends of Jaclyn Foundation"
+          },
+          {
+            "pos": 12,
+            "car": "18",
+            "qual_time": 137.25,
+            "qual_speed": 89.18,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Tyler Ankrum LiUNA!"
+          },
+          {
+            "pos": 13,
+            "car": "99",
+            "qual_time": 137.343,
+            "qual_speed": 89.12,
+            "manufacturer": "Ford",
+            "driver_raw": "Ben Rhodes Campers Inn"
+          },
+          {
+            "pos": 16,
+            "car": "62",
+            "qual_time": 138.198,
+            "qual_speed": 88.569,
+            "manufacturer": "Toyota",
+            "driver_raw": "Kaz Grala Fire Dept Coffee"
+          },
+          {
+            "pos": 18,
+            "car": "26",
+            "qual_time": 139.192,
+            "qual_speed": 87.936,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Dawson Sutton Rackley Roofing"
+          },
+          {
+            "pos": 19,
+            "car": "98",
+            "qual_time": 139.333,
+            "qual_speed": 87.847,
+            "manufacturer": "Ford",
+            "driver_raw": "Jake Garcia Quanta/Curb Records"
+          },
+          {
+            "pos": 20,
+            "car": "76",
+            "qual_time": 139.527,
+            "qual_speed": 87.725,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Nathan Nicholson Whelen Aerospace Technologies"
+          },
+          {
+            "pos": 22,
+            "car": "52",
+            "qual_time": 140.476,
+            "qual_speed": 87.132,
+            "manufacturer": "Toyota",
+            "driver_raw": "Stewart Friesen Halmar International"
+          },
+          {
+            "pos": 24,
+            "car": "81",
+            "qual_time": 141.115,
+            "qual_speed": 86.738,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Kris Wright NASCAR USA 250"
+          },
+          {
+            "pos": 25,
+            "car": "13",
+            "qual_time": 141.395,
+            "qual_speed": 86.566,
+            "manufacturer": "Ford",
+            "driver_raw": "Cole Butcher # Atlantic Tilt Load"
+          },
+          {
+            "pos": 26,
+            "car": "2",
+            "qual_time": 142.363,
+            "qual_speed": 85.977,
+            "manufacturer": "Ford",
+            "driver_raw": "Jackson Lee California Closets"
+          },
+          {
+            "pos": 27,
+            "car": "33",
+            "qual_time": 143.121,
+            "qual_speed": 85.522,
+            "manufacturer": "Ford",
+            "driver_raw": "Frankie Muniz Lakeside Construction"
+          },
+          {
+            "pos": 28,
+            "car": "20",
+            "qual_time": 144.173,
+            "qual_speed": 84.898,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Brendan Gaughan South Point Hotel & Casino"
+          },
+          {
+            "pos": 29,
+            "car": "22",
+            "qual_time": 144.318,
+            "qual_speed": 84.813,
+            "manufacturer": "Ford",
+            "driver_raw": "Austin Varco Tacos El Franc/Dave's Hot Chicken"
+          },
+          {
+            "pos": 30,
+            "car": "91",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Christian Eckes Columbia Bank"
+          },
+          {
+            "pos": 31,
+            "car": "77",
+            "qual_time": 0.0,
+            "qual_speed": 0.0,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Justin Marks Jockey 150th Anniversary"
           }
         ]
       }
