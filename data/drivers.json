@@ -4389,11 +4389,14 @@
       "rr_key": "Daniel_Hemric"
     },
     "daniel-suarez": {
-      "name": "Daniel Suarez",
+      "name": "Daniel Su\u00e1rez",
       "slug": "daniel-suarez",
-      "rr_key": "Daniel_Suarez",
+      "nascar_driver_id": 4113,
       "dob": "1992-01-07",
       "hometown": "Monterrey, Mexico",
+      "crew_chief": "Ryan Sparks",
+      "team": "Spire Motorsports",
+      "source_url": "https://cf.nascar.com/cacher/drivers.json",
       "career": {
         "NCS": {
           "years": 10,
@@ -4438,7 +4441,7 @@
           "lead_lap_finishes": 23
         }
       },
-      "source_url": "https://www.racing-reference.info/driver/Daniel_Suarez"
+      "rr_key": "Daniel_Suarez"
     },
     "danny-efland": {
       "name": "Danny Efland",
@@ -16671,9 +16674,9 @@
       "team": "BJ McLeod Motorsports",
       "source_url": "https://cf.nascar.com/cacher/drivers.json"
     },
-    "andr-s-p-rez": {
+    "andres-perez": {
       "name": "Andr\u00e9s P\u00e9rez",
-      "slug": "andr-s-p-rez",
+      "slug": "andres-perez",
       "nascar_driver_id": 4490,
       "dob": "2005-04-02",
       "hometown": "Mexico City, Mexico",
@@ -16841,16 +16844,6 @@
       "team": "4227",
       "source_url": "https://cf.nascar.com/cacher/drivers.json"
     },
-    "daniel-su-rez": {
-      "name": "Daniel Su\u00e1rez",
-      "slug": "daniel-su-rez",
-      "nascar_driver_id": 4113,
-      "dob": "1992-01-07",
-      "hometown": "Monterrey, Mexico",
-      "crew_chief": "Ryan Sparks",
-      "team": "Spire Motorsports",
-      "source_url": "https://cf.nascar.com/cacher/drivers.json"
-    },
     "dawson-sutton": {
       "name": "Dawson Sutton",
       "slug": "dawson-sutton",
@@ -16912,7 +16905,7 @@
       "source_url": "https://cf.nascar.com/cacher/drivers.json"
     }
   },
-  "generated_at": "2026-06-15T18:10:38Z",
+  "generated_at": "2026-06-22T18:05:41Z",
   "source": "cf.nascar.com/cacher/drivers.json (bios); career computed from race data",
-  "count": 383
+  "count": 382
 }
