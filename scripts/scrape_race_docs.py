@@ -49,6 +49,14 @@ CODE_TO_SERIES_ID = {v: k for k, v in SERIES_ID_TO_CODE.items()}
 WANT_DOCS = ("entry", "pitstall", "roster", "infraction")
 DEFAULT_OUT = os.path.join("data", "race_docs.json")
 
+# NASCAR/Jayski don't post entry lists, pit stalls, rosters or infraction
+# reports more than about a week before an event. Anything further out can't
+# have real docs — and loose track-name matching will happily hand a future
+# race an OLD same-track sheet (e.g. October Phoenix inheriting spring
+# Phoenix's roster). So we refuse to fetch docs for races beyond this horizon,
+# and prune any that slipped in during an --all backfill.
+FUTURE_BUFFER_DAYS = 10
+
 HEADERS = {
     "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"),
@@ -206,6 +214,26 @@ def _write_store(store, path):
     os.replace(tmp, path)        # atomic — never leaves a half-written file
 
 
+def _prune_future_docs(store, horizon):
+    """Drop docs attached to races dated beyond the horizon. Future races can't
+    have real sheets; any present came from loose same-track matching during a
+    backfill. Clears their `docs` (keeps the lightweight schedule shell) so the
+    app's doc tabs disappear. Returns the number of races cleaned."""
+    cleaned = 0
+    for year, ystore in (store or {}).items():
+        for code, sstore in (ystore or {}).items():
+            for rid, rec in (sstore or {}).items():
+                rd = (rec or {}).get("race_date") or ""
+                m = re.match(r"(\d{4})-(\d{2})-(\d{2})", str(rd))
+                if not m:
+                    continue
+                d = datetime(int(m[1]), int(m[2]), int(m[3]), tzinfo=timezone.utc).date()
+                if d > horizon and (rec.get("docs")):
+                    rec["docs"] = {}
+                    cleaned += 1
+    return cleaned
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -237,6 +265,13 @@ def main():
         raise SystemExit(f"Could not load schedule index for {args.year}.")
 
     store = load_store(args.out)
+    horizon = datetime.now(timezone.utc).date() + timedelta(days=FUTURE_BUFFER_DAYS)
+    pruned = _prune_future_docs(store, horizon)
+    if pruned:
+        print(f"[prune] cleared docs from {pruned} future-dated race(s) beyond "
+              f"{horizon} (can't have real sheets yet)", file=sys.stderr)
+        if not args.dry_run:
+            _write_store(store, args.out)
     ystore = store.setdefault(str(args.year), {})
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     total_docs = 0
@@ -257,6 +292,13 @@ def main():
             track = r.get("track_name", "")
             race_d = _race_date(r)
             if not rid or not track:
+                continue
+            # Refuse races beyond the doc horizon — no real sheets exist yet, and
+            # fetching invites a stale same-track match (future Phoenix grabbing
+            # spring Phoenix's roster).
+            if race_d and race_d > horizon:
+                print(f"[{code}] race {rid}  {track}  ({race_d}) — beyond doc horizon, skip",
+                      file=sys.stderr)
                 continue
             # Resumable backfills: skip a race that already has every wanted doc.
             if args.skip_existing:

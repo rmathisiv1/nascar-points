@@ -14370,28 +14370,16 @@ function _renderFinishRow(p, i, series) {
   // charter (only set when ranking off an entry list).
   const ptBadge = p.is_part_time
     ? `<span class="hp-parttime" title="Part-time entry (not a full-time charter)">PT</span>` : "";
-  // Betting odds (American) from the upcoming-race odds feed. Prefers raw
-  // top-5 odds, then implied top-5 prob, then win odds (see _oddsFor). The
-  // "value" flag fires when the model ranks this driver's finish well ahead of
-  // where the market ranks their odds.
-  const od = _oddsFor(p);
-  const oddsStr = od.display;
-  const modelRank = i + 1;
-  const isValue = od.prob != null && p.odds_rank != null &&
-                  modelRank <= 20 && (p.odds_rank - modelRank) >= 5;
-  const valueBadge = isValue
-    ? `<span class="hp-value" title="Model value: predicted to finish ahead of the market's odds (market #${p.odds_rank})">▲ VALUE</span>` : "";
   const carLabel = carNum ? `#${carNum}` : "—";
   return `
     <a class="hp-row hp-row-finish profile-link" href="#/driver/${slug}">
       <span class="hp-pos">${i + 1}</span>
       <span class="hp-car" style="background:${carHex};color:${carTxt}">${carLabel}</span>
-      <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}${valueBadge}</span>
+      <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}</span>
       <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
       <span class="hp-row-extras">
         <span class="hp-extra-cell"><span class="hp-extra-label">pred pts</span><span class="hp-stat-cell ${totalCls}">${p.predicted_total_pts.toFixed(1)}</span></span>
         <span class="hp-extra-cell"><span class="hp-extra-label">evd</span><span class="hp-evidence-dots" title="Evidence: ${p.has_track_history ? "track ✓ " : ""}${p.has_type_history ? "track-type ✓ " : ""}form ✓ season ✓">${dots}</span></span>
-        <span class="hp-extra-cell"><span class="hp-extra-label">odds</span><span class="hp-stat-cell hp-odds ${isValue ? "hp-odds-value" : ""}">${oddsStr}</span></span>
       </span>
     </a>
   `;
@@ -14474,14 +14462,13 @@ function renderRacePredictionSection(opts) {
     <div class="rps-col rps-col-finish">
       <div class="rps-col-head">
         <div class="rps-col-title">Top 10 predicted finish</div>
-        <div class="ed-byline">With predicted points + ${oddsLabel === "TOP 5" ? "top-5 finish" : oddsLabel === "WIN" ? "win" : ""} odds</div>
+        <div class="ed-byline">With predicted points</div>
       </div>
       <div class="rps-col-table-head">
         <span></span><span></span><span></span>
         <span class="rps-col-label">PRED FIN</span>
         <span class="rps-col-label">PRED PTS</span>
         <span class="rps-col-label">EVD</span>
-        <span class="rps-col-label">${oddsLabel}</span>
       </div>
       <div class="rps-list">
         ${finishTop10HTML}
@@ -14503,7 +14490,6 @@ function renderRacePredictionSection(opts) {
           <span class="rps-col-label">PRED FIN</span>
           <span class="rps-col-label">PRED PTS</span>
           <span class="rps-col-label">EVD</span>
-          <span class="rps-col-label">${oddsLabel}</span>
         </div>
         <div class="rps-list">
           ${finishFullHTML}
@@ -14656,23 +14642,16 @@ function _renderMiniPredRow(p, i, series) {
   let dots = "•○○";
   if (p.has_track_history && p.has_type_history) dots = "•••";
   else if (p.has_track_history || p.has_type_history) dots = "••○";
-  const od = _oddsFor(p);
-  const oddsStr = od.display;
-  const modelRank = i + 1;
-  const isValue = od.prob != null && p.odds_rank != null &&
-                  modelRank <= 20 && (p.odds_rank - modelRank) >= 5;
   const ptBadge = p.is_part_time
     ? `<span class="hp-parttime" title="Part-time entry">PT</span>` : "";
-  const valueBadge = isValue ? `<span class="hp-value" title="Model rates ahead of the market">▲</span>` : "";
   const carLabel = carNum ? `#${carNum}` : "—";
   return `
     <details class="hpt-row-wrap">
       <summary class="hpt-row">
         <span class="hp-pos">${i + 1}</span>
         <span class="hp-car" style="background:${carHex};color:${carTxt}">${carLabel}</span>
-        <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}${valueBadge}</span>
+        <span class="hp-name">${escapeHTML(p.driverName)}${ptBadge}</span>
         <span class="hp-stat-cell hp-pred ${tierCls}">${finishVal.toFixed(1)}</span>
-        <span class="hp-stat-cell hp-odds ${isValue ? "hp-odds-value" : ""}">${oddsStr}</span>
       </summary>
       <div class="hpt-row-detail">
         <a class="hpt-detail-link profile-link" href="#/driver/${slug}">full profile →</a>
@@ -14727,7 +14706,6 @@ function renderHomePredictionTrio(year) {
       <div class="hpt-table-head">
         <span></span><span></span><span></span>
         <span class="rps-col-label">FIN</span>
-        <span class="rps-col-label">${computed.oddsLabel === "TOP 5" ? "T5 ODDS" : computed.oddsLabel === "WIN" ? "WIN" : "ODDS"}</span>
       </div>
       <div class="rps-list">${computed.rowsHTML}</div>
     </div>`;
@@ -21794,8 +21772,6 @@ function _renderPredictedFinishCard(series, trackCode, race) {
   try { pred = _computeRacePredictions(series, trackCode, race); } catch (e) { return ""; }
   if (!pred || !pred.byFinish || !pred.byFinish.length) return "";
   const gridOn = pred.gridApplied > 0;
-  const oddsLabel = (typeof _oddsColLabel === "function") ? _oddsColLabel(pred) : "ODDS";
-  const oddsHead = oddsLabel === "TOP 5" ? "T5 ODDS" : (oddsLabel === "WIN" ? "WIN" : "ODDS");
   const top = pred.byFinish.slice(0, 10).map((p, i) => _renderMiniPredRow(p, i, series)).join("");
   // The full field lives here on the race page — "View full prediction" expands
   // rows 11..N inline (same format), rather than sending you to the track page.
@@ -21804,7 +21780,7 @@ function _renderPredictedFinishCard(series, trackCode, race) {
   return `<div class="card rc-card">
     <div class="rc-card-head"><span class="rc-card-title">Predicted Finish</span><span class="rc-card-sub">${gridOn ? "post-qual" : "model"}</span></div>
     <div class="hpt-col">
-      <div class="hpt-table-head"><span></span><span></span><span></span><span class="rps-col-label">FIN</span><span class="rps-col-label">${oddsHead}</span></div>
+      <div class="hpt-table-head"><span></span><span></span><span></span><span class="rps-col-label">FIN</span></div>
       <div class="rps-list">${top}</div>
       ${rest ? `<details class="rcx-fullpred"><summary>View full prediction · ${total} drivers →</summary><div class="rps-list">${rest}</div></details>` : ""}
     </div>

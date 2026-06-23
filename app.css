@@ -8313,7 +8313,7 @@ body.lightbox-open {
 .hpt-race:hover { text-decoration: underline; }
 .hpt-table-head {
   display: grid;
-  grid-template-columns: 20px 32px 1fr 34px 56px;
+  grid-template-columns: 20px 32px 1fr 34px;
   gap: 6px;
   align-items: center;
   padding: 0 4px 4px;
@@ -8330,7 +8330,7 @@ body.lightbox-open {
 .hpt-row-wrap[open] { background: var(--surface-2, rgba(255,255,255,0.02)); }
 .hpt-row {
   display: grid;
-  grid-template-columns: 20px 32px 1fr 34px 56px;
+  grid-template-columns: 20px 32px 1fr 34px;
   gap: 6px;
   align-items: center;
   padding: 5px 4px;
@@ -10590,7 +10590,7 @@ body.lightbox-open {
 /* Right column (Top 10 predicted finish): 7-col grid including the 3
    prediction columns (finish, stage, total) and the evidence dots. */
 .rps-col-finish .rps-col-table-head {
-  grid-template-columns: 24px 42px 1fr 50px 48px 36px 54px;
+  grid-template-columns: 24px 42px 1fr 50px 48px 36px;
 }
 /* Stage points details — 4 cols (no evidence dots column) */
 .rps-stage-table-head {
@@ -10599,7 +10599,7 @@ body.lightbox-open {
 /* Finish rows inside the right column inherit the same template as the
    full-field finish rows below. */
 .rps-col-finish .hp-row-finish {
-  grid-template-columns: 24px 42px 1fr 50px 48px 36px 54px;
+  grid-template-columns: 24px 42px 1fr 50px 48px 36px;
 }
 /* Desktop: .hp-row-extras is transparent — its three inner cells flow
    directly into the parent grid as columns 5/6/7. The "stage / total /
@@ -10826,10 +10826,10 @@ body.lightbox-open {
 }
 /* Inside the full prediction list, rows have stage + total + evidence cols */
 .rps-full-table-head {
-  grid-template-columns: 24px 42px 1fr 50px 48px 36px 54px !important;
+  grid-template-columns: 24px 42px 1fr 50px 48px 36px !important;
 }
 .hp-row-finish {
-  grid-template-columns: 24px 42px 1fr 50px 48px 36px 54px;
+  grid-template-columns: 24px 42px 1fr 50px 48px 36px;
 }
 .hp-evidence-dots {
   font-family: var(--mono);
