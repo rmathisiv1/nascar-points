@@ -125,6 +125,7 @@ def _track_slug(track_name):
     t = re.sub(r"\b(super)?speedway\b", " ", t)
     t = re.sub(r"\braceway( park)?\b", " ", t)
     t = re.sub(r"\bspeedway\b", " ", t)
+    t = re.sub(r"\b(street\s+)?course\b", " ", t)   # 'San Diego Street Course' -> 'san diego'
     t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")
     return _TRACK_ALIASES.get(t, t)
 
