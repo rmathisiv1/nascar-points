@@ -2846,6 +2846,18 @@ async function ensureTrajectorySeasonsLoaded() {
   await Promise.all(years.map(y => loadSeasonIntoCache(y)));
 }
 
+// The season projection leans on cross-season history (predictDriverForRace
+// reads prior years for track / track-type strength). If it simulates before
+// the warmup has loaded those years, it produces a DIFFERENT — and wrong —
+// champion off thin data, which is the "Reddick flashes first, then corrects
+// to Hamlin" bug. Load every available season first so the very first paint is
+// already the settled result. loadSeasonIntoCache early-returns when a year is
+// already cached, so this is cheap once the warmup has run.
+async function ensureProjectionSeasonsLoaded() {
+  const years = (STATE.seasonsAvailable || []).filter(Boolean);
+  await Promise.all(years.map(y => loadSeasonIntoCache(y).catch(() => null)));
+}
+
 function showError(msg) {
   document.querySelectorAll(".view").forEach(v => v.hidden = true);
   const ev = document.getElementById("view-error");
@@ -13536,9 +13548,22 @@ function _computeRacePredictions(series, trackCode, race) {
 const PROJECTION_CACHE = new Map(); // key: "series|year|nSims" → result
 
 // Reset hook — called whenever SEASON_CACHE changes structure so
-// projections stay in sync with the latest available data.
+// projections stay in sync with the latest available data. Clears BOTH the
+// in-memory cache and the persisted localStorage copies: a projection computed
+// during warmup (before all cross-season history loaded) is keyed only by
+// completed-race count, so without purging localStorage that stale, partial-
+// data result would be replayed on the next render even after the analytics
+// cache was correctly invalidated.
 function resetProjectionCache() {
   PROJECTION_CACHE.clear();
+  try {
+    const kill = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf("proj_v") === 0) kill.push(k);
+    }
+    kill.forEach(k => localStorage.removeItem(k));
+  } catch (_) { /* localStorage unavailable — in-memory clear already done */ }
 }
 
 // Standard Normal sample via Box-Muller. Used to add finish-position
@@ -27366,7 +27391,14 @@ function renderProjection() {
 
   host.innerHTML = `<div class="proj-loading">Simulating ${nSims} season rollouts…</div>`;
 
-  setTimeout(() => {
+  // Wait for cross-season history before simulating so the first paint uses the
+  // complete dataset (not a partial-warmup snapshot that yields a different,
+  // wrong champion). Guarded against a stale render: if the user navigated away
+  // while seasons loaded, don't clobber the new view.
+  Promise.resolve(
+    typeof ensureProjectionSeasonsLoaded === "function" ? ensureProjectionSeasonsLoaded() : null
+  ).then(() => {
+    if (STATE.view !== "projection") return;
     try {
       const proj = simulateSeasonRollout(series, year, { nSims });
       if (!proj) {
@@ -27396,7 +27428,7 @@ function renderProjection() {
         <span class="muted" style="font-size:11px;">Check browser console for details.</span>
       </div>`;
     }
-  }, 50);
+  });
 }
 
 function _wireProjectionTooltips() {
