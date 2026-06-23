@@ -13717,7 +13717,11 @@ function simulateSeasonRollout(series, year, opts = {}) {
   // when new race data arrives, not on every page refresh.
   const allRacesForCount = allRacesSorted();
   const completedCount = allRacesForCount.filter(r => (r.results || []).length > 0).length;
-  const PROJ_VERSION = 24;  // v24: project each full-time car's PREDOMINANT (regular) driver, ≥50%
+  const PROJ_VERSION = 25;  // v25: per-race prediction now includes a recent-finishing-form
+                            // (last 8) momentum signal, so the projection reflects who's hot
+                            // now — not just accumulated points. Also retires older cached
+                            // results that could surface a stale champion.
+                            // v24: project each full-time car's PREDOMINANT (regular) driver, ≥50%
                             // of the car's starts — keeps injured full-timers (Bowman/Crews),
                             // excludes part-time fill-ins (Heim). Mfr view uses real NASCAR mfr scale.
                             // v22: drafting-track prediction uses plate-specific history only
@@ -14949,6 +14953,16 @@ function predictDriverForRace(driverName, series, trackCode, actualStart) {
     { name: "track_alltime", label: "All-time here",        w: 0.15, val: allTimeTrimmed },
     { name: "qual_track",    label: "Qual · this track",    w: 0.10, val: trackQual },
     { name: "pace_form",     label: "Pace form (last 5)",   w: 0.15, val: paceForm },
+    // Recent FINISHING form this season (last 8 results) — the momentum signal.
+    // Pace tells us how fast the car is; this tells us how the driver is actually
+    // FINISHING right now. Without it the projection leans on track history +
+    // accumulated points and crowns the current points leader even when a hotter
+    // driver has clearly taken over (e.g. Hamlin red-hot but Reddick projected
+    // champ purely on an 8-point lead). A meaningful weight here lets momentum
+    // compound across the remaining schedule, aligning the season projection with
+    // the recent-form read in the power rankings. Tunable: the 0.25 below.
+    { name: "recent_form",   label: "Recent form (last 8)", w: 0.25,
+      val: (form8 && Number.isFinite(form8.avg_finish)) ? form8.avg_finish : null },
   ];
   // Post-qualifying: the ACTUAL starting position for THIS race is a far better
   // qualifying read than the driver's historical track qual, so retire the
