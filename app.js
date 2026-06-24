@@ -4768,16 +4768,14 @@ function _isCleanFormRace(r) {
   }
   // Ran up front but finished well off that pace → almost certainly a late
   // incident (tire, contact, pit-road problem), not the car's true speed. We
-  // tier it: a driver who actually LED laps was running at the very front, so a
-  // finish of P15 or worse is a clear fluke; a car that merely ran a big share of
-  // laps inside the top 15 (without leading) gets a slightly deeper P20 line to
-  // avoid clipping a genuine fade. This protects a driver who, say, leads late,
-  // blows a tire and limps home in the teens/twenties from having that one result
-  // tank their form rating (the old rule only caught getting collected at P30+).
-  const ledUpFront = (r.lapsLed || 0) >= 5;
-  const ranTop15   = r.pct_top15 != null && r.pct_top15 >= 40;
-  if (ledUpFront && r.finish != null && r.finish >= 15) return false;
-  if (ranTop15   && r.finish != null && r.finish >= 20) return false;
+  // measure "ran up front" by SHARE OF LAPS inside the top 15, not laps led —
+  // leading a few laps is noisy (pit-cycle timing, staying out on old tires, one
+  // green-flag stop) and doesn't mean the car was fast. A car that genuinely ran
+  // up front for a big chunk of the race (≥45% of laps top-15) yet finished P20
+  // or worse almost certainly hit trouble late, so we drop that race from the
+  // form window rather than let one fluke tank the rating. The finish threshold
+  // (P20) keeps a genuine fade to the mid-teens in the sample. Tunable below.
+  if (r.pct_top15 != null && r.pct_top15 >= 45 && r.finish != null && r.finish >= 20) return false;
   return true;
 }
 
@@ -13434,8 +13432,13 @@ function _gridStartsForRace(race, series) {
 }
 
 function _computeRacePredictions(series, trackCode, race) {
-  const entryList = (typeof getEntryList === "function")
-    ? getEntryList(series, trackCode) : null;
+  // Use only entries with a car number assigned — the same gate as the entry-
+  // list link/tab. A preliminary list can carry driver names (including a one-off
+  // part-time sub, e.g. a Truck regular entered in a Cup car) before car numbers
+  // are set. Projecting from that surfaces drivers who may not actually be in the
+  // field. Until a real numbered list exists, fall back to full-time regulars.
+  const entryList = (typeof renderableEntryList === "function")
+    ? renderableEntryList(series, trackCode) : null;
 
   let roster;  // [{ driverName, entity|null, isPartTime, win_prob }]
   if (entryList && entryList.length) {
