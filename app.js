@@ -3490,6 +3490,15 @@ function raceBack(e) {
   else location.hash = "#/schedule";
 }
 
+// Generic back for the takeover pages (driver / team / crew-chief profiles).
+// Returns the user wherever they came from; falls back to standings if the
+// page was opened cold via a direct link (no in-app history to pop).
+function pageBack(e) {
+  if (e) e.preventDefault();
+  if (window.history.length > 1) window.history.back();
+  else location.hash = "#/standings";
+}
+
 // Toggle handler: record the choice for THIS page, then apply. Reuses
 // applySeriesChangeGlobal for the heavy lifting (clamp season, load data,
 // reset cache, repopulate pickers, render). If the page is already on that
@@ -23401,8 +23410,12 @@ function renderTeamPage() {
   }
 
   const era = teamLabelForEra(teamCode, STATE.season);
-  if (titleEl) titleEl.textContent = era.full || teamCode;
-  if (subEl) subEl.textContent = `${STATE.season} ${STATE.series} · ${era.abbr}`;
+  // The team page renders its own hero card (with the name) inside #team-host,
+  // so blank the outer view-head — a CSS rule hides the now-empty bar, the same
+  // way the crew-chief page does. (Previously the name was set here but rendered
+  // blank, leaving a stray bordered strip above the hero with no name in it.)
+  if (titleEl) titleEl.textContent = "";
+  if (subEl) subEl.textContent = "";
 
   // Compute career stats early — reused for hero card, career strip,
   // and best-driver panels further down.
@@ -23804,6 +23817,10 @@ function renderTeamPage() {
   // specific data: years active, key career numbers, championship pill.
   const heroCardHTML = `
     <div class="tm-hero-card">
+      <div class="tm-hero-card-head">
+        <h1 class="tm-hero-name">${escapeHTML(era.full || teamCode)}</h1>
+        <span class="tm-hero-context">${STATE.season} ${STATE.series} · ${escapeHTML(era.abbr || teamCode)}</span>
+      </div>
       <div class="tm-hero-card-main">
         <div class="tm-hero-card-stats">
           ${yearsRangeStr ? `<div class="tm-hero-stat">

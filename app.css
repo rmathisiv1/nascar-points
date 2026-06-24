@@ -9983,11 +9983,37 @@ body.lightbox-open {
   border-left: 3px solid var(--accent);
   border-radius: 4px;
 }
-/* The CC page renders its own hero card inside #cc-host and blanks the
-   outer view-head's h1/sub on render. Without this rule the styled-but-
+/* The CC and team pages render their own hero card inside the host and blank
+   the outer view-head's h1/sub on render. Without this rule the styled-but-
    empty bar shows up as a thin oxblood-bordered strip above the real hero. */
-#view-cc .view-head:has(h1:empty) {
+#view-cc .view-head:has(h1:empty),
+#view-team .view-head:has(h1:empty) {
   display: none;
+}
+/* Team hero card header — the team name + season/series context, matching the
+   crew-chief hero treatment so every profile-style page leads with its name. */
+.tm-hero-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.tm-hero-name {
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  margin: 0;
+}
+.tm-hero-context {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--muted);
 }
 #view-team .view-head h1,
 #view-cc   .view-head h1 {
