@@ -125,7 +125,6 @@ def _track_slug(track_name):
     t = re.sub(r"\b(super)?speedway\b", " ", t)
     t = re.sub(r"\braceway( park)?\b", " ", t)
     t = re.sub(r"\bspeedway\b", " ", t)
-    t = re.sub(r"\b(street\s+)?course\b", " ", t)   # 'San Diego Street Course' -> 'san diego'
     t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")
     return _TRACK_ALIASES.get(t, t)
 
@@ -909,11 +908,21 @@ DOC_PDF_MARKERS = {
 }
 
 
-def find_doc_pdf(doc_url, doc_type):
+def find_doc_pdf(doc_url, doc_type, year=None):
     """Resolve a resource's PDF. Some resource links are already the PDF (e.g.
     crew rosters); otherwise fetch the doc page and pick the PDF whose filename
-    matches the doc type, falling back to the first uploaded PDF."""
+    matches the doc type, falling back to the first uploaded PDF.
+
+    `year` (the race's season) guards against grabbing the WRONG season's file.
+    Jayski stamps the year into roster/doc URLs (e.g. .../2020/10/8/2020-29nxs-
+    rosters.pdf), and an old race's hub page can still surface a current-season
+    doc link. Without this check a 2020 race could store the 2025 roster — which
+    is exactly the cross-year contamination we hit. If any candidate carries a
+    DIFFERENT 4-digit year than the race, it's dropped; if that leaves nothing
+    (only wrong-year files exist), we return None rather than store a mismatch."""
     if doc_url.split("?")[0].lower().endswith(".pdf"):
+        if year and _pdf_year_mismatch(doc_url, year):
+            return None
         return doc_url
     html = _get(doc_url)
     if not html:
@@ -921,6 +930,15 @@ def find_doc_pdf(doc_url, doc_type):
     pdfs = re.findall(r'https?://[^\s"\'<>]+?\.pdf', html, re.I)
     if not pdfs:
         return None
+    if year:
+        ystr = str(year)
+        # Keep PDFs that either carry no year or carry the race's year; drop the
+        # rest. If every candidate is a wrong-year file, refuse (return None).
+        ok = [p for p in pdfs if not _pdf_year_mismatch(p, year)]
+        if ok:
+            pdfs = ok
+        elif any(re.search(r'20\d\d', p) for p in pdfs):
+            return None
     markers = DOC_PDF_MARKERS.get(doc_type, [])
     for p in pdfs:
         if any(mk in p.lower() for mk in markers):
@@ -929,6 +947,14 @@ def find_doc_pdf(doc_url, doc_type):
         if "/uploads/" in p.lower():
             return p
     return pdfs[0]
+
+
+def _pdf_year_mismatch(pdf_url, year):
+    """True if the URL contains 4-digit year(s) and the race year isn't among
+    them — i.e. this is some OTHER season's document. URLs with no year are
+    treated as OK (can't disprove)."""
+    yrs = re.findall(r'20\d\d', pdf_url)
+    return bool(yrs) and (str(year) not in yrs)
 
 
 def discover_race_docs(series, year, track_name, want=None, race_date=None):
@@ -950,7 +976,7 @@ def discover_race_docs(series, year, track_name, want=None, race_date=None):
         doc_url = resources.get(key)
         if not doc_url:
             continue
-        pdf = find_doc_pdf(doc_url, key)
+        pdf = find_doc_pdf(doc_url, key, year=year)
         if pdf:
             pdfs[key] = pdf
         time.sleep(1.0)   # be polite; avoid the rapid-fire Cloudflare block
