@@ -13067,6 +13067,8 @@ body.lightbox-open {
 .pers-name-cell { font-weight: 600; color: var(--text); white-space: nowrap; }
 .pers-teams-cell { font-size: 12px; color: var(--text); white-space: nowrap; }
 .pers-more-tag { font-size: 10px; color: var(--muted); }
+.pers-info { font-size: 11px; color: var(--muted); cursor: help; margin-left: 3px; opacity: 0.75; }
+.pers-info:hover { color: var(--accent); opacity: 1; }
 .pers-car-cell { font-family: var(--mono); font-size: 11px; color: var(--text); white-space: nowrap; }
 .pers-hist-row td {
   font-size: 11px;

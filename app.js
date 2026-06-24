@@ -25946,6 +25946,19 @@ function _personnelTeamGridHTML() {
 // Positions/teams are OR-within-filter, AND-across-filters. The row surfaces
 // the PRIMARY team (most races this scope); other teams/cars live in the
 // expandable breakdown.
+// Canonical race key for counting. Normally one key per (year, series, track,
+// date). EXCEPTION: the February Daytona Speedweeks — the Duels (qualifying
+// races, ~Feb 15) and the Daytona 500 (~Feb 19) are one race WEEKEND, so they
+// fold to a single key and count once. Narrow by design: only Daytona in Feb.
+function _raceKey(a) {
+  const trackL = String(a.track || "").toLowerCase();
+  const mo = String(a.date || "").slice(5, 7);
+  if (trackL.includes("daytona") && mo === "02") {
+    return a.year + a.series + "daytona-speedweeks";
+  }
+  return a.year + a.series + a.track + a.date;
+}
+
 function _personnelRows() {
   const st = STATE.personnel || _personnelDefaults();
   const series = st.series || "all";
@@ -25960,11 +25973,21 @@ function _personnelRows() {
     if (!apps.length) continue;
     if (positions.length && !apps.some(a => positions.includes(a.position))) continue;
     if (teams.length && !apps.some(a => teams.includes(a.team))) continue;
-    const rk = a => a.year + a.series + a.track + a.date;
+    const rk = _raceKey;
     const races = new Set(apps.map(rk)).size;
     const wins = new Set(apps.filter(a => a.won).map(rk)).size;
     const top5 = new Set(apps.filter(a => a.top5).map(rk)).size;
     const posList = Array.from(new Set(apps.map(a => a.position).filter(Boolean)));
+    // Primary position = the role held in the most distinct races; shown in the
+    // header cell so a multi-role person reads as their main job (e.g. Engineer).
+    const posRaces = new Map();
+    for (const a of apps) {
+      if (!a.position) continue;
+      let s = posRaces.get(a.position); if (!s) { s = new Set(); posRaces.set(a.position, s); }
+      s.add(rk(a));
+    }
+    let primaryPosition = "", posN = -1;
+    for (const [pos, set] of posRaces) if (set.size > posN) { primaryPosition = pos; posN = set.size; }
     // Primary team = most distinct races; its cars shown in the main row.
     const teamRaces = new Map();
     for (const a of apps) {
@@ -25977,7 +26000,7 @@ function _personnelRows() {
     const teamCount = teamRaces.size;
     const primaryCars = Array.from(new Set(apps.filter(a => a.team === primaryTeam).map(a => a.car).filter(c => c !== "" && c != null)))
       .sort((m, n) => (parseInt(m, 10) || 999) - (parseInt(n, 10) || 999));
-    out.push({ key, name: p.name, apps, races, wins, top5, positions: posList, primaryTeam, teamCount, primaryCars });
+    out.push({ key, name: p.name, apps, races, wins, top5, positions: posList, primaryPosition, primaryTeam, teamCount, primaryCars });
   }
   const sort = st.sort || "races";
   const cmp = {
@@ -26095,47 +26118,61 @@ function _renderPersonnelList() {
 
   const body = slice.map((r, i) => {
     const rank = rankBase + i + 1;
-    const positions = r.positions.slice(0, 3).join(", ") + (r.positions.length > 3 ? "\u2026" : "");
+    const positions = escapeHTML(r.primaryPosition || "\u2014") + (r.positions.length > 1 ? ` <span class="pers-more-tag">+${r.positions.length - 1}</span>` : "");
     const teamCell = escapeHTML(r.primaryTeam || "\u2014") + (r.teamCount > 1 ? ` <span class="pers-more-tag">+${r.teamCount - 1}</span>` : "");
     const open = !!st.open[r.key];
     const main = `<tr class="pers-row${open ? " open" : ""}" onclick="personnelToggleRow('${r.key.replace(/'/g, "\\'")}')">
         <td class="num alltime-rank-cell">${rank}</td>
         <td class="pers-name-cell"><span class="pers-caret">${open ? "\u25be" : "\u25b8"}</span>${escapeHTML(r.name)}</td>
-        <td>${escapeHTML(positions)}</td>
+        <td>${positions}</td>
         <td class="pers-teams-cell">${teamCell}</td>
         <td class="pers-car-cell">${escapeHTML(carLabel(r.primaryCars))}</td>
         <td class="num">${r.races}</td>
         <td class="num">${r.top5 || ""}</td>
         <td class="num"><b>${r.wins || ""}</b></td></tr>`;
     if (!open) return main;
-    // Breakdown: ONE row per (series, team, position) with all cars from that
-    // grouping combined. Each group row is itself expandable into its individual
-    // races. Columns align with the main table.
+    // Breakdown: ONE row per (series, team). Within a group the dominant role and
+    // dominant car (by race count) are shown; any other roles/cars are tucked
+    // behind a hover ⓘ. Each group row expands into its individual races. Races
+    // are counted via _raceKey so Daytona Speedweeks folds to one.
     const groups = new Map();
     for (const a of r.apps) {
-      const gk = a.series + " | " + (a.team || "\u2014") + " | " + (a.position || "\u2014");
+      const gk = a.series + " | " + (a.team || "\u2014");
       let g = groups.get(gk);
-      if (!g) { g = { gk, series: a.series, team: a.team || "\u2014", position: a.position || "\u2014", cars: new Set(), years: new Set(), byRace: new Map() }; groups.set(gk, g); }
-      const id = a.year + a.series + a.track + a.date;
-      if (!g.byRace.has(id)) g.byRace.set(id, a);   // dedupe roster revisions of the same race
+      if (!g) { g = { gk, series: a.series, team: a.team || "\u2014", years: new Set(), byRace: new Map(), posRaces: new Map(), carRaces: new Map() }; groups.set(gk, g); }
+      const id = _raceKey(a);
+      if (!g.byRace.has(id)) g.byRace.set(id, a);   // dedupe roster revisions / Speedweeks
       if (a.year) g.years.add(a.year);
-      if (a.car !== "" && a.car != null) g.cars.add(a.car);
+      // Tally roles and cars by distinct race so "dominant" means most-raced.
+      if (a.position) { let s = g.posRaces.get(a.position); if (!s) { s = new Set(); g.posRaces.set(a.position, s); } s.add(id); }
+      if (a.car !== "" && a.car != null) { let s = g.carRaces.get(a.car); if (!s) { s = new Set(); g.carRaces.set(a.car, s); } s.add(id); }
     }
     const yrLabel = ys => { const arr = Array.from(ys).sort((m, n) => m - n); return !arr.length ? "" : (arr.length === 1 ? String(arr[0]) : `${arr[0]}\u2013${arr[arr.length - 1]}`); };
-    const carsLabel = cs => { const arr = Array.from(cs).sort((m, n) => (parseInt(m, 10) || 999) - (parseInt(n, 10) || 999)); return arr.length ? arr.map(c => "#" + c).join(", ") : "\u2014"; };
+    // Rank a Map(label -> Set(raceIds)) by race count; return ordered labels.
+    const rankByRaces = m => Array.from(m.entries()).sort((x, y) => y[1].size - x[1].size || String(x[0]).localeCompare(String(y[0]))).map(e => e[0]);
+    // Dominant value + a hover ⓘ listing the rest (formatted via fmt).
+    const domWithInfo = (m, fmt) => {
+      const ordered = rankByRaces(m);
+      if (!ordered.length) return "\u2014";
+      const head = fmt(ordered[0]);
+      if (ordered.length === 1) return head;
+      const rest = ordered.slice(1).map(fmt).join(", ");
+      return `${head} <span class="pers-info" title="${escapeHTML("also: " + rest)}">\u24d8</span>`;
+    };
     const gr = Array.from(groups.values()).sort((x, y) => y.byRace.size - x.byRace.size);
     const detail = gr.map(g => {
       const races = Array.from(g.byRace.values());
       const wins = races.filter(a => a.won).length;
       const top5 = races.filter(a => a.top5).length;
+      const domPosition = rankByRaces(g.posRaces)[0] || "\u2014";
       const gKey = r.key + "::" + g.gk;
       const gOpen = !!st.openGroups[gKey];
       const groupRow = `<tr class="pers-hist-row${gOpen ? " open" : ""}" onclick="personnelToggleGroup('${gKey.replace(/'/g, "\\'")}')">
         <td></td>
         <td class="pers-hist-when"><span class="pers-caret pers-caret-sub">${gOpen ? "\u25be" : "\u25b8"}</span>${escapeHTML(g.series)} \u00b7 ${yrLabel(g.years)}</td>
-        <td>${escapeHTML(g.position)}</td>
+        <td>${domWithInfo(g.posRaces, p => escapeHTML(p))}</td>
         <td>${escapeHTML(g.team)}</td>
-        <td class="pers-car-cell">${carsLabel(g.cars)}</td>
+        <td class="pers-car-cell">${domWithInfo(g.carRaces, c => "#" + escapeHTML(String(c)))}</td>
         <td class="num">${races.length}</td>
         <td class="num">${top5 || ""}</td>
         <td class="num">${wins || ""}</td></tr>`;
@@ -26151,7 +26188,7 @@ function _renderPersonnelList() {
           return `<tr class="pers-race-row">
             <td></td>
             <td class="pers-race-when">${when}</td>
-            <td>${escapeHTML(a.position || g.position)}</td>
+            <td>${escapeHTML(a.position || domPosition)}</td>
             <td>${escapeHTML(a.team || g.team)}</td>
             <td class="pers-car-cell">${carTag}</td>
             <td class="num"></td>

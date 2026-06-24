@@ -80,9 +80,9 @@ SERIES_JAYSKI = {
     #   Truck  -> truck-series, official PREENTNUM sheet
     # The on-site search is the primary finder; sections here scope the picker
     # and feed the index-scrape / construct fallbacks.
-    "NCS": {"sections": ["nascar-cup-series", "cup-series"],            "abbrs": ["nccs", "ncs"]},
-    "NOS": {"sections": ["oreilly-auto-parts-series", "xfinity-series"], "abbrs": ["noaps", "nxs"]},
-    "NTS": {"sections": ["truck-series"],                               "abbrs": ["ncts"]},
+    "NCS": {"sections": ["nascar-cup-series", "cup-series"],            "abbrs": ["nccs", "ncs"],  "labels": ["cup-series", "nascar-cup-series"]},
+    "NOS": {"sections": ["oreilly-auto-parts-series", "xfinity-series"], "abbrs": ["noaps", "nxs"], "labels": ["xfinity-series", "nascar-xfinity-series"]},
+    "NTS": {"sections": ["truck-series"],                               "abbrs": ["ncts"],         "labels": ["truck-series", "craftsman-truck-series", "nascar-craftsman-truck-series"]},
 }
 
 # NASCAR's track_name -> the token Jayski uses in its entry-list slug. Most are
@@ -110,6 +110,14 @@ _TRACK_ALIASES = {
     "martinsville speedway": "martinsville",
     "nashville superspeedway": "nashville",
     "world wide technology": "gateway",
+    # New / oddly-slugged venues: Jayski uses the circuit's own name, not the city.
+    "mexico city": "autodromo-hermanos-rodriguez",
+    "autodromo hermanos rodriguez": "autodromo-hermanos-rodriguez",
+    "autódromo hermanos rodríguez": "autodromo-hermanos-rodriguez",
+    "chicago street course": "chicago",
+    "chicago street race": "chicago",
+    "grant park": "chicago",
+    "san diego street course": "san-diego",
 }
 
 
@@ -744,14 +752,25 @@ def discover_entry_url(series, year, track_name, verbose=True, race_date=None):
             log(f"index-scrape hit ({sec}/): {hit}")
             return hit
 
-    # --- Strategy 4: construct from the known pattern, verify PDF present ---
+    # --- Strategy 4: construct from known patterns, verify PDF present ---
+    # Real Jayski format is track-first with a literal series label, e.g.
+    #   oreilly-auto-parts-series/2025-chicago-xfinity-series-entry-list/
+    #   oreilly-auto-parts-series/2025-autodromo-hermanos-rodriguez-xfinity-series-entry-list/
+    # (the older {abbr}-{slug} guess, e.g. 2025-noaps-chicago-..., does NOT exist
+    # on the site — that mismatch was silently skipping new/oddly-named venues).
+    # Try the real label templates first, then the legacy abbr form as a backstop.
+    labels = cfg.get("labels", [])
+    candidates = []
     for sec in sections:
+        for lab in labels:
+            candidates.append(f"https://www.jayski.com/{sec}/{yr}-{slug}-{lab}-entry-list/")
         for ab in abbrs:
-            cand = f"https://www.jayski.com/{sec}/{yr}-{ab}-{slug}-entry-list/"
-            if find_pdf_url(cand):
-                log(f"constructed hit: {cand}")
-                return cand
-            log(f"constructed miss: {cand}")
+            candidates.append(f"https://www.jayski.com/{sec}/{yr}-{ab}-{slug}-entry-list/")
+    for cand in candidates:
+        if find_pdf_url(cand):
+            log(f"constructed hit: {cand}")
+            return cand
+        log(f"constructed miss: {cand}")
 
     log("no entry-list URL found by any strategy")
     return None
@@ -825,6 +844,22 @@ def discover_race_page(series, year, track_name, verbose=True, race_date=None):
         if track_match(u):
             log(f"via search: {u}")
             return u
+
+    # Construct the hub directly. Real format is label-FIRST, track in the middle:
+    #   oreilly-auto-parts-series/2025-nascar-xfinity-series-dover-race-page/
+    # Try the label templates, then a track-first variant, verifying each resolves.
+    cfg = SERIES_JAYSKI.get((series or "").upper(), {})
+    labels = cfg.get("labels", [])
+    for sec in (sections or cfg.get("sections", [])):
+        cands = []
+        for lab in labels:
+            cands.append(f"https://www.jayski.com/{sec}/{year}-{lab}-{slug}-race-page/")
+            cands.append(f"https://www.jayski.com/{sec}/{year}-{slug}-{lab}-race-page/")
+        for cand in cands:
+            if _get(cand):
+                log(f"constructed hub hit: {cand}")
+                return cand
+
     log("no track-matching race page found")
     return None
 
