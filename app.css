@@ -13077,7 +13077,22 @@ body.lightbox-open {
   border-top: 0;
 }
 .pers-hist-row td:first-child { border-left: 2px solid var(--accent); width: 0; padding: 0; }
+.pers-hist-row { cursor: pointer; }
+.pers-hist-row:hover td { background: var(--bg-3, var(--card)); }
+.pers-caret-sub { font-size: 8px; }
 .pers-hist-when { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+/* Third level: one row per individual race under an opened group. Indented and
+   dimmer than the group rows so the hierarchy reads clearly. */
+.pers-race-row td {
+  font-size: 10.5px;
+  color: var(--dim, var(--muted));
+  background: var(--bg-2);
+  padding-top: 3px;
+  padding-bottom: 3px;
+  border-top: 0;
+}
+.pers-race-row td:first-child { border-left: 2px solid var(--accent); width: 0; padding: 0; }
+.pers-race-when { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; padding-left: 22px !important; }
 
 
 /* Entry-list quick links (race hero + home upcoming tile) */

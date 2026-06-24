@@ -25796,7 +25796,7 @@ function _seriesCarDriverSet(year, series) {
 }
 
 function _personnelDefaults() {
-  return { query: "", series: "all", positions: [], teams: [], teamPopupSeries: "all", sort: "races", page: 0, pageSize: 100, open: {}, filterOpen: false };
+  return { query: "", series: "all", positions: [], teams: [], teamPopupSeries: "all", sort: "races", page: 0, pageSize: 100, open: {}, openGroups: {}, filterOpen: false };
 }
 function setPersonnelFilter(kind, val) {
   STATE.personnel = STATE.personnel || _personnelDefaults();
@@ -25821,6 +25821,13 @@ function personnelToggleRow(key) {
   STATE.personnel = STATE.personnel || _personnelDefaults();
   STATE.personnel.open = STATE.personnel.open || {};
   STATE.personnel.open[key] = !STATE.personnel.open[key];
+  _renderPersonnelList();
+}
+// Toggle an individual (series·team·position) group open to list its races.
+function personnelToggleGroup(key) {
+  STATE.personnel = STATE.personnel || _personnelDefaults();
+  STATE.personnel.openGroups = STATE.personnel.openGroups || {};
+  STATE.personnel.openGroups[key] = !STATE.personnel.openGroups[key];
   _renderPersonnelList();
 }
 function personnelSort(key) {
@@ -26051,6 +26058,7 @@ function _renderPersonnelList() {
   if (!wrap || !PERSONNEL_INDEX) return;
   const st = STATE.personnel || _personnelDefaults();
   st.open = st.open || {};
+  st.openGroups = st.openGroups || {};
   const rows = _personnelRows();
   const sort = st.sort || "races";
 
@@ -26082,28 +26090,57 @@ function _renderPersonnelList() {
         <td class="num"><b>${r.wins || ""}</b></td></tr>`;
     if (!open) return main;
     // Breakdown: ONE row per (series, team, position) with all cars from that
-    // grouping combined. Columns align with the main table.
+    // grouping combined. Each group row is itself expandable into its individual
+    // races. Columns align with the main table.
     const groups = new Map();
     for (const a of r.apps) {
       const gk = a.series + " | " + (a.team || "\u2014") + " | " + (a.position || "\u2014");
       let g = groups.get(gk);
-      if (!g) { g = { series: a.series, team: a.team || "\u2014", position: a.position || "\u2014", cars: new Set(), races: new Set(), wins: new Set(), top5: new Set(), years: new Set() }; groups.set(gk, g); }
+      if (!g) { g = { gk, series: a.series, team: a.team || "\u2014", position: a.position || "\u2014", cars: new Set(), years: new Set(), byRace: new Map() }; groups.set(gk, g); }
       const id = a.year + a.series + a.track + a.date;
-      g.races.add(id); if (a.won) g.wins.add(id); if (a.top5) g.top5.add(id);
-      if (a.year) g.years.add(a.year); if (a.car !== "" && a.car != null) g.cars.add(a.car);
+      if (!g.byRace.has(id)) g.byRace.set(id, a);   // dedupe roster revisions of the same race
+      if (a.year) g.years.add(a.year);
+      if (a.car !== "" && a.car != null) g.cars.add(a.car);
     }
     const yrLabel = ys => { const arr = Array.from(ys).sort((m, n) => m - n); return !arr.length ? "" : (arr.length === 1 ? String(arr[0]) : `${arr[0]}\u2013${arr[arr.length - 1]}`); };
     const carsLabel = cs => { const arr = Array.from(cs).sort((m, n) => (parseInt(m, 10) || 999) - (parseInt(n, 10) || 999)); return arr.length ? arr.map(c => "#" + c).join(", ") : "\u2014"; };
-    const gr = Array.from(groups.values()).sort((x, y) => y.races.size - x.races.size);
-    const detail = gr.map(g =>
-      `<tr class="pers-hist-row"><td></td>
-        <td class="pers-hist-when">${escapeHTML(g.series)} \u00b7 ${yrLabel(g.years)}</td>
+    const gr = Array.from(groups.values()).sort((x, y) => y.byRace.size - x.byRace.size);
+    const detail = gr.map(g => {
+      const races = Array.from(g.byRace.values());
+      const wins = races.filter(a => a.won).length;
+      const top5 = races.filter(a => a.top5).length;
+      const gKey = r.key + "::" + g.gk;
+      const gOpen = !!st.openGroups[gKey];
+      const groupRow = `<tr class="pers-hist-row${gOpen ? " open" : ""}" onclick="personnelToggleGroup('${gKey.replace(/'/g, "\\'")}')">
+        <td></td>
+        <td class="pers-hist-when"><span class="pers-caret pers-caret-sub">${gOpen ? "\u25be" : "\u25b8"}</span>${escapeHTML(g.series)} \u00b7 ${yrLabel(g.years)}</td>
         <td>${escapeHTML(g.position)}</td>
         <td>${escapeHTML(g.team)}</td>
         <td class="pers-car-cell">${carsLabel(g.cars)}</td>
-        <td class="num">${g.races.size}</td>
-        <td class="num">${g.top5.size || ""}</td>
-        <td class="num">${g.wins.size || ""}</td></tr>`).join("");
+        <td class="num">${races.length}</td>
+        <td class="num">${top5 || ""}</td>
+        <td class="num">${wins || ""}</td></tr>`;
+      if (!gOpen) return groupRow;
+      // One row per individual race in this group, newest first.
+      const raceRows = races
+        .slice()
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+        .map(a => {
+          const carTag = (a.car !== "" && a.car != null) ? "#" + escapeHTML(String(a.car)) : "\u2014";
+          const fin = a.finish != null ? ` \u00b7 P${a.finish}` : "";
+          const when = `${escapeHTML(a.track || "\u2014")}${a.date ? " \u00b7 " + escapeHTML(a.date) : ""}${fin}`;
+          return `<tr class="pers-race-row">
+            <td></td>
+            <td class="pers-race-when">${when}</td>
+            <td>${escapeHTML(a.position || g.position)}</td>
+            <td>${escapeHTML(a.team || g.team)}</td>
+            <td class="pers-car-cell">${carTag}</td>
+            <td class="num"></td>
+            <td class="num">${a.top5 ? 1 : ""}</td>
+            <td class="num">${a.won ? 1 : ""}</td></tr>`;
+        }).join("");
+      return groupRow + raceRows;
+    }).join("");
     return main + detail;
   }).join("");
 
