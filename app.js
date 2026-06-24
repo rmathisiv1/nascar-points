@@ -25617,6 +25617,19 @@ function buildPersonnelIndex() {
         const round = rec.round || null;
         for (const car of roster) {
           const team = _canonTeamName(car.team || "");
+          // Cross-series mis-filing guard. A roster is sometimes filed under the
+          // wrong series — a Cup/Truck race inheriting the same-weekend Xfinity
+          // roster from the shared Jayski hub — which would credit that crew with
+          // phantom appearances in a series they never worked. If the results for
+          // THIS series/date show car #N driven by someone other than the driver
+          // this roster lists for #N, the roster belongs to a different series, so
+          // skip it. Fails OPEN: if results aren't loaded for this series/date (or
+          // the car/driver is blank), we can't verify and keep the appearance.
+          const dmap = _carDriverMapFor(+yr, series, date, track);
+          if (dmap && car.car != null && car.driver) {
+            const actual = dmap.get(String(car.car));
+            if (actual && actual !== normalizeDriverName(car.driver)) continue;
+          }
           const finMap = _finishMapFor(+yr, series, date, track);
           const finish = (finMap && car.car != null) ? finMap.get(String(car.car)) : undefined;
           const won = finish === 1;
@@ -25664,6 +25677,33 @@ function _finishMapFor(year, series, date, track) {
     }
   }
   _RACE_FINISH_CACHE.set(ck, map);
+  return map;
+}
+
+// Car number → actual driver (normalized) for a given series/date/track, from
+// the loaded results. Used by the personnel index to detect rosters mis-filed
+// under the wrong series: if a roster filed under series S lists car #20 for
+// driver "Brandon Jones", but the S results for that date show #20 driven by
+// someone else, the roster belongs to a different series and is skipped.
+const _RACE_DRIVER_CACHE = new Map();
+function _carDriverMapFor(year, series, date, track) {
+  const ck = `${year}|${series}|${date}|${track}`;
+  if (_RACE_DRIVER_CACHE.has(ck)) return _RACE_DRIVER_CACHE.get(ck);
+  const blk = SEASON_CACHE[year] && SEASON_CACHE[year][series];
+  let race = null;
+  if (blk && blk.races) {
+    const wantTrack = String(track || "").toLowerCase().trim();
+    race = blk.races.find(r => r.date && date && String(r.date).slice(0, 10) === date)
+        || blk.races.find(r => wantTrack && String(r.track || "").toLowerCase().trim() === wantTrack);
+  }
+  let map = null;
+  if (race && Array.isArray(race.results)) {
+    map = new Map();
+    for (const d of race.results) {
+      if (d.car_number != null && d.driver) map.set(String(d.car_number), normalizeDriverName(d.driver));
+    }
+  }
+  _RACE_DRIVER_CACHE.set(ck, map);
   return map;
 }
 
