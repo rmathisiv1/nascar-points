@@ -25704,16 +25704,15 @@ function buildPersonnelIndex() {
           // wrong series — a Cup/Truck race inheriting the same-weekend Xfinity
           // roster from the shared Jayski hub — crediting that crew with phantom
           // appearances in a series they never worked. Keep this car's roster only
-          // if its (car, driver) pair actually raced THIS series that season. The
-          // season-level check tolerates a one-off substitute on the crew's own
-          // car (the regular driver is still in the set from other starts) while
-          // rejecting a car/driver that never ran this series (the leak). Fails
-          // OPEN: if results for this series-year aren't loaded (set null/empty) or
-          // the car/driver is blank, we can't verify and keep the appearance.
-          const cdset = _seriesCarDriverSet(+yr, series);
-          if (cdset && cdset.size > 0 && car.car != null && car.driver) {
-            const cdKey = String(car.car) + "|" + normalizeDriverName(car.driver);
-            if (!cdset.has(cdKey)) continue;
+          // if its listed driver actually raced THIS series that season. Keying on
+          // the driver (not the car number) avoids wrongly dropping real entries
+          // when a roster's car number doesn't line up with the results (shared
+          // crew sheets, multi-car crew chiefs). Fails OPEN: if results for this
+          // series-year aren't loaded (set null/empty) or the driver is blank, we
+          // can't verify and keep the appearance.
+          const dset = _seriesDriverSet(+yr, series);
+          if (dset && dset.size > 0 && car.driver) {
+            if (!dset.has(normalizeDriverName(car.driver))) continue;
           }
           const finMap = _finishMapFor(+yr, series, date, track);
           const finish = (finMap && car.car != null) ? finMap.get(String(car.car)) : undefined;
@@ -25765,19 +25764,20 @@ function _finishMapFor(year, series, date, track) {
   return map;
 }
 
-// Set of "car|driver" pairs that actually raced in a given series-year, from the
-// loaded results. Used by the personnel index to detect rosters mis-filed under
-// the wrong series: a roster filed under series S for car #20 / "Brandon Jones"
-// is legitimate only if (#20, Brandon Jones) actually competed in S that season.
-// Matching at the SEASON level (not per race) tolerates a one-week substitute
-// driver on the crew's own car — the regular driver is still in the set from his
-// other starts — while still rejecting a car/driver pair that never ran S at all
-// (the cross-series leak). Returns null when results for that series-year aren't
-// loaded (guard then fails open).
-const _SERIES_CARDRIVER_CACHE = new Map();
-function _seriesCarDriverSet(year, series) {
+// Set of normalized DRIVER names that actually raced a given series-year, from
+// the loaded results. Used by the personnel index to detect rosters mis-filed
+// under the wrong series: a roster filed under series S is legitimate only if its
+// listed driver actually competed in S that season. Keying on the driver (not
+// car number) is deliberate — a crew's car can carry a different number across
+// roster sheets vs results, and a crew chief may run two cars, so a car+driver
+// key wrongly drops real appearances. "Did this driver race this series this
+// year" cleanly separates, e.g., a NOS #20 (Brandon Jones, who races NOS) from a
+// NOS roster leaked onto a Cup/Truck race (Brandon Jones never raced those).
+// Returns null when results for that series-year aren't loaded (guard fails open).
+const _SERIES_DRIVER_CACHE = new Map();
+function _seriesDriverSet(year, series) {
   const ck = `${year}|${series}`;
-  if (_SERIES_CARDRIVER_CACHE.has(ck)) return _SERIES_CARDRIVER_CACHE.get(ck);
+  if (_SERIES_DRIVER_CACHE.has(ck)) return _SERIES_DRIVER_CACHE.get(ck);
   const blk = SEASON_CACHE[year] && SEASON_CACHE[year][series];
   let set = null;
   if (blk && blk.races) {
@@ -25785,13 +25785,11 @@ function _seriesCarDriverSet(year, series) {
     for (const race of blk.races) {
       if (!Array.isArray(race.results)) continue;
       for (const d of race.results) {
-        if (d.car_number != null && d.driver) {
-          set.add(String(d.car_number) + "|" + normalizeDriverName(d.driver));
-        }
+        if (d.driver) set.add(normalizeDriverName(d.driver));
       }
     }
   }
-  _SERIES_CARDRIVER_CACHE.set(ck, set);
+  _SERIES_DRIVER_CACHE.set(ck, set);
   return set;
 }
 
@@ -25989,7 +25987,7 @@ function renderPersonnel() {
   // Clear per-race + season caches before rebuilding — a stale null (cached when
   // results weren't yet loaded) would otherwise defeat the guard permanently.
   _RACE_FINISH_CACHE.clear();
-  _SERIES_CARDRIVER_CACHE.clear();
+  _SERIES_DRIVER_CACHE.clear();
   PERSONNEL_INDEX = buildPersonnelIndex();
 
   let raceCount = 0; const cutoff = Date.now() + 9 * 864e5;
