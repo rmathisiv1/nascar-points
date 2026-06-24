@@ -4415,14 +4415,21 @@ function entitiesFromRaces(races) {
       const e = map.get(key);
       e.totalStarts += 1;    // always count, even if ineligible
       e.driversSet.add(d.driver);
-      e.driverStarts[d.driver] = (e.driverStarts[d.driver] || 0) + 1;
+      // Merge name variants of the SAME driver (e.g. "Daniel Suarez" vs the
+      // accented "Daniel Suárez") so a shared-car tooltip doesn't show one
+      // driver as two. Count under a single canonical spelling — the first one
+      // seen for that normalized name — instead of the raw string.
+      const _normName = normalizeDriverName(d.driver);
+      e._dispByNorm = e._dispByNorm || {};
+      const _disp = e._dispByNorm[_normName] || (e._dispByNorm[_normName] = d.driver);
+      e.driverStarts[_disp] = (e.driverStarts[_disp] || 0) + 1;
       // Track the most-recent round each driver ran this car, so we can resolve
       // the car's CURRENT driver when the predominant one has gone inactive
       // (mid-season driver change, e.g. a replacement taking over a chartered
       // car for the rest of the year).
       e.driverLastRound = e.driverLastRound || {};
-      if ((r.round || 0) >= (e.driverLastRound[d.driver] || 0)) {
-        e.driverLastRound[d.driver] = r.round || 0;
+      if ((r.round || 0) >= (e.driverLastRound[_disp] || 0)) {
+        e.driverLastRound[_disp] = r.round || 0;
       }
       e.maxRound = Math.max(e.maxRound || 0, r.round || 0);
       e.driver = d.driver;
@@ -4761,14 +4768,14 @@ function mean(xs) {
 // Returns higher-is-better raw values per component (or null when no data);
 // the field-relative 0-100 blend is assembled in buildPowerRankings where the
 // whole field is available for normalization. Components & weights:
-//   pace 30 / finish 20 / top-15% 20 / qualifying 15 / quality passes 10 /
-//   fast laps 5  (renormalized to 100 over whichever a driver has).
-// Qualifying uses the time-trial RESULT (qual_pos); races with no qualifying
-// contribute nothing rather than counting a formula-set lineup. Quality passes
-// and fast laps come from NASCAR loop data. NOTE: quality passes reward moving
-// THROUGH the field, so a car that dominates from the front can score modestly
-// there — intentional weight is low (10%).
-const POWER_WEIGHTS = { pace: 30, finish: 20, top15: 20, qual: 15, qpasses: 10, fastlaps: 5 };
+//   pace 25 / points 20 / finish 15 / top-15% 15 / qualifying 10 /
+//   quality passes 10 / fast laps 5  (renormalized to 100 over what a driver has).
+// Points (recent race points incl. win bonus + stage points) rewards winning
+// and dominance, not just average finish. Qualifying uses the time-trial RESULT
+// (qual_pos); races with no qualifying contribute nothing. Quality passes/fast
+// laps come from NASCAR loop data; quality passes reward moving THROUGH the
+// field, so a dominant front-runner can score modestly there (low weight).
+const POWER_WEIGHTS = { pace: 25, points: 20, finish: 15, top15: 15, qual: 10, qpasses: 10, fastlaps: 5 };
 
 // Decide if a race is a "clean" race for form purposes — i.e. NOT a wreck/DNF.
 // We exclude when the status indicates a DNF (accident/mechanical) OR when the
@@ -4811,7 +4818,7 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
   const recent = (driverRaces || []).slice(-windowN);
   const clean = recent.filter(_isCleanFormRace);
   const use = clean.length >= 3 ? clean : recent;   // keep ≥3 races of signal
-  if (!use.length) return { pace: null, finish: null, top15: null, qual: null, qpasses: null, fastlaps: null, nClean: 0 };
+  if (!use.length) return { pace: null, finish: null, top15: null, qual: null, qpasses: null, fastlaps: null, points: null, nClean: 0 };
 
   const roundsInWindow = new Set(use.map(r => r.round));
 
@@ -4860,6 +4867,13 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
   // — a raw-speed signal. Higher = better.
   const fastlaps = wAvg(use, r => (r.fast_laps != null ? r.fast_laps : null));
 
+  // Points earned (recent): recency-weighted avg race points per race over the
+  // window. Unlike finish position, points bake in the WIN bonus and stage
+  // points, so a driver winning races and sweeping stages (dominant + fast)
+  // out-scores a driver merely finishing top-5 consistently — capturing the
+  // "won three in a row and was fast" profile that finish-position alone flattens.
+  const points = wAvg(use, r => (r.total != null ? r.total : null));
+
   // Pace: recency-weighted avg lap-time blend over the window's clean rounds
   // (lower delta = faster), negated so higher = better. Pace records are newest
   // -first, so we reverse to oldest→newest to align with the recency weights.
@@ -4872,7 +4886,7 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
     if (paceAvg != null) pace = -paceAvg;
   } catch (_) { /* pace stays null; weight redistributes */ }
 
-  return { pace, finish, top15, qual, qpasses, fastlaps, nClean: clean.length };
+  return { pace, finish, top15, qual, qpasses, fastlaps, points, nClean: clean.length };
 }
 
 function seasonTotalRating(driverRaces) {
@@ -4891,11 +4905,11 @@ function buildPowerRankings(entities, series, windowN = 8, cutoffRound = null) {
     let races = d.races || [];
     if (cutoffRound != null) races = races.filter(r => (r.round || 0) <= cutoffRound);
     const comp = powerComponentsFor(d.primary_driver || d.driver, series, races, windowN);
-    return { key: entityKey(d), comp, hasAny: comp.pace != null || comp.finish != null || comp.top15 != null || comp.qual != null || comp.qpasses != null || comp.fastlaps != null };
+    return { key: entityKey(d), comp, hasAny: comp.pace != null || comp.finish != null || comp.top15 != null || comp.qual != null || comp.qpasses != null || comp.fastlaps != null || comp.points != null };
   }).filter(r => r.hasAny);
 
   // Field min/max per component for normalization.
-  const keys = ["pace", "finish", "top15", "qual", "qpasses", "fastlaps"];
+  const keys = ["pace", "finish", "top15", "qual", "qpasses", "fastlaps", "points"];
   const range = {};
   keys.forEach(k => {
     const vals = rows.map(r => r.comp[k]).filter(v => v != null);
