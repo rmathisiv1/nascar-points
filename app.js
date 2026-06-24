@@ -4766,8 +4766,18 @@ function _isCleanFormRace(r) {
   if (st && /(accident|crash|dnf|engine|suspension|brakes|overheating|rear gear|transmission|electrical|fire|did not finish|retired|parked)/.test(st)) {
     return false;
   }
-  // Ran up front but finished deep → almost certainly a late incident, not pace.
-  if (r.pct_top15 != null && r.pct_top15 >= 40 && r.finish != null && r.finish >= 30) return false;
+  // Ran up front but finished well off that pace → almost certainly a late
+  // incident (tire, contact, pit-road problem), not the car's true speed. We
+  // tier it: a driver who actually LED laps was running at the very front, so a
+  // finish of P15 or worse is a clear fluke; a car that merely ran a big share of
+  // laps inside the top 15 (without leading) gets a slightly deeper P20 line to
+  // avoid clipping a genuine fade. This protects a driver who, say, leads late,
+  // blows a tire and limps home in the teens/twenties from having that one result
+  // tank their form rating (the old rule only caught getting collected at P30+).
+  const ledUpFront = (r.lapsLed || 0) >= 5;
+  const ranTop15   = r.pct_top15 != null && r.pct_top15 >= 40;
+  if (ledUpFront && r.finish != null && r.finish >= 15) return false;
+  if (ranTop15   && r.finish != null && r.finish >= 20) return false;
   return true;
 }
 
