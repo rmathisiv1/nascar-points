@@ -4463,6 +4463,13 @@ function entitiesFromRaces(races) {
         pct_top15: d.loop_pct_top15_laps,
         rating: d.loop_driver_rating,
         pass_diff: d.loop_pass_diff,
+        // Qualifying RESULT (time-trial position), distinct from start_pos — which
+        // can be a formula-set lineup when no qualifying is held. Null here means
+        // no qualifying occurred, so the power-ranking qual component skips it
+        // rather than scoring where the car happened to line up.
+        qual_pos: d.qual_pos != null ? d.qual_pos : null,
+        quality_passes: d.loop_quality_passes,
+        fast_laps: d.loop_fastest_laps,
         status: d.status,
         driver: d.driver,
         track_code: r.track_code,
@@ -4752,10 +4759,16 @@ function mean(xs) {
 // Power Rankings metric — raw components over the last N races (default 8),
 // EXCLUDING wreck/DNF races so a fast car that got crashed isn't punished.
 // Returns higher-is-better raw values per component (or null when no data);
-// the field-relative 0-100 blend is assembled in renderFormTable where the
+// the field-relative 0-100 blend is assembled in buildPowerRankings where the
 // whole field is available for normalization. Components & weights:
-//   finish 35 / pace 30 / qualifying 20 / top-15% 15  (renormalized to 100).
-const POWER_WEIGHTS = { pace: 18, finish: 42, top15: 18, qual: 22 };
+//   pace 30 / finish 20 / top-15% 20 / qualifying 15 / quality passes 10 /
+//   fast laps 5  (renormalized to 100 over whichever a driver has).
+// Qualifying uses the time-trial RESULT (qual_pos); races with no qualifying
+// contribute nothing rather than counting a formula-set lineup. Quality passes
+// and fast laps come from NASCAR loop data. NOTE: quality passes reward moving
+// THROUGH the field, so a car that dominates from the front can score modestly
+// there — intentional weight is low (10%).
+const POWER_WEIGHTS = { pace: 30, finish: 20, top15: 20, qual: 15, qpasses: 10, fastlaps: 5 };
 
 // Decide if a race is a "clean" race for form purposes — i.e. NOT a wreck/DNF.
 // We exclude when the status indicates a DNF (accident/mechanical) OR when the
@@ -4798,7 +4811,7 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
   const recent = (driverRaces || []).slice(-windowN);
   const clean = recent.filter(_isCleanFormRace);
   const use = clean.length >= 3 ? clean : recent;   // keep ≥3 races of signal
-  if (!use.length) return { pace: null, finish: null, top15: null, qual: null, nClean: 0 };
+  if (!use.length) return { pace: null, finish: null, top15: null, qual: null, qpasses: null, fastlaps: null, nClean: 0 };
 
   const roundsInWindow = new Set(use.map(r => r.round));
 
@@ -4828,12 +4841,24 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
   const finAvg = wAvg(use, r => r.finish);
   const finish = finAvg != null ? -finAvg : null;
 
-  // Qualifying: recency-weighted avg start → negate so higher = better.
-  const qualAvg = wAvg(use, r => r.start);
+  // Qualifying: recency-weighted avg time-trial RESULT (qual_pos) → negate so
+  // higher = better. Uses qual_pos, NOT start: a race with no qualifying has a
+  // null qual_pos and is skipped, so a formula-set lineup never counts as a
+  // qualifying performance. If no race in the window had qualifying, qual stays
+  // null and its weight redistributes.
+  const qualAvg = wAvg(use, r => (r.qual_pos != null ? r.qual_pos : null));
   const qual = qualAvg != null ? -qualAvg : null;
 
   // Top-15%: recency-weighted avg share of green-flag laps in the top 15.
   const top15 = wAvg(use, r => r.pct_top15);
+
+  // Quality passes: recency-weighted avg count of green-flag passes for position
+  // inside the top 15 (NASCAR loop stat). Higher = better (more advancing).
+  const qpasses = wAvg(use, r => (r.quality_passes != null ? r.quality_passes : null));
+
+  // Fast laps: recency-weighted avg count of fastest laps run (NASCAR loop stat)
+  // — a raw-speed signal. Higher = better.
+  const fastlaps = wAvg(use, r => (r.fast_laps != null ? r.fast_laps : null));
 
   // Pace: recency-weighted avg lap-time blend over the window's clean rounds
   // (lower delta = faster), negated so higher = better. Pace records are newest
@@ -4847,7 +4872,7 @@ function powerComponentsFor(driverName, series, driverRaces, windowN = 8) {
     if (paceAvg != null) pace = -paceAvg;
   } catch (_) { /* pace stays null; weight redistributes */ }
 
-  return { pace, finish, top15, qual, nClean: clean.length };
+  return { pace, finish, top15, qual, qpasses, fastlaps, nClean: clean.length };
 }
 
 function seasonTotalRating(driverRaces) {
@@ -4866,11 +4891,11 @@ function buildPowerRankings(entities, series, windowN = 8, cutoffRound = null) {
     let races = d.races || [];
     if (cutoffRound != null) races = races.filter(r => (r.round || 0) <= cutoffRound);
     const comp = powerComponentsFor(d.primary_driver || d.driver, series, races, windowN);
-    return { key: entityKey(d), comp, hasAny: comp.pace != null || comp.finish != null || comp.top15 != null || comp.qual != null };
+    return { key: entityKey(d), comp, hasAny: comp.pace != null || comp.finish != null || comp.top15 != null || comp.qual != null || comp.qpasses != null || comp.fastlaps != null };
   }).filter(r => r.hasAny);
 
   // Field min/max per component for normalization.
-  const keys = ["pace", "finish", "top15", "qual"];
+  const keys = ["pace", "finish", "top15", "qual", "qpasses", "fastlaps"];
   const range = {};
   keys.forEach(k => {
     const vals = rows.map(r => r.comp[k]).filter(v => v != null);
