@@ -2858,6 +2858,17 @@ async function ensureProjectionSeasonsLoaded() {
   await Promise.all(years.map(y => loadSeasonIntoCache(y).catch(() => null)));
 }
 
+// The personnel index's cross-series mis-filing guard verifies each roster
+// against the actual race RESULTS (which driver ran which car in which series)
+// stored in SEASON_CACHE. Those load lazily per year, so before building the
+// index we load every year that has roster data — otherwise the guard can't
+// verify a 2024 roster and fails open, leaving the mis-filed rows in place.
+let _personnelSeasonsLoaded = false;
+async function ensurePersonnelSeasonsLoaded() {
+  const years = Object.keys(RACE_DOCS_CACHE || {}).filter(Boolean);
+  await Promise.all(years.map(y => loadSeasonIntoCache(y).catch(() => null)));
+}
+
 function showError(msg) {
   document.querySelectorAll(".view").forEach(v => v.hidden = true);
   const ev = document.getElementById("view-error");
@@ -25698,9 +25709,14 @@ function buildPersonnelIndex() {
           // skip it. Fails OPEN: if results aren't loaded for this series/date (or
           // the car/driver is blank), we can't verify and keep the appearance.
           const dmap = _carDriverMapFor(+yr, series, date, track);
-          if (dmap && car.car != null && car.driver) {
+          if (dmap && dmap.size > 0 && car.car != null && car.driver) {
             const actual = dmap.get(String(car.car));
-            if (actual && actual !== normalizeDriverName(car.driver)) continue;
+            // Mis-filed if this car/driver didn't actually run this series on this
+            // date: either the car number isn't in the field at all, or it ran
+            // under a different driver. (dmap.size > 0 means we have a real field
+            // to check against; an empty/missing field falls through and keeps the
+            // appearance rather than wrongly dropping everything.)
+            if (!actual || actual !== normalizeDriverName(car.driver)) continue;
           }
           const finMap = _finishMapFor(+yr, series, date, track);
           const finish = (finMap && car.car != null) ? finMap.get(String(car.car)) : undefined;
@@ -25956,7 +25972,17 @@ function renderPersonnel() {
   if (!_raceDocsAttempted) {
     loadRaceDocs().then(() => { if (STATE.view === "personnel") renderPersonnel(); });
   }
+  // Load the season results the mis-filing guard needs (one-time), then re-render
+  // so the guard can actually verify rosters. Until they're in, the guard fails
+  // open and mis-filed rows show; this corrects them on the follow-up render.
+  if (Object.keys(RACE_DOCS_CACHE || {}).length && !_personnelSeasonsLoaded) {
+    _personnelSeasonsLoaded = true;
+    ensurePersonnelSeasonsLoaded().then(() => { if (STATE.view === "personnel") renderPersonnel(); });
+  }
+  // Clear BOTH per-race caches before rebuilding — a stale null (cached when the
+  // results weren't yet loaded) would otherwise defeat the guard permanently.
   _RACE_FINISH_CACHE.clear();
+  _RACE_DRIVER_CACHE.clear();
   PERSONNEL_INDEX = buildPersonnelIndex();
 
   let raceCount = 0; const cutoff = Date.now() + 9 * 864e5;
