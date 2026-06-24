@@ -25685,9 +25685,46 @@ function _canonTeamName(team) {
   return t;
 }
 
+// Signature of a single car's roster (crew chief + sorted crew names + car), used
+// to detect rosters mis-attached to the wrong race. A backfill can attach a
+// CURRENT roster to an old race (the Jayski discovery isn't year-strict), so the
+// exact same crew sheet appears years apart. Real crews turn over, so a verbatim
+// match across distant years is the mis-attachment fingerprint.
+function _rosterCarSig(series, car) {
+  const cc = normalizeDriverName(car.crew_chief || "");
+  const crew = (car.crew || []).map(c => normalizeDriverName(c.name || "")).filter(Boolean).sort().join(",");
+  return `${series}|${car.car || ""}|${cc}|${crew}`;
+}
+
 function buildPersonnelIndex() {
   const idx = new Map();   // normName -> {name, appearances[], roles:Set, teams:Set, positions:Set}
   const cutoff = Date.now() + 9 * 864e5;   // race-week window; excludes far-future fallbacks
+
+  // Pre-pass: for each car-roster signature, record every YEAR it appears in.
+  // If an identical roster appears in years far apart, the older ones are
+  // mis-attached copies of the newer (real) roster and are dropped below.
+  const sigYears = new Map();   // sig -> Set(year)
+  for (const [yr, bySeries] of Object.entries(RACE_DOCS_CACHE || {})) {
+    for (const [series, races] of Object.entries(bySeries || {})) {
+      for (const rec of Object.values(races || {})) {
+        const rd = Date.parse(String(rec.race_date || "").slice(0, 10));
+        if (!rd || rd > cutoff) continue;
+        const roster = rec.docs && rec.docs.roster && rec.docs.roster.rows;
+        if (!Array.isArray(roster)) continue;
+        for (const car of roster) {
+          const sig = _rosterCarSig(series, car);
+          let ys = sigYears.get(sig);
+          if (!ys) { ys = new Set(); sigYears.set(sig, ys); }
+          ys.add(+yr);
+        }
+      }
+    }
+  }
+  // Gap (in years) beyond which an identical roster is treated as mis-attached.
+  // 2 is safe: a team can run the same crew in back-to-back years, but a verbatim
+  // crew sheet repeating 2+ years apart effectively never happens for real.
+  const DUP_ROSTER_GAP = 2;
+
   for (const [yr, bySeries] of Object.entries(RACE_DOCS_CACHE || {})) {
     for (const [series, races] of Object.entries(bySeries || {})) {
       for (const rec of Object.values(races || {})) {
@@ -25699,6 +25736,14 @@ function buildPersonnelIndex() {
         const date = String(rec.race_date || "").slice(0, 10);
         const round = rec.round || null;
         for (const car of roster) {
+          // Drop this car's roster if an identical one appears in a much LATER
+          // year — it's a stale copy mis-attached to this (older) race.
+          const sig = _rosterCarSig(series, car);
+          const ys = sigYears.get(sig);
+          if (ys && ys.size > 1) {
+            const maxY = Math.max(...ys);
+            if (maxY - (+yr) >= DUP_ROSTER_GAP) continue;
+          }
           const team = _canonTeamName(car.team || "");
           // Cross-series mis-filing guard. A roster is sometimes filed under the
           // wrong series — a Cup/Truck race inheriting the same-weekend Xfinity
