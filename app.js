@@ -25700,31 +25700,6 @@ function buildPersonnelIndex() {
   const idx = new Map();   // normName -> {name, appearances[], roles:Set, teams:Set, positions:Set}
   const cutoff = Date.now() + 9 * 864e5;   // race-week window; excludes far-future fallbacks
 
-  // Pre-pass: for each car-roster signature, record every YEAR it appears in.
-  // If an identical roster appears in years far apart, the older ones are
-  // mis-attached copies of the newer (real) roster and are dropped below.
-  const sigYears = new Map();   // sig -> Set(year)
-  for (const [yr, bySeries] of Object.entries(RACE_DOCS_CACHE || {})) {
-    for (const [series, races] of Object.entries(bySeries || {})) {
-      for (const rec of Object.values(races || {})) {
-        const rd = Date.parse(String(rec.race_date || "").slice(0, 10));
-        if (!rd || rd > cutoff) continue;
-        const roster = rec.docs && rec.docs.roster && rec.docs.roster.rows;
-        if (!Array.isArray(roster)) continue;
-        for (const car of roster) {
-          const sig = _rosterCarSig(series, car);
-          let ys = sigYears.get(sig);
-          if (!ys) { ys = new Set(); sigYears.set(sig, ys); }
-          ys.add(+yr);
-        }
-      }
-    }
-  }
-  // Gap (in years) beyond which an identical roster is treated as mis-attached.
-  // 2 is safe: a team can run the same crew in back-to-back years, but a verbatim
-  // crew sheet repeating 2+ years apart effectively never happens for real.
-  const DUP_ROSTER_GAP = 2;
-
   for (const [yr, bySeries] of Object.entries(RACE_DOCS_CACHE || {})) {
     for (const [series, races] of Object.entries(bySeries || {})) {
       for (const rec of Object.values(races || {})) {
@@ -25736,33 +25711,26 @@ function buildPersonnelIndex() {
         const date = String(rec.race_date || "").slice(0, 10);
         const round = rec.round || null;
         for (const car of roster) {
-          // Drop this car's roster if an identical one appears in a much LATER
-          // year — it's a stale copy mis-attached to this (older) race.
-          const sig = _rosterCarSig(series, car);
-          const ys = sigYears.get(sig);
-          if (ys && ys.size > 1) {
-            const maxY = Math.max(...ys);
-            if (maxY - (+yr) >= DUP_ROSTER_GAP) continue;
-          }
           const team = _canonTeamName(car.team || "");
-          // Cross-series mis-filing guard. A roster is sometimes filed under the
-          // wrong series — a Cup/Truck race inheriting the same-weekend Xfinity
-          // roster from the shared Jayski hub — crediting that crew with phantom
-          // appearances in a series they never worked. Keep the roster only if
-          // BOTH its car number and its driver actually appear in THIS series that
-          // season (checked independently, so a roster whose car number differs
-          // from the results isn't wrongly dropped). Drop if either is absent —
-          // that catches a #20 leaked onto a Truck race where no #20 ran, or a
-          // driver who never ran the series. Fails OPEN when results for this
-          // series-year aren't loaded (sets null/empty) or the field is blank.
-          const fs = _seriesFieldSets(+yr, series);
-          if (fs && fs.drivers.size > 0) {
-            const driverOK = !car.driver || fs.drivers.has(normalizeDriverName(car.driver));
-            const carOK = car.car == null || car.car === "" || fs.cars.has(String(car.car).trim());
-            if (!driverOK || !carOK) continue;
+          // Per-race mis-attribution guard. The scraper sometimes stamps a
+          // CURRENT roster onto the wrong race (wrong year and/or series) — e.g.
+          // the 2025 NOS #20 (Brandon Jones) crew got copied onto 2020 road-course
+          // races and onto Truck races, even though JGR runs no Truck team and the
+          // 2020 #20 was a different driver. Season-level checks miss this (Brandon
+          // Jones DID race 2020 NOS, just not that race). So verify against the
+          // SPECIFIC race's results: the roster's listed driver must match who
+          // actually drove that car number in that race. If it doesn't — or that
+          // car wasn't in the field at all — the roster doesn't belong to this
+          // race, so skip it. Fails OPEN when results for the race aren't loaded
+          // (map null) or the car/driver is blank, so nothing verifiable is lost.
+          const raceMap = _finishMapFor(+yr, series, date, track);
+          if (raceMap && raceMap.size > 0 && car.car != null && car.car !== "" && car.driver) {
+            const actual = raceMap.get(String(car.car).trim());
+            if (!actual || (actual.driver && actual.driver !== normalizeDriverName(car.driver))) continue;
           }
-          const finMap = _finishMapFor(+yr, series, date, track);
-          const finish = (finMap && car.car != null) ? finMap.get(String(car.car)) : undefined;
+          const finMap = raceMap;
+          const finRec = (finMap && car.car != null) ? finMap.get(String(car.car).trim()) : undefined;
+          const finish = finRec ? finRec.finish : undefined;
           const won = finish === 1;
           const top5 = finish != null && finish <= 5;
           const add = (name, position, type) => {
@@ -25804,7 +25772,12 @@ function _finishMapFor(year, series, date, track) {
   if (race && Array.isArray(race.results)) {
     map = new Map();
     for (const d of race.results) {
-      if (d.car_number != null && d.finish_pos != null) map.set(String(d.car_number), d.finish_pos);
+      if (d.car_number != null) {
+        map.set(String(d.car_number), {
+          finish: d.finish_pos != null ? d.finish_pos : undefined,
+          driver: d.driver ? normalizeDriverName(d.driver) : "",
+        });
+      }
     }
   }
   _RACE_FINISH_CACHE.set(ck, map);
