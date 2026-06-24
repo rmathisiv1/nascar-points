@@ -120,6 +120,16 @@ _TRACK_ALIASES = {
     "san diego street course": "san-diego",
 }
 
+# Some venues are slugged DIFFERENTLY across Jayski page types — the entry list
+# uses one name and the race-page hub another (e.g. Mexico: entry list is
+# 'autodromo-hermanos-rodriguez', but the hub is '...-mexico-city-race-page').
+# Map a resolved slug to EXTRA tokens/slugs that should also count as a match
+# and be tried when constructing the hub URL.
+_TRACK_MATCH_ALIASES = {
+    "autodromo-hermanos-rodriguez": ["mexico-city", "mexico"],
+    "chicago": ["chicago-street", "grant-park"],
+}
+
 
 def _norm_track_text(s):
     """Normalize a track name for matching. Two real-world problems are handled:
@@ -839,6 +849,7 @@ def discover_race_page(series, year, track_name, verbose=True, race_date=None):
 
     slug = _track_slug(track_name)
     tokens = [t for t in ([slug] + slug.split("-")) if len(t) >= 3]
+    tokens += _TRACK_MATCH_ALIASES.get(slug, [])   # alt names (e.g. mexico-city) the hub may use
     sections = (SERIES_JAYSKI.get((series or "").upper(), {}) or {}).get("sections", [])
 
     def track_match(href):
@@ -871,11 +882,13 @@ def discover_race_page(series, year, track_name, verbose=True, race_date=None):
     # Try the label templates, then a track-first variant, verifying each resolves.
     cfg = SERIES_JAYSKI.get((series or "").upper(), {})
     labels = cfg.get("labels", [])
+    slug_variants = [slug] + _TRACK_MATCH_ALIASES.get(slug, [])
     for sec in (sections or cfg.get("sections", [])):
         cands = []
-        for lab in labels:
-            cands.append(f"https://www.jayski.com/{sec}/{year}-{lab}-{slug}-race-page/")
-            cands.append(f"https://www.jayski.com/{sec}/{year}-{slug}-{lab}-race-page/")
+        for sv in slug_variants:
+            for lab in labels:
+                cands.append(f"https://www.jayski.com/{sec}/{year}-{lab}-{sv}-race-page/")
+                cands.append(f"https://www.jayski.com/{sec}/{year}-{sv}-{lab}-race-page/")
         for cand in cands:
             if _get(cand):
                 log(f"constructed hub hit: {cand}")
