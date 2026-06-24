@@ -26157,7 +26157,7 @@ function _renderPersonnelList() {
       const head = fmt(ordered[0]);
       if (ordered.length === 1) return head;
       const rest = ordered.slice(1).map(fmt).join(", ");
-      return `${head} <span class="pers-info" title="${escapeHTML("also: " + rest)}">\u24d8</span>`;
+      return `${head} <span class="pers-info" title="${escapeHTML("also: " + rest)}">i</span>`;
     };
     const gr = Array.from(groups.values()).sort((x, y) => y.byRace.size - x.byRace.size);
     const detail = gr.map(g => {

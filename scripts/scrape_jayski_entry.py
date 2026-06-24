@@ -121,11 +121,32 @@ _TRACK_ALIASES = {
 }
 
 
+def _norm_track_text(s):
+    """Normalize a track name for matching. Two real-world problems are handled:
+    (1) MOJIBAKE — names like 'Autódromo Hermanos Rodríguez' sometimes arrive as
+        'AutÃ³dromo Hermanos RodrÃ­guez' (UTF-8 bytes misread as Latin-1). We try
+        to reverse that round-trip.
+    (2) ACCENTS — fold 'ó'->'o', 'í'->'i' etc. so accented and plain spellings
+        match the same alias key regardless of how the source encoded them."""
+    import unicodedata
+    s = s or ""
+    # Repair mojibake: if the classic Ã/Â markers are present, re-decode.
+    if "Ã" in s or "Â" in s:
+        try:
+            s = s.encode("latin-1").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    # Strip accents/diacritics down to ASCII.
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return s.lower().strip()
+
+
 def _track_slug(track_name):
     """NASCAR track name -> Jayski URL token (e.g. 'Michigan Int'l Speedway'
-    -> 'michigan'). Checks the alias map first, then strips generic venue
-    suffixes and hyphenates the rest."""
-    t = (track_name or "").lower().strip()
+    -> 'michigan'). Repairs encoding, folds accents, checks the alias map first,
+    then strips generic venue suffixes and hyphenates the rest."""
+    t = _norm_track_text(track_name)
     if t in _TRACK_ALIASES:
         return _TRACK_ALIASES[t]
     # Drop generic venue words so 'Michigan International Speedway' -> 'michigan'
