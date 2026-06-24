@@ -5806,6 +5806,12 @@ function lineupLink(race, series, kind) {
 // center throw "_raceTabRound is not defined" — declare them here.
 let _raceTab = "overview";
 let _raceTabRound = null;
+// Loop Stats table column sort. Default mirrors the prior fixed sort (rating,
+// best first). Persists across races so a chosen column stays put. _loopStatsRows
+// holds the current race's rows so a header click can re-sort in place without a
+// full race-center re-render.
+let _loopSort = { key: "driver_rating", dir: "desc" };
+let _loopStatsRows = [];
 function selectRaceTab(k) {
   _raceTab = k;
   // The race page renders both as its own route (#/race) and inside the
@@ -22555,12 +22561,62 @@ function renderRaceSessionTabs(race, resultsHTML) {
 //   Rating - NASCAR Driver Rating (0-150 composite, ~70 average)
 function renderLoopStatsTable(rows) {
   if (!rows.length) return "";
-  const trHTML = rows.map(r => {
+  _loopStatsRows = rows;   // stash for in-place re-sort on header click
+  const sorted = _sortLoopRows(rows, _loopSort);
+  const trHTML = _loopRowsHTML(sorted);
+
+  // Subtitle highlights the rating leader (often != race winner). Computed from
+  // the rating-sorted view so it's stable regardless of the chosen column sort.
+  const byRating = _sortLoopRows(rows, { key: "driver_rating", dir: "desc" });
+  const leader = byRating[0];
+  const leaderLine = leader && leader.driver
+    ? `Highest rating: ${escapeHTML(leader.driver)}${leader.car_number ? ` (#${escapeHTML(leader.car_number)})` : ""} · ${leader.driver_rating?.toFixed(1) ?? "—"}`
+    : "";
+
+  // Sortable header cell. Reuses the .sortable / .sort-arrow styling from the
+  // power-rankings table. Click toggles direction (or switches column).
+  const lh = (key, label, title, numeric) => {
+    const active = _loopSort.key === key;
+    const arrow = active ? (_loopSort.dir === "asc" ? "▲" : "▼") : "↕";
+    const cls = `sortable ${numeric ? "num" : ""} ${active ? "sort-" + _loopSort.dir : ""}`.trim();
+    return `<th class="${cls}" data-loopsort="${key}" onclick="sortLoopStats('${key}')"${title ? ` title="${escapeHTML(title)}"` : ""}>${label}<span class="sort-arrow">${arrow}</span></th>`;
+  };
+
+  return `<div class="card rc-card rc-card-wide rc-session-card">
+    <div class="rc-card-head">
+      <span class="rc-card-title">Loop Stats</span>
+      <span class="rc-card-sub">${leaderLine}</span>
+    </div>
+    <div class="rc-card-body" style="padding:0;">
+      <div style="overflow-x:auto;">
+        <table class="data-table rc-session-table rc-loop-table">
+          <thead><tr>
+            ${lh("finish", "Fin", "Final finishing position", true)}
+            <th>Car</th>
+            ${lh("driver", "Driver", "", false)}
+            ${lh("avg_pos", "Avg Pos", "Average running position", true)}
+            ${lh("high_pos", "High", "Best position held", true)}
+            ${lh("low_pos", "Low", "Worst position held", true)}
+            ${lh("pass_diff", "Pass Diff", "Net green-flag passes (passes - times passed)", true)}
+            ${lh("quality_passes", "QPasses", "Quality passes (cars passed while they were in the top 15)", true)}
+            ${lh("pct_top15", "%Top15", "Percent of laps running in the top 15", true)}
+            ${lh("fastest_laps", "FastLaps", "Number of laps this driver had the fastest lap", true)}
+            ${lh("driver_rating", "Rating", "NASCAR Driver Rating: 0-150 composite (~70 average)", true)}
+          </tr></thead>
+          <tbody>${trHTML}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Build the <tr> rows for the loop-stats table (shared by first render and the
+// in-place re-sort handler).
+function _loopRowsHTML(rows) {
+  return rows.map(r => {
     const carHex = colorFor(STATE.series, r.car_number);
     const txt = contrastTextFor(carHex);
     const driverHref = `#/driver/${slugify(r.driver || '')}`;
-    // Color the rating: 100+ exceptional (green), 80-99 strong, 60-79 mid,
-    // <60 poor (red). Use the same tone classes used in driver-profile.
     const rating = r.driver_rating;
     const tone = rating == null ? ""
       : rating >= 100 ? "hot"
@@ -22580,39 +22636,55 @@ function renderLoopStatsTable(rows) {
       <td class="num mono ${tone}"><strong>${rating != null ? rating.toFixed(1) : "—"}</strong></td>
     </tr>`;
   }).join("");
+}
 
-  // Subtitle highlights the rating leader (often != race winner)
-  const leader = rows[0];
-  const leaderLine = leader && leader.driver
-    ? `Highest rating: ${escapeHTML(leader.driver)}${leader.car_number ? ` (#${escapeHTML(leader.car_number)})` : ""} · ${leader.driver_rating?.toFixed(1) ?? "—"}`
-    : "";
+// Sort loop rows by the active column. Driver is text (alphabetical); everything
+// else is numeric. Null values always sink to the bottom regardless of direction
+// so "—" cells don't crowd the top.
+function _sortLoopRows(rows, s) {
+  const { key, dir } = s;
+  const arr = rows.slice();
+  arr.sort((a, b) => {
+    if (key === "driver") {
+      const va = (a.driver || "").toLowerCase(), vb = (b.driver || "").toLowerCase();
+      const c = va < vb ? -1 : va > vb ? 1 : 0;
+      return dir === "asc" ? c : -c;
+    }
+    const va = a[key], vb = b[key];
+    const na = va == null, nb = vb == null;
+    if (na && nb) return 0;
+    if (na) return 1;          // nulls last
+    if (nb) return -1;
+    const c = va - vb;
+    return dir === "asc" ? c : -c;
+  });
+  return arr;
+}
 
-  return `<div class="card rc-card rc-card-wide rc-session-card">
-    <div class="rc-card-head">
-      <span class="rc-card-title">Loop Stats</span>
-      <span class="rc-card-sub">${leaderLine}</span>
-    </div>
-    <div class="rc-card-body" style="padding:0;">
-      <div style="overflow-x:auto;">
-        <table class="data-table rc-session-table rc-loop-table">
-          <thead><tr>
-            <th class="num">Fin</th>
-            <th>Car</th>
-            <th>Driver</th>
-            <th class="num" title="Average running position">Avg Pos</th>
-            <th class="num" title="Best position held">High</th>
-            <th class="num" title="Worst position held">Low</th>
-            <th class="num" title="Net green-flag passes (passes - times passed)">Pass Diff</th>
-            <th class="num" title="Quality passes (cars passed while they were in the top 15)">QPasses</th>
-            <th class="num" title="Percent of laps running in the top 15">%Top15</th>
-            <th class="num" title="Number of laps this driver had the fastest lap">FastLaps</th>
-            <th class="num" title="NASCAR Driver Rating: 0-150 composite (~70 average)">Rating</th>
-          </tr></thead>
-          <tbody>${trHTML}</tbody>
-        </table>
-      </div>
-    </div>
-  </div>`;
+// Header-click handler: toggle direction on the same column, or switch columns
+// with a sensible default direction (position-like columns ascending = best
+// first; counting/rating columns descending = best first; driver alphabetical).
+// Re-sorts the current rows and rewrites the table body + header arrows in place.
+function sortLoopStats(key) {
+  if (_loopSort.key === key) {
+    _loopSort.dir = _loopSort.dir === "asc" ? "desc" : "asc";
+  } else {
+    _loopSort.key = key;
+    const ascByDefault = (key === "driver" || key === "finish" || key === "avg_pos" || key === "high_pos" || key === "low_pos");
+    _loopSort.dir = ascByDefault ? "asc" : "desc";
+  }
+  const tbl = document.querySelector(".rc-loop-table");
+  if (!tbl) return;
+  const tbody = tbl.querySelector("tbody");
+  if (tbody) tbody.innerHTML = _loopRowsHTML(_sortLoopRows(_loopStatsRows, _loopSort));
+  tbl.querySelectorAll("th.sortable").forEach(th => {
+    const k = th.getAttribute("data-loopsort");
+    const active = k === _loopSort.key;
+    th.classList.toggle("sort-asc", active && _loopSort.dir === "asc");
+    th.classList.toggle("sort-desc", active && _loopSort.dir === "desc");
+    const arr = th.querySelector(".sort-arrow");
+    if (arr) arr.textContent = active ? (_loopSort.dir === "asc" ? "▲" : "▼") : "↕";
+  });
 }
 
 // Build the table body for a single session (practice or qual).
