@@ -5746,6 +5746,30 @@ const RACE_DOCS_CACHE = {};
 let _raceDocsAttempted = false;
 let PERSONNEL_INDEX = null;   // built lazily by renderPersonnel from roster docs
 
+// Optional, committed override file for personnel name-merges. The index does
+// most merging automatically (see _personnelAliasMap), but rosters occasionally
+// list a person two ways the rule can't safely resolve (or wrongly fuse two real
+// people). This file is the manual escape hatch:
+//   { "merge": [ ["Tyler Patterson", ["TPatterson", "T. Patterson"]] ],
+//     "split": [ ["Some Name", "Other Name"] ] }
+// "merge" forces variants under one canonical name; "split" forbids the rule
+// from ever merging that pair. Absent file = rule-only, which is the common case.
+let PERSONNEL_ALIASES = { merge: [], split: [] };
+let _personnelAliasesAttempted = false;
+async function loadPersonnelAliases() {
+  if (_personnelAliasesAttempted) return;
+  _personnelAliasesAttempted = true;
+  try {
+    const r = await fetch("data/personnel_aliases.json?v=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const data = await r.json();
+    PERSONNEL_ALIASES = {
+      merge: Array.isArray(data && data.merge) ? data.merge : [],
+      split: Array.isArray(data && data.split) ? data.split : [],
+    };
+  } catch (e) { /* no alias file — rule-based merging only */ }
+}
+
 async function loadRaceDocs() {
   if (_raceDocsAttempted) return;
   _raceDocsAttempted = true;
@@ -25696,9 +25720,140 @@ function _rosterCarSig(series, car) {
   return `${series}|${car.car || ""}|${cc}|${crew}`;
 }
 
+// Build a name-merge map for personnel. Rosters list the same person several
+// ways — full name ("Tyler Patterson"), spaced initial ("T Patterson"), or an
+// initial jammed onto the surname ("TPatterson", which can even parse as
+// "Tpatterson Patterson"). These should collapse to ONE person, but only when
+// it's safe: we require the names to share a car+team (so they actually worked
+// together) and the surnames to match, and we never merge a bare initial form
+// when two different full names would both abbreviate to it (ambiguous). The
+// committed personnel_aliases.json can force extra merges or block wrong ones.
+function _personnelAliasMap() {
+  const sigs = new Map();   // normName -> Set("car|team") it appears on
+  const disp = new Map();   // normName -> best (longest) display string seen
+  const consider = (name, sig) => {
+    if (!name) return;
+    const k = normalizeDriverName(name);
+    if (!k) return;
+    let s = sigs.get(k); if (!s) { s = new Set(); sigs.set(k, s); } s.add(sig);
+    const cur = disp.get(k);
+    if (!cur || String(name).length > cur.length) disp.set(k, String(name));
+  };
+  for (const bySeries of Object.values(RACE_DOCS_CACHE || {})) {
+    for (const races of Object.values(bySeries || {})) {
+      for (const rec of Object.values(races || {})) {
+        const roster = rec.docs && rec.docs.roster && rec.docs.roster.rows;
+        if (!Array.isArray(roster)) continue;
+        for (const car of roster) {
+          const sig = (car.car || "") + "|" + _canonTeamName(car.team || "");
+          consider(car.crew_chief, sig);
+          for (const c of (car.crew || [])) consider(c.name, sig);
+        }
+      }
+    }
+  }
+
+  const names = Array.from(sigs.keys());
+  const parent = new Map(names.map(n => [n, n]));
+  const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+  const union = (a, b) => { if (!parent.has(a) || !parent.has(b)) return; const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+  const share = (a, b) => { const A = sigs.get(a), B = sigs.get(b); if (!A || !B) return false; for (const x of A) if (x !== "|" && B.has(x)) return true; return false; };
+  const parse = n => { const t = n.split(" ").filter(Boolean); return t.length >= 2 ? { multi: true, first: t[0], last: t[t.length - 1] } : { multi: false, single: t[0] || "" }; };
+  const parsed = new Map(names.map(n => [n, parse(n)]));
+  // X is an "initial form" of full multi-token name F.
+  const initialOf = (X, F) => {
+    if (!F.multi || !F.first) return false;
+    if (X.multi) {
+      if (X.last !== F.last) return false;
+      return (X.first.length === 1 && X.first === F.first[0]) || (X.first === F.first[0] + F.last);
+    }
+    return X.single === F.first[0] + F.last;   // "tpatterson" === "t"+"patterson"
+  };
+
+  // Forbidden pairs from the override file (rule must never merge these).
+  const splitSet = new Set();
+  for (const pair of (PERSONNEL_ALIASES.split || [])) {
+    if (Array.isArray(pair) && pair.length === 2) {
+      const a = normalizeDriverName(pair[0]), b = normalizeDriverName(pair[1]);
+      splitSet.add([a, b].sort().join("||"));
+    }
+  }
+  const blocked = (a, b) => splitSet.has([a, b].sort().join("||"));
+
+  // 1) Explicit merges from the override file (these always win).
+  for (const grp of (PERSONNEL_ALIASES.merge || [])) {
+    if (!Array.isArray(grp) || grp.length < 2) continue;
+    const canon = normalizeDriverName(grp[0]);
+    for (const v of (Array.isArray(grp[1]) ? grp[1] : grp.slice(1))) {
+      const vn = normalizeDriverName(v);
+      if (canon && vn && parent.has(canon) && parent.has(vn)) union(canon, vn);
+    }
+  }
+
+  // 2) Rule-based merges. First bucket multi-token names by surname and merge
+  //    spaced-initial / concat-in-first forms ("T Patterson", "TPatterson
+  //    Patterson") into the full name when they share a car+team.
+  const byLast = new Map();
+  const singles = [];
+  for (const n of names) {
+    const p = parsed.get(n);
+    if (p.multi) {
+      if (!byLast.has(p.last)) byLast.set(p.last, []);
+      byLast.get(p.last).push(n);
+    } else { singles.push(n); }
+  }
+  for (const arr of byLast.values()) {
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i], b = arr[j];
+        if (blocked(a, b)) continue;
+        if ((initialOf(parsed.get(b), parsed.get(a)) || initialOf(parsed.get(a), parsed.get(b))) && share(a, b)) union(a, b);
+      }
+    }
+  }
+  //    Now resolve single-token forms ("TPatterson"). Index the initial+surname
+  //    concatenation to the union ROOTS that produce it — counting distinct
+  //    PEOPLE, not names, so two spellings of one person (already merged above)
+  //    don't look ambiguous. Merge only when exactly one person matches.
+  const concatRoots = new Map();    // (first[0]+last) -> Set(root)
+  const membersByRoot = new Map();
+  for (const n of names) { const r = find(n); if (!membersByRoot.has(r)) membersByRoot.set(r, []); membersByRoot.get(r).push(n); }
+  for (const n of names) {
+    const p = parsed.get(n);
+    if (!p.multi) continue;
+    const ck = p.first[0] + p.last;
+    if (!concatRoots.has(ck)) concatRoots.set(ck, new Set());
+    concatRoots.get(ck).add(find(n));
+  }
+  for (const s of singles) {
+    const roots = concatRoots.get(s);
+    if (!roots || roots.size !== 1) continue;          // absent or ambiguous -> leave alone
+    const R = roots.values().next().value;
+    if (blocked(s, R)) continue;
+    if ((membersByRoot.get(R) || []).some(m => share(s, m))) union(s, R);
+  }
+
+  // 3) Collapse groups; canonical = fullest name (prefer multi-token, longest first).
+  const groups = new Map();
+  for (const n of names) { const r = find(n); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(n); }
+  const aliasMap = new Map();    // normName -> canonical normName
+  const canonDisp = new Map();   // canonical normName -> display string
+  const score = n => { const p = parsed.get(n); return (p.multi ? 1000 : 0) + (p.multi ? p.first.length : 0); };
+  for (const members of groups.values()) {
+    let best = members[0];
+    for (const m of members) if (score(m) > score(best)) best = m;
+    let d = disp.get(best) || best;
+    for (const m of members) { const dm = disp.get(m); if (dm && parsed.get(m).multi && dm.length > d.length) d = dm; }
+    for (const m of members) aliasMap.set(m, best);
+    canonDisp.set(best, d);
+  }
+  return { aliasMap, canonDisp };
+}
+
 function buildPersonnelIndex() {
   const idx = new Map();   // normName -> {name, appearances[], roles:Set, teams:Set, positions:Set}
   const cutoff = Date.now() + 9 * 864e5;   // race-week window; excludes far-future fallbacks
+  const { aliasMap, canonDisp } = _personnelAliasMap();   // name-merge resolution
 
   for (const [yr, bySeries] of Object.entries(RACE_DOCS_CACHE || {})) {
     for (const [series, races] of Object.entries(bySeries || {})) {
@@ -25735,9 +25890,11 @@ function buildPersonnelIndex() {
           const top5 = finish != null && finish <= 5;
           const add = (name, position, type) => {
             if (!name) return;
-            const key = normalizeDriverName(name);
+            const rawKey = normalizeDriverName(name);
+            const key = aliasMap.get(rawKey) || rawKey;       // merge variant spellings/initials
+            const dispName = canonDisp.get(key) || name;      // show the fullest known name
             let p = idx.get(key);
-            if (!p) { p = { name, appearances: [], roles: new Set(), teams: new Set(), positions: new Set() }; idx.set(key, p); }
+            if (!p) { p = { name: dispName, appearances: [], roles: new Set(), teams: new Set(), positions: new Set() }; idx.set(key, p); }
             p.appearances.push({ year: +yr, series, track, date, round, car: car.car || "", driver: car.driver || "", team, position: position || "", type: type || "", finish, won, top5 });
             if (team) p.teams.add(team);
             if (position) p.positions.add(position);
@@ -26020,6 +26177,9 @@ function renderPersonnel() {
   STATE.personnel = STATE.personnel || _personnelDefaults();
   if (!_raceDocsAttempted) {
     loadRaceDocs().then(() => { if (STATE.view === "personnel") renderPersonnel(); });
+  }
+  if (!_personnelAliasesAttempted) {
+    loadPersonnelAliases().then(() => { if (STATE.view === "personnel") renderPersonnel(); });
   }
   // Load the season results the mis-filing guard needs (one-time), then re-render
   // so the guard can actually verify rosters. Until they're in, the guard fails
