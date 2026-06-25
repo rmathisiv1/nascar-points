@@ -25833,17 +25833,29 @@ function _personnelAliasMap() {
     if ((membersByRoot.get(R) || []).some(m => share(s, m))) union(s, R);
   }
 
-  // 3) Collapse groups; canonical = fullest name (prefer multi-token, longest first).
+  // 3) Collapse groups. The canonical name is the best-FORMED spelling, not just
+  //    the longest — a first name that's a bare initial ("T") or an initial fused
+  //    onto the surname ("Tpatterson", a parser artifact) must lose to a real
+  //    first name ("Tyler"). Quality: proper first name > bare initial > concat
+  //    artifact > single token.
   const groups = new Map();
   for (const n of names) { const r = find(n); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(n); }
   const aliasMap = new Map();    // normName -> canonical normName
   const canonDisp = new Map();   // canonical normName -> display string
-  const score = n => { const p = parsed.get(n); return (p.multi ? 1000 : 0) + (p.multi ? p.first.length : 0); };
+  const quality = n => {
+    const p = parsed.get(n);
+    if (!p.multi) return 0;                              // single token — worst
+    if (p.first === p.first[0] + p.last) return 1;       // "tpatterson" concat artifact
+    if (p.first.length === 1) return 2;                  // bare initial "t patterson"
+    return 100 + p.first.length;                         // real first name (longer wins)
+  };
+  const titleCase = s => s.replace(/\b\w/g, c => c.toUpperCase());
   for (const members of groups.values()) {
     let best = members[0];
-    for (const m of members) if (score(m) > score(best)) best = m;
-    let d = disp.get(best) || best;
-    for (const m of members) { const dm = disp.get(m); if (dm && parsed.get(m).multi && dm.length > d.length) d = dm; }
+    for (const m of members) if (quality(m) > quality(best)) best = m;
+    // Show the original-cased spelling of the best-formed name; fall back to a
+    // title-cased version of the normalized key if no raw string was captured.
+    const d = disp.get(best) || titleCase(best);
     for (const m of members) aliasMap.set(m, best);
     canonDisp.set(best, d);
   }
