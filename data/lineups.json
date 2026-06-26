@@ -1182,6 +1182,271 @@
             "driver_raw": "Nathan Byrd"
           }
         ]
+      },
+      "19": {
+        "track_code": "",
+        "track": "Sonoma Raceway",
+        "race_name": "Pit Boss/FoodMaxx 250",
+        "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/26/19-noaps-2026-lineup.pdf",
+        "scraped_at": "2026-06-26T22:43:56+00:00",
+        "entries": [
+          {
+            "pos": 1,
+            "car": "9",
+            "qual_time": 75.029,
+            "qual_speed": 95.483,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Shane Van Gisbergen(i) SuperFile"
+          },
+          {
+            "pos": 2,
+            "car": "19",
+            "qual_time": 75.218,
+            "qual_speed": 95.243,
+            "manufacturer": "Toyota",
+            "driver_raw": "Brent Crews # Mobil 1"
+          },
+          {
+            "pos": 3,
+            "car": "54",
+            "qual_time": 75.453,
+            "qual_speed": 94.947,
+            "manufacturer": "Toyota",
+            "driver_raw": "Taylor Gray Operation 300"
+          },
+          {
+            "pos": 4,
+            "car": "96",
+            "qual_time": 75.518,
+            "qual_speed": 94.865,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Anthony Alfredo Dude Wipes Poopsicle"
+          },
+          {
+            "pos": 5,
+            "car": "99",
+            "qual_time": 75.68,
+            "qual_speed": 94.662,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Parker Retzlaff FUNKAWAY"
+          },
+          {
+            "pos": 6,
+            "car": "17",
+            "qual_time": 75.705,
+            "qual_speed": 94.63,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Corey Day HendrickCars.com"
+          },
+          {
+            "pos": 7,
+            "car": "2",
+            "qual_time": 75.754,
+            "qual_speed": 94.569,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Jesse Love Whelen"
+          },
+          {
+            "pos": 8,
+            "car": "7",
+            "qual_time": 75.759,
+            "qual_speed": 94.563,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Justin Allgaier BRANDT Professional Agriculture"
+          },
+          {
+            "pos": 9,
+            "car": "41",
+            "qual_time": 75.797,
+            "qual_speed": 94.516,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sam Mayer Audibel"
+          },
+          {
+            "pos": 10,
+            "car": "21",
+            "qual_time": 75.875,
+            "qual_speed": 94.418,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Austin Hill Bennett Transportation"
+          },
+          {
+            "pos": 11,
+            "car": "00",
+            "qual_time": 75.95,
+            "qual_speed": 94.325,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sheldon Creed Pit Boss"
+          },
+          {
+            "pos": 12,
+            "car": "18",
+            "qual_time": 76.021,
+            "qual_speed": 94.237,
+            "manufacturer": "Toyota",
+            "driver_raw": "William Sawalich Starkey"
+          },
+          {
+            "pos": 13,
+            "car": "8",
+            "qual_time": 76.169,
+            "qual_speed": 94.054,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Sammy Smith Pilot"
+          },
+          {
+            "pos": 14,
+            "car": "20",
+            "qual_time": 76.216,
+            "qual_speed": 93.996,
+            "manufacturer": "Toyota",
+            "driver_raw": "Brandon Jones Menards/NIBCO"
+          },
+          {
+            "pos": 15,
+            "car": "32",
+            "qual_time": 76.319,
+            "qual_speed": 93.869,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ross Chastain(i) Western Watermelon Association"
+          },
+          {
+            "pos": 16,
+            "car": "91",
+            "qual_time": 76.332,
+            "qual_speed": 93.853,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Carson Kvapil Clarience Technologies"
+          },
+          {
+            "pos": 17,
+            "car": "26",
+            "qual_time": 76.509,
+            "qual_speed": 93.636,
+            "manufacturer": "Toyota",
+            "driver_raw": "Dean Thompson Thompson Pile Group"
+          },
+          {
+            "pos": 18,
+            "car": "07",
+            "qual_time": 76.578,
+            "qual_speed": 93.552,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Josh Bilicki SBC Contractors"
+          },
+          {
+            "pos": 19,
+            "car": "24",
+            "qual_time": 76.62,
+            "qual_speed": 93.5,
+            "manufacturer": "Toyota",
+            "driver_raw": "Harrison Burton Dead On Tools"
+          },
+          {
+            "pos": 20,
+            "car": "42",
+            "qual_time": 76.679,
+            "qual_speed": 93.428,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Will Rodgers Kelly Benefits"
+          },
+          {
+            "pos": 21,
+            "car": "88",
+            "qual_time": 76.702,
+            "qual_speed": 93.4,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Rajah Caruth HendrickCars.com"
+          },
+          {
+            "pos": 22,
+            "car": "27",
+            "qual_time": 76.766,
+            "qual_speed": 93.323,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Jeb Burton FVP/FECON"
+          },
+          {
+            "pos": 23,
+            "car": "51",
+            "qual_time": 76.851,
+            "qual_speed": 93.219,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Jeremy Clements AllSouthElectric.com"
+          },
+          {
+            "pos": 24,
+            "car": "0",
+            "qual_time": 76.898,
+            "qual_speed": 93.162,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Alex Labbe Bonita Bonita"
+          },
+          {
+            "pos": 25,
+            "car": "39",
+            "qual_time": 77.044,
+            "qual_speed": 92.986,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ryan Sieg SciAps"
+          },
+          {
+            "pos": 26,
+            "car": "92",
+            "qual_time": 77.126,
+            "qual_speed": 92.887,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Josh Williams OACEUS"
+          },
+          {
+            "pos": 27,
+            "car": "31",
+            "qual_time": 77.167,
+            "qual_speed": 92.838,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Blaine Perkins Nuthin Fancy Co."
+          },
+          {
+            "pos": 28,
+            "car": "28",
+            "qual_time": 77.368,
+            "qual_speed": 92.596,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Kyle Sieg RSS Racing"
+          },
+          {
+            "pos": 29,
+            "car": "02",
+            "qual_time": 77.372,
+            "qual_speed": 92.592,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Ryan Ellis Sweetwater"
+          },
+          {
+            "pos": 30,
+            "car": "1",
+            "qual_time": 77.395,
+            "qual_speed": 92.564,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Connor Zilisch(i) Roto-Rooter"
+          },
+          {
+            "pos": 31,
+            "car": "45",
+            "qual_time": 77.449,
+            "qual_speed": 92.5,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Lavar Scott # Sunoco"
+          },
+          {
+            "pos": 32,
+            "car": "44",
+            "qual_time": 77.732,
+            "qual_speed": 92.163,
+            "manufacturer": "Chevrolet",
+            "driver_raw": "Brennan Poole Midas"
+          }
+        ]
       }
     },
     "NTS": {
@@ -1391,7 +1656,7 @@
         "track": "San Diego Street Course",
         "race_name": "Navy 250",
         "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/19/32613_STARTROW.pdf",
-        "scraped_at": "2026-06-26T21:05:59+00:00",
+        "scraped_at": "2026-06-26T22:44:10+00:00",
         "entries": [
           {
             "pos": 1,
