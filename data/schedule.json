@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-25T16:04:00",
+  "generated": "2026-06-26T15:44:45",
   "events": {
     "2026:daytona-international-speedway:2026-02-16": {
       "track": "DAYTONA INTERNATIONAL SPEEDWAY",
@@ -18673,8 +18673,8 @@
       "event_date": "2026-06-28",
       "revised": "June 16, 06:01 PM",
       "timezone": "PACIFIC DAYLIGHT TIME",
-      "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/19/SONOMA-RACEWAY_NCS_NOAPS_AMSW-EventSchedule_6_28_2026-created-6-16-2026.pdf",
-      "session_count": 70,
+      "source_url": "https://www.jayski.com/wp-content/uploads/sites/31/2026/6/26/SONOMA-RACEWAY_NCS_NOAPS_AMSW-EventSchedule_6_28_2026-created-6-23-2026.pdf",
+      "session_count": 68,
       "sessions": [
         {
           "day": "TUESDAY, JUNE 23",
@@ -18712,25 +18712,6 @@
           "event": "EVENT OPERATIONS SET UP",
           "type": "other",
           "track_status": null,
-          "stages": null,
-          "laps": null,
-          "miles": null
-        },
-        {
-          "day": "WEDNESDAY, JUNE 24",
-          "date": "2026-06-24",
-          "start": "9:00 AM",
-          "start_24": "09:00",
-          "end": "10:00 AM",
-          "end_24": "10:00",
-          "approx_end": false,
-          "series": [],
-          "other_series": [],
-          "series_raw": "BROADCAST",
-          "national": false,
-          "event": "DRONE TRACK LAP CONTENT CAPTURE (CLEAR TRACK MANDATORY)",
-          "type": "other",
-          "track_status": "hot",
           "stages": null,
           "laps": null,
           "miles": null
@@ -19382,25 +19363,6 @@
           "event": "HAULERS ENTER PIT ROAD (EQUIPMENT LOADING)",
           "type": "other",
           "track_status": null,
-          "stages": null,
-          "laps": null,
-          "miles": null
-        },
-        {
-          "day": "FRIDAY, JUNE 26",
-          "date": "2026-06-26",
-          "start": "6:00 PM",
-          "start_24": "18:00",
-          "end": "6:30 PM",
-          "end_24": "18:30",
-          "approx_end": false,
-          "series": [],
-          "other_series": [],
-          "series_raw": "TRACK OPS",
-          "national": false,
-          "event": "TRACK LAPS (SONOMA RACEWAY)",
-          "type": "other",
-          "track_status": "hot",
           "stages": null,
           "laps": null,
           "miles": null
